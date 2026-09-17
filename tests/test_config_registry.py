@@ -708,7 +708,7 @@ class TestAgentEventAlertRulesJsonField(unittest.TestCase):
 class TestAgentContextCompressionFields(unittest.TestCase):
     """Visible chat context compression config must be exposed consistently."""
 
-    def test_profile_uses_chinese_labels_and_enum(self):
+    def test_profile_uses_localized_labels_and_enum(self):
         field = get_field_definition("AGENT_CONTEXT_COMPRESSION_PROFILE")
 
         self.assertEqual(field["category"], "agent")
@@ -719,7 +719,7 @@ class TestAgentContextCompressionFields(unittest.TestCase):
         )
         self.assertEqual(
             [option["label"] for option in field["options"]],
-            ["成本优先", "均衡推荐", "长上下文原文优先"],
+            ["Cost first", "Balanced (recommended)", "Long context, raw text first"],
         )
 
     def test_trigger_and_protected_turns_can_follow_profile_preset(self):

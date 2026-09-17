@@ -236,7 +236,7 @@ const appendDerivedEdge = (
 
     if (!previousEvent?.nodeId) {
       return nodeById.has('task_queue')
-        ? appendEdge(edges, 'task_queue', nodeId, 'control', node.status, '调用')
+        ? appendEdge(edges, 'task_queue', nodeId, 'control', node.status, 'Invoke')
         : edges;
     }
 
@@ -249,10 +249,10 @@ const appendDerivedEdge = (
       providerRunFromEvent(displayEvent, node),
     );
     const label = transitionKind === 'fallback'
-      ? '降级'
+      ? 'Fallback'
       : transitionKind === 'retry'
-        ? '重试'
-        : '调用';
+        ? 'Retry'
+        : 'Invoke';
     const message = metadataString(displayEvent.metadata, 'fallbackFrom', 'fallback_from', 'fallbackTo', 'fallback_to');
     return appendEdge(edges, previousNode.id, nodeId, transitionKind, node.status, label, message);
   }
@@ -260,7 +260,7 @@ const appendDerivedEdge = (
   if (displayEvent.type === 'llm_run' || displayEvent.type === 'llm_run_started') {
     const anchor = nodeById.has('analysis_pipeline') ? 'analysis_pipeline' : 'task_queue';
     return nodeById.has(anchor)
-      ? appendEdge(edges, anchor, nodeId, 'data', node.status, '生成')
+      ? appendEdge(edges, anchor, nodeId, 'data', node.status, 'Produce')
       : edges;
   }
 
@@ -268,7 +268,7 @@ const appendDerivedEdge = (
     const anchor = latestEventNodeId(events, nodeById, ['llm_run', 'llm_run_started'], displayEvent)
       || (nodeById.has('analysis_pipeline') ? 'analysis_pipeline' : 'task_queue');
     return nodeById.has(anchor)
-      ? appendEdge(edges, anchor, nodeId, 'data', node.status, '保存')
+      ? appendEdge(edges, anchor, nodeId, 'data', node.status, 'Save')
       : edges;
   }
 
@@ -277,7 +277,7 @@ const appendDerivedEdge = (
       || latestEventNodeId(events, nodeById, ['llm_run', 'llm_run_started'], displayEvent)
       || (nodeById.has('analysis_pipeline') ? 'analysis_pipeline' : 'task_queue');
     return nodeById.has(anchor)
-      ? appendEdge(edges, anchor, nodeId, 'control', node.status, '通知')
+      ? appendEdge(edges, anchor, nodeId, 'control', node.status, 'Notify')
       : edges;
   }
 

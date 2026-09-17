@@ -211,7 +211,7 @@ describe('useDashboardLifecycle', () => {
     const failedTask = {
       ...createTask(),
       status: 'failed' as const,
-      error: '分析失败',
+      error: 'Analysis failed',
     };
 
     act(() => {

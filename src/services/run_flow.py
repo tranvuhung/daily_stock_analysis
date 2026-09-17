@@ -20,10 +20,10 @@ from src.utils.data_processing import normalize_model_used, parse_json_field
 
 
 _LANES = [
-    {"id": "entry", "label": "入口", "order": 1},
-    {"id": "data_source", "label": "数据来源", "order": 2},
-    {"id": "analysis", "label": "分析引擎", "order": 3},
-    {"id": "artifact", "label": "产物", "order": 4},
+    {"id": "entry", "label": "Entry", "order": 1},
+    {"id": "data_source", "label": "Data source", "order": 2},
+    {"id": "analysis", "label": "Analysis engine", "order": 3},
+    {"id": "artifact", "label": "Artifact", "order": 4},
 ]
 
 _RUN_STATUS_MAP = {
@@ -101,7 +101,7 @@ def build_task_run_flow_snapshot(
         "request",
         lane="entry",
         kind="entry",
-        label="用户请求",
+        label="User request",
         status="success" if created_at else "unknown",
         started_at=created_at,
         ended_at=created_at,
@@ -119,7 +119,7 @@ def build_task_run_flow_snapshot(
         "task_queue",
         lane="entry",
         kind="queue",
-        label="任务队列",
+        label="Task queue",
         status=flow_status,
         started_at=created_at,
         ended_at=completed_at,
@@ -130,7 +130,7 @@ def build_task_run_flow_snapshot(
             "error": getattr(task, "error", None),
         },
     )
-    _append_edge(edges, "request", "task_queue", "control", flow_status, label="提交")
+    _append_edge(edges, "request", "task_queue", "control", flow_status, label="Submit")
 
     if flow_status in {"pending", "running", "cancel_requested"}:
         _put_node(
@@ -138,12 +138,12 @@ def build_task_run_flow_snapshot(
             "analysis_pipeline",
             lane="analysis",
             kind="analysis",
-            label="分析流程",
+            label="Analysis pipeline",
             status="running" if flow_status == "running" else flow_status,
             started_at=started_at,
             message=getattr(task, "message", None) or _task_status_message(flow_status),
         )
-        _append_edge(edges, "task_queue", "analysis_pipeline", "control", flow_status, label="调度")
+        _append_edge(edges, "task_queue", "analysis_pipeline", "control", flow_status, label="Scheduling")
     else:
         _put_skeleton_tail(nodes, edges, anchor_node_id="task_queue", status=flow_status)
 
@@ -222,11 +222,11 @@ def build_history_run_flow_snapshot(
         "request",
         lane="entry",
         kind="entry",
-        label="用户请求",
+        label="User request",
         status="success",
         started_at=created_at,
         ended_at=created_at,
-        message="历史分析记录",
+        message="Analysis history record",
         metadata={
             "query_id": query_id,
             "trigger_source": diagnostics.get("trigger_source") or overview_metadata.get("trigger_source"),
@@ -238,21 +238,21 @@ def build_history_run_flow_snapshot(
         "task_queue",
         lane="entry",
         kind="queue",
-        label="任务队列",
+        label="Task queue",
         status="success",
         started_at=created_at,
         ended_at=created_at,
-        message="任务已完成并进入历史记录",
+        message="Task completed and written to history",
     )
-    _append_edge(edges, "request", "task_queue", "control", "success", label="提交")
+    _append_edge(edges, "request", "task_queue", "control", "success", label="Submit")
     _append_event(
         events,
         "task_completed",
         node_id="task_queue",
         timestamp=created_at,
         severity="success",
-        title="任务完成",
-        message="历史记录已生成",
+        title="Task completed",
+        message="History record created",
     )
 
     provider_success_by_block = _append_provider_runs(
@@ -281,7 +281,7 @@ def build_history_run_flow_snapshot(
     )
     _append_context_blocks(nodes, edges, events, overview, provider_success_by_block)
     if not any(edge["to"] == "context_pack" for edge in edges):
-        _append_edge(edges, "task_queue", "context_pack", "data", context_status, label="输入")
+        _append_edge(edges, "task_queue", "context_pack", "data", context_status, label="Input")
 
     last_analysis_node = _append_llm_runs(
         nodes,
@@ -296,12 +296,12 @@ def build_history_run_flow_snapshot(
             "llm",
             lane="analysis",
             kind="model",
-            label="LLM 生成",
+            label="LLM generation",
             status="unknown",
             provider=normalize_model_used(raw.get("model_used")) if raw else None,
-            message="LLM 未记录诊断信息",
+            message="No LLM diagnostics recorded",
         )
-        _append_edge(edges, "context_pack", "llm", "data", "unknown", label="生成")
+        _append_edge(edges, "context_pack", "llm", "data", "unknown", label="Generation")
         last_analysis_node = "llm"
 
     last_artifact_node = _append_history_runs(
@@ -318,13 +318,13 @@ def build_history_run_flow_snapshot(
             "history_save",
             lane="artifact",
             kind="artifact",
-            label="保存报告",
+            label="Save report",
             status="success",
             ended_at=created_at,
-            message="历史记录已存在",
+            message="History record already exists",
             metadata={"analysis_history_id": getattr(record, "id", None)},
         )
-        _append_edge(edges, last_analysis_node, "history_save", "data", "success", label="保存")
+        _append_edge(edges, last_analysis_node, "history_save", "data", "success", label="Save")
         last_artifact_node = "history_save"
 
     notification_count = _append_notification_runs(
@@ -340,11 +340,11 @@ def build_history_run_flow_snapshot(
             "notification",
             lane="artifact",
             kind="notification",
-            label="推送通知",
+            label="Push notification",
             status="unknown",
-            message="通知结果未记录",
+            message="Notification result not recorded",
         )
-        _append_edge(edges, last_artifact_node, "notification", "control", "unknown", label="通知")
+        _append_edge(edges, last_artifact_node, "notification", "control", "unknown", label="Notification")
 
     summary = _build_summary(nodes, edges, events)
     status = _history_snapshot_status(nodes, diagnostics, overview)
@@ -438,11 +438,11 @@ def _append_provider_runs(
                 node_id,
                 edge_kind,
                 status,
-                label="降级" if edge_kind == "fallback" else "重试",
+                label="Degraded" if edge_kind == "fallback" else "重试",
                 message=_safe_text(run.get("fallback_from") or run.get("fallback_to"), max_length=120),
             )
         else:
-            _append_edge(edges, "task_queue", node_id, "control", status, label="调用")
+            _append_edge(edges, "task_queue", node_id, "control", status, label="Call")
 
         if success:
             provider_success_by_block[block_key] = node_id
@@ -454,7 +454,7 @@ def _append_provider_runs(
             node_id=node_id,
             timestamp=timestamp,
             severity=severity,
-            title=f"{label}{'成功' if success else '失败'}",
+            title=f"{label} {'succeeded' if success else 'failed'}",
             message=message,
             metadata={
                 "provider": provider,
@@ -511,10 +511,10 @@ def _append_context_blocks(
         )
         provider_node_id = provider_success_by_block.get(key)
         if provider_node_id:
-            _append_edge(edges, provider_node_id, node_id, "data", status, label="输入")
+            _append_edge(edges, provider_node_id, node_id, "data", status, label="Input")
         else:
-            _append_edge(edges, "task_queue", node_id, "data", status, label="输入")
-        _append_edge(edges, node_id, "context_pack", "data", status, label="组装")
+            _append_edge(edges, "task_queue", node_id, "data", status, label="Input")
+        _append_edge(edges, node_id, "context_pack", "data", status, label="Assembly")
         if status != "success":
             _append_event(
                 events,
@@ -522,7 +522,7 @@ def _append_context_blocks(
                 node_id=node_id,
                 timestamp=overview.get("created_at"),
                 severity="danger" if status == "failed" else "warning",
-                title=f"{block_map.get('label') or key}输入状态",
+                title=f"{block_map.get('label') or key} input status",
                 message=_context_block_message(block_map),
                 metadata={
                     "block_key": key,
@@ -566,7 +566,7 @@ def _append_llm_runs(
             node_id,
             lane="analysis",
             kind="model",
-            label="LLM 生成",
+            label="LLM generation",
             status=status,
             provider=model or provider,
             started_at=started_at,
@@ -584,14 +584,14 @@ def _append_llm_runs(
                 "error_message": run.get("error_message_sanitized"),
             },
         )
-        _append_edge(edges, previous_node_id, node_id, edge_kind, status, label="生成")
+        _append_edge(edges, previous_node_id, node_id, edge_kind, status, label="Generation")
         _append_event(
             events,
             "llm_run",
             node_id=node_id,
             timestamp=timestamp,
             severity="success" if success else "danger",
-            title=f"LLM {'成功' if success else '失败'}",
+            title=f"LLM {'succeeded' if success else 'failed'}",
             message=message,
             metadata={
                 "provider": provider,
@@ -627,13 +627,13 @@ def _append_history_runs(
         status = "success" if success else "failed"
         node_id = "history_save" if index == 1 else f"history_save_{index}"
         timestamp = _datetime_to_iso(run.get("created_at")) or fallback_created_at
-        message = "报告历史已保存" if success else f"报告历史保存失败：{_safe_text(run.get('error_message_sanitized'), max_length=160) or '未知错误'}"
+        message = "Report history saved" if success else f"报告历史保存失败：{_safe_text(run.get('error_message_sanitized'), max_length=160) or '未知错误'}"
         _put_node(
             nodes,
             node_id,
             lane="artifact",
             kind="artifact",
-            label="保存报告",
+            label="Save report",
             status=status,
             ended_at=timestamp,
             message=message,
@@ -643,14 +643,14 @@ def _append_history_runs(
                 "error_message": run.get("error_message_sanitized"),
             },
         )
-        _append_edge(edges, previous_node_id, node_id, "data", status, label="保存")
+        _append_edge(edges, previous_node_id, node_id, "data", status, label="Save")
         _append_event(
             events,
             "history_run",
             node_id=node_id,
             timestamp=timestamp,
             severity="success" if success else "danger",
-            title="历史保存成功" if success else "历史保存失败",
+            title="History saved successfully" if success else "历史保存失败",
             message=message,
             metadata={
                 "metadata_saved": run.get("metadata_saved"),
@@ -694,7 +694,7 @@ def _append_notification_runs(
             node_id,
             lane="artifact",
             kind="notification",
-            label=f"推送通知 · {channel}",
+            label=f"Push notification · {channel}",
             status=status,
             provider=channel,
             ended_at=timestamp,
@@ -707,14 +707,14 @@ def _append_notification_runs(
                 "error_message": run.get("error_message_sanitized"),
             },
         )
-        _append_edge(edges, anchor_node_id, node_id, "control", status, label="通知")
+        _append_edge(edges, anchor_node_id, node_id, "control", status, label="Notification")
         _append_event(
             events,
             "notification_run",
             node_id=node_id,
             timestamp=timestamp,
             severity="success" if status == "success" else ("warning" if status == "skipped" else "danger"),
-            title="通知发送成功" if status == "success" else ("通知跳过" if status == "skipped" else "通知失败"),
+            title="Notification sent successfully" if status == "success" else ("通知跳过" if status == "skipped" else "通知失败"),
             message=message,
             metadata={
                 "channel": channel,
@@ -825,39 +825,39 @@ def _put_skeleton_tail(
         kind="analysis",
         label="ContextPack",
         status=downstream_status,
-        message="尚未记录输入上下文诊断",
+        message="Input context diagnostics not recorded yet",
     )
     _put_node(
         nodes,
         "llm",
         lane="analysis",
         kind="model",
-        label="LLM 生成",
+        label="LLM generation",
         status=downstream_status,
-        message="尚未记录 LLM 诊断",
+        message="LLM diagnostics not recorded yet",
     )
     _put_node(
         nodes,
         "history_save",
         lane="artifact",
         kind="artifact",
-        label="保存报告",
+        label="Save report",
         status=downstream_status,
-        message="尚未记录历史保存结果",
+        message="History save result not recorded yet",
     )
     _put_node(
         nodes,
         "notification",
         lane="artifact",
         kind="notification",
-        label="推送通知",
+        label="Push notification",
         status=downstream_status,
-        message="尚未记录通知结果",
+        message="Notification result not recorded yet",
     )
-    _append_edge(edges, anchor_node_id, "context_pack", "data", downstream_status, label="输入")
-    _append_edge(edges, "context_pack", "llm", "data", downstream_status, label="生成")
-    _append_edge(edges, "llm", "history_save", "data", downstream_status, label="保存")
-    _append_edge(edges, "history_save", "notification", "control", downstream_status, label="通知")
+    _append_edge(edges, anchor_node_id, "context_pack", "data", downstream_status, label="Input")
+    _append_edge(edges, "context_pack", "llm", "data", downstream_status, label="Generation")
+    _append_edge(edges, "llm", "history_save", "data", downstream_status, label="Save")
+    _append_edge(edges, "history_save", "notification", "control", downstream_status, label="Notification")
 
 
 def _prune_active_skeleton_tail(
@@ -887,7 +887,7 @@ def _append_task_events(events: List[Dict[str, Any]], task: Any, flow_status: st
         node_id="task_queue",
         timestamp=_datetime_to_iso(getattr(task, "created_at", None)),
         severity="info",
-        title="任务已创建",
+        title="Task created",
         message=getattr(task, "message", None) or "任务已加入队列",
     )
     if getattr(task, "started_at", None):
@@ -897,7 +897,7 @@ def _append_task_events(events: List[Dict[str, Any]], task: Any, flow_status: st
             node_id="task_queue",
             timestamp=_datetime_to_iso(getattr(task, "started_at", None)),
             severity="info",
-            title="任务开始执行",
+            title="Task started",
             message=getattr(task, "message", None) or "任务执行中",
         )
     if flow_status == "failed":
@@ -907,7 +907,7 @@ def _append_task_events(events: List[Dict[str, Any]], task: Any, flow_status: st
             node_id="task_queue",
             timestamp=_datetime_to_iso(getattr(task, "completed_at", None)),
             severity="danger",
-            title="任务失败",
+            title="Task failed",
             message=getattr(task, "error", None) or getattr(task, "message", None),
         )
     elif flow_status in {"cancel_requested", "cancelled"}:
@@ -917,7 +917,7 @@ def _append_task_events(events: List[Dict[str, Any]], task: Any, flow_status: st
             node_id="task_queue",
             timestamp=_datetime_to_iso(getattr(task, "completed_at", None)),
             severity="warning",
-            title="任务取消" if flow_status == "cancelled" else "任务请求取消",
+            title="Task cancelled" if flow_status == "cancelled" else "任务请求取消",
             message=getattr(task, "message", None),
         )
     elif flow_status == "success":
@@ -927,7 +927,7 @@ def _append_task_events(events: List[Dict[str, Any]], task: Any, flow_status: st
             node_id="task_queue",
             timestamp=_datetime_to_iso(getattr(task, "completed_at", None)),
             severity="success",
-            title="任务完成",
+            title="Task completed",
             message=getattr(task, "message", None) or "分析完成",
         )
 
@@ -1014,22 +1014,22 @@ def _append_active_flow_events(
                         node_id,
                         edge_kind,
                         nodes[node_id].get("status", "unknown"),
-                        label="降级" if edge_kind == "fallback" else ("重试" if edge_kind == "retry" else "调用"),
+                        label="Degraded" if edge_kind == "fallback" else ("重试" if edge_kind == "retry" else "调用"),
                     )
                 else:
-                    _append_edge(edges, "task_queue", node_id, "control", nodes[node_id].get("status", "unknown"), label="调用")
+                    _append_edge(edges, "task_queue", node_id, "control", nodes[node_id].get("status", "unknown"), label="Call")
                 last_provider_node_by_type[provider_data_type] = (node_id, provider_run)
             elif event_type in {"llm_run", "llm_run_started"}:
                 anchor = "analysis_pipeline" if "analysis_pipeline" in nodes else "task_queue"
-                _append_edge(edges, anchor, node_id, "data", nodes[node_id].get("status", "unknown"), label="生成")
+                _append_edge(edges, anchor, node_id, "data", nodes[node_id].get("status", "unknown"), label="Generation")
                 last_llm_node = node_id
             elif event_type == "history_run":
                 anchor = last_llm_node or ("analysis_pipeline" if "analysis_pipeline" in nodes else "task_queue")
-                _append_edge(edges, anchor, node_id, "data", nodes[node_id].get("status", "unknown"), label="保存")
+                _append_edge(edges, anchor, node_id, "data", nodes[node_id].get("status", "unknown"), label="Save")
                 last_history_node = node_id
             elif event_type == "notification_run":
                 anchor = last_history_node or last_llm_node or ("analysis_pipeline" if "analysis_pipeline" in nodes else "task_queue")
-                _append_edge(edges, anchor, node_id, "control", nodes[node_id].get("status", "unknown"), label="通知")
+                _append_edge(edges, anchor, node_id, "control", nodes[node_id].get("status", "unknown"), label="Notification")
             known_node_ids.add(node_id)
 
         _append_external_event(events, event)

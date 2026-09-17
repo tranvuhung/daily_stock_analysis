@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [测试] 修复股票名称解析冷启动超时并发测试的同步竞态：在放行后台抓取前确认两个等待者均已结束并返回空结果，避免 Docker 发布门禁偶发失败。
 - [文档] 将仓库内所有 SerpApi 链接统一更新为新的赞助转化追踪地址。
 - [修复] 智能导入兼容带 UTF-8 BOM 的 CSV 与剪贴板文本，避免 `code` 表头被误当成数据并丢失有效股票代码。
+- [改进] Web UI 语言体系由 `zh | en` 调整为 `vi | en`：`UiLanguage`、`uiText`、`settingsHelp` 与各功能文案表改为越南语 / 英语双语，默认语言为英语；报告内容语言 `ReportLanguage`（`zh | en | ko`）契约不变。
+- [改进] FastAPI OpenAPI 元数据、接口 `summary` / `description` / `Field` 说明与返回给客户端的 `message` / `detail` 文案统一改为英文；报告与通知生成层仍按 `REPORT_LANGUAGE` 输出，未做改动。
+- [改进] Web 前端组件内硬编码的中文界面文案统一改为英文（选股、问股、持仓、告警、设置 / LLM 渠道等页面）；报告展示层按 `ReportLanguage` 取值的中文文案、解析用正则与行业关键字保持不变。
+- [修复] `parseApiError` 缺参判定改为匹配英文后端文案 `must be provided`，修复 API 文案英文化后缺少 `stock_code` 时降级为通用错误提示的问题。
+- [修复] 热点题材兜底路线标题改用共享常量判定，避免文案与路线替换逻辑分别演进导致的静默失效。
+- [改进] `AlertRuleForm` 删除与 `locales/featureText` 重复的本地选项标签表，统一从 featureText 取双语标签，消除同一枚举在表单与列表页出现两套文案的漂移。
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->

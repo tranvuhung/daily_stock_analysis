@@ -10,6 +10,7 @@ import type {
   ReportLanguage,
 } from '../../types/analysis';
 import { markdownToPlainText } from '../../utils/markdown';
+import { useUiLanguage } from '../../contexts/UiLanguageContext';
 import { getReportText, normalizeReportLanguage } from '../../utils/reportLanguage';
 import { Card } from '../common';
 import { Tooltip } from '../common/Tooltip';
@@ -107,7 +108,7 @@ const splitMarketReviewSections = (markdown: string): MarketReviewSection[] => {
   if (matches.length === 0) {
     return [{
       id: 'full-review',
-      title: '复盘正文',
+      title: 'Review body',
       content: markdown,
       icon: FileText,
     }];
@@ -117,7 +118,7 @@ const splitMarketReviewSections = (markdown: string): MarketReviewSection[] => {
   const sections: MarketReviewSection[] = intro
     ? [{
         id: 'overview',
-        title: '复盘概览',
+        title: 'Review overview',
         content: intro,
         icon: FileText,
       }]
@@ -369,9 +370,10 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
   className = '',
   onOpenRunFlow,
 }) => {
+  const { language: uiLanguage } = useUiLanguage();
   const normalizedReportLanguage = normalizeReportLanguage(reportLanguage);
   const text = getReportText(normalizedReportLanguage);
-  const runFlowText = UI_TEXT[normalizedReportLanguage === 'ko' ? 'en' : normalizedReportLanguage];
+  const runFlowText = UI_TEXT[uiLanguage];
   const marketReviewText = MARKET_REVIEW_TEXT[normalizedReportLanguage];
   const [loadedMarkdown, setLoadedMarkdown] = useState<LoadedMarkdown | null>(null);
   const [loadError, setLoadError] = useState<LoadError | null>(null);
@@ -683,7 +685,7 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
                       </div>
                     );
                   });
-                  // 两类板块都存在时按 行业|概念 左右并列，节省纵向空间；只有一类时保留 领涨|领跌 横向布局。
+                  // When both board types exist, lay industry|concept side by side to save vertical space; with only one, keep the leading|lagging horizontal layout.
                   if (boardTypes.length >= 2) {
                     return (
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

@@ -414,7 +414,7 @@ class AnalysisTaskQueue:
         """
         stock_code = resolve_index_stock_code_for_analysis(stock_code)
         if not stock_code:
-            raise ValueError("股票代码不能为空或仅包含空白字符")
+            raise ValueError("Stock code must not be empty or whitespace only")
 
         accepted, duplicates = self.submit_tasks_batch(
             [stock_code],
@@ -506,7 +506,7 @@ class AnalysisTaskQueue:
                     stock_code=stock_code,
                     stock_name=stock_name,
                     status=TaskStatus.PENDING,
-                    message="任务已加入队列",
+                    message="Task queued",
                     report_type=report_type,
                     analysis_phase=analysis_phase or "auto",
                     original_query=original_query,
@@ -584,7 +584,7 @@ class AnalysisTaskQueue:
 
         with self._data_lock:
             if task_id in self._tasks:
-                raise ValueError(f"任务 ID 已存在: {task_id}")
+                raise ValueError(f"Task ID already exists: {task_id}")
             self._tasks[task_id] = task_info
             try:
                 future = self.executor.submit(self._execute_background_task, task_id, run_task)
@@ -790,7 +790,7 @@ class AnalysisTaskQueue:
             portfolio_context = dict(task.portfolio_context) if isinstance(task.portfolio_context, dict) else None
             task.status = TaskStatus.PROCESSING
             task.started_at = datetime.now()
-            task.message = "正在分析中..."
+            task.message = "Analyzing..."
             task.progress = 10
         
         self._broadcast_event("task_started", task.to_dict())
@@ -842,7 +842,7 @@ class AnalysisTaskQueue:
                         task.progress = 100
                         task.completed_at = datetime.now()
                         task.result = result
-                        task.message = "分析完成"
+                        task.message = "Analysis completed"
                         task.stock_name = result.get("stock_name", task.stock_name)
                         
                         # 从分析中集合移除（使用 submit 时固化的 key，避免不一致残留）
@@ -876,7 +876,7 @@ class AnalysisTaskQueue:
                     task.status = TaskStatus.FAILED
                     task.completed_at = datetime.now()
                     task.error = error_msg[:200]  # 限制错误信息长度
-                    task.message = f"分析失败: {error_msg[:50]}"
+                    task.message = f"Analysis failed: {error_msg[:50]}"
                     
                     # 从分析中集合移除（使用 submit 时固化的 key，避免不一致残留）
                     dedupe_key = task.dedupe_key or _dedupe_task_key(
@@ -916,7 +916,7 @@ class AnalysisTaskQueue:
             trace_id = task.trace_id or task_id
             task.status = TaskStatus.PROCESSING
             task.started_at = datetime.now()
-            task.message = "任务执行中"
+            task.message = "Task running"
             task.progress = 10
             self._broadcast_event("task_started", task.to_dict())
 
@@ -945,7 +945,7 @@ class AnalysisTaskQueue:
                     task.progress = 100
                     task.completed_at = datetime.now()
                     task.result = result
-                    task.message = "任务执行完成"
+                    task.message = "Task execution completed"
 
             self._broadcast_event("task_completed", task.to_dict())
             logger.info(f"[TaskQueue] 自定义任务完成: {task_id}")
@@ -965,7 +965,7 @@ class AnalysisTaskQueue:
                     task.status = TaskStatus.FAILED
                     task.completed_at = datetime.now()
                     task.error = error_msg[:200]
-                    task.message = f"任务失败: {error_msg[:80]}"
+                    task.message = f"Task failed: {error_msg[:80]}"
 
             if task:
                 self._broadcast_event("task_failed", task.to_dict())

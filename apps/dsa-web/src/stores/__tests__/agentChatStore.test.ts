@@ -142,7 +142,7 @@ describe('agentChatStore.startStream', () => {
 
     const streamPromise = useAgentChatStore.getState().startStream(
       {
-        message: '分析 AAPL',
+        message: 'Analyze AAPL',
         session_id: 'session-test',
         request_id: 'request-live-codex',
       },
@@ -207,7 +207,7 @@ describe('agentChatStore.startStream', () => {
 
     const streamPromise = useAgentChatStore.getState().startStream(
       {
-        message: '分析 AAPL',
+        message: 'Analyze AAPL',
         session_id: 'session-test',
         request_id: 'request-old-session',
       },
@@ -248,7 +248,7 @@ describe('agentChatStore.startStream', () => {
 
     const streamPromise = useAgentChatStore.getState().startStream(
       {
-        message: '分析 AAPL',
+        message: 'Analyze AAPL',
         session_id: 'session-test',
         request_id: 'request-old-chat',
       },
@@ -362,7 +362,7 @@ describe('agentChatStore.startStream', () => {
     const state = useAgentChatStore.getState();
     expect(state.messages).toHaveLength(1);
     expect(state.chatError).toMatchObject({
-      title: '请求未被接受',
+      title: 'Request was not accepted',
       rawMessage: 'Agent stream emitted accepted more than once.',
     });
   });
@@ -384,7 +384,7 @@ describe('agentChatStore.startStream', () => {
     expect(state.messages).toEqual([]);
     expect(state.sessions).toEqual([]);
     expect(state.chatError).toMatchObject({
-      title: '请求未被接受',
+      title: 'Request was not accepted',
       rawMessage: 'Agent stream emitted done before accepted.',
     });
   });
@@ -463,8 +463,8 @@ describe('agentChatStore.startStream', () => {
     const state = useAgentChatStore.getState();
     expect(state.messages).toHaveLength(1);
     expect(state.chatError).toMatchObject({
-      title: '回复未完整返回',
-      message: 'Agent 流式响应在完成前中断，请重试。',
+      title: 'The reply was truncated',
+      message: 'The agent stream ended before the reply completed; please try again.',
       category: 'upstream_network',
     });
   });
@@ -484,7 +484,7 @@ describe('agentChatStore.startStream', () => {
     });
 
     expect(useAgentChatStore.getState().chatError).toMatchObject({
-      title: '系统没有配置可用的 LLM 模型',
+      title: 'No usable LLM model is configured',
       category: 'llm_not_configured',
       rawMessage: 'Agent LLM: no effective primary model configured',
     });
@@ -505,7 +505,7 @@ describe('agentChatStore.startStream', () => {
     });
 
     expect(useAgentChatStore.getState().chatError).toMatchObject({
-      title: '连接上游服务超时',
+      title: 'Timed out connecting to the upstream service',
       category: 'upstream_timeout',
       rawMessage: 'connect timeout while calling upstream provider',
     });
@@ -527,7 +527,7 @@ describe('agentChatStore.startStream', () => {
 
     const error = useAgentChatStore.getState().chatError;
     expect(error?.message).toContain('Codex Agent');
-    expect(error?.message).toContain('Agent 设置');
+    expect(error?.message).toContain('Agent settings');
     expect(error?.message).not.toContain('API Key');
   });
 });
@@ -547,7 +547,7 @@ describe('agentChatStore.switchSession', () => {
       progressSteps: [{ type: 'thinking', message: '正在制定分析路径...' }],
       abortController: ac,
       chatError: {
-        title: '请求失败',
+        title: 'Request failed',
         message: '旧错误',
         category: 'unknown',
         rawMessage: '旧错误',
@@ -624,7 +624,7 @@ describe('agentChatStore session Skill state', () => {
     vi.mocked(agentApi.getChatSessionMessages).mockResolvedValue({
       session_id: 'saved-session',
       messages: [
-        { id: 'msg-1', role: 'user', content: '分析 AAPL', created_at: null },
+        { id: 'msg-1', role: 'user', content: 'Analyze AAPL', created_at: null },
       ],
       session_state: { selected_skill_ids: ['technical', 'risk'] },
     });
@@ -652,7 +652,7 @@ describe('agentChatStore session Skill state', () => {
     vi.mocked(agentApi.getChatSessionMessages).mockResolvedValue({
       session_id: 'legacy-session',
       messages: [
-        { id: 'msg-1', role: 'user', content: '分析 AAPL', created_at: null },
+        { id: 'msg-1', role: 'user', content: 'Analyze AAPL', created_at: null },
       ],
       session_state: { selected_skill_ids: null },
     });

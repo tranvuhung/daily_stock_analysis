@@ -85,7 +85,7 @@ describe('screeningApi', () => {
       },
     });
 
-    await expect(screeningApi.enable()).rejects.toThrow('选股功能不可用');
+    await expect(screeningApi.enable()).rejects.toThrow('Screening is unavailable');
 
     expect(updateConfig).toHaveBeenNthCalledWith(1, {
       configVersion: 'v1',
@@ -326,7 +326,7 @@ describe('screeningApi', () => {
           task_id: 'screen-task-storage-disabled',
           trace_id: 'screen-task-storage-disabled',
           status: 'pending',
-          message: '选股任务已提交',
+          message: 'Screening task submitted',
           strategy: 'dual_low',
           market: 'cn',
           max_results: 3,
@@ -357,7 +357,7 @@ describe('screeningApi', () => {
         trace_id: 'screen-task-1',
         status: 'completed',
         progress: 100,
-        message: '任务执行完成',
+        message: 'Task 执行完成',
         result: {
           enabled: true,
           candidates: [],

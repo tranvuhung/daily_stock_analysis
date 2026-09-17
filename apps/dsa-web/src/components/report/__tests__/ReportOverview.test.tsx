@@ -46,7 +46,7 @@ describe('ReportOverview', () => {
 
     expect(screen.getByLabelText('市场阶段: CN · 盘中')).toBeInTheDocument();
     expect(screen.getByText('市场阶段: CN · 盘中')).toBeVisible();
-    expect(screen.getByLabelText('日线未完成')).toBeInTheDocument();
+    expect(screen.getByLabelText('Partial bar')).toBeInTheDocument();
   });
 
   it('renders English final market phase and partial-bar labels', () => {
@@ -105,14 +105,14 @@ describe('ReportOverview', () => {
     );
 
     expect(screen.getByText('市场阶段: 阶段未知')).toBeVisible();
-    expect(screen.queryByText('日线未完成')).not.toBeInTheDocument();
+    expect(screen.queryByText('Partial bar')).not.toBeInTheDocument();
   });
 
   it('does not render a market phase placeholder for legacy reports', () => {
     render(<ReportOverview meta={baseMeta} summary={baseSummary} />);
 
-    expect(screen.queryByText(/市场阶段/)).not.toBeInTheDocument();
-    expect(screen.queryByText('日线未完成')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Market phase/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Partial bar')).not.toBeInTheDocument();
   });
 
   it('renders related boards with leading and lagging markers', () => {
@@ -338,8 +338,8 @@ describe('ReportOverview', () => {
       />,
     );
 
-    expect(screen.queryByText('自选')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /自选/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Watchlist')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Watchlist/ })).not.toBeInTheDocument();
   });
 
   it('keeps the stock-only watchlist card for stock reports', () => {
@@ -356,8 +356,8 @@ describe('ReportOverview', () => {
       />,
     );
 
-    expect(screen.getByText('自选')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '加入自选' })).toBeInTheDocument();
+    expect(screen.getByText('Watchlist')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add to watchlist' })).toBeInTheDocument();
   });
 
   it('keeps the stock-only watchlist card when assetType is absent (legacy)', () => {
@@ -374,6 +374,6 @@ describe('ReportOverview', () => {
       />,
     );
 
-    expect(screen.getByText('自选')).toBeInTheDocument();
+    expect(screen.getByText('Watchlist')).toBeInTheDocument();
   });
 });

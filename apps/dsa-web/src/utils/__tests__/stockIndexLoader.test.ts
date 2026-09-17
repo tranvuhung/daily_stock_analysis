@@ -298,7 +298,7 @@ describe('stockIndexLoader', () => {
         {
           canonicalCode: 'TEST.US',
           displayCode: 'TEST',
-          nameZh: '测试',
+          nameZh: 'Test',
           pinyinFull: 'test',
           pinyinAbbr: 'test',
           aliases: [],
@@ -319,7 +319,7 @@ describe('stockIndexLoader', () => {
         {
           canonicalCode: 'TEST.US',
           displayCode: 'TEST',
-          nameZh: '测试',
+          nameZh: 'Test',
           pinyinFull: 'test',
           pinyinAbbr: 'test',
           aliases: undefined as unknown as string[],
@@ -409,7 +409,7 @@ describe('stockIndexLoader', () => {
         {
           canonicalCode: 'TEST.US',
           displayCode: 'TEST',
-          nameZh: '测试',
+          nameZh: 'Test',
           pinyinFull: 'test',
           pinyinAbbr: 'test',
           aliases: [],

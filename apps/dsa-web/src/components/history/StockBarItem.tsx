@@ -4,7 +4,7 @@ import type { StockBarItem as StockBarItemType } from '../../types/analysis';
 import { getSentimentColor } from '../../types/analysis';
 import { buildDecisionActionLabelMap, getDecisionActionLabel } from '../../utils/decisionAction';
 import { formatDateTime } from '../../utils/format';
-import { getMarketPhaseSummaryLabel } from '../../utils/marketPhase';
+import { getMarketPhaseValueLabel } from '../../utils/marketPhase';
 import { truncateStockName } from '../../utils/stockName';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
 
@@ -37,10 +37,7 @@ export const StockBarItemComponent: React.FC<StockBarItemProps> = ({
     t('history.sentiment'),
     actionLabels,
   );
-  const phaseLabel = getMarketPhaseSummaryLabel(item.marketPhaseSummary, language)
-    ?.replace('市场阶段: ', '')
-    .replace('市场阶段：', '')
-    .replace('Market phase: ', '');
+  const phaseLabel = getMarketPhaseValueLabel(item.marketPhaseSummary, language);
 
   return (
     <button

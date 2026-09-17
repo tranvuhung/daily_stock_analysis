@@ -456,9 +456,9 @@ def _summarize_hotspot_news_event_locally(*, topic: str, text: str) -> str:
     catalyst = _extract_hotspot_catalyst_phrase(cleaned)
     impacts = _extract_hotspot_impact_phrases(cleaned)
     if catalyst and impacts:
-        summary = f"{catalyst}，带动{impacts}发酵。"
+        summary = f"{catalyst}, driving momentum in {impacts}."
     elif catalyst:
-        summary = f"{catalyst}，市场关注{topic}相关产业链机会。"
+        summary = f"{catalyst}; the market is watching supply-chain opportunities related to {topic}."
     else:
         summary = _first_meaningful_hotspot_sentence(cleaned)
     summary = _truncate_text(summary, DSA_SCREENING_HOTSPOT_EVENT_SUMMARY_MAX_CHARS).rstrip(".。…")
@@ -941,7 +941,7 @@ class ScreeningService:
                 status_code=404,
                 detail={
                     "error": "screening_run_not_found",
-                    "message": f"选股运行 {run_id} 不存在。",
+                    "message": f"Screening run {run_id} does not exist.",
                 },
             )
         return {"enabled": True, **run}
@@ -958,7 +958,7 @@ class ScreeningService:
                 status_code=503,
                 detail={
                     "error": "screening_history_unavailable",
-                    "message": "DSA 数据库未注入，无法读取选股运行历史。",
+                    "message": "The DSA database is not injected, so screening run history cannot be read.",
                 },
             )
         return self.db_manager
@@ -1121,7 +1121,7 @@ class ScreeningService:
         if not topic_text:
             raise HTTPException(
                 status_code=400,
-                detail={"error": "screening_hotspot_topic_required", "message": "热点题材名称不能为空。"},
+                detail={"error": "screening_hotspot_topic_required", "message": "Hot topic name must not be empty."},
             )
         provider_name, provider_arg = _resolve_hotspot_provider(provider)
         if not isinstance(provider_arg, DsaEastMoneyHotspotProvider):
@@ -1238,14 +1238,14 @@ class ScreeningService:
         except (TypeError, KeyError) as exc:
             raise HTTPException(
                 status_code=422,
-                detail={"error": "screening_invalid_input", "message": f"Screening 参数非法：{exc}"},
+                detail={"error": "screening_invalid_input", "message": f"Invalid screening parameter: {exc}"},
             ) from exc
         except HTTPException:
             raise
         except Exception as exc:
             raise HTTPException(
                 status_code=424,
-                detail={"error": "screening_screen_failed", "message": f"Screening 选股运行失败：{exc}"},
+                detail={"error": "screening_screen_failed", "message": f"Screening run failed: {exc}"},
             ) from exc
 
         raw_data = _to_plain(raw)
@@ -1403,8 +1403,8 @@ def _hotspot_timeline_to_route(timeline: List[Any]) -> List[Dict[str, Any]]:
     if route:
         return route
     return [{
-        "title": "等待发酵",
-        "description": "暂未获取到明确催化事件，可继续观察涨跌幅、成交额和核心个股联动。",
+        "title": _HOTSPOT_FALLBACK_ROUTE_TITLE,
+        "description": _HOTSPOT_FALLBACK_ROUTE_DESCRIPTION,
         "source": "fallback",
     }]
 
@@ -1446,6 +1446,13 @@ def _merge_provider_hotspot_route_fallback(
     return normalized
 
 
+_HOTSPOT_FALLBACK_ROUTE_TITLE = "Awaiting momentum"
+_HOTSPOT_FALLBACK_ROUTE_DESCRIPTION = (
+    "No clear catalyst event found yet; keep watching price change, turnover and the "
+    "linkage among core stocks."
+)
+
+
 def _has_meaningful_hotspot_route(route: Any) -> bool:
     if not isinstance(route, list):
         return False
@@ -1457,7 +1464,7 @@ def _has_meaningful_hotspot_route(route: Any) -> bool:
         source = _env_text(item.get("source"))
         if not title and not description:
             continue
-        if source == "fallback" and title == "等待发酵":
+        if source == "fallback" and title == _HOTSPOT_FALLBACK_ROUTE_TITLE:
             continue
         return True
     return False
@@ -1492,7 +1499,7 @@ def _ensure_screening_available_for_use() -> None:
         return
     normalized_diagnostics = _include_screening_diagnostic_suffix(diagnostics)
     raise _screening_unavailable_exception(
-        "选股功能初始化失败，请检查策略文件、依赖和服务端日志。",
+        "Screening initialization failed; check the strategy files, dependencies and server logs.",
         diagnostics=normalized_diagnostics,
     )
 
@@ -1600,7 +1607,7 @@ def _list_strategies() -> List[Dict[str, Any]]:
     if not isinstance(raw, list):
         raise HTTPException(
             status_code=424,
-            detail={"error": "screening_invalid_result", "message": "选股策略列表结构非法。"},
+            detail={"error": "screening_invalid_result", "message": "The screening strategy list has an invalid structure."},
         )
 
     normalized: List[Dict[str, Any]] = []
@@ -2348,7 +2355,7 @@ class DsaEastMoneyHotspotProvider:
         info = self._fetch_ths_info(topic)
         if info:
             route.append({
-                "title": "同花顺板块概况",
+                "title": "THS sector overview",
                 "description": "；".join(f"{key} {value}" for key, value in list(info.items())[:4]),
                 "source": "ths_info",
             })
@@ -2626,7 +2633,7 @@ class DsaEastMoneyHotspotProvider:
             event_date = self._extract_route_date(ths_event) or today
             put_daily_item(
                 date=event_date,
-                title="题材驱动",
+                title="Theme-driven",
                 description=ths_event,
                 source="ths_summary",
             )
@@ -2635,10 +2642,10 @@ class DsaEastMoneyHotspotProvider:
             event_text = "；".join(f"{item['label']}出现 {item['count']} 次" for item in change_events)
             description = self._build_hotspot_summary(topic, summary)
             if event_text:
-                description = f"{description} 当日结构：{event_text}。"
+                description = f"{description} Intraday structure: {event_text}."
             put_daily_item(
                 date=today,
-                title="当日发酵",
+                title="Building during the session",
                 description=description,
                 source="eastmoney_board_change",
             )
@@ -2648,8 +2655,8 @@ class DsaEastMoneyHotspotProvider:
         ]
         if not route:
             route.append({
-                "title": "等待发酵",
-                "description": "暂未获取到明确催化事件，可继续观察涨跌幅、成交额和核心个股联动。",
+                "title": _HOTSPOT_FALLBACK_ROUTE_TITLE,
+                "description": _HOTSPOT_FALLBACK_ROUTE_DESCRIPTION,
                 "source": "fallback",
                 "date": today,
                 "published_at": today,

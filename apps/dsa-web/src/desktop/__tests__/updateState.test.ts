@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { formatUiText, UI_TEXT } from '../../i18n/uiText';
 import { getDesktopUpdateBadgeTone, getDesktopUpdateNotice, isBusyDesktopUpdateStatus, normalizeDesktopUpdateState } from '../updateState';
 
-const t = (key: keyof typeof UI_TEXT.zh, params?: Record<string, string | number>) => (
-  formatUiText(UI_TEXT.zh[key], params)
+const t = (key: keyof typeof UI_TEXT.en, params?: Record<string, string | number>) => (
+  formatUiText(UI_TEXT.en[key], params)
 );
 
 describe('desktop updateState helpers', () => {

@@ -2,114 +2,103 @@ import type {
   AnalysisPhase,
   MarketPhaseSummary,
   MarketPhaseValue,
-  ReportLanguage,
 } from '../types/analysis';
-import { normalizeReportLanguage } from './reportLanguage';
+import type { UiLanguage } from '../i18n/uiText';
 
-const REQUEST_PHASE_LABELS: Record<ReportLanguage, Record<AnalysisPhase, string>> = {
-  zh: {
-    auto: '自动阶段',
-    premarket: '盘前',
-    intraday: '盘中',
-    postmarket: '盘后',
-  },
-  en: {
-    auto: 'Auto',
-    premarket: 'Pre-market',
-    intraday: 'Intraday',
-    postmarket: 'Post-market',
-  },
-  ko: {
-    auto: '자동 단계',
-    premarket: '장 시작 전',
-    intraday: '장중',
-    postmarket: '장 마감 후',
-  },
+/**
+ * Phase labels are UI chrome, so they follow the UI language (vi/en) rather than the
+ * report content language. Callers may pass either a UiLanguage or a backend
+ * ReportLanguage ('zh' | 'en' | 'ko'); anything that is not Vietnamese renders in
+ * English, the UI fallback language.
+ */
+const toUiLanguage = (value?: string | null): UiLanguage =>
+  value?.toLowerCase().startsWith('vi') ? 'vi' : 'en';
+
+const REQUEST_PHASE_LABELS: Record<UiLanguage, Record<AnalysisPhase, string>> = {
+  vi: { auto: 'Tự động', premarket: 'Trước phiên', intraday: 'Trong phiên', postmarket: 'Sau phiên' },
+  en: { auto: 'Auto', premarket: 'Pre-market', intraday: 'Intraday', postmarket: 'Post-market' },
 };
 
-const MARKET_PHASE_LABELS: Record<ReportLanguage, Record<MarketPhaseValue, string>> = {
-  zh: {
-    premarket: '盘前',
-    intraday: '盘中',
-    lunch_break: '午间休市',
-    closing_auction: '临近收盘',
-    postmarket: '盘后',
-    non_trading: '非交易日',
-    unknown: '阶段未知',
+const MARKET_PHASE_LABELS: Record<UiLanguage, Record<MarketPhaseValue, string>> = {
+  vi: {
+    premarket: 'Trước phiên',
+    intraday: 'Trong phiên',
+    lunch_break: 'Nghỉ trưa',
+    closing_auction: 'Phiên khớp lệnh đóng cửa',
+    postmarket: 'Sau phiên',
+    non_trading: 'Ngày không giao dịch',
+    unknown: 'Không rõ giai đoạn',
   },
   en: {
     premarket: 'Pre-market',
     intraday: 'Intraday',
     lunch_break: 'Lunch break',
-    closing_auction: 'Near close',
+    closing_auction: 'Closing auction',
     postmarket: 'Post-market',
-    non_trading: 'Non-trading',
+    non_trading: 'Non-trading day',
     unknown: 'Unknown phase',
-  },
-  ko: {
-    premarket: '장 시작 전',
-    intraday: '장중',
-    lunch_break: '점심 휴장',
-    closing_auction: '마감 임박',
-    postmarket: '장 마감 후',
-    non_trading: '비거래일',
-    unknown: '단계 불명',
   },
 };
 
-const TEXT = {
-  zh: {
-    requestPrefix: '请求阶段',
-    finalPrefix: '市场阶段',
-    partialBar: '日线未完成',
-  },
-  en: {
-    requestPrefix: 'Requested phase',
-    finalPrefix: 'Market phase',
-    partialBar: 'Partial bar',
-  },
-  ko: {
-    requestPrefix: '요청 단계',
-    finalPrefix: '시장 단계',
-    partialBar: '일봉 미완성',
-  },
-} as const;
+const TEXT: Record<UiLanguage, { requestPrefix: string; finalPrefix: string; partialBar: string }> = {
+  vi: { requestPrefix: 'Giai đoạn yêu cầu', finalPrefix: 'Giai đoạn thị trường', partialBar: 'Nến chưa hoàn chỉnh' },
+  en: { requestPrefix: 'Requested phase', finalPrefix: 'Market phase', partialBar: 'Partial bar' },
+};
 
 export const getRequestedPhaseLabel = (
   phase?: AnalysisPhase | null,
-  language?: ReportLanguage | null,
+  language?: string | null,
 ): string | null => {
   if (!phase) {
     return null;
   }
 
-  const reportLanguage = normalizeReportLanguage(language);
-  const label = REQUEST_PHASE_LABELS[reportLanguage][phase];
+  const uiLanguage = toUiLanguage(language);
+  const label = REQUEST_PHASE_LABELS[uiLanguage][phase];
   if (!label) {
     return null;
   }
 
-  return `${TEXT[reportLanguage].requestPrefix}: ${label}`;
+  return `${TEXT[uiLanguage].requestPrefix}: ${label}`;
 };
 
 export const getMarketPhaseSummaryLabel = (
   summary?: MarketPhaseSummary | null,
-  language?: ReportLanguage | null,
+  language?: string | null,
 ): string | null => {
   if (!summary) {
     return null;
   }
 
-  const reportLanguage = normalizeReportLanguage(language);
-  const phaseLabel = MARKET_PHASE_LABELS[reportLanguage][summary.phase];
+  const uiLanguage = toUiLanguage(language);
+  const phaseLabel = MARKET_PHASE_LABELS[uiLanguage][summary.phase];
   if (!phaseLabel) {
     return null;
   }
 
   const market = (summary.market || '').trim().toUpperCase();
   const value = market ? `${market} · ${phaseLabel}` : phaseLabel;
-  return `${TEXT[reportLanguage].finalPrefix}: ${value}`;
+  return `${TEXT[uiLanguage].finalPrefix}: ${value}`;
 };
 
-export const getPartialBarLabel = (language?: ReportLanguage | null): string =>
-  TEXT[normalizeReportLanguage(language)].partialBar;
+export const getPartialBarLabel = (language?: string | null): string =>
+  TEXT[toUiLanguage(language)].partialBar;
+
+/** Same as getMarketPhaseSummaryLabel but without the "Market phase: " prefix. */
+export const getMarketPhaseValueLabel = (
+  summary?: MarketPhaseSummary | null,
+  language?: string | null,
+): string | null => {
+  if (!summary) {
+    return null;
+  }
+
+  const uiLanguage = toUiLanguage(language);
+  const phaseLabel = MARKET_PHASE_LABELS[uiLanguage][summary.phase];
+  if (!phaseLabel) {
+    return null;
+  }
+
+  const market = (summary.market || '').trim().toUpperCase();
+  return market ? `${market} · ${phaseLabel}` : phaseLabel;
+};

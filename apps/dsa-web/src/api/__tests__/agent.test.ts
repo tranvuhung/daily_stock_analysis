@@ -46,7 +46,7 @@ describe('agentApi', () => {
       data: {
         session_id: 'session-1',
         messages: [
-          { id: '1', role: 'user', content: '分析 AAPL', created_at: null },
+          { id: '1', role: 'user', content: 'Analyze AAPL', created_at: null },
         ],
         session_state: {
           selected_skill_ids: ['technical', 'risk'],

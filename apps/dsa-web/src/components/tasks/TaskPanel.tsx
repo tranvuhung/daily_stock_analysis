@@ -8,7 +8,7 @@ import { getRequestedPhaseLabel } from '../../utils/marketPhase';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
 
 /**
- * 任务项组件属性
+ * Task item component props
  */
 interface TaskItemProps {
   task: TaskInfo;
@@ -16,7 +16,7 @@ interface TaskItemProps {
 }
 
 /**
- * 单个任务项
+ * A single task item
  */
 const TaskItem: React.FC<TaskItemProps> = ({ task, onOpenRunFlow }) => {
   const { language, t } = useUiLanguage();
@@ -146,28 +146,28 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onOpenRunFlow }) => {
 };
 
 /**
- * 任务面板属性
+ * Task panel props
  */
 interface TaskPanelProps {
-  /** 任务列表 */
+  /** Task list */
   tasks: TaskInfo[];
-  /** 是否显示 */
+  /** Whether the panel is visible */
   visible?: boolean;
-  /** 标题 */
+  /** Title */
   title?: string;
-  /** 自定义类名 */
+  /** Extra class name */
   className?: string;
-  /** 打开运行流面板 */
+  /** Open the run-flow panel */
   onOpenRunFlow?: (task: TaskInfo) => void;
-  /** 是否折叠 */
+  /** Whether the panel is collapsed */
   collapsed?: boolean;
-  /** 折叠状态变化 */
+  /** Collapse-state change handler */
   onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 /**
- * 任务面板组件
- * 显示进行中的分析任务列表
+ * Task panel component
+ * Shows the list of in-flight analysis tasks
  */
 export const TaskPanel: React.FC<TaskPanelProps> = ({
   tasks,
@@ -181,13 +181,13 @@ export const TaskPanel: React.FC<TaskPanelProps> = ({
   const { t } = useUiLanguage();
   const contentId = useId();
   const [internalCollapsed, setInternalCollapsed] = useState(false);
-  // 筛选活跃任务（pending / processing / cancel requested）
+  // Keep only active tasks (pending / processing / cancel requested)
   const activeTasks = tasks.filter(
     (t) => t.status === 'pending' || t.status === 'processing' || t.status === 'cancel_requested'
   );
   const isCollapsed = collapsed ?? internalCollapsed;
 
-  // 无任务或不可见时不渲染
+  // Render nothing when there is no task or the panel is hidden
   if (!visible || activeTasks.length === 0) {
     return null;
   }

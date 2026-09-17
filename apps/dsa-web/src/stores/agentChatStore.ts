@@ -74,7 +74,7 @@ type StreamFailureEvent = {
 
 function streamFailureFallback(event: StreamFailureEvent, defaultMessage: string): string {
   return event.backend === 'codex_app_server'
-    ? 'Codex Agent 暂时无法完成本次问股，请查看 Agent 设置中的运行状态。'
+    ? 'The Codex agent could not complete this question; check the runtime status in Agent settings.'
     : defaultMessage;
 }
 
@@ -331,8 +331,8 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
     };
     const skillNames = meta?.skillNames?.length
       ? meta.skillNames
-      : [meta?.skillName ?? '通用'];
-    const skillName = skillNames.join('、');
+      : [meta?.skillName ?? 'General'];
+    const skillName = skillNames.join(', ');
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -364,8 +364,8 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
       let acceptedEvent: StreamAcceptedEvent | null = null;
       const currentProgressSteps: ProgressStep[] = [];
       const protocolError = (message: string) => createParsedApiError({
-        title: '请求未被接受',
-        message: 'Agent 没有确认接收本次问题，请保留当前内容后重试。',
+        title: 'Request was not accepted',
+        message: 'The agent did not acknowledge this question; keep your input and try again.',
         rawMessage: message,
         category: 'upstream_network',
       });
@@ -423,7 +423,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
           if (doneEvent.success === false) {
             throw getStreamFailureError(
               doneEvent,
-              streamFailureFallback(doneEvent, '大模型调用出错，请检查 API Key 配置'),
+              streamFailureFallback(doneEvent, 'The LLM call failed; check the API key configuration'),
             );
           }
           finalContent = doneEvent.content ?? '';
@@ -435,7 +435,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
           const failureEvent = event as unknown as StreamFailureEvent;
           throw getStreamFailureError(
             failureEvent,
-            streamFailureFallback(failureEvent, '分析出错'),
+            streamFailureFallback(failureEvent, 'Analysis failed'),
           );
         }
 
@@ -477,8 +477,8 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
 
       if (!receivedDoneEvent && !ac.signal.aborted) {
         throw createParsedApiError({
-          title: '回复未完整返回',
-          message: 'Agent 流式响应在完成前中断，请重试。',
+          title: 'The reply was truncated',
+          message: 'The agent stream ended before the reply completed; please try again.',
           rawMessage: 'Agent stream ended before a done event was received.',
           category: 'upstream_network',
         });
@@ -494,7 +494,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
             {
               id: (Date.now() + 1).toString(),
               role: 'assistant',
-              content: finalContent || '（无内容）',
+              content: finalContent || '(no content)',
               skills: payload.skills,
               skill: payload.skills?.[0],
               skillNames,

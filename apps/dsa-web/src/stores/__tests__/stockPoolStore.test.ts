@@ -503,7 +503,7 @@ describe('stockPoolStore', () => {
 
   it('surfaces duplicate task errors without replacing the dashboard error state', async () => {
     vi.mocked(analysisApi.analyzeAsync).mockRejectedValue(
-      new DuplicateTaskError('600519', 'task-1', '股票 600519 正在分析中'),
+      new DuplicateTaskError('600519', 'task-1', 'Stock 600519 is already being analyzed'),
     );
 
     useStockPoolStore.getState().setQuery('600519');
@@ -521,7 +521,7 @@ describe('stockPoolStore', () => {
     await useStockPoolStore.getState().submitAnalysis();
 
     const state = useStockPoolStore.getState();
-    expect(state.inputError).toBe('请输入有效的股票代码或股票名称');
+    expect(state.inputError).toBe('Enter a valid stock code or stock name');
     expect(state.isAnalyzing).toBe(false);
     expect(analysisApi.analyzeAsync).not.toHaveBeenCalled();
   });
@@ -1186,7 +1186,7 @@ describe('stockPoolStore', () => {
       progress: 100,
       reportType: 'detailed',
       createdAt: '2026-03-18T08:00:00Z',
-      error: '分析失败',
+      error: 'Analysis failed',
     });
 
     const state = useStockPoolStore.getState();

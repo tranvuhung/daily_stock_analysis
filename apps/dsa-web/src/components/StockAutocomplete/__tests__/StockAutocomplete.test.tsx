@@ -151,7 +151,7 @@ describe('StockAutocomplete', () => {
       />
     );
 
-    const input = screen.getByPlaceholderText(/输入股票代码或名称/);
+    const input = screen.getByPlaceholderText(/Enter a stock code or name/);
     expect(input).toBeInTheDocument();
   });
 
@@ -245,11 +245,11 @@ describe('StockAutocomplete', () => {
         value=""
         onChange={mockOnChange}
         onSubmit={mockOnSubmit}
-        ariaLabel="当前股票"
+        ariaLabel="Current stock"
       />
     );
 
-    expect(screen.getByLabelText('当前股票')).toBeInTheDocument();
+    expect(screen.getByLabelText('Current stock')).toBeInTheDocument();
   });
 
   describe('fallback mode', () => {
@@ -270,7 +270,7 @@ describe('StockAutocomplete', () => {
         />
       );
 
-      const input = screen.getByPlaceholderText(/输入股票代码或名称/);
+      const input = screen.getByPlaceholderText(/Enter a stock code or name/);
       expect(input).toHaveAttribute('data-autocomplete-mode', 'fallback');
     });
 
@@ -301,7 +301,7 @@ describe('StockAutocomplete', () => {
         />
       );
 
-      const input = screen.getByPlaceholderText(/输入股票代码或名称/);
+      const input = screen.getByPlaceholderText(/Enter a stock code or name/);
       expect(input).toHaveAttribute('data-autocomplete-mode', 'fallback');
     });
 
@@ -362,11 +362,11 @@ describe('StockAutocomplete', () => {
           value=""
           onChange={mockOnChange}
           onSubmit={mockOnSubmit}
-          ariaLabel="当前股票"
+          ariaLabel="Current stock"
         />
       );
 
-      expect(screen.getByLabelText('当前股票')).toHaveAttribute('data-autocomplete-mode', 'fallback');
+      expect(screen.getByLabelText('Current stock')).toHaveAttribute('data-autocomplete-mode', 'fallback');
     });
 
     it('prevents duplicate form submission when fallback input receives Enter', () => {
@@ -637,8 +637,8 @@ describe('StockAutocomplete', () => {
       const input = screen.getByDisplayValue('000660');
       fireEvent.focus(input);
 
-      expect(screen.getByText('韩股')).toBeInTheDocument();
-      expect(screen.getByText('日股')).toBeInTheDocument();
+      expect(screen.getByText('KR')).toBeInTheDocument();
+      expect(screen.getByText('JP')).toBeInTheDocument();
       expect(screen.getByText('000660.KS')).toBeInTheDocument();
       expect(screen.getByText('7203.T')).toBeInTheDocument();
     });

@@ -330,14 +330,15 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
     app = FastAPI(
         title="Daily Stock Analysis API",
         description=(
-            "A股/港股/美股自选股智能分析系统 API\n\n"
-            "## 功能模块\n"
-            "- 股票分析：触发 AI 智能分析\n"
-            "- 历史记录：查询历史分析报告\n"
-            "- 股票数据：获取行情数据\n\n"
-            "## 认证方式\n"
-            "支持可选管理员认证：ADMIN_AUTH_ENABLED=true 时，除登录、状态、健康检查和 "
-            "OpenAPI 文档外，/api/v1/* 需要有效管理员会话 Cookie；关闭时不强制认证。"
+            "Watchlist analysis API for A-shares, Hong Kong and US stocks\n\n"
+            "## Modules\n"
+            "- Stock analysis: trigger AI analysis\n"
+            "- History: query historical analysis reports\n"
+            "- Stock data: fetch quote data\n\n"
+            "## Authentication\n"
+            "Optional admin authentication. When ADMIN_AUTH_ENABLED=true, /api/v1/* requires a "
+            "valid admin session cookie, except for login, status, health check and the OpenAPI "
+            "docs. When disabled, authentication is not enforced."
         ),
         version="1.0.0",
         lifespan=app_lifespan,
@@ -436,18 +437,18 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
         "/health",
         response_model=HealthResponse,
         tags=["Health"],
-        summary="健康检查",
-        description="用于负载均衡器或监控系统检查服务状态"
+        summary="Health check",
+        description="Used by load balancers or monitoring systems to check service status"
     )
     @app.get(
         "/api/health",
         response_model=HealthResponse,
         tags=["Health"],
-        summary="健康检查",
-        description="用于负载均衡器或监控系统检查服务状态"
+        summary="Health check",
+        description="Used by load balancers or monitoring systems to check service status"
     )
     async def health_check() -> HealthResponse:
-        """健康检查接口"""
+        """Health check endpoint"""
         return HealthResponse(
             status="ok",
             timestamp=datetime.now().isoformat()

@@ -10,6 +10,7 @@ import type {
   RunDiagnosticStatus,
   RunDiagnosticSummary,
 } from '../../types/analysis';
+import { useUiLanguage } from '../../contexts/UiLanguageContext';
 import { normalizeReportLanguage } from '../../utils/reportLanguage';
 import { Badge, Button, Card, StatusDot } from '../common';
 
@@ -168,9 +169,10 @@ export const ReportDiagnostics: React.FC<ReportDiagnosticsProps> = ({
   language = 'zh',
   onOpenRunFlow,
 }) => {
+  const { language: uiLanguage } = useUiLanguage();
   const reportLanguage = normalizeReportLanguage(language);
   const text = TEXT[reportLanguage];
-  const runFlowText = UI_TEXT[reportLanguage === 'ko' ? 'en' : reportLanguage];
+  const runFlowText = UI_TEXT[uiLanguage];
   const [fetchState, setFetchState] = useState<{
     recordId?: number;
     summary: RunDiagnosticSummary | null;

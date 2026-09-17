@@ -4,8 +4,8 @@ import type { RunFlowEdge, RunFlowLane, RunFlowNode } from '../../../types/runFl
 import { RunFlowGraph } from '../RunFlowGraph';
 
 const lanes: RunFlowLane[] = [
-  { id: 'entry', label: '入口', order: 1 },
-  { id: 'data_source', label: '数据来源', order: 2 },
+  { id: 'entry', label: 'Entry', order: 1 },
+  { id: 'data_source', label: 'Data source', order: 2 },
   { id: 'analysis', label: '分析引擎', order: 3 },
 ];
 
@@ -71,13 +71,13 @@ describe('RunFlowGraph', () => {
       />,
     );
 
-    expect(screen.getByText('入口')).toBeInTheDocument();
-    expect(screen.getByText('数据来源')).toBeInTheDocument();
-    expect(screen.getAllByText('降级回退').length).toBeGreaterThan(0);
+    expect(screen.getByText('Entry')).toBeInTheDocument();
+    expect(screen.getByText('Data source')).toBeInTheDocument();
+    expect(screen.getAllByText('Fallback').length).toBeGreaterThan(0);
     expect(screen.getByText('降级输入')).toBeInTheDocument();
-    expect(screen.getByTestId('run-flow-node-news')).toHaveTextContent('开始');
+    expect(screen.getByTestId('run-flow-node-news')).toHaveTextContent('Start');
     expect(screen.getByTestId('run-flow-node-news')).toHaveTextContent('2026');
-    expect(screen.getByRole('button', { name: '新闻舆情 节点，状态 降级回退' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新闻舆情 node, status 降级回退' })).toBeInTheDocument();
     const marker = container.querySelector('marker');
     expect(marker).toHaveAttribute('markerWidth', '4');
     expect(marker).toHaveAttribute('markerHeight', '4');
@@ -86,7 +86,7 @@ describe('RunFlowGraph', () => {
     fireEvent.mouseEnter(screen.getByTestId('run-flow-node-news'));
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '新闻舆情 节点，状态 降级回退' }));
+    fireEvent.click(screen.getByRole('button', { name: '新闻舆情 node, status 降级回退' }));
 
     expect(onSelectNode).toHaveBeenCalledWith(expect.objectContaining({ id: 'news' }));
   });
@@ -251,7 +251,7 @@ describe('RunFlowGraph', () => {
             id: 'task_queue',
             lane: 'entry',
             kind: 'queue',
-            label: '任务队列',
+            label: 'Task 队列',
             status: 'success',
           },
         ]}
@@ -289,7 +289,7 @@ describe('RunFlowGraph', () => {
         to: 'quote',
         kind: 'control',
         status: 'success',
-        label: '详情',
+        label: 'Details',
       },
     ];
     const { container } = render(
@@ -316,7 +316,7 @@ describe('RunFlowGraph', () => {
     expect(startY).toBeLessThan(endY);
     expect(startY).toBe(dailyBottom);
     expect(endY).toBe(quoteTop);
-    const label = screen.getByText('详情');
+    const label = screen.getByText('Details');
     expect(label).toHaveAttribute('text-anchor', 'start');
     expect(parseFloat(label.getAttribute('x') || '0')).toBeGreaterThan(startX);
     expect(parseFloat(label.getAttribute('y') || '0')).toBeGreaterThan((startY + endY) / 2);
@@ -460,7 +460,7 @@ describe('RunFlowGraph', () => {
       <RunFlowGraph
         lanes={[
           ...lanes,
-          { id: 'artifact', label: '产物', order: 4 },
+          { id: 'artifact', label: 'Artifact', order: 4 },
         ]}
         nodes={laneWidthNodes}
         edges={[]}
@@ -498,7 +498,7 @@ describe('RunFlowGraph', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '展开 新闻舆情 运行尝试' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Expand 新闻舆情 attempts' }));
 
     expect(screen.getByTestId('run-flow-node-topology_data_news_search')).toHaveClass('pb-8');
     expect(onToggleExpanded).toHaveBeenCalledWith('topology_data_news_search');
@@ -539,7 +539,7 @@ describe('RunFlowGraph', () => {
             id: 'task_queue',
             lane: 'entry',
             kind: 'queue',
-            label: '任务队列',
+            label: 'Task 队列',
             status: 'success',
           },
           {

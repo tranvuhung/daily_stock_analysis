@@ -47,15 +47,15 @@ const snapshot: RunFlowSnapshot = {
     eventCount: 1,
   },
   lanes: [
-    { id: 'entry', label: '入口', order: 1 },
-    { id: 'data_source', label: '数据来源', order: 2 },
+    { id: 'entry', label: 'Entry', order: 1 },
+    { id: 'data_source', label: 'Data source', order: 2 },
   ],
   nodes: [
     {
       id: 'task_queue',
       lane: 'entry',
       kind: 'queue',
-      label: '任务队列',
+      label: 'Task 队列',
       status: 'running',
     },
   ],
@@ -67,7 +67,7 @@ const snapshot: RunFlowSnapshot = {
       severity: 'info',
       type: 'task_started',
       nodeId: 'task_queue',
-      title: '任务开始执行',
+      title: 'Task 开始执行',
     },
   ],
 };
@@ -324,7 +324,7 @@ describe('useRunFlowSnapshot', () => {
     ));
 
     expect(fallbackEdge).toBeDefined();
-    expect(fallbackEdge?.label).toBe('降级');
+    expect(fallbackEdge?.label).toBe('Fallback');
     expect(result.current.snapshot?.summary).toEqual(expect.objectContaining({
       failedAttempts: 1,
       fallbackCount: 1,
@@ -527,7 +527,7 @@ describe('useRunFlowSnapshot', () => {
             to: primaryNode.id,
             kind: 'control',
             status: 'failed',
-            label: '调用',
+            label: 'Invoke',
           },
           {
             id: 'provider_daily_data_primary_1_to_provider_daily_data_backup_2_fallback',
@@ -535,7 +535,7 @@ describe('useRunFlowSnapshot', () => {
             to: backupNode.id,
             kind: 'fallback',
             status: 'success',
-            label: '降级',
+            label: 'Fallback',
           },
         ],
         events: [

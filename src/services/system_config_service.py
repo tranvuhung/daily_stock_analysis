@@ -525,8 +525,8 @@ class SystemConfigService:
         channel: str,
         items: Sequence[Dict[str, str]],
         mask_token: str = "******",
-        title: str = "DSA 通知测试",
-        content: str = "这是一条来自 DSA Web 设置页的通知测试消息。",
+        title: str = "DSA notification test",
+        content: str = "This is a test notification from the DSA Web settings page.",
         timeout_seconds: float = 20.0,
     ) -> Dict[str, Any]:
         """Send one real notification test without persisting submitted values."""
@@ -542,7 +542,7 @@ class SystemConfigService:
         if missing:
             return self._build_notification_test_result(
                 success=False,
-                message=f"通知渠道配置不完整，缺少: {', '.join(missing)}",
+                message=f"Notification channel configuration is incomplete. Missing: {', '.join(missing)}",
                 error_code="config_missing",
                 stage="config_validation",
                 retryable=False,
@@ -579,7 +579,7 @@ class SystemConfigService:
             error_code, retryable = self._classify_notification_exception(exc)
             return self._build_notification_test_result(
                 success=False,
-                message=f"通知测试异常: {exc}",
+                message=f"Notification test error: {exc}",
                 error_code=error_code,
                 stage="notification_send",
                 retryable=retryable,
@@ -2157,7 +2157,7 @@ class SystemConfigService:
             )
             warnings.append(
                 (
-                    "新闻窗口已按策略计算："
+                    "News window computed from profile: "
                     f"NEWS_STRATEGY_PROFILE={profile}, "
                     f"NEWS_MAX_AGE_DAYS={max_age}, "
                     f"effective_days={effective_days} "
@@ -2173,15 +2173,15 @@ class SystemConfigService:
             if reload_now:
                 warnings.append(
                     (
-                        f"MAX_WORKERS={max_workers} 已保存。任务队列空闲时会自动应用；"
-                        "若当前存在运行中任务，将在队列空闲后生效。"
+                        f"MAX_WORKERS={max_workers} was saved. It applies automatically when the task queue is idle; "
+                        "if tasks are currently running, it takes effect once the queue becomes idle."
                     )
                 )
             else:
                 warnings.append(
                     (
-                        f"MAX_WORKERS={max_workers} 已写入 .env，但本次未触发运行时重载"
-                        "（reload_now=false）；重载后才会应用。"
+                        f"MAX_WORKERS={max_workers} was written to .env, but no runtime reload was triggered "
+                        "(reload_now=false); it applies after a reload."
                     )
                 )
 
@@ -2191,9 +2191,10 @@ class SystemConfigService:
         if startup_only_run_keys:
             warnings.append(
                 (
-                    f"{', '.join(sorted(startup_only_run_keys))} 已写入 .env。"
-                    "它属于启动期单次运行配置：当前已运行的 WebUI/API 进程不会因为本次保存立即触发分析；"
-                    "请重启当前进程后，在非 schedule 模式下按新值生效。"
+                    f"{', '.join(sorted(startup_only_run_keys))} was written to .env. "
+                    "This is a startup-time, single-run setting: the running WebUI/API process will not "
+                    "trigger an analysis because of this save. Restart the process, then it takes effect "
+                    "in non-schedule mode."
                 )
             )
 
@@ -2203,9 +2204,10 @@ class SystemConfigService:
         if startup_only_schedule_keys:
             warnings.append(
                 (
-                    f"{', '.join(sorted(startup_only_schedule_keys))} 已写入 .env。"
-                    "这些属于启动期调度模式配置：当前已运行的 WebUI/API 进程不会因为本次保存启动、"
-                    "停止或重建 scheduler；请重启当前进程，并以 schedule 模式重新启动后生效。"
+                    f"{', '.join(sorted(startup_only_schedule_keys))} was written to .env. "
+                    "These are startup-time schedule-mode settings: the running WebUI/API process will not "
+                    "start, stop or rebuild the scheduler because of this save. Restart the process in "
+                    "schedule mode for it to take effect."
                 )
             )
 
@@ -2213,9 +2215,10 @@ class SystemConfigService:
             schedule_enabled = (current_map.get("SCHEDULE_ENABLED", "false") or "false").strip().lower()
             warnings.append(
                 (
-                    f"SCHEDULE_ENABLED={schedule_enabled} 已写入 .env。"
-                    "如果当前进程是 WebUI/API/Desktop 长运行进程，runtime scheduler 会按新配置启停；"
-                    "CLI schedule 模式仍按启动参数和配置运行。"
+                    f"SCHEDULE_ENABLED={schedule_enabled} was written to .env. "
+                    "For long-running WebUI/API/Desktop processes the runtime scheduler starts or stops "
+                    "according to the new configuration; CLI schedule mode still follows its startup "
+                    "arguments and configuration."
                 )
             )
 
@@ -2225,9 +2228,9 @@ class SystemConfigService:
             effective = schedule_times or schedule_time
             warnings.append(
                 (
-                    f"SCHEDULE_TIMES={effective} 已写入 .env。"
-                    "有效时间点会去重、排序；为空时继续使用 SCHEDULE_TIME。"
-                    "如果当前进程存在 runtime scheduler，会按新时间重建 daily jobs。"
+                    f"SCHEDULE_TIMES={effective} was written to .env. "
+                    "Valid times are deduplicated and sorted; when empty, SCHEDULE_TIME is still used. "
+                    "If the current process has a runtime scheduler, daily jobs are rebuilt with the new times."
                 )
             )
 
@@ -2235,9 +2238,9 @@ class SystemConfigService:
             schedule_time = (current_map.get("SCHEDULE_TIME", "") or "").strip() or "18:00"
             warnings.append(
                 (
-                    f"SCHEDULE_TIME={schedule_time} 已写入 .env。"
-                    "如果当前进程已经以 schedule 模式运行，scheduler 会在下一轮检查中自动重建 daily job；"
-                    "如果当前进程未以 schedule 模式运行，本次保存不会启动 scheduler。"
+                    f"SCHEDULE_TIME={schedule_time} was written to .env. "
+                    "If the current process already runs in schedule mode, the scheduler rebuilds the daily "
+                    "job on its next check; if it does not, this save does not start a scheduler."
                 )
             )
 
@@ -2248,9 +2251,10 @@ class SystemConfigService:
         if startup_only_bind_keys:
             warnings.append(
                 (
-                    f"{', '.join(sorted(startup_only_bind_keys))} 已写入 .env。"
-                    "这些属于启动期监听配置：当前已运行的 WebUI/API 进程不会因为本次保存重新绑定监听地址或端口；"
-                    "请重启当前进程、Docker 容器或服务管理器后生效。"
+                    f"{', '.join(sorted(startup_only_bind_keys))} was written to .env. "
+                    "These are startup-time listener settings: the running WebUI/API process will not rebind "
+                    "its host or port because of this save. Restart the process, Docker container or service "
+                    "manager for it to take effect."
                 )
             )
 
@@ -2264,9 +2268,9 @@ class SystemConfigService:
     ) -> List[str]:
         """Explain when save payload clears stale runtime model references."""
         runtime_labels = {
-            "LITELLM_MODEL": "主模型",
-            "AGENT_LITELLM_MODEL": "Agent 主模型",
-            "VISION_MODEL": "Vision 模型",
+            "LITELLM_MODEL": "Primary model",
+            "AGENT_LITELLM_MODEL": "Agent primary model",
+            "VISION_MODEL": "Vision model",
         }
         cleared_labels: List[str] = []
         for key, label in runtime_labels.items():
@@ -2292,14 +2296,14 @@ class SystemConfigService:
 
         cleaned_targets = list(cleared_labels)
         if removed_fallbacks:
-            cleaned_targets.append("备选模型中的失效项")
+            cleaned_targets.append("Stale entries among the fallback models")
 
         cleaned_text = " / ".join(cleaned_targets)
         warning = (
-            f"检测到已同步清理失效的运行时模型引用：{cleaned_text}。"
-            "如需恢复，请先补回对应渠道模型列表后重新选择；"
-            "也可用桌面端导出备份或手动 .env 还原之前的 LLM_* / "
-            "LITELLM_MODEL / AGENT_LITELLM_MODEL / VISION_MODEL / LLM_TEMPERATURE。"
+            f"Stale runtime model references were cleaned up: {cleaned_text}. "
+            "To restore them, add the models back to the corresponding channel list and select them again; "
+            "you can also use a desktop export backup or manually restore the previous LLM_* / "
+            "LITELLM_MODEL / AGENT_LITELLM_MODEL / VISION_MODEL / LLM_TEMPERATURE."
         )
         return [warning]
 
@@ -2324,11 +2328,12 @@ class SystemConfigService:
 
         return [
             (
-                "检测到已清理 Hermes Phase 3 不支持的配置项："
-                f"{', '.join(cleared)}。"
-                "Hermes reserved channel 只支持单个 LLM_HERMES_API_KEY，不支持多 Key 或额外 Header；"
-                "如需恢复旧值，请从 .env 备份、Git 历史或桌面端导出备份手动还原，"
-                "但非空 LLM_HERMES_API_KEYS / LLM_HERMES_EXTRA_HEADERS 仍会被后端校验拒绝。"
+                "Configuration entries unsupported by Hermes Phase 3 were cleaned up: "
+                f"{', '.join(cleared)}. "
+                "The Hermes reserved channel supports only a single LLM_HERMES_API_KEY, not multiple keys or extra "
+                "headers. To restore old values, recover them manually from an .env backup, Git history or a "
+                "desktop export backup, but non-empty LLM_HERMES_API_KEYS / LLM_HERMES_EXTRA_HEADERS will "
+                "still be rejected by backend validation."
             )
         ]
 
@@ -2349,7 +2354,7 @@ class SystemConfigService:
         """Parse raw `.env` text into update items without expanding app templates."""
         normalized_content = content.replace("\ufeff", "")
         if not normalized_content.strip():
-            raise ConfigImportError("未识别到有效 .env 配置")
+            raise ConfigImportError("No valid .env configuration detected")
 
         from dotenv import dotenv_values
 
@@ -2366,7 +2371,7 @@ class SystemConfigService:
             )
 
         if not updates:
-            raise ConfigImportError("未识别到有效 .env 配置")
+            raise ConfigImportError("No valid .env configuration detected")
 
         return updates
 
@@ -2960,14 +2965,14 @@ class SystemConfigService:
             ntfy_server_url, ntfy_topic = resolve_ntfy_endpoint(ntfy_url)
             if ntfy_server_url and ntfy_topic:
                 return None
-            return "NTFY_URL 必须包含 topic path，例如 https://ntfy.sh/my-topic。"
+            return "NTFY_URL must include a topic path, for example https://ntfy.sh/my-topic."
         if channel == "gotify":
             gotify_url = (effective_map.get("GOTIFY_URL") or "").strip()
             if not gotify_url:
                 return None
             if resolve_gotify_message_endpoint(gotify_url):
                 return None
-            return "GOTIFY_URL 必须是 Gotify server base URL，不包含 /message。"
+            return "GOTIFY_URL must be the Gotify server base URL, without /message."
         return None
 
     def _build_notification_test_config(self, effective_map: Dict[str, str]) -> Config:
@@ -3038,11 +3043,11 @@ class SystemConfigService:
             total_count = len(attempts)
             success = success_count > 0
             if success_count == total_count and total_count > 0:
-                message = f"自定义 Webhook 通知测试成功（{success_count}/{total_count}）"
+                message = f"Custom webhook notification test succeeded ({success_count}/{total_count})"
             elif success_count > 0:
-                message = f"自定义 Webhook 通知测试部分成功（{success_count}/{total_count}）"
+                message = f"Custom webhook notification test partially succeeded ({success_count}/{total_count})"
             else:
-                message = f"自定义 Webhook 通知测试失败（{success_count}/{total_count}）"
+                message = f"Custom webhook notification test failed ({success_count}/{total_count})"
             return self._build_notification_test_result(
                 success=success,
                 message=message,
@@ -3074,7 +3079,7 @@ class SystemConfigService:
         attempt = {
             "channel": channel,
             "success": ok,
-            "message": "通知测试发送成功" if ok else "通知测试发送失败",
+            "message": "Notification test sent successfully" if ok else "Notification test delivery failed",
             "target": target,
             "error_code": None if ok else "send_failed",
             "stage": "notification_send",
@@ -3083,7 +3088,7 @@ class SystemConfigService:
         }
         return self._build_notification_test_result(
             success=ok,
-            message=f"{channel} 通知测试成功" if ok else f"{channel} 通知测试失败",
+            message=f"{channel} notification test succeeded" if ok else f"{channel} notification test failed",
             error_code=None if ok else "send_failed",
             stage="notification_send",
             retryable=False,
@@ -3553,12 +3558,12 @@ class SystemConfigService:
                 return explicit_model, "explicit"
             has_direct_source = self._has_setup_runtime_source_for_model(explicit_model, effective_map)
             if yaml_models and explicit_model not in set(yaml_models):
-                return "", "主模型未出现在当前 LiteLLM YAML model_list 中"
+                return "", "The primary model does not appear in the current LiteLLM YAML model_list"
             if channel_models and explicit_model not in set(channel_models):
-                return "", "主模型未出现在当前启用渠道模型列表中"
+                return "", "The primary model does not appear in the model list of the enabled channels"
             if yaml_models or channel_models or has_direct_source:
                 return explicit_model, "explicit"
-            return "", "主模型缺少可用渠道或匹配的 API Key"
+            return "", "The primary model has no available channel or matching API key"
 
         if yaml_models:
             return yaml_models[0], "yaml"
@@ -3569,7 +3574,7 @@ class SystemConfigService:
         if legacy_model:
             return legacy_model, "legacy"
 
-        return "", "尚未检测到主模型配置"
+        return "", "No primary model configuration detected yet"
 
     def _build_setup_primary_llm_check(self, effective_map: Dict[str, str]) -> Dict[str, Any]:
         generation_backend = normalize_backend_id(
@@ -3581,56 +3586,57 @@ class SystemConfigService:
             if shutil.which(preset.executable):
                 return self._setup_check(
                     "llm_primary",
-                    "LLM 主渠道",
+                    "LLM primary channel",
                     "ai_model",
                     True,
                     "configured",
-                    f"已启用 {preset.display_name} 本地生成 Backend（experimental/limited）。",
+                    f"Enabled {preset.display_name} local generation backend (experimental/limited).",
                 )
             return self._setup_check(
                 "llm_primary",
-                "LLM 主渠道",
+                "LLM primary channel",
                 "ai_model",
                 True,
                 "needs_action",
                 (
-                    "已选择 codex_cli，但 DSA 后端进程当前 PATH 中找不到 codex 可执行文件。"
+                    "codex_cli is selected, but the codex executable was not found on the DSA backend process PATH."
                     if generation_backend == CODEX_CLI_BACKEND_ID
-                    else f"已选择 {generation_backend}，但未找到 {preset.executable} 可执行文件。"
+                    else f"Selected {generation_backend}, but could not find {preset.executable} executable."
                 ),
                 (
-                    "请确认 Codex CLI 已安装到后端 PATH 可见目录；桌面端请完全退出并重开。"
-                    "打开 Codex CLI 交互窗口不会改变已运行后端的 PATH；若找到后仍失败，再检查 Codex CLI 登录态，"
-                    "或将 GENERATION_BACKEND 设回 litellm。"
+                    "Make sure the Codex CLI is installed in a directory visible on the backend PATH; on desktop, quit "
+                    "the app completely and reopen it. Opening a Codex CLI window does not change the PATH of an "
+                    "already running backend. If it is found but still fails, check the Codex CLI sign-in state, "
+                    "or set GENERATION_BACKEND back to litellm."
                     if generation_backend == CODEX_CLI_BACKEND_ID
-                    else "请先安装并登录对应 CLI，或将 GENERATION_BACKEND 设回 litellm。"
+                    else "Install and sign in to the corresponding CLI first, or set GENERATION_BACKEND back to litellm."
                 ),
             )
 
         model, source = self._resolve_setup_primary_model(effective_map)
         if model:
             source_label = {
-                "explicit": "显式主模型",
+                "explicit": "Explicit primary model",
                 "yaml": "LiteLLM YAML",
-                "channel": "LLM 渠道",
+                "channel": "LLM channel",
                 "legacy": "legacy provider",
             }.get(source, source)
             return self._setup_check(
                 "llm_primary",
-                "LLM 主渠道",
+                "LLM primary channel",
                 "ai_model",
                 True,
                 "configured",
-                f"已检测到 {source_label}: {model}",
+                f"Detected {source_label}: {model}",
             )
         return self._setup_check(
             "llm_primary",
-            "LLM 主渠道",
+            "LLM primary channel",
             "ai_model",
             True,
             "needs_action",
             source,
-            "请配置 LITELLM_MODEL、LLM_CHANNELS、LITELLM_CONFIG 或 legacy provider API Key。",
+            "Configure LITELLM_MODEL, LLM_CHANNELS, LITELLM_CONFIG, or a legacy provider API key.",
         )
 
     def _build_setup_agent_llm_check(
@@ -3649,12 +3655,12 @@ class SystemConfigService:
         if agent_backend in GENERATION_ONLY_BACKEND_IDS:
             return self._setup_check(
                 "llm_agent",
-                "Agent 渠道",
+                "Agent channel",
                 "agent",
                 True,
                 "needs_action",
-                f"Agent 工具调用暂不支持 {agent_backend} text-only backend。",
-                "请将 AGENT_GENERATION_BACKEND 设为 auto 或 litellm，并配置 LiteLLM 工具调用渠道。",
+                f"Agent tool calls do not yet support {agent_backend} text-only backend.",
+                "Set AGENT_GENERATION_BACKEND to auto or litellm, and configure a LiteLLM tool-calling channel.",
             )
 
         agent_model_raw = (effective_map.get("AGENT_LITELLM_MODEL") or "").strip()
@@ -3667,70 +3673,70 @@ class SystemConfigService:
                     if litellm_model in hermes_routes and litellm_model not in non_hermes_routes:
                         return self._setup_check(
                             "llm_agent",
-                            "Agent 渠道",
+                            "Agent channel",
                             "agent",
                             True,
                             "needs_action",
-                            "普通分析使用 Codex CLI；但当前 LiteLLM Agent 路径继承的是 Hermes-only 模型，"
-                            "Hermes Phase 3 不支持 Agent 工具调用。",
-                            "如需使用 Ask-Stock Agent，请配置非 Hermes 的 AGENT_LITELLM_MODEL，"
-                            "或配置包含非 Hermes deployment 的 mixed Agent route。",
+                            "Regular analysis uses the Codex CLI, but the current LiteLLM Agent path inherits a "
+                            "Hermes-only model, and Hermes Phase 3 does not support Agent tool calls.",
+                            "To use the Ask-Stock Agent, configure a non-Hermes AGENT_LITELLM_MODEL, or a mixed Agent "
+                            "route that includes a non-Hermes deployment.",
                         )
                     return self._setup_check(
                         "llm_agent",
-                        "Agent 渠道",
+                        "Agent channel",
                         "agent",
                         True,
                         "configured",
-                        f"普通分析使用 Codex CLI；Agent 工具调用仍使用 LiteLLM 主模型: {litellm_model}",
+                        f"Regular analysis uses the Codex CLI; Agent tool calls still use the LiteLLM primary model: {litellm_model}",
                     )
                 if agent_backend == LITELLM_BACKEND_ID:
                     return self._setup_check(
                         "llm_agent",
-                        "Agent 渠道",
+                        "Agent channel",
                         "agent",
                         True,
                         "needs_action",
-                        "AGENT_GENERATION_BACKEND 已选择 litellm，但未检测到可用 LiteLLM 模型配置。",
-                        "如需使用 Ask-Stock Agent，请配置 AGENT_LITELLM_MODEL、LITELLM_MODEL、LLM_CHANNELS 或 LITELLM_CONFIG。",
+                        "AGENT_GENERATION_BACKEND is set to litellm, but no usable LiteLLM model configuration was detected.",
+                        "To use the Ask-Stock Agent, configure AGENT_LITELLM_MODEL, LITELLM_MODEL, LLM_CHANNELS or LITELLM_CONFIG.",
                     )
                 return self._setup_check(
                     "llm_agent",
-                    "Agent 渠道",
+                    "Agent channel",
                     "agent",
                     True,
                     "needs_action",
-                    "Agent 工具调用需要 LiteLLM 模型配置；local CLI 主生成方式不会被自动继承。",
-                    "如需使用 Ask-Stock Agent，请配置 LiteLLM 模型，或将 AGENT_GENERATION_BACKEND 固定为 litellm 后补齐模型配置。",
+                    "Agent tool calls require a LiteLLM model configuration; a local CLI primary generation method is not inherited automatically.",
+                    "To use the Ask-Stock Agent, configure a LiteLLM model, or pin AGENT_GENERATION_BACKEND to litellm and complete the model configuration.",
                 )
             if primary_check["status"] == "configured":
                 primary_model, _source = self._resolve_setup_primary_model(effective_map)
                 if primary_model in hermes_routes and primary_model not in non_hermes_routes:
                     return self._setup_check(
                         "llm_agent",
-                        "Agent 渠道",
+                        "Agent channel",
                         "agent",
                         True,
                         "needs_action",
-                        "Hermes Phase 3 不支持 Agent 工具调用，且当前继承的主模型没有非 Hermes deployment。",
-                        "请选择非 Hermes Agent 模型，或配置包含非 Hermes deployment 的 mixed Agent route。",
+                        "Hermes Phase 3 does not support Agent tool calls, and the inherited primary model has no non-Hermes deployment.",
+                        "Select a non-Hermes Agent model, or configure a mixed Agent route that includes a non-Hermes deployment.",
                     )
                 return self._setup_check(
                     "llm_agent",
-                    "Agent 渠道",
+                    "Agent channel",
                     "agent",
                     True,
                     "inherited",
-                    "未单独配置 Agent 主模型，将继承 LLM 主渠道。",
+                    "No dedicated Agent primary model is configured; it inherits the LLM primary channel.",
                 )
             return self._setup_check(
                 "llm_agent",
-                "Agent 渠道",
+                "Agent channel",
                 "agent",
                 True,
                 "needs_action",
-                "Agent 未配置独立模型，且 LLM 主渠道尚不可用。",
-                "请先补齐 LLM 主渠道配置。",
+                "Agent has no dedicated model configured, and the LLM primary channel is not yet available.",
+                "Complete the LLM primary channel configuration first.",
             )
 
         configured_models = set(
@@ -3741,22 +3747,22 @@ class SystemConfigService:
         if agent_model in hermes_routes and agent_model not in non_hermes_routes:
             return self._setup_check(
                 "llm_agent",
-                "Agent 渠道",
+                "Agent channel",
                 "agent",
                 True,
                 "needs_action",
-                f"Agent 主模型 {agent_model} 只有 Hermes deployment，Phase 3 不支持 Agent 工具调用。",
-                "请选择非 Hermes Agent 模型，或配置 mixed route 中的非 Hermes deployment。",
+                f"Agent primary model {agent_model} has only Hermes deployments, and Phase 3 does not support Agent tool calls.",
+                "Select a non-Hermes Agent model, or configure a non-Hermes deployment in the mixed route.",
             )
-        configured_agent_message = f"已配置 Agent 主模型: {agent_model}"
+        configured_agent_message = f"Agent primary model configured: {agent_model}"
         if generation_backend == CODEX_CLI_BACKEND_ID:
             configured_agent_message = (
-                f"普通分析使用 Codex CLI；Agent 工具调用仍使用 LiteLLM 主模型: {agent_model}"
+                f"Regular analysis uses the Codex CLI; Agent tool calls still use the LiteLLM primary model: {agent_model}"
             )
         if _uses_direct_env_provider(agent_model):
             return self._setup_check(
                 "llm_agent",
-                "Agent 渠道",
+                "Agent channel",
                 "agent",
                 True,
                 "configured",
@@ -3768,7 +3774,7 @@ class SystemConfigService:
         ) or agent_model in configured_models:
             return self._setup_check(
                 "llm_agent",
-                "Agent 渠道",
+                "Agent channel",
                 "agent",
                 True,
                 "configured",
@@ -3777,12 +3783,12 @@ class SystemConfigService:
 
         return self._setup_check(
             "llm_agent",
-            "Agent 渠道",
+            "Agent channel",
             "agent",
             True,
             "needs_action",
-            f"Agent 主模型 {agent_model} 缺少可用渠道或匹配的 API Key。",
-            "请调整 AGENT_LITELLM_MODEL 或补齐对应渠道配置。",
+            f"Agent primary model {agent_model} has no available channel or matching API key.",
+            "Adjust AGENT_LITELLM_MODEL or complete the corresponding channel configuration.",
         )
 
     def _build_setup_stock_list_check(self, effective_map: Dict[str, str]) -> Dict[str, Any]:
@@ -3790,20 +3796,20 @@ class SystemConfigService:
         if stocks:
             return self._setup_check(
                 "stock_list",
-                "自选股",
+                "Watchlist",
                 "base",
                 True,
                 "configured",
-                f"已配置 {len(stocks)} 只股票。",
+                f"Configured {len(stocks)} stock(s).",
             )
         return self._setup_check(
             "stock_list",
-            "自选股",
+            "Watchlist",
             "base",
             True,
             "needs_action",
-            "当前 STOCK_LIST 为空。",
-            "请至少添加 1 只股票用于首次试跑。",
+            "STOCK_LIST is currently empty.",
+            "Add at least one stock for the first trial run.",
         )
 
     def _build_setup_notification_check(self, effective_map: Dict[str, str]) -> Dict[str, Any]:
@@ -3851,20 +3857,20 @@ class SystemConfigService:
         if configured:
             return self._setup_check(
                 "notification",
-                "通知渠道",
+                "Notification channels",
                 "notification",
                 False,
                 "configured",
-                "已检测到至少一个通知渠道配置。",
+                "At least one notification channel is configured.",
             )
         return self._setup_check(
             "notification",
-            "通知渠道",
+            "Notification channels",
             "notification",
             False,
             "optional",
-            "通知为可选项，未配置也不影响首次跑通。",
-            "需要推送时可稍后配置飞书、钉钉、Telegram、邮件或其他通知渠道。",
+            "Notifications are optional; leaving them unconfigured does not block the first run.",
+            "When you need push notifications, configure Feishu, DingTalk, Telegram, email or another channel later.",
         )
 
     def _build_setup_storage_check(self, effective_map: Dict[str, str]) -> Dict[str, Any]:
@@ -3877,21 +3883,21 @@ class SystemConfigService:
         if not probe.exists() or not probe.is_dir():
             return self._setup_check(
                 "storage",
-                "数据库 / 本地存储",
+                "Database / local storage",
                 "system",
                 True,
                 "needs_action",
-                f"数据库路径父目录不可用: {parent}",
-                "请检查 DATABASE_PATH 或上级目录权限。",
+                f"The database path's parent directory is unavailable: {parent}",
+                "Check DATABASE_PATH or the parent directory permissions.",
             )
 
         if os.access(probe, os.W_OK):
-            detail = f"数据库路径可用: {db_path}"
+            detail = f"Database path is available: {db_path}"
             if not parent.exists():
-                detail = f"数据库上级目录可创建: {parent}"
+                detail = f"Database parent directory can be created: {parent}"
             return self._setup_check(
                 "storage",
-                "数据库 / 本地存储",
+                "Database / local storage",
                 "system",
                 True,
                 "configured",
@@ -3900,12 +3906,12 @@ class SystemConfigService:
 
         return self._setup_check(
             "storage",
-            "数据库 / 本地存储",
+            "Database / local storage",
             "system",
             True,
             "needs_action",
-            f"数据库路径上级目录不可写: {probe}",
-            "请调整 DATABASE_PATH 或目录权限。",
+            f"The database path's parent directory is not writable: {probe}",
+            "Adjust DATABASE_PATH or the directory permissions.",
         )
 
     @staticmethod
@@ -4252,7 +4258,7 @@ class SystemConfigService:
             "blocked due to policy",
             "moderation_blocked",
             "policy_blocked",
-            "请求被拦截",
+            "Request blocked",
         )
         return any(token in lowered for token in blocked_tokens)
 
@@ -4490,7 +4496,7 @@ class SystemConfigService:
                 {
                     "key": "AGENT_ARCH",
                     "code": "unsupported_agent_arch",
-                    "message": "Codex 本地 Agent 当前只支持单 Agent 问股，请切换为 single。",
+                    "message": "Codex local Agent currently supports single-agent ask-stock only. Switch to single.",
                     "severity": "error",
                     "expected": "single",
                     "actual": agent_arch,
@@ -4509,7 +4515,7 @@ class SystemConfigService:
                 {
                     "key": "AGENT_ORCHESTRATOR_TIMEOUT_S",
                     "code": "codex_timeout_required",
-                    "message": "Codex 本地 Agent 必须设置大于 0 的整体时限，确保每次问股都会结束。",
+                    "message": "Codex local Agent requires an overall timeout greater than 0 so every ask-stock turn reaches an end.",
                     "severity": "error",
                     "expected": ">0 when AGENT_BACKEND=codex_app_server",
                     "actual": timeout_raw,
@@ -4574,10 +4580,10 @@ class SystemConfigService:
                     "key": "FEISHU_CHAT_ID",
                     "code": "feishu_mode_mismatch",
                     "message": (
-                        "仅配置 FEISHU_APP_ID / FEISHU_APP_SECRET 不会开启飞书静态通知；"
-                        "App Bot 主动推送需要同时配置 FEISHU_CHAT_ID，"
-                        "Webhook 推送请填写 FEISHU_WEBHOOK_URL；"
-                        "事件订阅请使用 FEISHU_STREAM_ENABLED=true 并完成应用发布与权限配置。"
+                        "Configuring only FEISHU_APP_ID / FEISHU_APP_SECRET does not enable Feishu static notifications. "
+                        "App Bot push also needs FEISHU_CHAT_ID; webhook push needs FEISHU_WEBHOOK_URL; "
+                        "event subscription needs FEISHU_STREAM_ENABLED=true plus a published app with the "
+                        "right permissions."
                     ),
                     "severity": "warning",
                     "expected": (

@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-健康检查接口
+Health check endpoint
 ===================================
 
 职责：
-1. 提供 /api/v1/health 健康检查接口
+1. 提供 /api/v1/health Health check endpoint
 2. 用于负载均衡器和监控系统
 """
 
@@ -21,12 +21,12 @@ router = APIRouter()
 @router.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
     """
-    健康检查接口
+    Health check endpoint
     
-    用于负载均衡器或监控系统检查服务状态
+    Used by load balancers or monitoring systems to check service status
     
     Returns:
-        HealthResponse: 包含服务状态和时间戳
+        HealthResponse: Service status and timestamp
     """
     return HealthResponse(
         status="ok",

@@ -68,7 +68,7 @@ describe('DesktopUpdateIndicator', () => {
 
   it('does not render in ordinary browser WebUI', () => {
     renderIndicator();
-    expect(screen.queryByRole('button', { name: '桌面端更新' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Desktop update' })).not.toBeInTheDocument();
     expect(desktopGetUpdateState).not.toHaveBeenCalled();
     expect(desktopCheckForUpdates).not.toHaveBeenCalled();
   });
@@ -76,7 +76,7 @@ describe('DesktopUpdateIndicator', () => {
   it('does not render when only a desktop version is present', () => {
     (window as { dsaDesktop?: unknown }).dsaDesktop = { version: '3.30.0' };
     renderIndicator();
-    expect(screen.queryByRole('button', { name: '桌面端更新' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Desktop update' })).not.toBeInTheDocument();
     expect(desktopCheckForUpdates).not.toHaveBeenCalled();
   });
 
@@ -84,7 +84,7 @@ describe('DesktopUpdateIndicator', () => {
     (window as { dsaDesktop?: unknown }).dsaDesktop = createDesktopRuntime();
     renderIndicator();
 
-    expect(await screen.findByRole('button', { name: '桌面端更新' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Desktop update' })).toBeInTheDocument();
     await waitFor(() => expect(desktopGetUpdateState).toHaveBeenCalledTimes(1));
     expect(desktopCheckForUpdates).not.toHaveBeenCalled();
     expect(desktopOnUpdateStateChange).toHaveBeenCalledTimes(1);
@@ -102,11 +102,11 @@ describe('DesktopUpdateIndicator', () => {
     (window as { dsaDesktop?: unknown }).dsaDesktop = createDesktopRuntime();
     renderIndicator();
 
-    fireEvent.click(await screen.findByRole('button', { name: '桌面端更新' }));
-    expect(await screen.findByText('发现新版本')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Desktop update' }));
+    expect(await screen.findByText('New version available')).toBeInTheDocument();
     expect(screen.getByTestId('desktop-update-badge')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '前往下载' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open release' }));
     await waitFor(() => {
       expect(desktopOpenReleasePage).toHaveBeenCalledWith(
         'https://github.com/ZhuLinsen/daily_stock_analysis/releases/tag/v3.31.0',
@@ -125,8 +125,8 @@ describe('DesktopUpdateIndicator', () => {
     (window as { dsaDesktop?: unknown }).dsaDesktop = createDesktopRuntime();
     renderIndicator();
 
-    fireEvent.click(await screen.findByRole('button', { name: '桌面端更新' }));
-    fireEvent.click(await screen.findByRole('button', { name: '重启安装' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Desktop update' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Restart to install' }));
     await waitFor(() => expect(desktopInstallDownloadedUpdate).toHaveBeenCalledTimes(1));
   });
 
@@ -138,9 +138,9 @@ describe('DesktopUpdateIndicator', () => {
     (window as { dsaDesktop?: unknown }).dsaDesktop = createDesktopRuntime();
     renderIndicator();
 
-    fireEvent.click(await screen.findByRole('button', { name: '桌面端更新' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Desktop update' }));
     expect(desktopCheckForUpdates).not.toHaveBeenCalled();
-    fireEvent.click(await screen.findByRole('button', { name: '重新检查' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Check again' }));
     await waitFor(() => expect(desktopCheckForUpdates).toHaveBeenCalledTimes(1));
   });
 
@@ -154,7 +154,7 @@ describe('DesktopUpdateIndicator', () => {
     (window as { dsaDesktop?: unknown }).dsaDesktop = createDesktopRuntime();
     renderIndicator();
 
-    const entry = await screen.findByRole('button', { name: '桌面端更新' });
+    const entry = await screen.findByRole('button', { name: 'Desktop update' });
     expect(entry).toHaveAttribute('title', expect.stringContaining('42%'));
     expect(desktopCheckForUpdates).not.toHaveBeenCalled();
   });

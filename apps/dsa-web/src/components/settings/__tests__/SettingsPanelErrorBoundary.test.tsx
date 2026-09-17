@@ -19,7 +19,7 @@ describe('SettingsPanelErrorBoundary', () => {
   it('renders a configurable desktop-log diagnostic fallback when a settings panel throws', () => {
     render(
       <SettingsPanelErrorBoundary
-        title="通知设置"
+        title="Notification settings"
         resetKey="notification"
         diagnosticHint={(
           <>
@@ -34,22 +34,22 @@ describe('SettingsPanelErrorBoundary', () => {
     );
 
     expect(screen.getByRole('alert')).toBeInTheDocument();
-    expect(screen.getByText('通知设置加载失败')).toBeInTheDocument();
+    expect(screen.getByText('Notification settings failed to load')).toBeInTheDocument();
     expect(screen.getByText('desktop.log')).toBeInTheDocument();
     expect(screen.getByText(/release 版本、Windows 版本和触发入口/)).toBeInTheDocument();
-    expect(screen.getByText(/错误摘要：mock settings panel crash/)).toBeInTheDocument();
+    expect(screen.getByText(/Error summary: mock settings panel crash/)).toBeInTheDocument();
   });
 
   it('redacts and truncates sensitive error summary text', () => {
     render(
-      <SettingsPanelErrorBoundary title="通知设置" resetKey="notification">
+      <SettingsPanelErrorBoundary title="Notification settings" resetKey="notification">
         <ThrowingPanel
           message={`Webhook failed: https://hooks.slack.com/services/T000/B000/path-secret?token=super-secret-token&foo=bar OPENAI_API_KEY=sk-supersecretvalue123456 ${'x'.repeat(220)}`}
         />
       </SettingsPanelErrorBoundary>
     );
 
-    const summary = screen.getByText(/错误摘要：/).textContent ?? '';
+    const summary = screen.getByText(/Error summary: /).textContent ?? '';
 
     expect(summary).toContain('https://hooks.slack.com/[redacted]?[redacted]');
     expect(summary).toContain('?[redacted]');
@@ -58,20 +58,20 @@ describe('SettingsPanelErrorBoundary', () => {
     expect(summary).not.toContain('path-secret');
     expect(summary).not.toContain('super-secret-token');
     expect(summary).not.toContain('sk-supersecretvalue123456');
-    expect(summary.length).toBeLessThanOrEqual('错误摘要：'.length + 183);
+    expect(summary.length).toBeLessThanOrEqual('Error summary: '.length + 183);
   });
 
   it('resets after resetKey changes so the panel can render again', async () => {
     const { rerender } = render(
-      <SettingsPanelErrorBoundary title="Agent 设置" resetKey="agent:v1">
+      <SettingsPanelErrorBoundary title="Agent settings" resetKey="agent:v1">
         <ThrowingPanel />
       </SettingsPanelErrorBoundary>
     );
 
-    expect(screen.getByText('Agent 设置加载失败')).toBeInTheDocument();
+    expect(screen.getByText('Agent settings failed to load')).toBeInTheDocument();
 
     rerender(
-      <SettingsPanelErrorBoundary title="Agent 设置" resetKey="agent:v2">
+      <SettingsPanelErrorBoundary title="Agent settings" resetKey="agent:v2">
         <div>Agent 设置已恢复</div>
       </SettingsPanelErrorBoundary>
     );
@@ -79,6 +79,6 @@ describe('SettingsPanelErrorBoundary', () => {
     await waitFor(() => {
       expect(screen.getByText('Agent 设置已恢复')).toBeInTheDocument();
     });
-    expect(screen.queryByText('Agent 设置加载失败')).not.toBeInTheDocument();
+    expect(screen.queryByText('Agent settings failed to load')).not.toBeInTheDocument();
   });
 });

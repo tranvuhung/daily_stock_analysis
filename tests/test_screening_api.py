@@ -1159,7 +1159,7 @@ class ScreeningOpportunitiesApiTestCase(unittest.TestCase):
                     "role": "核心龙头",
                     "source": "last_good_cache.leader_stocks",
                 }],
-                "route": [{"title": "盘中发酵", "description": "真实新闻催化", "source": "news"}],
+                "route": [{"title": "Intraday momentum", "description": "真实新闻催化", "source": "news"}],
             }
 
         provider = screening_service.DsaEastMoneyHotspotProvider()
@@ -1209,7 +1209,7 @@ class ScreeningOpportunitiesApiTestCase(unittest.TestCase):
                         "source": "last_good_cache.summary.leader_stocks",
                     }],
                 },
-                "route": [{"title": "盘中发酵", "description": "真实新闻催化", "source": "news"}],
+                "route": [{"title": "Intraday momentum", "description": "真实新闻催化", "source": "news"}],
             }
 
         provider = screening_service.DsaEastMoneyHotspotProvider()
@@ -1629,7 +1629,7 @@ class ScreeningOpportunitiesApiTestCase(unittest.TestCase):
         provider.hotspot_detail = MagicMock(return_value={
             "topic": "机器人执行器",
             "summary": "机器人执行器 盘中发酵。",
-            "route": [{"title": "盘中发酵", "description": "provider fallback route.", "source": "eastmoney_board_change"}],
+            "route": [{"title": "Intraday momentum", "description": "provider fallback route.", "source": "eastmoney_board_change"}],
             "stocks": [{"code": "002000", "name": "旧路径个股"}],
             "stock_count": 1,
             "source_errors": [],
@@ -1648,7 +1648,7 @@ class ScreeningOpportunitiesApiTestCase(unittest.TestCase):
         ):
             payload = self._hotspot_detail(config=config, provider="akshare", topic="机器人执行器")
 
-        self.assertEqual(payload["route"][0]["title"], "盘中发酵")
+        self.assertEqual(payload["route"][0]["title"], "Intraday momentum")
         self.assertEqual(payload["route"][0]["source"], "eastmoney_board_change")
         provider.hotspot_detail.assert_called_once_with("机器人执行器")
         self.assertEqual(
@@ -1664,7 +1664,7 @@ class ScreeningOpportunitiesApiTestCase(unittest.TestCase):
             "topic": "机器人执行器",
             "summary": "机器人执行器 盘中发酵。",
             "route": [{
-                "title": "盘中发酵",
+                "title": "Intraday momentum",
                 "description": "机器人执行器 当前有异动记录。",
                 "source": "eastmoney_board_change",
             }],
@@ -1698,7 +1698,7 @@ class ScreeningOpportunitiesApiTestCase(unittest.TestCase):
         ):
             payload = self._hotspot_detail(config=config, provider="akshare", topic="机器人执行器")
 
-        self.assertEqual(payload["route"][0]["title"], "盘中发酵")
+        self.assertEqual(payload["route"][0]["title"], "Intraday momentum")
         self.assertEqual(payload["route"][0]["source"], "eastmoney_board_change")
         self.assertEqual(payload["stocks"][0]["name"], "合约路径个股")
         provider.hotspot_detail.assert_called_once_with("机器人执行器")
@@ -1711,7 +1711,7 @@ class ScreeningOpportunitiesApiTestCase(unittest.TestCase):
                 return {
                     "topic": topic,
                     "summary": f"{topic} 盘中发酵。",
-                    "route": [{"title": "盘中发酵", "description": "出现大笔买入。"}],
+                    "route": [{"title": "Intraday momentum", "description": "出现大笔买入。"}],
                     "stocks": [{"code": "920438", "name": "戈碧迦", "role": "异动核心"}],
                     "stock_count": 1,
                     "source_errors": [],
@@ -1726,7 +1726,7 @@ class ScreeningOpportunitiesApiTestCase(unittest.TestCase):
         self.assertEqual(payload["enabled"], True)
         self.assertEqual(payload["provider"], "akshare")
         self.assertEqual(payload["topic"], "玻璃基板")
-        self.assertEqual(payload["route"][0]["title"], "盘中发酵")
+        self.assertEqual(payload["route"][0]["title"], "Intraday momentum")
         self.assertEqual(payload["stocks"][0]["name"], "戈碧迦")
         self.assertEqual(payload["leader_stocks"][0]["name"], "戈碧迦")
 
@@ -2125,7 +2125,7 @@ class ScreeningOpportunitiesApiTestCase(unittest.TestCase):
         self.assertLessEqual(len(route), 2)
         self.assertEqual(route[0]["date"], datetime.now().date().isoformat())
         self.assertEqual(route[0]["published_at"], route[0]["date"])
-        self.assertIn("当日结构", route[0]["description"])
+        self.assertIn("Intraday structure", route[0]["description"])
         self.assertEqual(route[1]["date"], "2026-06-12")
 
     def test_hotspot_route_does_not_invent_metal_catalyst_hint(self) -> None:
@@ -2342,7 +2342,7 @@ class ScreeningOpportunitiesApiTestCase(unittest.TestCase):
         self.assertEqual(caught.exception.status_code, 424)
         self.assertEqual(caught.exception.detail["error"], "screening_unavailable")
         self.assertEqual(caught.exception.detail.get("diagnostics", {}).get("reason"), "unexpected_exception")
-        self.assertIn("选股功能初始化失败", caught.exception.detail["message"])
+        self.assertIn("Screening initialization failed", caught.exception.detail["message"])
 
     def test_start_screen_task_submits_background_work(self) -> None:
         config = self._config(enabled=True)
@@ -2387,7 +2387,7 @@ class ScreeningOpportunitiesApiTestCase(unittest.TestCase):
         fake_queue.update_task_progress.assert_any_call(
             "screen-task-1",
             20,
-            "正在执行选股，外部数据源较慢时会持续后台运行",
+            "Screening is running; it continues in the background when external data sources are slow",
         )
         fake_queue.update_task_progress.assert_any_call(
             "screen-task-1",

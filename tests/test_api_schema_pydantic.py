@@ -200,7 +200,7 @@ def test_market_review_request_openapi_exposes_only_region_override_name() -> No
     assert string_schema["minLength"] == 1
     assert region_schema["examples"] == ["cn", "jp,kr", "both"]
     description = region_schema["description"]
-    for contract_text in ("cn", "both 只能单独使用", "空 token", "整体返回 4xx", "64"):
+    for contract_text in ("cn", "both must be used alone", "empty token", "returns 4xx", "64"):
         assert contract_text in description
     assert "market_review_region" not in schema["properties"]
 

@@ -612,13 +612,13 @@ def _provider_started_flow_event(
     label = _DATA_TYPE_LABELS.get(data_type_key, data_type_key)
     node_id = f"provider_{data_type_key}_{provider_key}_{index}"
     timestamp = datetime.now().isoformat()
-    message = f"{label} {provider} 调用中"
+    message = f"Calling {label} {provider}"
     return {
         "timestamp": timestamp,
         "severity": "info",
         "type": "provider_run_started",
         "node_id": node_id,
-        "title": f"{label}开始",
+        "title": f"{label} started",
         "message": sanitize_diagnostic_text(message, max_length=220),
         "metadata": _clean_metadata(
             {
@@ -664,7 +664,7 @@ def _provider_flow_event(
         "severity": "success" if run.success else "warning",
         "type": "provider_run",
         "node_id": node_id,
-        "title": f"{label}{'成功' if run.success else '失败'}",
+        "title": f"{label} {'succeeded' if run.success else 'failed'}",
         "message": sanitize_diagnostic_text(message, max_length=220),
         "metadata": _clean_metadata(
             {
@@ -707,13 +707,13 @@ def _llm_started_flow_event(
     display_model = model or provider or "unknown"
     node_id = f"llm_{call_type_key}_{index}"
     timestamp = datetime.now().isoformat()
-    message = f"LLM {display_model} 调用中"
+    message = f"Calling LLM {display_model}"
     return {
         "timestamp": timestamp,
         "severity": "info",
         "type": "llm_run_started",
         "node_id": node_id,
-        "title": "LLM 开始",
+        "title": "LLM started",
         "message": sanitize_diagnostic_text(message, max_length=220),
         "metadata": _clean_metadata(
             {
@@ -725,7 +725,7 @@ def _llm_started_flow_event(
                     "id": node_id,
                     "lane": "analysis",
                     "kind": "model",
-                    "label": "LLM 生成",
+                    "label": "LLM generation",
                     "status": "running",
                     "provider": display_model,
                     "started_at": timestamp,
@@ -757,7 +757,7 @@ def _llm_flow_event(
         "severity": "success" if run.success else "danger",
         "type": "llm_run",
         "node_id": node_id,
-        "title": f"LLM {'成功' if run.success else '失败'}",
+        "title": f"LLM {'succeeded' if run.success else 'failed'}",
         "message": sanitize_diagnostic_text(message, max_length=220),
         "metadata": _clean_metadata(
             {
@@ -772,7 +772,7 @@ def _llm_flow_event(
                     "id": node_id,
                     "lane": "analysis",
                     "kind": "model",
-                    "label": "LLM 生成",
+                    "label": "LLM generation",
                     "status": status,
                     "provider": model,
                     "started_at": started_at,
@@ -792,13 +792,13 @@ def _history_flow_event(
 ) -> Dict[str, Any]:
     node_id = "history_save" if index == 1 else f"history_save_{index}"
     status = "success" if run.report_saved else "failed"
-    message = "报告历史已保存" if run.report_saved else f"报告历史保存失败：{run.error_message_sanitized or '未知错误'}"
+    message = "Report history saved" if run.report_saved else f"报告历史保存失败：{run.error_message_sanitized or '未知错误'}"
     return {
         "timestamp": run.created_at,
         "severity": "success" if run.report_saved else "danger",
         "type": "history_run",
         "node_id": node_id,
-        "title": "历史保存成功" if run.report_saved else "历史保存失败",
+        "title": "History saved successfully" if run.report_saved else "历史保存失败",
         "message": sanitize_diagnostic_text(message, max_length=220),
         "metadata": _clean_metadata(
             {
@@ -809,7 +809,7 @@ def _history_flow_event(
                     "id": node_id,
                     "lane": "artifact",
                     "kind": "artifact",
-                    "label": "保存报告",
+                    "label": "Save report",
                     "status": status,
                     "message": message,
                 },
@@ -829,14 +829,14 @@ def _notification_flow_event(
     status = _flow_status_for_success(run.success, skipped=skipped)
     node_id = f"notification_{channel_key}_{index}"
     if status == "success":
-        title = "通知发送成功"
-        message = f"{channel} 通知发送成功"
+        title = "Notification sent successfully"
+        message = f"{channel} notification sent successfully"
     elif status == "skipped":
-        title = "通知跳过"
-        message = f"{channel} 通知跳过"
+        title = "Notification skipped"
+        message = f"{channel} notification skipped"
     else:
-        title = "通知失败"
-        message = f"{channel} 通知失败：{run.error_message_sanitized or run.status or '未知错误'}"
+        title = "Notification failed"
+        message = f"{channel} notification failed: {run.error_message_sanitized or run.status or 'unknown error'}"
     return {
         "timestamp": run.created_at,
         "severity": "success" if status == "success" else ("warning" if status == "skipped" else "danger"),
@@ -854,7 +854,7 @@ def _notification_flow_event(
                     "id": node_id,
                     "lane": "artifact",
                     "kind": "notification",
-                    "label": f"推送通知 · {channel}",
+                    "label": f"Push notification · {channel}",
                     "status": status,
                     "provider": channel,
                     "attempts": run.attempts,
@@ -1224,7 +1224,7 @@ def _provider_component(
 
 
 def _news_component(context_snapshot: Dict[str, Any], raw_result: Dict[str, Any]) -> RunDiagnosticComponent:
-    label = "新闻搜索"
+    label = "News search"
     input_block = _analysis_input_block(context_snapshot, "news")
     input_message = _analysis_input_status_message(input_block)
     has_retrieval_news = "news_retrieval_content" in context_snapshot
@@ -1290,9 +1290,9 @@ def _llm_component(diagnostics: Dict[str, Any], raw_result: Dict[str, Any]) -> R
             success_run = successes[-1]
             model = success_run.get("model") or raw_result.get("model_used") or "unknown"
             status = "degraded" if failures or success_run.get("fallback_model") else "ok"
-            message = f"LLM {model} 成功"
+            message = f"LLM {model} succeeded"
             if status == "degraded":
-                message = f"LLM {model} 成功，期间发生过失败或模型切换"
+                message = f"LLM {model} succeeded, with failures or model switches along the way"
             return _component(
                 "llm",
                 label,
@@ -1330,7 +1330,7 @@ def _llm_component(diagnostics: Dict[str, Any], raw_result: Dict[str, Any]) -> R
 
 
 def _notification_component(diagnostics: Dict[str, Any]) -> RunDiagnosticComponent:
-    label = "通知"
+    label = "Notification"
     runs = [
         run for run in _as_list(diagnostics.get("notification_runs"))
         if isinstance(run, dict)
@@ -1381,7 +1381,7 @@ def _history_component(
     diagnostics: Dict[str, Any],
     report_saved: Optional[bool],
 ) -> RunDiagnosticComponent:
-    label = "历史保存"
+    label = "History save"
     runs = [
         run for run in _as_list(diagnostics.get("history_runs"))
         if isinstance(run, dict)
@@ -1432,14 +1432,14 @@ def build_run_diagnostic_summary(
 
     daily_data_component = _provider_component(
         key="daily_data",
-        label="日线数据",
+        label="Daily data",
         data_type="daily_data",
         provider_runs=provider_runs,
     )
     components = {
         "realtime_quote": _provider_component(
             key="realtime_quote",
-            label="实时行情",
+            label="Realtime quote",
             data_type="realtime_quote",
             provider_runs=provider_runs,
         ),
@@ -1469,7 +1469,7 @@ def build_run_diagnostic_summary(
         status = "normal"
 
     if status == "unknown":
-        reason = "旧报告或诊断证据不足，无法判断本次运行状态"
+        reason = "Old report or insufficient diagnostic evidence; the status of this run cannot be determined"
     else:
         reason = next(
             (

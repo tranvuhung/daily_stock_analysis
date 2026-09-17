@@ -58,10 +58,10 @@ describe('DecisionSignalCard', () => {
     expect(screen.getByText('1600 - 1620')).toBeInTheDocument();
     expect(screen.getByText('业绩窗口')).toBeInTheDocument();
     expect(screen.getByText('跌破 1550')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '查看 贵州茅台 AI 建议详情' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for 贵州茅台' }));
 
     expect(onSelect).toHaveBeenCalledWith(signal);
-    expect(screen.getByText('3 日')).toBeInTheDocument();
+    expect(screen.getByText('3 days')).toBeInTheDocument();
     expect(screen.getByText('计划质量: 完整')).toBeInTheDocument();
     expect(screen.getByText('阶段: 盘中')).toBeInTheDocument();
     expect(screen.queryByText('3d')).not.toBeInTheDocument();
@@ -73,7 +73,7 @@ describe('DecisionSignalCard', () => {
     renderCard();
 
     expect(screen.getByText('贵州茅台')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '查看 贵州茅台 AI 建议详情' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View AI signal details for 贵州茅台' })).not.toBeInTheDocument();
   });
 
   it('hides missing optional plan text for sparse legacy signals', () => {
@@ -98,15 +98,15 @@ describe('DecisionSignalCard', () => {
       </UiLanguageProvider>,
     );
 
-    expect(screen.getByText('评分')).toBeInTheDocument();
-    expect(screen.getByText('置信度')).toBeInTheDocument();
-    expect(screen.getByText('周期')).toBeInTheDocument();
+    expect(screen.getByText('Score')).toBeInTheDocument();
+    expect(screen.getByText('Confidence')).toBeInTheDocument();
+    expect(screen.getByText('Horizon')).toBeInTheDocument();
     expect(screen.getAllByText('-').length).toBeGreaterThanOrEqual(3);
-    expect(screen.queryByText('入场区间')).not.toBeInTheDocument();
-    expect(screen.queryByText('止损')).not.toBeInTheDocument();
-    expect(screen.queryByText('目标价')).not.toBeInTheDocument();
-    expect(screen.queryByText('催化')).not.toBeInTheDocument();
-    expect(screen.queryByText('失效条件')).not.toBeInTheDocument();
+    expect(screen.queryByText('Entry range')).not.toBeInTheDocument();
+    expect(screen.queryByText('Stop loss')).not.toBeInTheDocument();
+    expect(screen.queryByText('Target price')).not.toBeInTheDocument();
+    expect(screen.queryByText('Catalyst')).not.toBeInTheDocument();
+    expect(screen.queryByText('Invalidation')).not.toBeInTheDocument();
   });
 });
 
@@ -119,14 +119,14 @@ describe('DecisionSignalDetails', () => {
       </UiLanguageProvider>,
     );
 
-    const entryRange = screen.getByText('入场区间').closest('div');
+    const entryRange = screen.getByText('Entry range').closest('div');
     expect(entryRange).not.toBeNull();
     expect(entryRange as HTMLElement).toHaveTextContent('1680');
-    expect(screen.getByText('3 日')).toBeInTheDocument();
-    expect(screen.getByText('完整')).toBeInTheDocument();
-    expect(screen.getByText('盘中')).toBeInTheDocument();
-    expect(screen.getByText('风格')).toBeInTheDocument();
-    expect(screen.getAllByText('进取').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('3 days')).toBeInTheDocument();
+    expect(screen.getByText('Full')).toBeInTheDocument();
+    expect(screen.getByText('Intraday')).toBeInTheDocument();
+    expect(screen.getByText('Profile')).toBeInTheDocument();
+    expect(screen.getAllByText('Aggressive').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('3d')).not.toBeInTheDocument();
   });
 
@@ -142,8 +142,8 @@ describe('DecisionSignalDetails', () => {
     );
 
     expect(screen.getAllByText('风格: 未知').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('风格').closest('div')).toHaveTextContent('未知');
-    expect(screen.queryByText('均衡')).not.toBeInTheDocument();
+    expect(screen.getByText('Profile').closest('div')).toHaveTextContent('未知');
+    expect(screen.queryByText('Balanced')).not.toBeInTheDocument();
   });
 
   it('renders opaque JSON fields without creating html nodes from their string values', () => {
@@ -212,15 +212,15 @@ describe('DecisionSignalDetails', () => {
       </UiLanguageProvider>,
     );
 
-    expect(screen.getByText('后验结果')).toBeInTheDocument();
-    expect(screen.getAllByText('3 日').length).toBeGreaterThan(1);
-    expect(screen.getByText('命中')).toBeInTheDocument();
+    expect(screen.getByText('Outcome results')).toBeInTheDocument();
+    expect(screen.getAllByText('3 days').length).toBeGreaterThan(1);
+    expect(screen.getByText('Hit')).toBeInTheDocument();
     expect(screen.getByText('5%')).toBeInTheDocument();
-    expect(screen.getByText('催化')).toBeInTheDocument();
+    expect(screen.getByText('Catalyst')).toBeInTheDocument();
     expect(screen.getByText('业绩窗口')).toBeInTheDocument();
-    expect(screen.getByText('失效条件')).toBeInTheDocument();
+    expect(screen.getByText('Invalidation')).toBeInTheDocument();
     expect(screen.getByText('跌破 1550')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '无用' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not useful' }));
     expect(onFeedbackSubmit).toHaveBeenCalledWith('not_useful');
   });
 

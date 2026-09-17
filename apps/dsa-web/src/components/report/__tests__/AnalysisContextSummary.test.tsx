@@ -468,7 +468,7 @@ describe('ReportSummary analysis context placement', () => {
     });
 
     expect(screen.getByText('市场阶段: CN · 盘中')).toBeInTheDocument();
-    expect(screen.getByText('日线未完成')).toBeInTheDocument();
+    expect(screen.getByText('Partial bar')).toBeInTheDocument();
     expect(screen.getAllByText('质量分 82/100 可用')[0]).toBeInTheDocument();
 
     const strategy = screen.getByText('狙击点位');

@@ -15,8 +15,8 @@ const baseSnapshot: RunFlowSnapshot = {
     eventCount: 3,
   },
   lanes: [
-    { id: 'entry', label: '入口', order: 1 },
-    { id: 'data_source', label: '数据来源', order: 2 },
+    { id: 'entry', label: 'Entry', order: 1 },
+    { id: 'data_source', label: 'Data source', order: 2 },
     { id: 'analysis', label: '分析引擎', order: 3 },
   ],
   nodes: [
@@ -24,7 +24,7 @@ const baseSnapshot: RunFlowSnapshot = {
       id: 'task_queue',
       lane: 'entry',
       kind: 'queue',
-      label: '任务队列',
+      label: 'Task 队列',
       status: 'success',
     },
     {

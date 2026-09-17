@@ -5,7 +5,7 @@
 ===================================
 
 职责：
-1. 定义股票实时行情模型
+1. 定义Realtime stock quote模型
 2. 定义历史 K 线数据模型
 """
 
@@ -21,20 +21,20 @@ StockProfileStatus = Literal["fresh", "partial", "unavailable"]
 
 
 class StockQuote(BaseModel):
-    """股票实时行情"""
+    """Realtime stock quote"""
     
-    stock_code: str = Field(..., description="股票代码")
-    stock_name: Optional[str] = Field(None, description="股票名称")
-    current_price: float = Field(..., description="当前价格")
-    change: Optional[float] = Field(None, description="涨跌额")
-    change_percent: Optional[float] = Field(None, description="涨跌幅 (%)")
-    open: Optional[float] = Field(None, description="开盘价")
-    high: Optional[float] = Field(None, description="最高价")
-    low: Optional[float] = Field(None, description="最低价")
-    prev_close: Optional[float] = Field(None, description="昨收价")
-    volume: Optional[float] = Field(None, description="成交量（股）")
-    amount: Optional[float] = Field(None, description="成交额（元）")
-    update_time: Optional[str] = Field(None, description="更新时间")
+    stock_code: str = Field(..., description="Stock code")
+    stock_name: Optional[str] = Field(None, description="Stock name")
+    current_price: float = Field(..., description="Current price")
+    change: Optional[float] = Field(None, description="Price change")
+    change_percent: Optional[float] = Field(None, description="Change percent (%)")
+    open: Optional[float] = Field(None, description="Open")
+    high: Optional[float] = Field(None, description="High")
+    low: Optional[float] = Field(None, description="Low")
+    prev_close: Optional[float] = Field(None, description="Previous close")
+    volume: Optional[float] = Field(None, description="Volume (shares)")
+    amount: Optional[float] = Field(None, description="Turnover (CNY)")
+    update_time: Optional[str] = Field(None, description="Updated at")
     
     model_config = ConfigDict(json_schema_extra={
         "example": {
@@ -55,16 +55,16 @@ class StockQuote(BaseModel):
 
 
 class KLineData(BaseModel):
-    """K 线数据点"""
+    """K-line data point"""
     
-    date: str = Field(..., description="日期")
-    open: float = Field(..., description="开盘价")
-    high: float = Field(..., description="最高价")
-    low: float = Field(..., description="最低价")
-    close: float = Field(..., description="收盘价")
-    volume: Optional[float] = Field(None, description="成交量")
-    amount: Optional[float] = Field(None, description="成交额")
-    change_percent: Optional[float] = Field(None, description="涨跌幅 (%)")
+    date: str = Field(..., description="Date")
+    open: float = Field(..., description="Open")
+    high: float = Field(..., description="High")
+    low: float = Field(..., description="Low")
+    close: float = Field(..., description="Close")
+    volume: Optional[float] = Field(None, description="Volume")
+    amount: Optional[float] = Field(None, description="Turnover")
+    change_percent: Optional[float] = Field(None, description="Change percent (%)")
     
     model_config = ConfigDict(json_schema_extra={
         "example": {
@@ -81,28 +81,28 @@ class KLineData(BaseModel):
 
 
 class ExtractItem(BaseModel):
-    """单条提取结果（代码、名称、置信度）"""
+    """A single extraction result (code, name, confidence)"""
 
-    code: Optional[str] = Field(None, description="股票代码，None 表示解析失败")
-    name: Optional[str] = Field(None, description="股票名称（如有）")
-    confidence: str = Field("medium", description="置信度：high/medium/low")
+    code: Optional[str] = Field(None, description="Stock code; None means parsing failed")
+    name: Optional[str] = Field(None, description="Stock name (if available)")
+    confidence: str = Field("medium", description="Confidence: high/medium/low")
 
 
 class ExtractFromImageResponse(BaseModel):
-    """图片股票代码提取响应"""
+    """Image stock code extraction response"""
 
-    codes: List[str] = Field(..., description="提取的股票代码（已去重，向后兼容）")
-    items: List[ExtractItem] = Field(default_factory=list, description="提取结果明细（代码+名称+置信度）")
-    raw_text: Optional[str] = Field(None, description="原始 LLM 响应（调试用）")
+    codes: List[str] = Field(..., description="Extracted stock codes (deduplicated, kept for backward compatibility)")
+    items: List[ExtractItem] = Field(default_factory=list, description="Extraction details (code, name and confidence)")
+    raw_text: Optional[str] = Field(None, description="Raw LLM response (for debugging)")
 
 
 class StockHistoryResponse(BaseModel):
-    """股票历史行情响应"""
+    """Historical stock quote response"""
     
-    stock_code: str = Field(..., description="股票代码")
-    stock_name: Optional[str] = Field(None, description="股票名称")
-    period: str = Field(..., description="K 线周期")
-    data: List[KLineData] = Field(default_factory=list, description="K 线数据列表")
+    stock_code: str = Field(..., description="Stock code")
+    stock_name: Optional[str] = Field(None, description="Stock name")
+    period: str = Field(..., description="K-line interval")
+    data: List[KLineData] = Field(default_factory=list, description="K-line data list")
     
     model_config = ConfigDict(json_schema_extra={
         "example": {

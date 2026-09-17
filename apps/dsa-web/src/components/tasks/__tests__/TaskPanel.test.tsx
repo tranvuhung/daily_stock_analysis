@@ -59,12 +59,12 @@ describe('TaskPanel', () => {
       />,
     );
 
-    expect(screen.getByText('分析任务')).toBeInTheDocument();
-    expect(screen.getByText('1 进行中')).toBeInTheDocument();
-    expect(screen.getByText('1 等待中')).toBeInTheDocument();
+    expect(screen.getByText('Analysis tasks')).toBeInTheDocument();
+    expect(screen.getByText('1 processing')).toBeInTheDocument();
+    expect(screen.getByText('1 pending')).toBeInTheDocument();
     expect(screen.getByText('贵州茅台')).toBeInTheDocument();
     expect(screen.getByText('AAPL')).toBeInTheDocument();
-    expect(screen.getByLabelText('任务状态：分析中')).toBeInTheDocument();
+    expect(screen.getByLabelText('Task 状态：分析中')).toBeInTheDocument();
     expect(screen.getByText('运行诊断')).toBeInTheDocument();
     expect(screen.getAllByText('trace-task-1')).toHaveLength(2);
     expect(screen.queryByText(/请求阶段:/)).not.toBeInTheDocument();
@@ -92,21 +92,21 @@ describe('TaskPanel', () => {
       />,
     );
 
-    const collapseButton = screen.getByRole('button', { name: '折叠任务面板' });
+    const collapseButton = screen.getByRole('button', { name: 'Collapse task panel' });
     expect(collapseButton).toHaveAttribute('aria-expanded', 'true');
 
     fireEvent.click(collapseButton);
 
-    const expandButton = screen.getByRole('button', { name: '展开任务面板' });
+    const expandButton = screen.getByRole('button', { name: 'Expand task panel' });
     expect(expandButton).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.getByTestId('task-panel-collapsed-summary')).toHaveTextContent('1 进行中');
-    expect(screen.getByTestId('task-panel-collapsed-summary')).toHaveTextContent('1 等待中');
-    expect(screen.getByTestId('task-panel-collapsed-summary')).toHaveTextContent('平均进度 40%');
+    expect(screen.getByTestId('task-panel-collapsed-summary')).toHaveTextContent('1 processing');
+    expect(screen.getByTestId('task-panel-collapsed-summary')).toHaveTextContent('1 pending');
+    expect(screen.getByTestId('task-panel-collapsed-summary')).toHaveTextContent('Avg 40%');
     expect(screen.queryByTestId('task-panel-item')).not.toBeInTheDocument();
 
     fireEvent.click(expandButton);
 
-    expect(screen.getByRole('button', { name: '折叠任务面板' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Collapse task panel' })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getAllByTestId('task-panel-item')).toHaveLength(2);
   });
 
@@ -139,7 +139,7 @@ describe('TaskPanel', () => {
     expect(diagnosticsSummary).toHaveClass('grid-cols-[auto_minmax(0,1fr)_auto]');
     expect(screen.getByText('运行诊断')).toHaveClass('whitespace-nowrap');
     expect(screen.getByText('c5b9665a64...')).toHaveClass('truncate');
-    expect(screen.getByRole('button', { name: '查看 长飞光纤 运行流' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View 长飞光纤 run flow' })).toBeInTheDocument();
   });
 
   it('opens the run-flow view from an active task icon button', () => {
@@ -151,7 +151,7 @@ describe('TaskPanel', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '查看 贵州茅台 运行流' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View 贵州茅台 run flow' }));
 
     expect(onOpenRunFlow).toHaveBeenCalledWith(baseTask);
   });
@@ -170,7 +170,7 @@ describe('TaskPanel', () => {
     );
 
     expect(screen.getByText('贵州茅台')).toBeInTheDocument();
-    expect(screen.getByLabelText('任务状态：请求取消')).toBeInTheDocument();
+    expect(screen.getByLabelText('Task 状态：请求取消')).toBeInTheDocument();
     expect(screen.queryByText('失败')).not.toBeInTheDocument();
   });
 

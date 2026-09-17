@@ -82,9 +82,9 @@ export interface ReportMeta {
   createdAt: string;
   currentPrice?: number;
   changePct?: number;
-  modelUsed?: string;  // 历史元数据快照，仅用于展示，不用于运行时模型选择
+  modelUsed?: string;  // Historical metadata snapshot, for display only; not used for runtime model selection
   marketPhaseSummary?: MarketPhaseSummary | null;
-  assetType?: 'stock' | 'index';  // 后端权威资产类型；index 用于隐藏 stock-only 自选操作
+  assetType?: 'stock' | 'index';  // Authoritative asset type from the backend; 'index' hides stock-only watchlist actions
 }
 
 /** Sentiment label */
@@ -541,7 +541,7 @@ export interface HistoryItem {
   changePct?: number;
   volumeRatio?: number;
   turnoverRate?: number;
-  modelUsed?: string;  // 历史元数据快照，仅用于列表展示，不影响运行时调用与路由
+  modelUsed?: string;  // Historical metadata snapshot, for list display only; does not affect runtime calls or routing
   marketPhaseSummary?: MarketPhaseSummary | null;
   assetType?: 'stock' | 'index';
   createdAt: string;
