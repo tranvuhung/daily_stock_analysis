@@ -1,6 +1,6 @@
 # Analyze Issue
 
-分析 GitHub Issue，判断其真实性、优先级、仓库责任边界与建议动作。
+Phân tích GitHub Issue, đánh giá tính xác thực, mức độ ưu tiên, ranh giới trách nhiệm của repo và hành động đề xuất.
 
 **Repository**: https://github.com/ZhuLinsen/daily_stock_analysis/issues
 
@@ -12,68 +12,68 @@
 
 ## Instructions
 
-分析时使用简洁中文，优先遵循仓库根目录 `AGENTS.md`。
+Khi phân tích hãy dùng tiếng Việt ngắn gọn, ưu tiên tuân theo `AGENTS.md` ở thư mục gốc của repo.
 
-### Step 1: 同步最新代码基线
+### Step 1: Đồng bộ baseline mã nguồn mới nhất
 
-分析 issue 前必须先刷新远端状态，并尽量把本地安全推进到最新基线：
+Trước khi phân tích issue, bắt buộc phải làm mới trạng thái remote và cố gắng đưa bản địa tiến an toàn lên baseline mới nhất:
 
 ```bash
 git status --short
 git fetch --all --prune
-# 仅当工作区干净且当前分支可 fast-forward 时执行：
+# Chỉ chạy khi working tree sạch và nhánh hiện tại có thể fast-forward:
 git pull --ff-only
 ```
 
-- 只有在工作区干净、当前分支有可 fast-forward 的上游时，才执行并接受 `git pull --ff-only` 的结果。
-- 如存在本地改动、冲突状态、未跟踪风险文件、无上游分支或无法 fast-forward，不要执行 `stash`、`reset`、强制切分支或覆盖本地状态；改用已 fetch 的 `origin/main` 或相关远端 refs 做分析。
-- 在输出文档的 `Evidence` 中记录同步结果：本地 HEAD、使用的远端基线，以及未更新本地工作树的原因（如有）。
+- Chỉ thực hiện và chấp nhận kết quả của `git pull --ff-only` khi working tree sạch và nhánh hiện tại có upstream fast-forward được.
+- Nếu có thay đổi cục bộ, đang ở trạng thái conflict, có file chưa được theo dõi mang rủi ro, không có nhánh upstream hoặc không thể fast-forward: không được chạy `stash`, `reset`, ép chuyển nhánh hay ghi đè trạng thái cục bộ; thay vào đó dùng `origin/main` hoặc các remote ref liên quan đã fetch để phân tích.
+- Ghi lại kết quả đồng bộ trong mục `Evidence` của tài liệu đầu ra: HEAD cục bộ, baseline remote đã dùng, và lý do không cập nhật working tree cục bộ (nếu có).
 
-### Step 2: 拉取 Issue 信息
+### Step 2: Lấy thông tin Issue
 
 ```bash
 gh issue view <issue_number> --repo ZhuLinsen/daily_stock_analysis
 gh issue view <issue_number> --repo ZhuLinsen/daily_stock_analysis --comments
 ```
 
-如为 bug，优先核对 issue 模板中是否提供了以下信息：
+Nếu là bug, ưu tiên đối chiếu xem template issue đã cung cấp đủ các thông tin sau chưa:
 
-- 是否已同步到最新版本
-- commit hash / 版本基线
-- 运行环境与复现步骤
-- 日志或报错信息
+- Đã đồng bộ lên phiên bản mới nhất chưa
+- Commit hash / baseline phiên bản
+- Môi trường chạy và các bước tái hiện
+- Log hoặc thông báo lỗi
 
-### Step 3: 回答 4 个核心问题
+### Step 3: Trả lời 4 câu hỏi cốt lõi
 
-1. 版本是否明确
-2. 问题是否真实且可验证
-3. 是否属于仓库责任边界
-4. 是否值得立即处理
+1. Phiên bản đã rõ ràng chưa
+2. Vấn đề có thật và có kiểm chứng được không
+3. Có thuộc ranh giới trách nhiệm của repo không
+4. Có đáng xử lý ngay không
 
-### Step 4: 结合仓库现状做证据检查
+### Step 4: Kiểm tra bằng chứng dựa trên hiện trạng repo
 
-- 阅读相关代码、配置、测试、脚本、工作流与文档
-- 如果问题涉及 API、数据源 fallback、报告生成、通知发送、认证、桌面端、发布流程，明确写出影响面
-- 判断是实际 bug、环境配置问题、使用方式问题、还是外部依赖问题
-- 如怀疑已被修复，检查当前代码而不是只看 issue 描述
+- Đọc mã nguồn, cấu hình, test, script, workflow và tài liệu liên quan
+- Nếu vấn đề liên quan tới API, fallback nguồn dữ liệu, sinh báo cáo, gửi thông báo, xác thực, ứng dụng desktop, quy trình phát hành: phải ghi rõ phạm vi ảnh hưởng
+- Xác định đây là bug thật, vấn đề cấu hình môi trường, vấn đề cách sử dụng, hay vấn đề của phụ thuộc bên ngoài
+- Nếu nghi ngờ vấn đề đã được sửa, hãy kiểm tra mã nguồn hiện tại thay vì chỉ đọc mô tả issue
 
-### Step 5: 形成结论
+### Step 5: Đưa ra kết luận
 
-至少给出以下字段：
+Tối thiểu phải nêu các trường sau:
 
-- `版本基线`：最新 / 非最新 / 未提供
-- `是否合理`：是/否 + 理由
-- `是否是 issue`：是/否 + 理由
-- `是否好解决`：是/否 + 难点
-- `结论`：`成立 / 部分成立 / 不成立`
-- `分类`：`bug / feature / docs / question / external`
-- `优先级`：`P0 / P1 / P2 / P3`
-- `难度`：`easy / medium / hard`
-- `建议动作`：`立即修复 / 排期修复 / 文档澄清 / 关闭`
+- `Baseline phiên bản`: mới nhất / không phải mới nhất / không cung cấp
+- `Có hợp lý không`: có/không + lý do
+- `Có phải là issue không`: có/không + lý do
+- `Có dễ xử lý không`: có/không + điểm khó
+- `Kết luận`: `thành lập / thành lập một phần / không thành lập`
+- `Phân loại`: `bug / feature / docs / question / external`
+- `Mức ưu tiên`: `P0 / P1 / P2 / P3`
+- `Độ khó`: `easy / medium / hard`
+- `Hành động đề xuất`: `sửa ngay / đưa vào kế hoạch sửa / làm rõ bằng tài liệu / đóng issue`
 
-### Step 6: 生成分析文档
+### Step 6: Sinh tài liệu phân tích
 
-保存到 `.claude/reviews/issues/issue-<number>.md`
+Lưu vào `.claude/reviews/issues/issue-<number>.md`
 
 ## Output Document Format
 
@@ -85,59 +85,59 @@ gh issue view <issue_number> --repo ZhuLinsen/daily_stock_analysis --comments
 
 ## Summary
 
-- 版本基线：
-- 是否合理：
-- 是否是 issue：
-- 是否好解决：
-- 结论：
-- 分类：
-- 优先级：
-- 难度：
-- 建议动作：
+- Baseline phiên bản:
+- Có hợp lý không:
+- Có phải là issue không:
+- Có dễ xử lý không:
+- Kết luận:
+- Phân loại:
+- Mức ưu tiên:
+- Độ khó:
+- Hành động đề xuất:
 
 ## Evidence
 
-- 代码同步基线：
-- 关键 issue 信息：
-- 关键代码/脚本/工作流证据：
+- Baseline đồng bộ mã nguồn:
+- Thông tin issue then chốt:
+- Bằng chứng từ mã nguồn/script/workflow:
 
 ## Impact Scope
 
-- 受影响模块：
-- 受影响运行路径（本地 / Docker / GitHub Actions / API / Web / Desktop）：
+- Module bị ảnh hưởng:
+- Đường chạy bị ảnh hưởng (cục bộ / Docker / GitHub Actions / API / Web / Desktop):
 
 ## Root Cause / Main Reasoning
 
-<根因或主要判断依据>
+<nguyên nhân gốc hoặc căn cứ đánh giá chính>
 
 ## Proposed Handling
 
-<建议修复、澄清或关闭方式>
+<đề xuất cách sửa, làm rõ hoặc đóng issue>
 
-若建议后续创建 PR，给出的 PR title 建议符合 `AGENTS.md`：使用 `<类型>: <修改内容>`，不添加 `[codex]`、`codex`、`autocode`、`copilot` 或其他工具/agent 来源前缀；该约定仅用于协作一致性提醒，不应单独作为 review process blocker。
+Nếu đề xuất tạo PR ở bước sau, tiêu đề PR gợi ý phải tuân theo `AGENTS.md`: dùng `<loại>: <nội dung thay đổi>`, không thêm tiền tố nguồn gốc công cụ/agent như `[codex]`, `codex`, `autocode`, `copilot`; quy ước này chỉ nhằm nhắc nhở tính nhất quán khi cộng tác, không nên dùng riêng nó làm điều kiện chặn quy trình review.
 
 ## Risks And Rollback
 
-- 风险点：
-- 若修复，回滚方式：
+- Điểm rủi ro:
+- Nếu sửa thì rollback thế nào:
 
 ## Draft Reply
 
-<建议回复内容>
+<nội dung trả lời đề xuất>
 ```
 
 ## Allowed Auto-Actions (No Confirmation Needed)
 
-- 拉取 issue 详情与评论
-- 执行 `git fetch --all --prune`，并在工作区干净且可 fast-forward 时执行 `git pull --ff-only`
-- 阅读相关代码、配置、脚本、工作流和文档
-- 生成分析文档
+- Lấy chi tiết issue và các bình luận
+- Chạy `git fetch --all --prune`, và chạy `git pull --ff-only` khi working tree sạch và có thể fast-forward
+- Đọc mã nguồn, cấu hình, script, workflow và tài liệu liên quan
+- Sinh tài liệu phân tích
 
 ## Actions Requiring Confirmation
 
-执行以下动作前，先询问用户：
+Trước khi thực hiện các hành động sau, phải hỏi người dùng:
 
-1. 添加或修改标签
-2. 在 issue 下评论
-3. 关闭 issue
-4. 开始修复 issue
+1. Thêm hoặc sửa nhãn (label)
+2. Bình luận dưới issue
+3. Đóng issue
+4. Bắt đầu sửa issue

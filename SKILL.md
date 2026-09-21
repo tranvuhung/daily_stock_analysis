@@ -1,117 +1,117 @@
 ---
 name: "stock_analyzer"
-description: "分析股票和市场。当用户想要分析单个或多个股票，或进行市场复盘时调用。"
+description: "Phân tích cổ phiếu và thị trường. Gọi kỹ năng này khi người dùng muốn phân tích một hoặc nhiều mã cổ phiếu, hoặc muốn tổng kết/đánh giá lại thị trường chung."
 ---
 
-# 股票分析器
+# Bộ phân tích cổ phiếu
 
-本技能基于 `src/services/analyzer_service.py` 的逻辑，提供分析股票和整体市场的功能。
+Kỹ năng này dựa trên logic của `src/services/analyzer_service.py`, cung cấp khả năng phân tích từng cổ phiếu và toàn bộ thị trường.
 
-## 输出结构 (`AnalysisResult`)
+## Cấu trúc đầu ra (`AnalysisResult`)
 
-分析函数返回一个 `AnalysisResult` 对象（或其列表），该对象具有丰富的结构。以下是其关键组件的简要概述，并附有真实的输出示例：
+Các hàm phân tích trả về một đối tượng `AnalysisResult` (hoặc danh sách các đối tượng này) với cấu trúc khá phong phú. Dưới đây là tóm tắt các thành phần chính, kèm ví dụ đầu ra thực tế:
 
-`dashboard` 属性包含核心分析，分为四个主要部分：
-1.  **`core_conclusion`**: 一句话总结、信号类型和仓位建议。
-2.  **`data_perspective`**: 技术数据，包括趋势状态、价格位置、量能分析和筹码结构。
-3.  **`intelligence`**: 定性信息，如新闻、风险警报和积极催化剂。
-4.  **`battle_plan`**: 可操作的策略，包括狙击点（买/卖目标）、仓位策略和风险控制清单。
+Thuộc tính `dashboard` chứa phần phân tích cốt lõi, được chia thành bốn khối chính:
+1.  **`core_conclusion`**: Kết luận một câu, loại tín hiệu và khuyến nghị tỷ trọng vị thế.
+2.  **`data_perspective`**: Dữ liệu kỹ thuật, bao gồm trạng thái xu hướng, vị trí giá, phân tích khối lượng và cấu trúc phân bố cổ phiếu (chip structure).
+3.  **`intelligence`**: Thông tin định tính như tin tức, cảnh báo rủi ro và các chất xúc tác tích cực.
+4.  **`battle_plan`**: Chiến lược có thể hành động, gồm điểm vào/ra (mục tiêu mua/bán), chiến lược quản lý vị thế và danh sách kiểm soát rủi ro.
 
-## 配置 (`Config`)
+## Cấu hình (`Config`)
 
-所有分析函数都可以接受一个可选的 `config` 对象。该对象包含应用程序的所有配置，例如 API 密钥、通知设置和分析参数。
+Mọi hàm phân tích đều có thể nhận một đối tượng `config` tùy chọn. Đối tượng này chứa toàn bộ cấu hình của ứng dụng, ví dụ như API key, thiết lập thông báo và các tham số phân tích.
 
-如果未提供 `config` 对象，函数将自动使用从 `.env` 文件加载的全局单例实例。
+Nếu không truyền đối tượng `config`, hàm sẽ tự động dùng thực thể singleton toàn cục được nạp từ file `.env`.
 
-**参考:** [`Config`](src/config.py)
+**Tham khảo:** [`Config`](src/config.py)
 
-## 函数
+## Các hàm
 
-### 1. 分析单只股票
+### 1. Phân tích một cổ phiếu
 
-**描述:** 分析单只股票并返回分析结果。
+**Mô tả:** Phân tích một mã cổ phiếu và trả về kết quả phân tích.
 
-**何时使用:** 当用户要求分析特定股票时。
+**Khi nào dùng:** Khi người dùng yêu cầu phân tích một mã cổ phiếu cụ thể.
 
-**输入:**
-- `stock_code` (str): 要分析的股票代码。
-- `config` (Config, 可选): 配置对象。默认为 `None`。
-- `full_report` (bool, 可选): 是否生成完整报告。默认为 `False`。
-- `notifier` (NotificationService, 可选): 通知服务对象。默认为 `None`。
+**Đầu vào:**
+- `stock_code` (str): Mã cổ phiếu cần phân tích.
+- `config` (Config, tùy chọn): Đối tượng cấu hình. Mặc định là `None`.
+- `full_report` (bool, tùy chọn): Có sinh báo cáo đầy đủ hay không. Mặc định là `False`.
+- `notifier` (NotificationService, tùy chọn): Đối tượng dịch vụ thông báo. Mặc định là `None`.
 
-**输出:** `Optional[AnalysisResult]`
-一个包含分析结果的 `AnalysisResult` 对象，如果分析失败则为 `None`。
+**Đầu ra:** `Optional[AnalysisResult]`
+Một đối tượng `AnalysisResult` chứa kết quả phân tích, hoặc `None` nếu phân tích thất bại.
 
-**示例:**
+**Ví dụ:**
 
 ```python
 from src.services.analyzer_service import analyze_stock
 
-# 分析单只股票
+# Phân tích một cổ phiếu
 result = analyze_stock("600989")
 if result:
-    print(f"股票: {result.name} ({result.code})")
-    print(f"情绪得分: {result.sentiment_score}")
-    print(f"操作建议: {result.operation_advice}")
+    print(f"Cổ phiếu: {result.name} ({result.code})")
+    print(f"Điểm tâm lý thị trường: {result.sentiment_score}")
+    print(f"Khuyến nghị hành động: {result.operation_advice}")
 ```
 
-**参考:** [`analyze_stock`](src/services/analyzer_service.py)
+**Tham khảo:** [`analyze_stock`](src/services/analyzer_service.py)
 
-### 2. 分析多只股票
+### 2. Phân tích nhiều cổ phiếu
 
-**描述:** 分析一个股票列表并返回分析结果列表。
+**Mô tả:** Phân tích một danh sách cổ phiếu và trả về danh sách kết quả phân tích.
 
-**何时使用:** 当用户想要一次分析多只股票时。
+**Khi nào dùng:** Khi người dùng muốn phân tích nhiều mã cổ phiếu cùng lúc.
 
-**输入:**
-- `stock_codes` (List[str]): 要分析的股票代码列表。
-- `config` (Config, 可选): 配置对象。默认为 `None`。
-- `full_report` (bool, 可选): 是否为每只股票生成完整报告。默认为 `False`。
-- `notifier` (NotificationService, 可选): 通知服务对象。默认为 `None`。
+**Đầu vào:**
+- `stock_codes` (List[str]): Danh sách mã cổ phiếu cần phân tích.
+- `config` (Config, tùy chọn): Đối tượng cấu hình. Mặc định là `None`.
+- `full_report` (bool, tùy chọn): Có sinh báo cáo đầy đủ cho từng cổ phiếu hay không. Mặc định là `False`.
+- `notifier` (NotificationService, tùy chọn): Đối tượng dịch vụ thông báo. Mặc định là `None`.
 
-**输出:** `List[AnalysisResult]`
-一个 `AnalysisResult` 对象列表。
+**Đầu ra:** `List[AnalysisResult]`
+Một danh sách các đối tượng `AnalysisResult`.
 
-**示例:**
+**Ví dụ:**
 
 ```python
 from src.services.analyzer_service import analyze_stocks
 
-# 分析多只股票
+# Phân tích nhiều cổ phiếu
 results = analyze_stocks(["600989", "000001"])
 for result in results:
-    print(f"股票: {result.name}, 操作建议: {result.operation_advice}")
+    print(f"Cổ phiếu: {result.name}, Khuyến nghị hành động: {result.operation_advice}")
 ```
 
-**参考:** [`analyze_stocks`](src/services/analyzer_service.py)
+**Tham khảo:** [`analyze_stocks`](src/services/analyzer_service.py)
 
-### 3. 执行大盘复盘
+### 3. Tổng kết, đánh giá lại thị trường chung
 
-**描述:** 对整体市场进行复盘并返回一份报告。
+**Mô tả:** Thực hiện đánh giá lại (review) toàn bộ thị trường và trả về một báo cáo.
 
-**何时使用:** 当用户要求市场概览、摘要或复盘时。
+**Khi nào dùng:** Khi người dùng yêu cầu tổng quan thị trường, bản tóm tắt hoặc bản đánh giá lại thị trường.
 
-**输入:**
-- `config` (Config, 可选): 配置对象。默认为 `None`。
-- `notifier` (NotificationService, 可选): 通知服务对象。默认为 `None`。
+**Đầu vào:**
+- `config` (Config, tùy chọn): Đối tượng cấu hình. Mặc định là `None`.
+- `notifier` (NotificationService, tùy chọn): Đối tượng dịch vụ thông báo. Mặc định là `None`.
 
-**输出:** `Optional[str]`
-一个包含市场复盘报告的字符串，如果失败则为 `None`。
+**Đầu ra:** `Optional[str]`
+Một chuỗi chứa báo cáo đánh giá thị trường, hoặc `None` nếu thất bại.
 
-**示例:**
+**Ví dụ:**
 
 ```python
 from src.services.analyzer_service import perform_market_review
 
-# 执行大盘复盘
+# Thực hiện đánh giá lại thị trường chung
 report = perform_market_review()
 if report:
     print(report)
 ```
 
-**参考:** [`perform_market_review`](src/services/analyzer_service.py)
+**Tham khảo:** [`perform_market_review`](src/services/analyzer_service.py)
 
-## 模型与外部 Bot
+## Mô hình và Bot bên ngoài
 
-- 若把 **xAI Grok** 当作 DSA 分析模型：配置 `XAI_API_KEY` + `LITELLM_MODEL=xai/<官方模型ID>`（LiteLLM 直连，非托管渠道），并用 `python scripts/check_env.py --llm` 验证。示例见 [`docs/LLM_CONFIG_GUIDE.md`](docs/LLM_CONFIG_GUIDE.md)。
-- 2026-08-11 上线的 **[Grok Bot](https://x.ai/bot)** 是另一条路径：它是带 Skills / Routines / MCP / computer use 的 AI teammate，应通过 HTTP 调用本仓库的 `analyze_stock` / REST API，而不是把 Bot 本身配成 LiteLLM provider。对接说明见 [`docs/grok-bot-integration.md`](docs/grok-bot-integration.md)。
+- Nếu dùng **xAI Grok** làm mô hình phân tích của DSA: cấu hình `XAI_API_KEY` + `LITELLM_MODEL=xai/<ID mô hình chính thức>` (kết nối trực tiếp qua LiteLLM, không qua kênh trung gian được quản lý), rồi kiểm chứng bằng `python scripts/check_env.py --llm`. Xem ví dụ tại [`docs/LLM_CONFIG_GUIDE.md`](docs/LLM_CONFIG_GUIDE.md).
+- **[Grok Bot](https://x.ai/bot)** ra mắt ngày 2026-08-11 là một hướng tiếp cận khác: đây là một "AI teammate" có Skills / Routines / MCP / computer use, nên gọi `analyze_stock` hoặc REST API của repo này qua HTTP, thay vì cấu hình bản thân Bot thành một LiteLLM provider. Hướng dẫn tích hợp xem tại [`docs/grok-bot-integration.md`](docs/grok-bot-integration.md).

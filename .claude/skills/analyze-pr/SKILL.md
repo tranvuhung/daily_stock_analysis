@@ -1,6 +1,6 @@
 # Analyze PR
 
-分析 GitHub Pull Request，评估必要性、描述完整性、验证证据、主要风险与是否可直接合入。
+Phân tích GitHub Pull Request, đánh giá tính cần thiết, mức độ đầy đủ của mô tả, bằng chứng kiểm chứng, rủi ro chính và khả năng merge trực tiếp.
 
 **Repository**: https://github.com/ZhuLinsen/daily_stock_analysis/pulls
 
@@ -12,24 +12,24 @@
 
 ## Instructions
 
-分析时使用简洁中文，优先遵循仓库根目录 `AGENTS.md` 和 `.github/PULL_REQUEST_TEMPLATE.md`。
+Khi phân tích hãy dùng tiếng Việt ngắn gọn, ưu tiên tuân theo `AGENTS.md` ở thư mục gốc của repo và `.github/PULL_REQUEST_TEMPLATE.md`.
 
-### Step 1: 同步最新代码基线
+### Step 1: Đồng bộ baseline mã nguồn mới nhất
 
-分析 PR 前必须先刷新远端状态，并尽量把本地安全推进到最新基线：
+Trước khi phân tích PR, bắt buộc phải làm mới trạng thái remote và cố gắng đưa bản địa tiến an toàn lên baseline mới nhất:
 
 ```bash
 git status --short
 git fetch --all --prune
-# 仅当工作区干净且当前分支可 fast-forward 时执行：
+# Chỉ chạy khi working tree sạch và nhánh hiện tại có thể fast-forward:
 git pull --ff-only
 ```
 
-- 只有在工作区干净、当前分支有可 fast-forward 的上游时，才执行并接受 `git pull --ff-only` 的结果。
-- 如存在本地改动、冲突状态、未跟踪风险文件、无上游分支或无法 fast-forward，不要执行 `stash`、`reset`、强制切分支或覆盖本地状态；改用已 fetch 的 `origin/main`、PR head 或 GitHub diff 做分析。
-- 在输出文档的 `Validation Evidence` 中记录同步结果：本地 HEAD、使用的远端基线，以及未更新本地工作树的原因（如有）。
+- Chỉ thực hiện và chấp nhận kết quả của `git pull --ff-only` khi working tree sạch và nhánh hiện tại có upstream fast-forward được.
+- Nếu có thay đổi cục bộ, đang ở trạng thái conflict, có file chưa được theo dõi mang rủi ro, không có nhánh upstream hoặc không thể fast-forward: không được chạy `stash`, `reset`, ép chuyển nhánh hay ghi đè trạng thái cục bộ; thay vào đó dùng `origin/main`, PR head hoặc GitHub diff đã fetch để phân tích.
+- Ghi lại kết quả đồng bộ trong mục `Validation Evidence` của tài liệu đầu ra: HEAD cục bộ, baseline remote đã dùng, và lý do không cập nhật working tree cục bộ (nếu có).
 
-### Step 2: 拉取 PR 基本信息
+### Step 2: Lấy thông tin cơ bản của PR
 
 ```bash
 gh pr view <pr_number> --repo ZhuLinsen/daily_stock_analysis
@@ -38,66 +38,66 @@ gh pr checks <pr_number> --repo ZhuLinsen/daily_stock_analysis
 gh pr diff <pr_number> --repo ZhuLinsen/daily_stock_analysis
 ```
 
-如有失败的 CI，优先查看失败日志，而不是立刻在本地重跑全部检查：
+Nếu có CI thất bại, ưu tiên xem log lỗi trước thay vì chạy lại toàn bộ kiểm tra ở máy cục bộ:
 
 ```bash
 gh run view <run_id> --log-failed
 ```
 
-### Step 3: 检查标题与描述完整性
+### Step 3: Kiểm tra tiêu đề và mức độ đầy đủ của mô tả
 
-先检查 PR title 是否符合 `AGENTS.md` 的非阻断建议：
+Trước hết kiểm tra tiêu đề PR có phù hợp với khuyến nghị không-chặn trong `AGENTS.md` hay không:
 
-- 格式应为 `<类型>: <修改内容>`，例如 `fix: 修复大盘分析历史记录丢失`
-- 类型优先为 `fix`/`feat`/`refactor`/`docs`/`chore`/`test`/`ci`
-- 不应包含 `[codex]`、`codex`、`autocode`、`copilot` 或其他工具/agent 来源前缀
-- 标题应描述实际变更；若标题与 diff 不符，在描述完整性中指出，但不应单独作为 review process blocker。
+- Định dạng nên là `<loại>: <nội dung thay đổi>`, ví dụ `fix: 修复大盘分析历史记录丢失`
+- Loại ưu tiên dùng `fix`/`feat`/`refactor`/`docs`/`chore`/`test`/`ci`
+- Không nên chứa tiền tố nguồn gốc công cụ/agent như `[codex]`, `codex`, `autocode`, `copilot`
+- Tiêu đề phải mô tả thay đổi thực tế; nếu tiêu đề không khớp với diff thì chỉ ra ở phần đánh giá mức độ đầy đủ của mô tả, nhưng không dùng riêng nó làm điều kiện chặn quy trình review.
 
-对照 `.github/PULL_REQUEST_TEMPLATE.md`，确认是否覆盖：
+Đối chiếu với `.github/PULL_REQUEST_TEMPLATE.md`, xác nhận PR đã bao phủ:
 
 - `PR Type`
 - `Background And Problem`
 - `Scope Of Change`
 - `Issue Link`
 - `Verification Commands And Results`
-- `Visual Evidence`（仅当 PR 修改报告格式、报告渲染效果或 Web UI 界面时要求截图或替代可视证据）
+- `Visual Evidence` (chỉ bắt buộc ảnh chụp màn hình hoặc bằng chứng trực quan thay thế khi PR sửa định dạng báo cáo, hiệu quả render báo cáo hoặc giao diện Web UI)
 - `Compatibility And Risk`
 - `Rollback Plan`
 
-若 PR 涉及第三方模型 / API 兼容语义、请求参数固定值、OpenAI-compatible 路由、YAML alias、fallback 行为或运行时配置保存 / 清理 / 迁移逻辑，还要额外检查描述里是否明确写出：
+Nếu PR liên quan tới ngữ nghĩa tương thích của mô hình/API bên thứ ba, giá trị cố định của tham số request, routing kiểu OpenAI-compatible, YAML alias, hành vi fallback, hoặc logic lưu / xoá / migrate cấu hình lúc chạy, cần kiểm tra thêm xem mô tả có ghi rõ:
 
-- 官方来源链接或公告
-- 当前锁定依赖 / 运行时兼容范围（例如 LiteLLM 版本窗口）
-- 已验证的调用链路覆盖面
-- 旧配置是否会被静默改写、清空、迁移或保持不变
-- 最小回滚路径（通常是 revert 本 PR）
+- Link nguồn chính thức hoặc thông báo chính thức
+- Phạm vi tương thích của phụ thuộc đang khoá / runtime hiện tại (ví dụ cửa sổ phiên bản LiteLLM)
+- Mức độ bao phủ của các đường gọi đã được kiểm chứng
+- Cấu hình cũ có bị ghi đè, xoá trắng, migrate ngầm hay giữ nguyên
+- Đường rollback tối thiểu (thường là revert chính PR này)
 
-若 PR 修改报告格式、报告渲染效果或 Web UI 界面，还要检查 `Visual Evidence` 是否附受影响报告 / 页面截图；涉及前后差异时优先检查前后对比。若无法截图，描述中应说明原因与替代可视证据。
+Nếu PR sửa định dạng báo cáo, hiệu quả render báo cáo hoặc giao diện Web UI, còn phải kiểm tra `Visual Evidence` đã đính kèm ảnh chụp báo cáo / trang bị ảnh hưởng chưa; khi có khác biệt trước–sau thì ưu tiên kiểm tra ảnh so sánh trước–sau. Nếu không chụp được màn hình, mô tả phải nêu lý do và bằng chứng trực quan thay thế.
 
-### Step 4: 优先使用 CI / Diff 证据
+### Step 4: Ưu tiên dùng bằng chứng từ CI / Diff
 
-- 先根据 `gh pr checks`、PR diff、现有测试与工作流日志判断问题
-- 仅当 CI 未覆盖改动面、CI 结果不足以定性问题、或需要验证关键回归风险时，再补充本地最小验证
-- 不要默认切换当前分支或执行 `gh pr checkout`
+- Trước tiên dựa vào `gh pr checks`, PR diff, các test hiện có và log workflow để đánh giá vấn đề
+- Chỉ bổ sung kiểm chứng tối thiểu ở máy cục bộ khi CI chưa bao phủ phạm vi thay đổi, kết quả CI không đủ để kết luận vấn đề, hoặc cần xác minh rủi ro hồi quy then chốt
+- Không mặc định chuyển nhánh hiện tại hoặc chạy `gh pr checkout`
 
-如果必须补本地验证，按改动面选择最接近的检查，例如：
+Nếu buộc phải bổ sung kiểm chứng cục bộ, hãy chọn kiểm tra gần nhất với phạm vi thay đổi, ví dụ:
 
-- 后端：`./scripts/ci_gate.sh` 或 `python -m py_compile <changed_python_files>`
-- 前端：`cd apps/dsa-web && npm ci && npm run lint && npm run build`
-- 桌面端：先构建 Web，再构建 Electron
+- Backend: `./scripts/ci_gate.sh` hoặc `python -m py_compile <changed_python_files>`
+- Frontend: `cd apps/dsa-web && npm ci && npm run lint && npm run build`
+- Desktop: build Web trước, rồi build Electron
 
-### Step 5: 评估正确性与风险
+### Step 5: Đánh giá tính đúng đắn và rủi ro
 
-重点检查：
+Trọng tâm kiểm tra:
 
-- 是否解决了明确问题，且没有夹带无关改动
-- 是否破坏 API / Schema / Web / Desktop 兼容性
-- 是否破坏 fallback、降级路径、通知链路或发布流程
-- 是否存在明显逻辑错误、异常吞没、安全问题、配置语义变化未同步文档
+- Có giải quyết đúng vấn đề đã xác định và không mang theo thay đổi không liên quan hay không
+- Có phá vỡ tương thích API / Schema / Web / Desktop hay không
+- Có phá vỡ fallback, đường suy giảm (degradation), chuỗi thông báo hoặc quy trình phát hành hay không
+- Có lỗi logic rõ ràng, nuốt ngoại lệ, vấn đề bảo mật, hoặc thay đổi ngữ nghĩa cấu hình mà chưa đồng bộ tài liệu hay không
 
-### Step 6: 生成评审文档
+### Step 6: Sinh tài liệu review
 
-保存到 `.claude/reviews/prs/pr-<number>.md`
+Lưu vào `.claude/reviews/prs/pr-<number>.md`
 
 ## Output Document Format
 
@@ -109,53 +109,53 @@ gh run view <run_id> --log-failed
 
 ## Findings
 
-- [严重级别] file:line - 问题描述
+- [mức độ nghiêm trọng] file:line - mô tả vấn đề
 
 ## Summary
 
-- 必要性：
-- 是否有对应 issue：
-- PR 类型：
-- PR title：
-- description 完整性：
-- 验证情况：
-- 主要风险：
-- 是否可直接合入：
+- Tính cần thiết:
+- Có issue tương ứng không:
+- Loại PR:
+- PR title:
+- Mức độ đầy đủ của description:
+- Tình hình kiểm chứng:
+- Rủi ro chính:
+- Có thể merge trực tiếp không:
 
 ## Validation Evidence
 
-- 代码同步基线：
-- CI 结论：
-- 本地补充验证（如有）：
+- Baseline đồng bộ mã nguồn:
+- Kết luận CI:
+- Kiểm chứng cục bộ bổ sung (nếu có):
 
 ## Compatibility And Risk
 
-- API / Web / Desktop：
-- 配置 / Docker / GitHub Actions：
-- fallback / 通知 / 报告结构：
-- 第三方依赖 / 官方约束来源：
-- 运行时兼容窗口 / 已覆盖链路：
-- 旧配置迁移或静默改写风险：
+- API / Web / Desktop:
+- Cấu hình / Docker / GitHub Actions:
+- fallback / thông báo / cấu trúc báo cáo:
+- Phụ thuộc bên thứ ba / nguồn ràng buộc chính thức:
+- Cửa sổ tương thích runtime / các đường gọi đã bao phủ:
+- Rủi ro migrate hoặc ghi đè ngầm cấu hình cũ:
 
 ## Draft Review Comment
 
-<建议评论内容>
+<nội dung bình luận đề xuất>
 ```
 
 ## Allowed Auto-Actions (No Confirmation Needed)
 
-- 拉取 PR 元数据、diff、评论和 CI 状态
-- 执行 `git fetch --all --prune`，并在工作区干净且可 fast-forward 时执行 `git pull --ff-only`
-- 阅读相关代码、模板、工作流与文档
-- 在必要时执行最小化本地验证
-- 生成评审文档
+- Lấy metadata, diff, bình luận và trạng thái CI của PR
+- Chạy `git fetch --all --prune`, và chạy `git pull --ff-only` khi working tree sạch và có thể fast-forward
+- Đọc mã nguồn, template, workflow và tài liệu liên quan
+- Chạy kiểm chứng cục bộ tối thiểu khi cần thiết
+- Sinh tài liệu review
 
 ## Actions Requiring Confirmation
 
-执行以下动作前，先询问用户：
+Trước khi thực hiện các hành động sau, phải hỏi người dùng:
 
-1. 发布评论
+1. Đăng bình luận
 2. Approve PR
 3. Request changes
 4. Merge PR
-5. 关闭 PR
+5. Đóng PR

@@ -1,6 +1,6 @@
 # Fix Issue
 
-基于 issue 分析结果实现修复，并按仓库规则补齐验证、风险与回滚说明。
+Triển khai bản sửa dựa trên kết quả phân tích issue, đồng thời bổ sung đầy đủ phần kiểm chứng, rủi ro và cách rollback theo quy tắc của repo.
 
 **Repository**: https://github.com/ZhuLinsen/daily_stock_analysis
 
@@ -12,56 +12,56 @@
 
 ## Prerequisites
 
-优先先完成 `/analyze-issue <issue_number>`，确保问题成立且边界清晰。
+Ưu tiên hoàn thành `/analyze-issue <issue_number>` trước, để chắc chắn vấn đề là thành lập và ranh giới đã rõ ràng.
 
 ## Instructions
 
-### Step 1: 确认分析基线
+### Step 1: Xác nhận baseline phân tích
 
-检查 `.claude/reviews/issues/issue-<number>.md` 是否存在；如果不存在，先补做 issue 分析或在本次修复中补齐最小分析结论。
+Kiểm tra xem `.claude/reviews/issues/issue-<number>.md` có tồn tại hay không; nếu chưa có, hãy bổ sung phần phân tích issue trước, hoặc bổ sung kết luận phân tích tối thiểu ngay trong lần sửa này.
 
-### Step 2: 同步最新代码基线并选择安全的工作方式
+### Step 2: Đồng bộ baseline mã nguồn mới nhất và chọn cách làm việc an toàn
 
-开始修复或准备创建 / 更新 PR 前，先按 `AGENTS.md` 拉新：
+Trước khi bắt đầu sửa hoặc chuẩn bị tạo / cập nhật PR, hãy cập nhật mã nguồn theo `AGENTS.md`:
 
 ```bash
 git status --short
 git fetch --all --prune
-# 仅当工作区干净且当前分支可 fast-forward 时执行：
+# Chỉ chạy khi working tree sạch và nhánh hiện tại có thể fast-forward:
 git pull --ff-only
 ```
 
-- 默认基于当前工作树做最小相关改动
-- 只有在工作区干净、当前分支有可 fast-forward 的上游时，才执行并接受 `git pull --ff-only` 的结果
-- 如存在本地改动、冲突状态、未跟踪风险文件、无上游分支或无法 fast-forward，不要执行 `stash`、`reset`、强制切分支或覆盖本地状态；先记录本地 HEAD、使用的远端基线与无法更新本地工作树的原因
-- 若后续要创建 / 更新 PR，先说明当前分支与目标基线差异；必要时请求用户确认 rebase、merge 或继续基于当前分支推进
-- 不要默认切换分支或改写用户当前工作状态
-- 如果用户明确要求建分支，再执行最小必要的分支操作
+- Mặc định thực hiện thay đổi tối thiểu và liên quan trực tiếp, dựa trên working tree hiện tại
+- Chỉ thực hiện và chấp nhận kết quả của `git pull --ff-only` khi working tree sạch và nhánh hiện tại có upstream fast-forward được
+- Nếu có thay đổi cục bộ, đang ở trạng thái conflict, có file chưa được theo dõi mang rủi ro, không có nhánh upstream hoặc không thể fast-forward: không được chạy `stash`, `reset`, ép chuyển nhánh hay ghi đè trạng thái cục bộ; trước hết hãy ghi lại HEAD cục bộ, baseline remote đã dùng và lý do không thể cập nhật working tree cục bộ
+- Nếu sau đó cần tạo / cập nhật PR, trước tiên phải nêu rõ khác biệt giữa nhánh hiện tại và baseline mục tiêu; khi cần thiết hãy hỏi người dùng xác nhận rebase, merge hay tiếp tục dựa trên nhánh hiện tại
+- Không mặc định chuyển nhánh hoặc ghi đè trạng thái làm việc hiện tại của người dùng
+- Chỉ khi người dùng yêu cầu rõ ràng việc tạo nhánh thì mới thực hiện thao tác nhánh ở mức tối thiểu cần thiết
 
-### Step 3: 实施修复
+### Step 3: Triển khai bản sửa
 
-- 根据 issue 结论定位相关文件
-- 优先复用现有模块、配置入口、脚本和测试
-- 保持默认行为向后兼容，避免破坏 fallback / fail-open
-- 如果修复涉及用户可见行为、配置语义、CLI/API、部署、通知、报告结构，要同步更新相关文档、`docs/CHANGELOG.md`、`.env.example`
-- 向 `docs/CHANGELOG.md` 写入条目时，在 `[Unreleased]` 段追加一行，格式为 `- [类型] 描述`，其中 `[类型]` 从 `[新功能]/[改进]/[修复]/[文档]/[测试]/[chore]` 中按本次变更内容选择；只有修复 bug 时才使用 `[修复]`；**不要**在 `[Unreleased]` 内新增 `### 类目标题`
-- `README.md` 只承载项目定位、核心能力、快速开始、主要入口、赞助/合作等首页级信息；非必要不更新 README，避免持续膨胀
-- 更细的模块行为、页面交互、专题配置、排障说明、字段契约、实现语义和边界条件，优先更新对应 `docs/*.md`
+- Dựa trên kết luận của issue để xác định các file liên quan
+- Ưu tiên tái sử dụng module, điểm vào cấu hình, script và test hiện có
+- Giữ hành vi mặc định tương thích ngược, tránh phá vỡ fallback / fail-open
+- Nếu bản sửa ảnh hưởng tới hành vi người dùng thấy được, ngữ nghĩa cấu hình, CLI/API, triển khai, thông báo, cấu trúc báo cáo: phải đồng bộ cập nhật tài liệu liên quan, `docs/CHANGELOG.md`, `.env.example`
+- Khi ghi mục vào `docs/CHANGELOG.md`, thêm một dòng vào phần `[Unreleased]`, theo định dạng `- [类型] 描述`, trong đó `[类型]` chọn từ `[新功能]/[改进]/[修复]/[文档]/[测试]/[chore]` tuỳ theo nội dung thay đổi lần này; chỉ dùng `[修复]` khi thực sự sửa bug; **không** được thêm `### 类目标题` bên trong `[Unreleased]`
+- `README.md` chỉ chứa thông tin cấp trang chủ: định vị dự án, năng lực cốt lõi, hướng dẫn bắt đầu nhanh, các lối vào chính, tài trợ/hợp tác; không cần thiết thì không cập nhật README để tránh phình to liên tục
+- Các nội dung chi tiết hơn như hành vi module, tương tác trang, cấu hình chuyên đề, hướng dẫn xử lý sự cố, hợp đồng trường dữ liệu, ngữ nghĩa triển khai và điều kiện biên: ưu tiên cập nhật vào `docs/*.md` tương ứng
 
-### Step 4: 按改动面验证
+### Step 4: Kiểm chứng theo phạm vi thay đổi
 
-按 `AGENTS.md` 的验证矩阵执行最接近的检查：
+Thực hiện kiểm tra gần nhất theo ma trận kiểm chứng trong `AGENTS.md`:
 
-- 后端优先：`./scripts/ci_gate.sh`
-- 最低后端要求：`python -m py_compile <changed_python_files>`
-- 前端：`cd apps/dsa-web && npm ci && npm run lint && npm run build`
-- 桌面端：先构建 Web，再构建桌面端
+- Backend ưu tiên: `./scripts/ci_gate.sh`
+- Yêu cầu tối thiểu cho backend: `python -m py_compile <changed_python_files>`
+- Frontend: `cd apps/dsa-web && npm ci && npm run lint && npm run build`
+- Desktop: build Web trước, rồi build desktop
 
-如无法完成完整验证，必须记录缺口、原因与潜在风险。
+Nếu không thể hoàn tất kiểm chứng đầy đủ, bắt buộc phải ghi lại phần còn thiếu, lý do và rủi ro tiềm ẩn.
 
-### Step 5: 更新 issue 分析文档
+### Step 5: Cập nhật tài liệu phân tích issue
 
-在 `.claude/reviews/issues/issue-<number>.md` 中补充：
+Bổ sung vào `.claude/reviews/issues/issue-<number>.md`:
 
 ```markdown
 ## Fix Implementation
@@ -70,51 +70,51 @@ git pull --ff-only
 
 ### Changes Made
 
-- 文件与改动点：
+- File và các điểm thay đổi:
 
 ### Validation
 
-- 已执行：
-- 未执行：
+- Đã thực hiện:
+- Chưa thực hiện:
 
 ### Risks
 
-- 风险点：
+- Điểm rủi ro:
 
 ### Rollback
 
-- 回滚方式：
+- Cách rollback:
 ```
 
-### Step 6: 需要确认的后续动作
+### Step 6: Các hành động tiếp theo cần xác nhận
 
-如用户要求创建 PR、生成 PR 标题或整理 PR 描述，PR title 建议遵循 `AGENTS.md`：
+Nếu người dùng yêu cầu tạo PR, sinh tiêu đề PR hoặc soạn mô tả PR, tiêu đề PR nên tuân theo `AGENTS.md`:
 
-- 使用 `<类型>: <修改内容>` 格式，例如 `fix: 修复大盘分析历史记录丢失`
-- 类型优先使用 `fix`/`feat`/`refactor`/`docs`/`chore`/`test`/`ci`
-- 标题只描述实际改动，建议不添加 `[codex]`、`codex`、`autocode`、`copilot` 或其他工具/agent 来源前缀
-- 该约定仅用于协作一致性，不应被单独当作 process blocker
+- Dùng định dạng `<loại>: <nội dung thay đổi>`, ví dụ `fix: 修复大盘分析历史记录丢失`
+- Loại ưu tiên dùng `fix`/`feat`/`refactor`/`docs`/`chore`/`test`/`ci`
+- Tiêu đề chỉ mô tả thay đổi thực tế, không nên thêm tiền tố nguồn gốc công cụ/agent như `[codex]`, `codex`, `autocode`, `copilot`
+- Quy ước này chỉ nhằm giữ tính nhất quán khi cộng tác, không nên dùng riêng nó làm điều kiện chặn quy trình
 
-只有在用户明确确认后，才执行：
+Chỉ sau khi người dùng xác nhận rõ ràng mới được thực hiện:
 
-- 建分支
+- Tạo nhánh
 - `git commit`
 - `git push`
-- 创建 PR
-- 在 issue 下回复或关闭 issue
+- Tạo PR
+- Trả lời dưới issue hoặc đóng issue
 
 ## Allowed Auto-Actions (No Confirmation Needed)
 
-- 阅读和分析代码
-- 执行 `git fetch --all --prune`，并在工作区干净且可 fast-forward 时执行 `git pull --ff-only`
-- 应用与当前任务直接相关的最小修复
-- 运行非破坏性的本地验证
-- 更新本地 issue 分析文档
+- Đọc và phân tích mã nguồn
+- Chạy `git fetch --all --prune`, và chạy `git pull --ff-only` khi working tree sạch và có thể fast-forward
+- Áp dụng bản sửa tối thiểu liên quan trực tiếp tới nhiệm vụ hiện tại
+- Chạy các kiểm chứng cục bộ không gây phá huỷ
+- Cập nhật tài liệu phân tích issue ở máy cục bộ
 
 ## Actions Requiring Confirmation
 
-1. 切换或创建分支
+1. Chuyển hoặc tạo nhánh
 2. `git commit`
 3. `git push`
-4. 创建 PR
-5. 回复或关闭 issue
+4. Tạo PR
+5. Trả lời hoặc đóng issue
