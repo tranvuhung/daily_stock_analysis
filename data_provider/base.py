@@ -357,6 +357,41 @@ _MARKET_DETECTORS = {
 }
 
 
+# Nguồn có cơ sở điều chỉnh giá khác với nguồn chính của thị trường. Những nguồn
+# này vẫn được phép phục vụ phân tích trong một phiên chạy, nhưng KHÔNG được ghi
+# vào bảng ``stock_daily``: ``Database.save_daily_data`` UPSERT theo khoá
+# ``(code, date)``, nên một lần failover sẽ ghi đè lẻ tẻ vài ngày và để lại chuỗi
+# lịch sử trộn hai cơ sở giá — MA, volume_ratio, vùng hỗ trợ/kháng cự sai mà không
+# có bất kỳ tín hiệu lỗi nào.
+#
+# Trường hợp cụ thể: Yahoo và VCI điều chỉnh quyền theo mốc khác nhau. Đo thực tế
+# trên mã MBB (82 phiên, yfinance auto_adjust=True): các phiên từ 2026-08-11 trở đi
+# khớp tuyệt đối (tỷ lệ 1,0), nhưng toàn bộ phần lịch sử trước 2026-07-09 lệch đúng
+# một hệ số cố định 1,043938. Đây là bậc thang tại ngày chốt quyền, không phải
+# nhiễu — nếu trộn hai nguồn thì chuỗi lịch sử sẽ có một bước nhảy giả ~4,4% ngay
+# tại đó. Phần lớn mã khác lệch trung bình chỉ 0,01-0,05%.
+_NON_PERSISTABLE_DAILY_SOURCES = {
+    "YfinanceFetcher": {"vn"},
+}
+
+
+def is_daily_source_persistable(source_name: str, market: str) -> bool:
+    """Nến ngày lấy từ ``source_name`` cho ``market`` có được ghi vào DB hay không.
+
+    Args:
+        source_name: Tên fetcher đã phục vụ, đúng như ``get_daily_data`` trả về.
+        market: Nhãn thị trường (``vn``/``cn``/…).
+
+    Returns:
+        ``False`` khi nguồn lệch cơ sở điều chỉnh so với nguồn chính của thị trường.
+    """
+
+    blocked = _NON_PERSISTABLE_DAILY_SOURCES.get((source_name or "").strip())
+    if not blocked:
+        return True
+    return (market or "").strip().lower() not in blocked
+
+
 def _market_tag(code: str) -> str:
     """Trả về nhãn thị trường: vn/cn/us/hk/jp/kr/tw; thị trường chưa bật trả ``unknown``.
 
@@ -378,6 +413,20 @@ def _market_tag(code: str) -> str:
     if is_market_enabled("cn"):
         return "cn"
     return "unknown"
+
+
+def should_persist_daily_data(source_name: str, stock_code: str) -> bool:
+    """Nến ngày vừa lấy về có được ghi vào ``stock_daily`` hay không.
+
+    Bản tiện dụng của :func:`is_daily_source_persistable`, tự suy ra thị trường từ
+    mã nên điểm gọi chỉ còn một dòng.
+
+    Args:
+        source_name: Tên fetcher đã phục vụ, đúng như ``get_daily_data`` trả về.
+        stock_code: Mã cổ phiếu ở dạng người dùng nhập.
+    """
+
+    return is_daily_source_persistable(source_name, _market_tag(stock_code))
 
 
 def is_bse_code(code: str) -> bool:
@@ -753,7 +802,9 @@ class DataFetcherManager:
         "TickFlowFetcher": {"cn"},
         "PytdxFetcher": {"cn"},
         "BaostockFetcher": {"cn"},
-        "YfinanceFetcher": {"cn", "hk", "us", "jp", "kr", "tw"},
+        # Yahoo phục vụ VN ở vai trò dự phòng cấp 3 (chỉ nến ngày, chỉ sàn HOSE).
+        # Xem _NON_PERSISTABLE_DAILY_SOURCES về ràng buộc không ghi vào stock_daily.
+        "YfinanceFetcher": {"cn", "hk", "us", "jp", "kr", "tw", "vn"},
         "LongbridgeFetcher": {"hk", "us"},
         "FutuFetcher": {"hk"},
         "FinnhubFetcher": {"us"},

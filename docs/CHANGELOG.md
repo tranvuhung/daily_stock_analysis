@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [新功能] 越南市场新增第三兜底日线源：`YfinanceFetcher` 现在为 `vn` 服务（Priority 4，仅在 VCI 与 SSI 都失败时调用），通过 `.VN` 后缀取 HOSE 个股日线，无需 API Key。实测覆盖 HOSE 20/20、HNX 0/20、UPCOM 0/20，因此只声明 `kline.daily`，不声明 `quote.realtime` / `index.daily` / `market.overview`；请求越南指数时直接抛 `DataFetchError` 且不发请求，避免把 `^VNINDEX.VN` 那一根垃圾 K 线当成数据。
+- [修复] 新增 `should_persist_daily_data()` 写入闸门：Yahoo 与 VCI 的复权基准不一致（MBB 实测除权日之前的历史整体相差固定系数 1.043938，近期交易日则完全一致），而 `save_daily_data` 以 `(code, date)` UPSERT，混写会在除权日留下约 4.4% 的假跳空且不报错。Yahoo 为越南标的取回的日线改为只服务当次分析，不写入 `stock_daily`；其他市场不受影响。
+- [修复] `_get_analysis_context_with_market_fallback` 纳入 `vn`：否则数据库里没有上下文时（正是 Yahoo 兜底的场景），个股分析会在完全没有历史行情的情况下继续跑。现在改为直接用内存中的日线构建分析上下文。
+- [修复] `--dry-run` 的成功计数改为「本次已取到数据」或「数据库已有当日数据」二者取其一。此前只查数据库，遇到不写库的数据源会把成功的兜底误报成失败。
+- [测试] 新增 `tests/test_yfinance_vn.py`（14 个离线用例：代码转换顺序、指数拒绝、单位量级、写入闸门），并在 `tests/test_vn_source_drift.py` 增加 3 个 `@pytest.mark.network` 用例。跨源一致性阈值取 6% 而非 VCI/SSI 那对的 0.5%，因为复权基准差异是已知且预期内的，该用例只用于捕获单位级漂移。
+- [文档] `docs/data-source-stability.md`、`docs/market-support.md` 与 `.env.example` 补充 Yahoo 在越南市场的定位、实测覆盖矩阵、不写库的原因，以及不要把 `YFINANCE_PRIORITY` 调到 `SSI_PRIORITY` 之前的警告。
 - [文档] `AGENTS.md` 改写为英文（`CLAUDE.md` 为软链接，同步生效）；`docs/CHANGELOG.md` 的类型标记 `新功能`/`改进`/`修复`/`文档`/`测试` 保持中文原样，它们是本文件正在使用的字面值，翻译会让规则与实际内容不符。
 - [文档] 根 `README.md` 改写为英文，并按当前默认行为说明「默认仅启用越南市场，其余市场可在配置中开启」；原中文内容移至 `docs/README_CN.md`（相对路径已按 `docs/` 层级修正），`docs/README_EN.md` 与 `docs/README_CHT.md` 仅更新语言切换行的指向。
 - [修复] Web 自动补全遇到越南市场标的直接抛异常并降级为纯输入框（`MARKET_BADGE_CONFIG` 缺少 `VN`），同时补齐 `Market` 类型联合与越南代码/指数的前端校验正则。

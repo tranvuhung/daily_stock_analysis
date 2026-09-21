@@ -286,10 +286,33 @@ class DataCapabilityOverviewTestCase(unittest.TestCase):
         # 新增枚举值会破坏做穷举匹配的客户端），原因通过 warnings 传递。
         with supported_markets("vn"):
             providers = self._providers()
-        for name in ("efinance", "akshare", "yfinance", "longbridge"):
+        # ``yfinance`` cố tình không nằm ở đây: nó phục vụ ``vn`` ở vai trò dự phòng
+        # cấp 3 cho nến ngày, xem test_yfinance_serves_vn_daily_only bên dưới.
+        for name in ("efinance", "akshare", "longbridge"):
             self.assertFalse(providers[name]["enabled"], name)
             self.assertEqual(providers[name]["status"], "unconfigured", name)
             self.assertIn("market_disabled", providers[name]["warnings"], name)
+
+    def test_yfinance_serves_vn_daily_only(self):
+        """Yahoo là dự phòng cấp 3 cho nến ngày VN, không được khai gì thêm.
+
+        Thực đo: Yahoo chỉ phủ sàn HOSE (20/20 mã mẫu), HNX 0/20, UPCOM 0/20, và
+        không có lịch sử chỉ số Việt Nam (``^VNINDEX.VN`` xin 1 năm trả đúng 1 nến).
+        Khai thêm quote.realtime hay index.daily cho ``vn`` sẽ là pseudo-fallback.
+        """
+
+        with supported_markets("vn"):
+            providers = self._providers()
+
+        yfinance = providers["yfinance"]
+        self.assertIn("vn", yfinance["markets"])
+        self.assertNotIn("market_disabled", yfinance["warnings"])
+
+        datasets = yfinance["dataset_markets"]
+        self.assertIn("vn", datasets["kline.daily"])
+        for dataset in ("quote.realtime", "index.daily", "market.overview",
+                        "financial.snapshot"):
+            self.assertNotIn("vn", datasets[dataset], dataset)
 
     def test_vnstock_is_unconfigured_but_not_market_disabled(self):
         with supported_markets("vn"):

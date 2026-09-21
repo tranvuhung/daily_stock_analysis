@@ -110,6 +110,7 @@ PY
 | 实时行情 | `SsiFetcher`（Priority 1） | `GET iboard-query.ssi.com.vn/stock/exchange/{hose,hnx,upcom}`，**一次请求覆盖整个交易所**（HOSE 408 / HNX 299 / UPCOM 819），`prefetch_realtime_quotes` 三个请求即可覆盖全市场 |
 | 日线兜底 | `SsiFetcher` | `GET iboard-api.ssi.com.vn/statistics/charts/history`（TradingView UDF 格式） |
 | 可选补充 | `VnstockFetcher`（Priority 2） | 需 `VNSTOCK_ENABLED=true` 且已安装 `vnstock`，默认不启用 |
+| 第三兜底 | `YfinanceFetcher`（Priority 4） | `.VN` 后缀，无需 API Key。**仅覆盖 HOSE**（HNX / UPCOM / 指数均无数据），且日线**不写入数据库**，详见 [数据源稳定性](data-source-stability.md#yfinance-在越南市场的定位第三兜底源) |
 
 支持的代码写法（三者归一到同一个 `canonical_id`，避免 `stock_daily` 出现重复行）：
 
@@ -122,6 +123,7 @@ PY
 ### 已知边界
 
 - **单位不一致是本次接入最大的风险点**：VCI 日线与 SSI 快照用「盾」（21300），而 SSI 图表接口与 `vnstock` 用「千盾」（21.3）。两个后者在归一化时统一乘 1000。口径错了不会抛异常，只会让均线、止损价静默偏离 1000 倍，因此 `tests/test_vn_source_drift.py` 专门断言了跨源收盘价一致性。
+- **Yahoo 只能当第三兜底**：实测 HOSE 覆盖 20/20，HNX 与 UPCOM 各 0/20，且没有可用的指数历史（`^VNINDEX.VN` 请求一年只返回 1 根 K 线）。更关键的是它与 VCI 的**复权基准不一致**——MBB 实测显示除权日之前的历史整体相差固定系数 1.043938，而近期完全一致。因此 Yahoo 为越南标的取回的日线只服务当次分析，不写入 `stock_daily`，避免同一支股票的历史混用两套复权口径。
 - **没有交易日历**：`exchange-calendars` 的 102 个日历里没有 HOSE/HNX/UPCOM，`is_market_open('vn')` 走既有 fail-open 分支（任何日期都视为交易日）。影响是春节等长假会照常发起请求，不影响正确性。`market_phase` 对越南返回 `unknown`。
 - **没有大盘复盘**：`market_profile.py` / `market_strategy.py` / `market_context.py` 的 prompt 是按市场手写的，越南尚未实现。`MarketSpec.supports_market_review=False`，`MARKET_REVIEW_REGION` 在只启用越南时解析为空并跳过复盘，而不是回退到 `cn`。
 - **没有基本面 / 资金流 / 板块**：这些能力当前只有 A 股实现，越南按 `not_supported` 降级。

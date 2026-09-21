@@ -19,9 +19,9 @@
 
 | 场景 | 已接入源 | 默认使用方式 | 失败处理 |
 | --- | --- | --- | --- |
-| 越南个股日线 / 技术面 | VCI (Vietcap)、SSI iBoard | `DataFetcherManager` 按 priority 尝试：VCI → SSI。两者都是公开接口，无需 API Key | VCI 失败后回退 SSI；连续失败会短期熔断该源；两源皆失败抛出汇总异常 |
+| 越南个股日线 / 技术面 | VCI (Vietcap)、SSI iBoard、YFinance（仅 HOSE） | `DataFetcherManager` 按 priority 尝试：VCI(P0) → SSI(P1) → YFinance(P4)。三者都是公开接口，无需 API Key | VCI 失败后回退 SSI，再回退 YFinance；连续失败会短期熔断该源；全部失败抛出汇总异常 |
 | 越南实时行情 | SSI iBoard | 全市场快照（HOSE/HNX/UPCOM 各一次请求，共 1526 个标的），逐股查询命中进程内缓存 | 快照失败返回 None 降级为历史收盘价；单个交易所失败不影响其余两个 |
-| 越南指数日线 | VCI (Vietcap) | `VNINDEX` / `VN30` / `HNXIndex` / `HNX30` / `HNXUpcomIndex`，走与个股相同的日线接口 | 与个股同链路，失败后回退 SSI |
+| 越南指数日线 | VCI (Vietcap) | `VNINDEX` / `VN30` / `HNXIndex` / `HNX30` / `HNXUpcomIndex`，走与个股相同的日线接口 | 与个股同链路，失败后回退 SSI。**YFinance 不参与**：Yahoo 没有越南指数历史 |
 | A 股个股日线 / 技术面 | Efinance、Tencent、AkShare、Tushare、TickFlow、Pytdx、Baostock、YFinance | `DataFetcherManager` 按 priority 尝试；配置 `TUSHARE_TOKEN` 后 Tushare 自动进入候选源 | 单源失败后尝试下一个源；连续失败会短期熔断该源 |
 | 已登记 A 股指数日线 / 技术面 | Tencent、AkShare、TickFlow、YFinance | 当前 5 个 `IndexRegistry` 标的固定按 Tencent → AkShare → TickFlow → YFinance 尝试，不读取普通日 K 的 `*_PRIORITY` 配置 | 未配置、熔断、异常或空结果均继续下一源；全部失败返回空结果并记录汇总告警 |
 | A 股实时行情 | Tencent、AkShare Sina、Efinance、AkShare EM、Tushare | `REALTIME_SOURCE_PRIORITY` 控制顺序，默认偏向 Tencent / Sina 这类轻量源 | 失败源记录 `fallback_from`，成功源继续返回 |
@@ -47,14 +47,37 @@ flowchart LR
     S1 -->|成功| OK
     S1 -->|失败| VS{VNSTOCK_ENABLED?}
     VS -->|是且已安装| VN2[VnstockFetcher]
-    VS -->|否| FAIL[抛出汇总异常]
-    VN2 -->|失败| FAIL
+    VS -->|否| Y[YfinanceFetcher<br/>仅 HOSE 个股]
+    VN2 -->|失败| Y
+    Y -->|成功| OKNB[返回但不写入 stock_daily]
+    Y -->|失败/非 HOSE/指数| FAIL[抛出汇总异常]
     K -->|实时| S2[SsiFetcher 全市场快照]
     S2 -->|成功| OK
     S2 -->|失败| NONE[返回 None，降级为历史收盘价]
 ```
 
 ⚠️ **单位口径**：VCI 日线与 SSI 快照使用「盾」（HPG 报 `21300`），SSI 图表接口与 `vnstock` 使用「千盾」（报 `21.3`）。后两者在归一化时统一乘 1000。这个差异出错时**不会抛异常**，只会让均线、涨跌幅和止损价静默偏离 1000 倍，因此 `tests/test_vn_source_drift.py` 对跨源收盘价一致性和绝对量级都设了断言，并随 `network-smoke` 定时运行。
+
+### YFinance 在越南市场的定位（第三兜底源）
+
+Yahoo 通过 `.VN` 后缀提供越南数据，定位是**第三兜底**：只有 VCI 与 SSI 都失败时才会被调用。加入它的理由是它部署在越南基础设施之外，能覆盖「境内公开接口同时不可用」这一类故障。
+
+实测覆盖范围（2026-09-21，各板块 20 个随机样本）：
+
+| 板块 | 覆盖 | 说明 |
+| --- | --- | --- |
+| HOSE | 20/20 | `HPG.VN`、`FPT.VN` 等，价格为越南盾全额计价 |
+| HNX | **0/20** | 所有后缀写法（`.HN` / `.HNX` / `.VN` / `.HA`）均为空 |
+| UPCOM | **0/20** | 仅个别大市值标的（如 `MCH.VN`）有数据 |
+| 指数 | **无可用历史** | `^VNINDEX.VN` 请求一年只返回 1 根 K 线；`^VN30.VN` / `^HNXINDEX.VN` / `^UPCOM.VN` 全空 |
+
+因此 `data_capability_service` 中 YFinance 只对 `vn` 声明 `kline.daily`，不声明 `quote.realtime`、`index.daily` 或 `market.overview`；请求越南指数时 `_convert_stock_code` 直接抛 `DataFetchError`，不发请求，避免把那 1 根垃圾 K 线当成数据。HNX/UPCOM 标的会得到空结果并正常抛错，交由 manager 当作一个失败源处理。
+
+⚠️ **复权基准不一致，所以 Yahoo 的日线不写入数据库**：`save_daily_data` 以 `(code, date)` 做 UPSERT，而 Yahoo 与 VCI 对除权除息的处理基准不同。以 MBB 实测（82 个交易日）为例，2026-08-11 之后两源完全一致，但 2026-07-09 之前的历史整体相差固定系数 **1.043938**——这是除权日上的一个台阶，不是噪声。若两源混写同一支股票的历史，该日期就会出现约 4.4% 的假跳空，均线、量比与支撑/压力位会静默失真且没有任何报错。
+
+因此 `should_persist_daily_data()`（`data_provider/base.py`）会拦住这类写入：Yahoo 为越南标的返回的日线**只服务当次分析**，通过 `_build_analysis_context_from_daily_df()` 直接在内存中构建分析上下文，数据库里的历史序列始终保持单一复权口径。其他市场（美股、港股、日韩台）的 Yahoo 数据不受影响，照常写入。
+
+⚠️ **不要把 `YFINANCE_PRIORITY` 调到 `SSI_PRIORITY` 之前**：Yahoo 缺 HNX、UPCOM 与全部指数，一旦被当成主源，这些标的会成片失败。
 
 ⚠️ **无交易日历**：`exchange-calendars` 未收录 HOSE/HNX/UPCOM，越南的交易日判断走既有 fail-open 分支（任何日期都视为交易日），长假期间会照常发起请求。
 

@@ -12,7 +12,10 @@
 ``.github/workflows/network-smoke.yml`` 定时运行。
 """
 
+import os
 import unittest
+from contextlib import contextmanager
+from unittest.mock import patch
 
 import pytest
 import requests
@@ -21,8 +24,23 @@ from data_provider import ssi_fetcher, vci_fetcher
 from data_provider.base import DataFetchError
 from data_provider.ssi_fetcher import SsiFetcher
 from data_provider.vci_fetcher import VciFetcher
+from data_provider.yfinance_fetcher import YfinanceFetcher
+from src.core import markets
 
 pytestmark = pytest.mark.network
+
+
+@contextmanager
+def _vn_only_markets():
+    """越南股票的裸码识别要求 ``us`` 市场处于关闭状态（见 ``_is_vn_market``）。"""
+
+    with patch.dict(os.environ, {"SUPPORTED_MARKETS": "vn"}):
+        markets.reset_cache()
+        try:
+            yield
+        finally:
+            markets.reset_cache()
+
 
 # 流动性高、长期存在的标的，避免因为个股停牌造成误报
 _LIQUID_SYMBOL = "HPG"
@@ -203,3 +221,93 @@ class CrossSourceConsistencyTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class YfinanceVnDriftTestCase(unittest.TestCase):
+    """Yahoo 作为越南市场的第三兜底源（仅 HOSE 日线）。
+
+    与 VCI/SSI 那对 0.5% 的阈值不同，这里用 6%，原因见下面的注释：Yahoo 与 VCI
+    的复权基准本来就不一致，这是**已知且预期内**的偏差，不是漂移。
+    """
+
+    def setUp(self):
+        self.fetcher = YfinanceFetcher()
+
+    def test_daily_response_shape_and_units(self):
+        with _vn_only_markets():
+            try:
+                df = self.fetcher.get_daily_data(_LIQUID_SYMBOL, days=30)
+            except DataFetchError as exc:
+                _skip_on_transport_error(exc)
+                return
+
+        if df.empty:
+            pytest.skip("Yahoo 未返回越南股票数据")
+
+        for column in ("date", "open", "high", "low", "close", "volume"):
+            self.assertIn(column, df.columns, column)
+
+        last_close = float(df["close"].iloc[-1])
+        # 单位漂移探测：越南盾全额计价，HPG 在数千到数万之间。若 Yahoo 改成
+        # “千盾”，这里会立刻掉到 1000 以下。
+        self.assertGreater(
+            last_close, 1_000, f"Yahoo 收盘价 {last_close} 偏低，上游可能改了单位"
+        )
+        self.assertLess(
+            last_close, 10_000_000, f"Yahoo 收盘价 {last_close} 偏高，单位可疑"
+        )
+
+    def test_hnx_symbol_still_has_no_coverage(self):
+        """HNX 无覆盖是当前设计的前提，一旦 Yahoo 补齐就应该重新评估定位。
+
+        2026-09-21 实测：HNX 与 UPCOM 各 20 个随机样本全部为空。这条用例失败
+        不代表代码坏了，而是提示上游能力变了、值得把 Yahoo 的定位往上调。
+        """
+
+        with _vn_only_markets():
+            try:
+                df = self.fetcher.get_daily_data("SHS", days=20)
+            except DataFetchError:
+                return
+            except Exception as exc:  # noqa: BLE001 - 传输问题安静跳过
+                _skip_on_transport_error(exc)
+                return
+
+        self.assertTrue(
+            df is None or df.empty,
+            "Yahoo 现在能返回 HNX 数据了，请重新评估 Yahoo 在越南市场的定位",
+        )
+
+    def test_yahoo_and_vci_agree_within_adjustment_tolerance(self):
+        vci_fetcher.reset_symbols_cache()
+        with _vn_only_markets():
+            try:
+                vci_df = VciFetcher().get_daily_data(_LIQUID_SYMBOL, days=20)
+                yahoo_df = self.fetcher.get_daily_data(_LIQUID_SYMBOL, days=20)
+            except DataFetchError as exc:
+                _skip_on_transport_error(exc)
+                return
+
+        if vci_df.empty or yahoo_df.empty:
+            pytest.skip("两个数据源之一暂无数据")
+
+        merged = vci_df[["date", "close"]].merge(
+            yahoo_df[["date", "close"]], on="date", suffixes=("_vci", "_yahoo")
+        )
+        if merged.empty:
+            pytest.skip("两个数据源没有重叠的交易日")
+
+        row = merged.iloc[-1]
+        vci_close = float(row["close_vci"])
+        yahoo_close = float(row["close_yahoo"])
+        # 阈值 6%，而不是 VCI/SSI 那对的 0.5%。Yahoo 与 VCI 对除权除息的处理
+        # 基准不同：MBB 实测显示除权日之前的历史整体相差固定系数 1.043938，
+        # 而近期交易日完全一致。所以这条用例只用来抓**单位级**错误（比如上游
+        # 改用千盾，会差 1000 倍），抓不了也不该抓复权基准差异 —— 后者正是
+        # Yahoo 的日线不写入 stock_daily 的原因。
+        self.assertLess(
+            abs(vci_close - yahoo_close) / max(vci_close, 1.0),
+            0.06,
+            f"{row['date']} 收盘价差异过大: VCI={vci_close} Yahoo={yahoo_close}，"
+            "已超出复权基准差异的合理范围，疑似单位漂移",
+        )

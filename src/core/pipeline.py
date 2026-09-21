@@ -21,14 +21,18 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
-from typing import List, Dict, Any, Optional, Tuple, Callable
+from typing import List, Dict, Any, Optional, Set, Tuple, Callable
 
 import pandas as pd
 
 from src.config import FUNDAMENTAL_STAGE_TIMEOUT_SECONDS_DEFAULT, get_config, Config
 from src.storage import get_db
 from data_provider import DataFetcherManager
-from data_provider.base import is_bse_code, normalize_stock_code
+from data_provider.base import (
+    is_bse_code,
+    normalize_stock_code,
+    should_persist_daily_data,
+)
 from data_provider.realtime_types import ChipDistribution
 from src.analyzer import (
     GeminiAnalyzer,
@@ -471,9 +475,20 @@ class StockAnalysisPipeline:
             if df is None or df.empty:
                 return False, "获取数据为空"
 
-            # Lưu vào cơ sở dữ liệu
-            saved_count = self.db.save_daily_data(df, code, source_name)
-            logger.info(f"{stock_name}({code}) 数据保存成功（来源: {source_name}，新增 {saved_count} 条）")
+            # Lưu vào cơ sở dữ liệu. Nguồn lệch cơ sở điều chỉnh giá (ví dụ Yahoo
+            # phục vụ cổ phiếu Việt Nam) chỉ dùng cho phiên chạy hiện tại, không
+            # được ghi đè lẻ tẻ vào lịch sử theo khoá (code, date).
+            if should_persist_daily_data(source_name, code):
+                saved_count = self.db.save_daily_data(df, code, source_name)
+                logger.info(f"{stock_name}({code}) 数据保存成功（来源: {source_name}，新增 {saved_count} 条）")
+            else:
+                logger.info(
+                    "%s(%s) Bỏ qua ghi DB: nguồn [%s] khác cơ sở điều chỉnh giá so với "
+                    "nguồn chính của thị trường, dữ liệu chỉ dùng cho phiên chạy này",
+                    stock_name,
+                    code,
+                    source_name,
+                )
 
             return True, None
 
@@ -1482,8 +1497,17 @@ class StockAnalysisPipeline:
         try:
             df, source = self.fetcher_manager.get_daily_data(code, days=min_days)
             if df is not None and not df.empty:
-                self.db.save_daily_data(df, code, source)
-                logger.info("[%s] Prefetched %d rows of history for agent (source: %s)", code, len(df), source)
+                if should_persist_daily_data(source, code):
+                    self.db.save_daily_data(df, code, source)
+                    logger.info("[%s] Prefetched %d rows of history for agent (source: %s)", code, len(df), source)
+                else:
+                    logger.info(
+                        "[%s] Bỏ qua ghi DB cho %d dòng lịch sử: nguồn [%s] khác cơ sở "
+                        "điều chỉnh giá",
+                        code,
+                        len(df),
+                        source,
+                    )
         except Exception as e:
             logger.warning("[%s] Agent history prefetch failed: %s", code, e)
 
@@ -2039,7 +2063,12 @@ class StockAnalysisPipeline:
     def _get_analysis_context_with_market_fallback(
         self, code: str, analysis_target: Optional[AnalysisTarget] = None
     ) -> Optional[Dict[str, Any]]:
-        """Load analysis context, fetching JP/KR/TW daily bars when DB has no context."""
+        """Load analysis context, fetching JP/KR/TW/VN daily bars when DB has no context.
+
+        ``vn`` nằm ở đây vì nến ngày do Yahoo phục vụ cố tình không được ghi vào DB
+        (xem ``should_persist_daily_data``). Không có nhánh này thì một lần failover
+        sang Yahoo sẽ khiến phân tích chạy mà không có chút lịch sử giá nào.
+        """
         context = self.db.get_analysis_context(code)
         if isinstance(context, dict) and context:
             return context
@@ -2048,26 +2077,33 @@ class StockAnalysisPipeline:
             market = "cn"
         else:
             market = get_market_for_stock(normalize_stock_code(code))
-        if market not in {"jp", "kr", "tw"}:
+        if market not in {"jp", "kr", "tw", "vn"}:
             return context
 
         try:
             df, source_name = self.fetcher_manager.get_daily_data(code, days=60)
         except Exception as exc:
-            logger.warning("[%s] JP/KR daily fallback fetch failed: %s", code, exc)
+            logger.warning("[%s] JP/KR/VN daily fallback fetch failed: %s", code, exc)
             return context
 
         if df is None or df.empty:
-            logger.warning("[%s] JP/KR daily fallback returned empty data", code)
+            logger.warning("[%s] JP/KR/VN daily fallback returned empty data", code)
             return context
 
         try:
+            if not should_persist_daily_data(source_name, code):
+                logger.info(
+                    "[%s] Bỏ qua ghi DB: nguồn [%s] khác cơ sở điều chỉnh giá",
+                    code,
+                    source_name,
+                )
+                return self._build_analysis_context_from_daily_df(code, df)
             self.db.save_daily_data(df, code, source_name)
             refreshed = self.db.get_analysis_context(code)
             if isinstance(refreshed, dict) and refreshed:
                 return refreshed
         except Exception as exc:
-            logger.warning("[%s] JP/KR daily fallback persistence failed: %s", code, exc)
+            logger.warning("[%s] JP/KR/VN daily fallback persistence failed: %s", code, exc)
 
         return self._build_analysis_context_from_daily_df(code, df)
 
@@ -3438,6 +3474,12 @@ class StockAnalysisPipeline:
                 logger.warning(f"[{code}] 数据获取失败: {error}")
                 # Kể cả khi lấy dữ liệu thất bại vẫn thử phân tích bằng dữ liệu sẵn có
             else:
+                # Ghi nhận để chế độ dry-run thống kê đúng: có nguồn (như Yahoo cho
+                # cổ phiếu Việt Nam) cố tình không ghi vào DB, nên không thể chỉ dựa
+                # vào has_today_data() để kết luận là lấy dữ liệu thất bại.
+                fetched = getattr(self, "_fetched_codes_this_run", None)
+                if fetched is not None:
+                    fetched.add(code)
                 self._emit_progress(16, f"{code}：行情数据准备完成")
             
             # Bước 2: AI phân tích
@@ -3623,6 +3665,8 @@ class StockAnalysisPipeline:
             )
         
         results: List[AnalysisResult] = []
+        # set.add của CPython là thao tác nguyên tử nên dùng trực tiếp trong thread pool.
+        self._fetched_codes_this_run: Set[str] = set()
         
         # Xử lý đồng thời bằng thread pool
         # Lưu ý: max_workers để thấp (mặc định 3) nhằm tránh kích hoạt cơ chế chống bot
@@ -3696,7 +3740,7 @@ class StockAnalysisPipeline:
                     if analysis_targets is not None and idx < len(analysis_targets)
                     else None
                 )
-                if self.db.has_today_data(
+                if code in self._fetched_codes_this_run or self.db.has_today_data(
                     code,
                     self._resolve_resume_target_date(
                         code,

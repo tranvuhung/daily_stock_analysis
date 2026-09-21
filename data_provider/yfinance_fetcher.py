@@ -31,7 +31,17 @@ from tenacity import (
     before_sleep_log,
 )
 
-from .base import BaseFetcher, DataFetchError, STANDARD_COLUMNS, _is_hk_market, is_bse_code
+from .base import (
+    BaseFetcher,
+    DataFetchError,
+    STANDARD_COLUMNS,
+    _is_hk_market,
+    _is_vn_market,
+    is_bse_code,
+    is_vn_index_code,
+    normalize_stock_code,
+)
+from src.core.markets import is_market_enabled
 from .realtime_types import UnifiedRealtimeQuote, RealtimeSource
 from .us_index_mapping import get_us_index_yf_symbol, is_us_stock_code
 from .yfinance_fundamental_adapter import _safe_float
@@ -103,6 +113,7 @@ class YfinanceFetcher(BaseFetcher):
         - A股深市：000001.SZ (Shenzhen Stock Exchange)
         - 港股：0700.HK (Hong Kong Stock Exchange)
         - 美股：AAPL, TSLA, GOOGL (无需后缀)
+        - 越南股（HOSE）：HPG.VN、FPT.VN
 
         Args:
             stock_code: 原始代码，如 '600519', 'hk00700', 'AAPL'
@@ -117,8 +128,45 @@ class YfinanceFetcher(BaseFetcher):
             '0700.HK'
             >>> fetcher._convert_stock_code('AAPL')
             'AAPL'
+            >>> fetcher._convert_stock_code('HPG')   # khi thị trường us đang tắt
+            'HPG.VN'
         """
         code = stock_code.strip().upper()
+
+        # Việt Nam: PHẢI đặt trước nhánh mã Mỹ. Manager gọi normalize_stock_code()
+        # trước nên ``HPG.VN`` đã bị rút gọn thành ``HPG``, mà is_us_stock_code()
+        # khớp [A-Z]{1,5} nên sẽ nhận nhầm là mã Mỹ. Truyền mã gốc chứ không phải
+        # bản đã upper(): _is_vn_market() nhận dạng tiền tố ``vn`` trên chuỗi
+        # thường (``vnHPG``), và nó cũng mang sẵn quy tắc va chạm VN/US — mã trần
+        # 3 ký tự chỉ được coi là VN khi thị trường ``us`` đang tắt.
+        #
+        # Điều kiện ``is_market_enabled("vn")`` là để khớp với cách manager định
+        # tuyến: ``_market_tag`` chỉ hỏi ``_is_vn_market`` khi thị trường VN đang
+        # bật. Thiếu nó thì các mã trong ``VN_INDEX_SYMBOLS`` (``UPCOM`` là 5 ký
+        # tự chữ hoa, hình dạng hợp lệ của một ticker Mỹ) sẽ bị nhánh này chiếm
+        # mất ngay cả khi triển khai không hề bật thị trường Việt Nam.
+        if is_market_enabled("vn") and _is_vn_market(stock_code):
+            # Chỉ số Việt Nam bị từ chối thẳng, không phát request: ``^VNINDEX.VN``
+            # trả về đúng 1 nến rác khi xin cả năm, còn ``^VN30.VN`` /
+            # ``^HNXINDEX.VN`` / ``^UPCOM.VN`` thì rỗng hoàn toàn. Để lọt sẽ thành
+            # dữ liệu sai thay vì một lỗi sạch mà manager xử lý được.
+            if is_vn_index_code(code):
+                raise DataFetchError(
+                    f"[{self.name}] {stock_code}: Yahoo không có lịch sử chỉ số "
+                    "Việt Nam, chỉ số phải do VCI phục vụ"
+                )
+
+            # normalize_stock_code() rút mọi cách viết (``HPG.VN``/``vnHPG``) về mã
+            # trần ``HPG``, tránh nối thành ``HPG.VN.VN``.
+            #
+            # Không thể phân biệt HOSE/HNX/UPCOM từ hình dạng mã, và không được
+            # phụ thuộc bảng mã của VCI vì VCI hỏng chính là lý do rơi vào đây.
+            # Thực đo: HOSE phủ 20/20 mã mẫu, HNX 0/20, UPCOM 0/20. Mã ngoài HOSE
+            # sẽ cho DataFrame rỗng -> BaseFetcher.get_daily_data raise
+            # DataFetchError -> manager coi như một nguồn hỏng bình thường.
+            vn_code = normalize_stock_code(stock_code)
+            logger.debug(f"识别为越南股票代码: {stock_code} -> {vn_code}.VN")
+            return f"{vn_code}.VN"
 
         # 美股指数：映射到 Yahoo Finance 符号（如 SPX -> ^GSPC）
         yf_symbol, _ = get_us_index_yf_symbol(code)

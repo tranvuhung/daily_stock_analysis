@@ -336,20 +336,33 @@ def _handle_get_daily_history(stock_code: str, days: int = 60) -> dict:
 
     if source != "db_cache":
         _, normalized_code = _history_code_candidates(stock_code)
-        try:
-            saved_count = _get_db().save_daily_data(df, normalized_code, source)
+        from data_provider.base import should_persist_daily_data
+
+        # Nguồn lệch cơ sở điều chỉnh giá (Yahoo cho cổ phiếu Việt Nam) chỉ phục vụ
+        # lần gọi này, không được trộn vào lịch sử trong DB.
+        if not should_persist_daily_data(source, normalized_code):
+            # Chỉ bỏ qua bước ghi DB; dữ liệu vẫn được trả về bình thường bên dưới.
             logger.info(
-                "Agent daily history persisted for %s (source=%s, new_records=%s)",
+                "Agent daily history NOT persisted for %s: source=%s differs in "
+                "price adjustment basis",
                 normalized_code,
                 source,
-                saved_count,
             )
-        except Exception as exc:
-            logger.warning(
-                "Agent daily history persistence failed for %s: %s",
-                normalized_code,
-                exc,
-            )
+        else:
+            try:
+                saved_count = _get_db().save_daily_data(df, normalized_code, source)
+                logger.info(
+                    "Agent daily history persisted for %s (source=%s, new_records=%s)",
+                    normalized_code,
+                    source,
+                    saved_count,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Agent daily history persistence failed for %s: %s",
+                    normalized_code,
+                    exc,
+                )
 
     # Convert DataFrame to list of dicts (last N records)
     records = df.tail(min(effective_days, len(df))).to_dict(orient="records")

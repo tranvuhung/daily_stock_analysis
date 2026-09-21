@@ -80,7 +80,11 @@ _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
         fetcher_name="YfinanceFetcher",
         dataset_markets={
             "quote.realtime": ("hk", "us", "jp", "kr", "tw"),
-            "kline.daily": ("cn", "hk", "us", "jp", "kr", "tw"),
+            # ``vn`` chỉ có ở kline.daily: Yahoo là dự phòng cấp 3 cho cổ phiếu
+            # Việt Nam, và chỉ phủ sàn HOSE. Không khai quote.realtime,
+            # index.daily hay market.overview cho ``vn`` — Yahoo không có lịch sử
+            # chỉ số Việt Nam, khai thêm sẽ thành pseudo-fallback.
+            "kline.daily": ("cn", "hk", "us", "jp", "kr", "tw", "vn"),
             "index.daily": ("cn", "us"),
             "market.overview": ("cn", "hk", "us", "jp", "kr", "tw"),
             "financial.snapshot": ("hk", "us", "jp", "kr", "tw"),
