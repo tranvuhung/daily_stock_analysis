@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [新功能] 本地资讯池支持越南市场：`_ALLOWED_MARKETS` 增加 `vn`，并内置 6 个越南语 RSS 模板（CafeF 4 个、VnExpress、Vietstock，均已实测可用）。此前 `_load_persisted_intelligence_context` 按 `market="vn"` 查询，而 `vn` 不是合法市场，导致越南标的的市场级资讯源根本无法创建。
+- [修复] 越南标的的新闻检索此前用错语言：`_US_STOCK_RE`（`^[A-Za-z]{1,5}$`）匹配所有越南裸码，HPG/FPT 被当成美股走英文查询；越南指数因 `src/core/pipeline.py` 对指数传空 code 而落入中文分支，VNINDEX 被用「研报 目标价 评级 / 上交所 深交所 cninfo」检索。现新增越南语查询分支（置于美股分支之前），指数走 `is_vn_index_code` 保留代码，A 股与美股查询保持不变。
+- [修复] Brave 搜索对越南标的错误地发送 `country=US`（`_is_us_stock` 复用同一个美股正则），现返回 `search_lang=vi, country=VN`。
+- [修复] 相关性排序此前会把越南语新闻降级：`_COMPANY_EVENT_TERMS` 没有越南语事件词，越南语标题拿不到「公司直接新闻」加分；可信来源表也缺 HOSE/HNX/UBCKNN 与 cafef.vn/vietstock.vn。两张表均补齐（只新增、不删除既有条目）。
+- [修复] `format_intel_report()` 的标题、维度标签与零命中占位文本原本固定中文，并被直接送入 LLM 输入，导致越南语报告的 prompt 里混入中文；现按 `REPORT_LANGUAGE` 渲染。零命中仍返回非空字符串的既有语义未变（`src/services/empty_news.py` 依赖该行为）。
+- [改进] `.env.example` 默认开启 `NEWS_INTEL_AUTO_FETCH_ENABLED`，并补充越南市场的搜索渠道选型说明：推荐 Tavily；明确不要依赖 `SEARXNG_PUBLIC_INSTANCES_ENABLED`（实测 24 个在线公共实例无一开放 JSON API，而 provider 强制 `format=json`，开启后只会让警告消失、新闻面依旧为空）。
+- [改进] `NEWS_INTEL_AUTO_FETCH_ENABLED` 纳入配置注册表与 Web 设置帮助文案（中英双语），此前它只存在于 `.env.example` 注释中，在设置页不可见。
+- [测试] 新增 `tests/test_search_vn_queries.py`（14 个离线用例：越南标的识别、查询语言、指数不再走中文分支、美股/A 股不回归、Brave locale、排序词表、报告语言）；`tests/test_intelligence_service.py` 增加 `vn` 市场与越南语模板用例。`tests/test_intelligence_analysis_integration.py` 与 `tests/test_notification_empty_news_disclosure.py` 的断言从中文字面量改为按语义断言（本地证据池标题、零命中占位行数），因为这两处文案现在跟随 `REPORT_LANGUAGE`。
+- [文档] `docs/intelligence-sources.md` 增加越南语内置源清单与启用方式；`docs/full-guide.md` 搜索服务配置补充越南市场选型提示。
 - [改进] `apps/dsa-web/public/stocks.index.json` 裁剪为**只保留越南标的**：33264 条 -> 1553 条（1523 只股票 + 24 只 ETF + 6 个指数），体积 3.4 MB -> 138 KB。Web UI 自动补全不再混进美股与 A 股条目。`scripts/generate_vn_index.py` 的合并逻辑不受影响（其他市场保留 0 条）。
 - [修复] `STOCK_INDEX_REMOTE_UPDATE_ENABLED` 默认值改为 `false`（`src/config.py`、`src/core/config_registry.py`、`.env.example` 三处同步）。默认远程地址指向上游 A 股项目的 `stocks.index.json`，不含任何越南标的，开启后会覆盖内置越南代码表并让 Web UI 自动补全搜不到 HPG / FPT / VNINDEX——且不报错，表现只是「输入后没有下拉建议」，缓存 TTL 48 小时使问题延迟复现。
 - [测试] 移除 `tests/test_stock_code_utils.py` 中 8 个依赖多市场代码表的用例（5 个 `registered CSI` 收敛用例依赖 A 股指数 `csi930955`；3 个 `cross_market_*` 用例依赖 JP/HK 之间裸码 8035 的重叠）。索引裁剪后这些前提不复存在，原用例位置留有注释说明去向。

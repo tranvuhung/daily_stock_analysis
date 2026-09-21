@@ -331,6 +331,34 @@ class IntelligenceServiceTestCase(unittest.TestCase):
         self.assertEqual(created["market"], "hk")
         self.assertFalse(created["enabled"])
 
+    def test_vn_is_an_allowed_market(self) -> None:
+        """Không có ``vn`` thì nguồn tin cấp thị trường cho Việt Nam không tạo được.
+
+        ``_load_persisted_intelligence_context`` (src/core/pipeline.py) truy vấn theo
+        ``market="vn"`` cho cổ phiếu Việt Nam, nên nếu ``_ALLOWED_MARKETS`` thiếu
+        ``vn`` thì nhánh này vĩnh viễn rỗng.
+        """
+
+        created = self.service.create_source({
+            "name": "vn-manual-source",
+            "source_type": "rss",
+            "url": "https://cafef.vn/thi-truong-chung-khoan.rss",
+            "scope_type": "market",
+            "market": "vn",
+            "enabled": False,
+        })
+        self.assertEqual(created["market"], "vn")
+
+    def test_vn_source_templates_exist_and_create_sources(self) -> None:
+        templates = self.service.list_source_templates(market="vn")
+        self.assertGreaterEqual(templates["total"], 1)
+
+        created = self.service.create_source_from_template(
+            "vn-cafef-chung-khoan", {"enabled": False, "name": "cafef-template-copy"}
+        )
+        self.assertEqual(created["market"], "vn")
+        self.assertFalse(created["enabled"])
+
     def test_newsnow_source_fetches_json_items(self) -> None:
         source = self.service.create_source({
             "name": "newsnow-cls",

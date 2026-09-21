@@ -10,7 +10,7 @@ Issue #1707 的首版能力聚焦“合规资讯源采集、本地沉淀、可�
 - 保存资讯源配置、启用状态、作用域和最近一次拉取状态。
 - 拉取条目落库到 `intelligence_items`，保存标题、摘要、URL、来源、发布时间、拉取时间、市场与作用域。
 - 按 URL 去重；无 URL 条目使用 `no-url:intel:<hash>` 兜底键。
-- 支持 `symbol` / `market` / `sector` 作用域，以及 `cn` / `hk` / `us` / `jp` / `kr` / `tw` / `global` 市场标记。
+- 支持 `symbol` / `market` / `sector` 作用域，以及 `vn` / `cn` / `hk` / `us` / `jp` / `kr` / `tw` / `global` 市场标记。
 - 拉取批处理采用 fail-open：单个源失败不会阻塞其他源或主分析链路。
 - 支持 retention 清理，避免资讯池无限增长。
 
@@ -83,6 +83,34 @@ NEWS_INTEL_AUTO_FETCH_ENABLED=true
 该开关代表用户明确同意运行时访问已配置的外部 RSS/Atom/NewsNow HTTP 源；默认关闭是为了避免未确认的外部请求、公开 NewsNow 示例实例压力和分析 prompt 输入变化。
 
 > 说明：该开关只有在实际执行进程环境变量中可见时才会生效。仓库默认随带的 `00-daily-analysis.yml` 为 `env` 采用 allowlist 映射策略，未显式列入映射时，即便在仓库 Variables/Secrets 中设置同名变量也不会注入运行环境，因此默认 workflow 中不会自动接收该开关。若要在仓库自带每日分析任务里开启该能力，请在 workflow 中显式添加该变量透传，或改为本地/Docker 直接配置环境变量运行。
+
+## 越南语内置 RSS 源（market=vn）
+
+本仓库默认 `SUPPORTED_MARKETS=vn`，因此内置了以下越南语财经 RSS 模板。它们免 API key，
+是越南市场最直接的新闻证据来源。与按需搜索（`src/search_service.py`）互补：即使一个
+搜索 API key 都没配，只要拉取过这些源，个股分析也能读到新闻面证据。
+
+| template_id | 来源 | 说明 |
+| --- | --- | --- |
+| `vn-cafef-chung-khoan` | CafeF | Thị trường chứng khoán |
+| `vn-cafef-doanh-nghiep` | CafeF | Doanh nghiệp（个股事件密度最高） |
+| `vn-cafef-tai-chinh-ngan-hang` | CafeF | Tài chính ngân hàng |
+| `vn-cafef-vi-mo` | CafeF | Vĩ mô đầu tư |
+| `vn-vnexpress-kinh-doanh` | VnExpress | Kinh doanh |
+| `vn-vietstock-co-phieu` | Vietstock | Cổ phiếu |
+
+⚠️ Vietstock 必须用 `https://vietstock.vn/741/chung-khoan/co-phieu.rss`；
+`https://vietstock.vn/RSS/chung-khoan.rss` 返回 HTML 而非 RSS，不可用。
+
+启用方式（任选其一）：
+
+```bash
+# 一键创建并启用全部内置默认源
+curl -s -X POST http://127.0.0.1:8765/api/v1/intelligence/sources/defaults \
+     -H 'Content-Type: application/json' -d '{"enabled": true}'
+
+# 或在 .env 设置 NEWS_INTEL_AUTO_FETCH_ENABLED=true，由分析链路自动建源并拉取
+```
 
 ## NewsNow 默认源
 

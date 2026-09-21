@@ -364,6 +364,15 @@ daily_stock_analysis/
 
 ### 搜索服务配置
 
+> **越南市场部署（本仓库默认）**：推荐 `TAVILY_API_KEYS`。
+> `SEARXNG_PUBLIC_INSTANCES_ENABLED` 默认 `false`，**不要**为了消除告警而打开它：实测
+> searx.space 上 24 个在线公共实例无一开放 JSON API，而 provider 强制 `format=json`；
+> 打开后 `has_search_capability_enabled()` 返回 true，未配置告警消失但新闻面依旧为空，
+> 等于把一个显式错误变成静默错误。要用 SearXNG 请自建实例。
+> `BOCHA` / `SERPAPI` 面向中文与 A 股优化，对越南标的收益有限。另有一条免 key 的互补路径：
+> 本地资讯池 RSS（`NEWS_INTEL_*`，内置越南语源），见 [资讯 / 情报源](intelligence-sources.md)。
+
+
 | 变量名 | 说明 | 必填 |
 |--------|------|:----:|
 | `ANSPIRE_API_KEYS` | Anspire Open API Key（可用于搜索与大模型网关共享场景的配置示例；是否可用取决于账号权限与网关可见性，可有效增强 A 股分析效果） | 推荐 |

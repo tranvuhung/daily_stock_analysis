@@ -2285,28 +2285,42 @@ class SearchService:
         "合作", "中标", "earnings", "revenue", "profit", "guidance", "filing",
         "sec", "shares", "stock", "buyback", "dividend", "lawsuit", "merger",
         "acquisition", "results", "quarterly", "annual", "announces", "launches",
+        # Tiếng Việt: thiếu nhóm này thì bài báo Việt không bao giờ được cộng điểm
+        # "tin trực tiếp về doanh nghiệp", luôn bị xếp xuống nhóm tin nền.
+        "công bố", "nghị quyết", "cổ tức", "phát hành", "chào bán", "mua lại",
+        "thoái vốn", "kiện", "xử phạt", "vi phạm", "lợi nhuận", "doanh thu",
+        "báo cáo tài chính", "đại hội cổ đông", "hội đồng quản trị", "trúng thầu",
+        "hợp tác", "niêm yết", "giao dịch nội bộ",
     )
     _SECTOR_NEWS_TERMS = (
         "行业", "板块", "产业链", "龙头", "概念股", "赛道", "sector", "industry",
         "peers", "competitors", "supply chain", "market share",
+        "ngành", "nhóm ngành", "chuỗi cung ứng", "thị phần", "đối thủ",
     )
     _MACRO_NEWS_TERMS = (
         "大盘", "市场", "指数", "宏观", "央行", "利率", "通胀", "a股", "港股",
         "美股", "纳指", "标普", "market", "index", "fed", "inflation",
         "interest rate", "nasdaq", "s&p 500", "dow jones",
+        "vn-index", "vnindex", "vn30", "hnx", "upcom", "thị trường", "chỉ số",
+        "vĩ mô", "lãi suất", "lạm phát", "ngân hàng nhà nước",
     )
     _OFFICIAL_SOURCE_TERMS = (
         "cninfo", "sse.com", "szse.cn", "hkexnews", "sec.gov", "nasdaq.com",
         "nyse.com", "上交所", "深交所", "港交所", "证券交易所",
+        "hsx.vn", "hnx.vn", "ssc.gov.vn", "cafef.vn", "vietstock.vn",
     )
     _OFFICIAL_SOURCE_HOSTS = (
         "cninfo.com.cn", "sse.com", "sse.com.cn", "szse.cn", "hkexnews.hk",
         "sec.gov", "nasdaq.com", "nyse.com",
+        # Việt Nam: hai sàn (HOSE/HNX) và Uỷ ban Chứng khoán Nhà nước.
+        "hsx.vn", "hnx.vn", "ssc.gov.vn",
     )
     _OFFICIAL_SOURCE_LABELS = (
         "cninfo", "hkexnews", "巨潮资讯", "巨潮资讯网",
         "上交所", "深交所", "港交所", "证券交易所",
         "上海证券交易所", "深圳证券交易所", "香港交易所", "香港联合交易所",
+        "hose", "hnx", "sở giao dịch chứng khoán", "uỷ ban chứng khoán nhà nước",
+        "ủy ban chứng khoán nhà nước",
     )
     _LOW_QUALITY_DOWNLOAD_ACTION_TERMS = (
         "下载", "安装", "下载安装", "下载安装到手机", "下载链接",
@@ -2566,6 +2580,33 @@ class SearchService:
         code = (stock_code or "").strip().upper()
         return bool(cls._US_STOCK_RE.match(code) or is_us_index_code(code))
 
+    @staticmethod
+    def _is_vn_symbol(stock_code: str, stock_name: str = "") -> bool:
+        """Mã này có thuộc thị trường Việt Nam hay không.
+
+        Tái dùng ``data_provider.base`` làm nguồn sự thật thay vì thêm một regex
+        thứ ba: mã Việt Nam trần (``HPG``/``FPT``) trùng hoàn toàn với hình dạng
+        ticker Mỹ ``^[A-Z]{1,5}$``, nên ``_US_STOCK_RE`` ở lớp này sẽ nhận nhầm
+        chúng là cổ phiếu Mỹ. ``src/core/markets.py`` đã giải va chạm đó bằng
+        ``detect_order`` và ``_is_vn_market`` mang sẵn quy tắc ấy.
+
+        Import trễ theo đúng quy ước sẵn có trong repo, tránh kéo cả
+        ``data_provider.base`` vào thời điểm import module này.
+        """
+
+        try:
+            from data_provider.base import _is_vn_market, is_vn_index_code
+        except Exception:  # pragma: no cover - chỉ xảy ra khi lắp ghép lỗi
+            return False
+
+        for candidate in (stock_code, stock_name):
+            text = (candidate or "").strip()
+            if not text:
+                continue
+            if is_vn_index_code(text) or _is_vn_market(text):
+                return True
+        return False
+
     @classmethod
     def _should_prefer_chinese_news(
         cls,
@@ -2650,6 +2691,10 @@ class SearchService:
         """Resolve Brave locale hints without forcing US bias onto non-US symbols."""
         if prefer_chinese:
             return {"search_lang": "zh-hans", "country": "CN"}
+        # Việt Nam phải xét TRƯỚC ``_is_us_stock``: hàm đó dùng chung ``_US_STOCK_RE``
+        # nên mã như HPG sẽ bị gắn ``country=US`` và Brave trả kết quả nhắm thị trường Mỹ.
+        if cls._is_vn_symbol(stock_code):
+            return {"search_lang": "vi", "country": "VN"}
         if cls._is_us_stock(stock_code):
             return {"search_lang": "en", "country": "US"}
         return {}
@@ -2673,6 +2718,15 @@ class SearchService:
         # US index (SPX, DJI, IXIC etc.)
         if is_us_index_code(code):
             return True
+        # Chỉ số Việt Nam (VNINDEX / VN30 / HNXIndex / HNXUpcomIndex ...): mã chính là
+        # tên gọi nên đi thẳng qua bảng đăng ký thay vì suy đoán theo hình dạng.
+        try:
+            from data_provider.base import is_vn_index_code
+
+            if is_vn_index_code(code):
+                return True
+        except Exception:  # pragma: no cover - chỉ xảy ra khi lắp ghép lỗi
+            pass
         # US/HK ETF: foreign symbol + name contains fund-like keywords
         if SearchService._is_foreign_stock(code):
             name_upper = (stock_name or '').upper()
@@ -4047,9 +4101,19 @@ class SearchService:
         # display name is Chinese (e.g. AAPL -> 苹果), otherwise the foreign
         # branch below is unreachable and English headlines are missed.
         prefer_chinese = prefer_chinese and not (is_foreign and english_aliases)
+        is_vn = self._is_vn_symbol(stock_code, stock_name)
         if focus_keywords:
             # 如果提供了关键词，直接使用关键词作为查询
             query = " ".join(focus_keywords)
+        elif is_vn:
+            # Nhánh Việt Nam đặt trước prefer_chinese và is_foreign: mã VN trần khớp
+            # ``_US_STOCK_RE`` nên nếu không chặn ở đây sẽ sinh truy vấn tiếng Anh,
+            # còn chỉ số VN (code rỗng ở một số lối gọi) rơi xuống nhánh mặc định
+            # tiếng Trung ở cuối hàm.
+            if stock_code and stock_code.strip().upper() != (stock_name or "").strip().upper():
+                query = f"{stock_name} {stock_code} cổ phiếu tin tức mới nhất"
+            else:
+                query = f"{(stock_name or stock_code).strip()} tin tức mới nhất"
         elif prefer_chinese:
             # 指数 target 的 stock_code 可能为空（Agent 工具 _resolve_search_subject
             # 有意只传显示名），空 code 直接省略，避免拼出 "上证50  股票" 双空格。
@@ -4393,8 +4457,72 @@ class SearchService:
 
         is_foreign = self._is_foreign_stock(stock_code)
         is_index_etf = self.is_index_or_etf(stock_code, stock_name)
+        is_vn = self._is_vn_symbol(stock_code, stock_name)
 
-        if is_foreign:
+        if is_vn:
+            # Nhánh Việt Nam phải đứng TRƯỚC nhánh is_foreign: mã Việt Nam trần
+            # (HPG/FPT) khớp ``_US_STOCK_RE`` nên nếu để rơi xuống dưới sẽ bị coi
+            # là cổ phiếu Mỹ và sinh truy vấn tiếng Anh, bỏ lỡ toàn bộ báo chí
+            # tài chính tiếng Việt (CafeF, Vietstock, VnExpress).
+            # Chỉ số thường có tên trùng mã (VN30/VN30) — tránh lặp từ trong truy vấn.
+            if stock_code and stock_code.strip().upper() != (stock_name or "").strip().upper():
+                subject = f"{stock_name} {stock_code}".strip()
+            else:
+                subject = (stock_name or stock_code or "").strip()
+            search_dimensions = [
+                {
+                    'name': 'latest_news',
+                    'query': f"{subject} tin tức mới nhất",
+                    'desc': 'Tin mới nhất',
+                    'tavily_topic': 'news',
+                    'strict_freshness': True,
+                },
+                {
+                    'name': 'market_analysis',
+                    'query': (
+                        f"{subject} nhận định thị trường xu hướng"
+                        if is_index_etf
+                        else f"{stock_name} khuyến nghị giá mục tiêu báo cáo phân tích"
+                    ),
+                    'desc': 'Phân tích tổ chức',
+                    'tavily_topic': None,
+                    'strict_freshness': False,
+                },
+                {
+                    'name': 'risk_check',
+                    'query': (
+                        f"{subject} biến động rủi ro thị trường"
+                        if is_index_etf
+                        else f"{stock_name} rủi ro vi phạm xử phạt kiện tụng bán ra"
+                    ),
+                    'desc': 'Rà soát rủi ro',
+                    'tavily_topic': None if is_index_etf else 'news',
+                    'strict_freshness': not is_index_etf,
+                },
+                {
+                    'name': 'earnings',
+                    'query': (
+                        f"{subject} thanh khoản vốn hóa diễn biến"
+                        if is_index_etf
+                        else f"{stock_name} kết quả kinh doanh doanh thu lợi nhuận"
+                    ),
+                    'desc': 'Kỳ vọng kết quả kinh doanh',
+                    'tavily_topic': None,
+                    'strict_freshness': False,
+                },
+                {
+                    'name': 'industry',
+                    'query': (
+                        f"{subject} nhóm ngành dẫn dắt"
+                        if is_index_etf
+                        else f"{stock_name} ngành đối thủ thị phần triển vọng"
+                    ),
+                    'desc': 'Phân tích ngành',
+                    'tavily_topic': None,
+                    'strict_freshness': False,
+                },
+            ]
+        elif is_foreign:
             # Issue #2026: Foreign-ticker English alias resolution from the
             # single source of truth (STOCK_ENGLISH_NAME_MAP in
             # src/data/stock_mapping.py). When STOCK_NAME_MAP maps the ticker
@@ -4620,6 +4748,17 @@ class SearchService:
         
         return results
     
+    @staticmethod
+    def _resolve_report_language() -> str:
+        """Ngôn ngữ báo cáo đang hiệu lực; lỗi thì lùi về ``zh`` như hành vi cũ."""
+
+        try:
+            from src.config import get_config
+
+            return (get_config().report_language or "zh").strip().lower()
+        except Exception:  # pragma: no cover - cấu hình chưa sẵn sàng
+            return "zh"
+
     def format_intel_report(self, intel_results: Dict[str, SearchResponse], stock_name: str) -> str:
         """
         格式化情报搜索结果为报告
@@ -4631,19 +4770,42 @@ class SearchService:
         Returns:
             格式化的情报报告文本
         """
-        lines = [f"【{stock_name} 情报搜索结果】"]
-        
+        # Khối văn bản này được nạp thẳng vào prompt của LLM (src/core/pipeline.py),
+        # nên nhãn phải theo ngôn ngữ báo cáo; để nguyên tiếng Trung sẽ lẫn chữ Hán
+        # vào đầu vào của báo cáo tiếng Việt.
+        #
+        # LƯU Ý: hàm này luôn trả về chuỗi KHÔNG rỗng kể cả khi không có kết quả.
+        # Không được dùng giá trị trả về để suy ra "có bằng chứng tin tức hay không"
+        # — xem src/services/empty_news.py, ngữ nghĩa ba trạng thái None/0/>0.
+        language = self._resolve_report_language()
+        is_vi = language == "vi"
+
+        lines = [
+            f"【Kết quả tìm kiếm tin tức: {stock_name}】" if is_vi
+            else f"【{stock_name} 情报搜索结果】"
+        ]
+
         # 维度展示顺序
         display_order = ['latest_news', 'announcements', 'market_analysis', 'risk_check', 'earnings', 'industry']
 
-        dim_labels = {
-            'latest_news': '📰 最新消息',
-            'announcements': '📋 公司公告',
-            'market_analysis': '📈 机构分析',
-            'risk_check': '⚠️ 风险排查',
-            'earnings': '📊 业绩预期',
-            'industry': '🏭 行业分析',
-        }
+        if is_vi:
+            dim_labels = {
+                'latest_news': '📰 Tin mới nhất',
+                'announcements': '📋 Công bố thông tin',
+                'market_analysis': '📈 Phân tích tổ chức',
+                'risk_check': '⚠️ Rà soát rủi ro',
+                'earnings': '📊 Kết quả kinh doanh',
+                'industry': '🏭 Phân tích ngành',
+            }
+        else:
+            dim_labels = {
+                'latest_news': '📰 最新消息',
+                'announcements': '📋 公司公告',
+                'market_analysis': '📈 机构分析',
+                'risk_check': '⚠️ 风险排查',
+                'earnings': '📊 业绩预期',
+                'industry': '🏭 行业分析',
+            }
 
         for dim_name in display_order:
             if dim_name not in intel_results:
@@ -4654,7 +4816,8 @@ class SearchService:
             # 获取维度描述
             dim_desc = dim_labels.get(dim_name, dim_name)
             
-            lines.append(f"\n{dim_desc} (来源: {resp.provider}):")
+            source_label = "nguồn" if is_vi else "来源"
+            lines.append(f"\n{dim_desc} ({source_label}: {resp.provider}):")
             if resp.success and resp.results:
                 # 增加显示条数
                 for i, r in enumerate(resp.results[:4], 1):
@@ -4670,10 +4833,17 @@ class SearchService:
                         if r.relevance_score is not None:
                             relevance_parts.append(f"score={r.relevance_score}")
                         if r.relevance_reasons:
-                            relevance_parts.append(f"依据: {'；'.join(r.relevance_reasons[:3])}")
-                        lines.append(f"     关联度: {'; '.join(relevance_parts)}")
+                            reason_label = "căn cứ" if is_vi else "依据"
+                            joiner = "; " if is_vi else "；"
+                            relevance_parts.append(
+                                f"{reason_label}: {joiner.join(r.relevance_reasons[:3])}"
+                            )
+                        rel_label = "Mức liên quan" if is_vi else "关联度"
+                        lines.append(f"     {rel_label}: {'; '.join(relevance_parts)}")
             else:
-                lines.append("  未找到相关信息")
+                lines.append(
+                    "  Không tìm thấy thông tin liên quan" if is_vi else "  未找到相关信息"
+                )
         
         return "\n".join(lines)
     

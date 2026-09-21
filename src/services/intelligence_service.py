@@ -28,7 +28,7 @@ from src.services.run_diagnostics import sanitize_diagnostic_text
 logger = logging.getLogger(__name__)
 _ALLOWED_SOURCE_TYPES = {"rss", "atom", "newsnow"}
 _ALLOWED_SCOPE_TYPES = {"symbol", "market", "sector"}
-_ALLOWED_MARKETS = {"cn", "hk", "us", "jp", "kr", "tw", "global"}
+_ALLOWED_MARKETS = {"vn", "cn", "hk", "us", "jp", "kr", "tw", "global"}
 _PRIVATE_HOSTNAMES = {"localhost", "localhost.localdomain"}
 _MAX_FEED_BYTES = 2 * 1024 * 1024
 _MAX_FEED_REDIRECTS = 5
@@ -55,6 +55,63 @@ _BUILTIN_SOURCE_TEMPLATES = [
         "scope_type": "market",
         "market": "hk",
         "description": "HKEX public news entry for Hong Kong market evidence. Test before enabling.",
+    },
+    {
+        "template_id": "vn-cafef-chung-khoan",
+        "name": "CafeF - Thị trường chứng khoán",
+        "source_type": "rss",
+        "url": "https://cafef.vn/thi-truong-chung-khoan.rss",
+        "scope_type": "market",
+        "market": "vn",
+        "description": "Tin thị trường chứng khoán Việt Nam từ CafeF.",
+    },
+    {
+        "template_id": "vn-cafef-doanh-nghiep",
+        "name": "CafeF - Doanh nghiệp",
+        "source_type": "rss",
+        "url": "https://cafef.vn/doanh-nghiep.rss",
+        "scope_type": "market",
+        "market": "vn",
+        "description": "Tin doanh nghiệp niêm yết từ CafeF, hữu ích cho bằng chứng theo từng mã.",
+    },
+    {
+        "template_id": "vn-cafef-tai-chinh-ngan-hang",
+        "name": "CafeF - Tài chính ngân hàng",
+        "source_type": "rss",
+        "url": "https://cafef.vn/tai-chinh-ngan-hang.rss",
+        "scope_type": "market",
+        "market": "vn",
+        "description": "Tin tài chính - ngân hàng từ CafeF, phù hợp cho nhóm cổ phiếu ngân hàng.",
+    },
+    {
+        "template_id": "vn-cafef-vi-mo",
+        "name": "CafeF - Vĩ mô đầu tư",
+        "source_type": "rss",
+        "url": "https://cafef.vn/vi-mo-dau-tu.rss",
+        "scope_type": "market",
+        "market": "vn",
+        "description": "Tin vĩ mô và đầu tư từ CafeF, dùng làm bối cảnh thị trường.",
+    },
+    {
+        "template_id": "vn-vnexpress-kinh-doanh",
+        "name": "VnExpress - Kinh doanh",
+        "source_type": "rss",
+        "url": "https://vnexpress.net/rss/kinh-doanh.rss",
+        "scope_type": "market",
+        "market": "vn",
+        "description": "Chuyên mục Kinh doanh của VnExpress, bao phủ rộng tin kinh tế Việt Nam.",
+    },
+    {
+        "template_id": "vn-vietstock-co-phieu",
+        "name": "Vietstock - Cổ phiếu",
+        "source_type": "rss",
+        "url": "https://vietstock.vn/741/chung-khoan/co-phieu.rss",
+        "scope_type": "market",
+        "market": "vn",
+        "description": (
+            "Tin cổ phiếu từ Vietstock. Lưu ý dùng đúng đường dẫn /741/…; "
+            "đường dẫn /RSS/chung-khoan.rss trả về HTML nên không dùng được."
+        ),
     },
     {
         "template_id": "global-marketwatch",

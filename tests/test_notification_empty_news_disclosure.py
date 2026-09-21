@@ -737,9 +737,14 @@ class NewsEvidenceSourcesTestCase(unittest.TestCase):
             "测试标的",
         )
 
-        # 前提：这段占位文本确实非空，否则这条反例就失去意义
+        # 前提：这段占位文本确实非空，否则这条反例就失去意义。
+        # 占位文案现在跟随 REPORT_LANGUAGE（本仓库只可选 `vi`），因此断言"每个维度都
+        # 渲染了一行零命中占位"这一语义，而不是某个具体语言的字面量。
         self.assertTrue(placeholder.strip())
-        self.assertIn("未找到相关信息", placeholder)
+        placeholder_lines = [
+            line for line in placeholder.splitlines() if line.startswith("  ")
+        ]
+        self.assertEqual(len(placeholder_lines), 2, placeholder)
 
         # 按来源登记：实时 0 条、无社交、无本地资讯池 —— 必须判定为没有证据
         self.assertFalse(news_evidence_present(0, None, None))

@@ -71,7 +71,9 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
         )
         self.assertIsNotNone(context)
         assert context is not None
-        self.assertIn("本地资讯证据池", context)
+        # Tiêu đề khối bằng chứng nay theo REPORT_LANGUAGE (repo này chỉ chọn được
+        # `vi`), nên khẳng định theo ý nghĩa thay vì theo chuỗi tiếng Trung cũ.
+        self.assertRegex(context, r"^## .+600519")
         self.assertIn("Company wins major AI order", context)
         self.assertIn("https://news.example.com/symbol", context)
 

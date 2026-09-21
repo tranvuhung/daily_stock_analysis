@@ -1358,6 +1358,40 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         ],
         "warning_codes": [],
     },
+    "NEWS_INTEL_AUTO_FETCH_ENABLED": {
+        "title": "Auto-fetch Local News Sources",
+        "description": (
+            "Before stock, Agent and market-review analysis read the local intelligence "
+            "pool, automatically create the built-in news sources and fetch the enabled "
+            "ones. This repository ships Vietnamese RSS sources (CafeF, VnExpress, "
+            "Vietstock), so turning this on gives news evidence without any search API "
+            "key. Fail-open: a failed refresh never blocks analysis, and there is a "
+            "60-minute in-process cooldown. Enabling it means you consent to outbound "
+            "requests to the configured sources."
+        ),
+        "category": "data_source",
+        "data_type": "boolean",
+        "ui_control": "switch",
+        "is_sensitive": False,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": "false",
+        "options": [],
+        "validation": {},
+        "display_order": 62,
+        "help_key": "settings.data_source.news_intel_auto_fetch",
+        "examples": [
+            "NEWS_INTEL_AUTO_FETCH_ENABLED=true",
+            "NEWS_INTEL_AUTO_FETCH_ENABLED=false",
+        ],
+        "docs": [
+            {
+                "label": "Intelligence sources",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/intelligence-sources.md",
+            },
+        ],
+        "warning_codes": [],
+    },
     "BIAS_THRESHOLD": {
         "title": "Bias Threshold (%)",
         "description": "Deviation threshold from MA5 (%). Exceeding this triggers 'do not chase' warning. Strong trend stocks auto-widen to 1.5x.",

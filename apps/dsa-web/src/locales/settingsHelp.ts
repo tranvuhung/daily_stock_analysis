@@ -402,6 +402,20 @@ const settingsHelpViVN: SettingsHelpMap = {
     impact: ['Ảnh hưởng tới khả năng kết nối và lấy dữ liệu khi dùng nguồn Pytdx.'],
     notes: ['Nếu một máy chủ không truy cập được, hãy dựa vào cơ chế dự phòng nguồn dữ liệu và tránh phụ thuộc vào một điểm cuối không ổn định.'],
   },
+  'settings.data_source.news_intel_auto_fetch': {
+    title: 'Tự động lấy nguồn tin cục bộ',
+    summary: 'Tự tạo và cập nhật kho tin RSS nội bộ trước mỗi lượt phân tích.',
+    usage: 'Bật để có bằng chứng tin tức mà không cần API key tìm kiếm.',
+    valueNotes: [
+      'Repo có sẵn nguồn RSS tiếng Việt (CafeF, VnExpress, Vietstock).',
+      'Có cooldown 60 phút trong tiến trình, không gọi lại cho từng mã.',
+    ],
+    impact: ['Bổ sung mục tin tức vào báo cáo và đầu vào của mô hình.'],
+    notes: [
+      'Bật đồng nghĩa với việc bạn đồng ý cho hệ thống gọi ra các nguồn đã cấu hình.',
+      'Fail-open: lấy tin thất bại không chặn luồng phân tích.',
+    ],
+  },
   'settings.data_source.news_window': {
     title: 'Khung thời gian tin tức',
     summary: 'Quy định tin tức cũ tới mức nào thì bị loại khỏi ngữ cảnh phân tích.',
@@ -1629,6 +1643,20 @@ const settingsHelpEnUS: SettingsHelpMap = {
     valueNotes: ['Separate multiple servers with English commas; runtime data-source logic tries them as configured.'],
     impact: ['Affects quote connectivity and availability when the Pytdx data source is used.'],
     notes: ['If a server is unreachable, rely on data-source fallback and avoid a single unstable endpoint.'],
+  },
+  'settings.data_source.news_intel_auto_fetch': {
+    title: 'Auto-fetch Local News Sources',
+    summary: 'Creates and refreshes the local RSS intelligence pool before each analysis.',
+    usage: 'Enable to get news evidence without any search API key.',
+    valueNotes: [
+      'This repository ships Vietnamese RSS sources (CafeF, VnExpress, Vietstock).',
+      'A 60-minute in-process cooldown avoids refetching for every symbol.',
+    ],
+    impact: ['Adds a news section to reports and to the model input.'],
+    notes: [
+      'Enabling it means you consent to outbound requests to the configured sources.',
+      'Fail-open: a failed refresh never blocks the analysis flow.',
+    ],
   },
   'settings.data_source.news_window': {
     title: 'News Window',

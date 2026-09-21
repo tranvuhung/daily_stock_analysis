@@ -30,6 +30,7 @@ from src.storage import get_db
 from data_provider import DataFetcherManager
 from data_provider.base import (
     is_bse_code,
+    is_vn_index_code,
     normalize_stock_code,
     should_persist_daily_data,
 )
@@ -774,8 +775,16 @@ class StockAnalysisPipeline:
                 # Dùng tìm kiếm đa chiều (tối đa 5 lượt)
                 # Mục tiêu là chỉ số: subject của truy vấn chỉ dùng tên trong registry, không đưa
                 # canonical code / mã máy 6 chữ số vào truy vấn (Story 1.5 V7).
+                #
+                # Ngoại lệ chỉ số Việt Nam: mã của chúng (VNINDEX / VN30 / HNXIndex) chính là tên
+                # gọi thông dụng chứ không phải mã máy, nên vẫn truyền vào để tầng tìm kiếm nhận
+                # ra đây là mục tiêu Việt Nam. Bỏ mã đi thì truy vấn rơi về bộ chiều tiếng Trung
+                # và chỉ số Việt Nam bị tìm bằng "研报 目标价 评级".
+                intel_stock_code = (
+                    "" if (is_index and not is_vn_index_code(code)) else code
+                )
                 intel_results = self.search_service.search_comprehensive_intel(
-                    stock_code=("" if is_index else code),
+                    stock_code=intel_stock_code,
                     stock_name=stock_name,
                     max_searches=5
                 )
@@ -3166,19 +3175,33 @@ class StockAnalysisPipeline:
                     break
             if not collected:
                 return None
-            lines = [f"## 本地资讯证据池（{stock_name}/{code}）"]
+            # Khối này đi thẳng vào prompt của LLM, nên nhãn phải theo ngôn ngữ báo cáo;
+            # để cứng tiếng Trung sẽ lẫn chữ Hán vào đầu vào của báo cáo tiếng Việt.
+            # Cùng lớp lỗi đã sửa ở SearchService.format_intel_report.
+            is_vi = (getattr(self.config, "report_language", "") or "").strip().lower() == "vi"
+            heading = (
+                f"## Kho bằng chứng tin tức cục bộ ({stock_name}/{code})" if is_vi
+                else f"## 本地资讯证据池（{stock_name}/{code}）"
+            )
+            untitled = "Tin không có tiêu đề" if is_vi else "未命名资讯"
+            summary_label = "Tóm tắt" if is_vi else "摘要"
+            source_label = "Nguồn" if is_vi else "来源"
+            lines = [heading]
             for idx, item in enumerate(collected[:limit], 1):
-                title = str(item.get("title") or "未命名资讯").strip()
+                title = str(item.get("title") or untitled).strip()
                 summary = str(item.get("summary") or "").strip()
                 source = str(item.get("source") or item.get("source_name") or "local-intel").strip()
                 published = str(item.get("published_at") or "").strip()
                 url = str(item.get("url") or "").strip()
                 meta = " / ".join(part for part in (source, published) if part)
-                lines.append(f"{idx}. {title}" + (f"（{meta}）" if meta else ""))
+                if meta:
+                    lines.append(f"{idx}. {title}" + (f" ({meta})" if is_vi else f"（{meta}）"))
+                else:
+                    lines.append(f"{idx}. {title}")
                 if summary:
-                    lines.append(f"   摘要：{summary[:220]}")
+                    lines.append(f"   {summary_label}: {summary[:220]}")
                 if url and not url.startswith("no-url:intel:"):
-                    lines.append(f"   来源：{url}")
+                    lines.append(f"   {source_label}: {url}")
             return "\n".join(lines)
         except Exception as exc:
             logger.debug("读取本地资讯证据失败（fail-open）: %s", exc)
