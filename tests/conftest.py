@@ -249,3 +249,23 @@ class _ThreadlessTestClient:
 
 fastapi.testclient.TestClient = _ThreadlessTestClient
 starlette.testclient.TestClient = _ThreadlessTestClient
+
+
+# ---------------------------------------------------------------------------
+# Market allowlist (SUPPORTED_MARKETS)
+# ---------------------------------------------------------------------------
+# 运行时默认只启用越南市场，但既有测试套件覆盖 A股/港股/美股/日股/韩股/台股，
+# 约 75 个文件直接断言这些市场的行为。这里把测试进程的 allowlist 打开成全量，
+# 使"默认只跑越南"这个部署决策不会把历史回归测试一起关掉。
+#
+# 必须在**模块导入期**设置，而不是放进 fixture：部分测试模块（例如
+# ``test_analysis_api_contract.py``）在自己被导入时就 ``dict(os.environ)``
+# 快照了环境变量，并在每个用例后把 ``os.environ`` 还原成那份快照。session
+# 级 fixture 在收集之后才执行，设置的值会被这类还原逻辑抹掉。conftest 在所有
+# 测试模块之前导入，所以在这里设置能被那些快照捕获。
+#
+# 只在未显式设置时生效，针对 allowlist 本身的测试仍可用 ``patch.dict`` 覆盖
+# （记得同时调用 ``src.core.markets.reset_cache()``）。
+import os as _os  # noqa: E402
+
+_os.environ.setdefault("SUPPORTED_MARKETS", "all")

@@ -33,8 +33,10 @@ class _ProviderDefinition:
             for markets in self.dataset_markets.values()
             for market in markets
         }
-        preferred_order = ("cn", "hk", "us", "jp", "kr", "tw")
-        return tuple(market for market in preferred_order if market in supported)
+        # 顺序取自市场注册表，新增市场时不需要再改这里
+        from src.core.markets import ALL_MARKET_CODES
+
+        return tuple(market for market in ALL_MARKET_CODES if market in supported)
 
 
 _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
@@ -139,6 +141,38 @@ _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
             "quote.realtime": ("hk",),
             "kline.daily": ("hk",),
             "financial.snapshot": ("hk",),
+        },
+    ),
+    _ProviderDefinition(
+        name="vci",
+        label="VCI (Vietcap)",
+        fetcher_name="VciFetcher",
+        dataset_markets={
+            "kline.daily": ("vn",),
+            # VNINDEX / VN30 / HNXIndex / HNX30 / HNXUpcomIndex 走同一个日线接口
+            "index.daily": ("vn",),
+        },
+        builtin=True,
+    ),
+    _ProviderDefinition(
+        name="ssi",
+        label="SSI iBoard",
+        fetcher_name="SsiFetcher",
+        dataset_markets={
+            # 全市场快照（HOSE/HNX/UPCOM 各一次请求）
+            "quote.realtime": ("vn",),
+            "kline.daily": ("vn",),
+        },
+        builtin=True,
+    ),
+    _ProviderDefinition(
+        name="vnstock",
+        label="vnstock (optional)",
+        fetcher_name="VnstockFetcher",
+        dataset_markets={
+            # 仅在 VNSTOCK_ENABLED=true 且已安装 vnstock 时才会被实例化，
+            # 因此不声明实时行情能力，避免变成 pseudo-fallback。
+            "kline.daily": ("vn",),
         },
     ),
     _ProviderDefinition(
@@ -281,13 +315,28 @@ class DataCapabilityService:
         fetcher_map = {str(getattr(fetcher, "name", "")): fetcher for fetcher in fetchers}
         providers: List[Dict[str, Any]] = []
 
+        from src.core.markets import is_market_enabled
+
         for definition in _PROVIDER_DEFINITIONS:
             fetcher = fetcher_map.get(definition.fetcher_name or "")
             configured = self._is_provider_configured(definition)
-            enabled = bool(definition.builtin or configured)
+            # 所有服务市场都被 SUPPORTED_MARKETS 关掉的 provider 在运行时根本不会
+            # 被实例化。如果这里仍然报 enabled=true / unavailable，看板会把"市场
+            # 已停用"误读成"数据源坏了"。
+            market_enabled = any(
+                is_market_enabled(market) for market in definition.markets
+            ) if definition.markets else True
+            enabled = bool(definition.builtin or configured) and market_enabled
             warnings: List[str] = []
 
-            if not configured and not definition.builtin:
+            if not market_enabled:
+                # 复用既有的 unconfigured 状态而不是新增枚举值：
+                # ProviderCapabilityStatus 是对外契约，Web/Desktop 都按它做穷举
+                # 匹配，新增取值会无提示破坏现有客户端。具体原因通过 warnings
+                # 里的 market_disabled 传递，warnings 本来就是自由取值的编码列表。
+                status = "unconfigured"
+                warnings.append("market_disabled")
+            elif not configured and not definition.builtin:
                 status = "unconfigured"
             elif fetcher is None and enabled:
                 status = "unavailable"

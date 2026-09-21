@@ -141,7 +141,7 @@ class ReportMeta(BaseModel):
     stock_code: str = Field(..., description="Stock code")
     stock_name: Optional[str] = Field(None, description="Stock name")
     report_type: Optional[str] = Field(None, description="Report type")
-    report_language: Optional[str] = Field(None, description="Report output language (zh/en/ko)")
+    report_language: Optional[str] = Field(None, description="Report output language. New reports are Vietnamese (vi); historical records may still carry zh/en/ko")
     created_at: Optional[str] = Field(None, description="Created at")
     current_price: Optional[float] = Field(None, description="Price at analysis time")
     change_pct: Optional[float] = Field(None, description="Change percent at analysis time (%)")
@@ -322,7 +322,7 @@ class AnalysisReport(BaseModel):
                 "stock_code": "600519",
                 "stock_name": "贵州茅台",
                 "report_type": "detailed",
-                "report_language": "zh",
+                "report_language": "vi",
                 "created_at": "2024-01-01T12:00:00"
             },
             "summary": {

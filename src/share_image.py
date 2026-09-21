@@ -54,6 +54,23 @@ _NUMERIC_CODE_RE = re.compile(
 )
 _NA_VALUES = {"", "-", "--", "n/a", "na", "none", "null", "暂无", "暂无数据"}
 _POSTER_TEXT = {
+    "vi": {
+        "brand": "Phân tích cổ phiếu bằng AI", "stock_subtitle": "Thẻ quyết định cổ phiếu · kết luận, vùng giá và rủi ro",
+        "market_subtitle": "Tổng kết phiên: chỉ số, độ rộng, dòng dẫn dắt và rủi ro", "multi_title": "Tổng kết đa thị trường",
+        "multi_subtitle": "Chỉ số, dòng dẫn dắt và ranh giới rủi ro theo từng thị trường", "dashboard_subtitle": "Tóm tắt quyết định nhiều mã",
+        "score": "Điểm", "confidence": "Độ tin cậy", "trend": "Xu hướng", "core": "Kết luận cốt lõi",
+        "snapshot": "Ảnh chụp thị trường", "execution": "Kế hoạch thực thi", "technical": "Tham chiếu kỹ thuật",
+        "next_watch": "Theo dõi tiếp theo", "positive_catalysts": "Yếu tố hỗ trợ", "risk_alerts": "Cảnh báo rủi ro",
+        "catalysts_risks": "Yếu tố hỗ trợ và rủi ro", "no_position": "Chưa nắm giữ", "holding": "Đang nắm giữ",
+        "position": "Tỷ trọng", "entry": "Vào lệnh", "risk_control": "Quản trị rủi ro", "position_advice": "Khuyến nghị nắm giữ",
+        "market_signal": "Tín hiệu thị trường", "today_conclusion": "Kết luận hôm nay", "breadth": "Độ rộng thị trường",
+        "dimensions": "Phân rã tín hiệu", "leaders": "Nhóm dẫn dắt", "laggards": "Nhóm tụt lại",
+        "focus_tag": "Theo dõi", "avoid_tag": "Tránh", "focus": "Trọng tâm theo dõi", "funds": "Theo dõi dòng tiền",
+        "strategy": "Chiến lược phiên tới", "risks": "Cảnh báo rủi ro", "tagline": "Nghiên cứu cổ phiếu đơn giản và hiệu quả hơn",
+        "open_source": "Dự án mã nguồn mở · GitHub", "xiaohongshu": "Xiaohongshu",
+        "disclaimer": "Nội dung do AI tạo, chỉ phục vụ nghiên cứu, không phải khuyến nghị đầu tư. Thị trường luôn có rủi ro.",
+        "source": "Nguồn dữ liệu",
+    },
     "zh": {
         "brand": "AI 股票分析", "stock_subtitle": "个股决策卡 · 结论、点位与风险一图读懂",
         "market_subtitle": "指数、宽度、主线与风险的收盘复盘", "multi_title": "多市场复盘",
@@ -107,6 +124,15 @@ _POSTER_TEXT = {
     },
 }
 _POSTER_LABELS = {
+    "vi": {
+        "当前/收盘": "Hiện tại/Đóng cửa", "现价": "Giá hiện tại", "涨跌幅": "Biến động", "涨跌": "Biến động",
+        "量比": "Tỷ lệ khối lượng", "换手率": "Tỷ lệ chuyển nhượng", "换手": "Chuyển nhượng", "理想买入": "Điểm mua lý tưởng",
+        "确认买入": "Điểm mua xác nhận", "止损": "Cắt lỗ", "目标": "Mục tiêu", "均线": "Đường MA",
+        "量能": "Khối lượng", "趋势分": "Điểm xu hướng", "MA5乖离": "Độ lệch MA5", "支撑": "Hỗ trợ", "压力": "Kháng cự",
+        "行动窗口": "Khung hành động", "下次检查": "Lần kiểm tra tới", "上涨": "Tăng giá", "下跌": "Giảm giá",
+        "涨停": "Trần", "跌停": "Sàn", "成交额": "Giá trị giao dịch", "赚钱效应": "Điểm độ rộng",
+        "指数强度": "Độ mạnh chỉ số", "涨停结构": "Cấu trúc giá trần",
+    },
     "en": {
         "当前/收盘": "Current/Close", "现价": "Current", "涨跌幅": "Change", "涨跌": "Change",
         "量比": "Volume Ratio", "换手率": "Turnover", "换手": "Turnover", "理想买入": "Ideal Entry",
@@ -362,20 +388,23 @@ def _poster_language(
 
 
 def _poster_text(language: str, key: str) -> str:
-    return _POSTER_TEXT.get(language, _POSTER_TEXT["zh"]).get(key, _POSTER_TEXT["zh"].get(key, key))
+    # 回退链改为越南语：当前部署只产出越南语报告，未登记语言回退到中文会在
+    # 分享图上混入中文字样。
+    default_text = _POSTER_TEXT["vi"]
+    return _POSTER_TEXT.get(language, default_text).get(key, default_text.get(key, key))
 
 
 def _poster_html_language(language: str) -> str:
     """Map the supported report language, not the market region, to HTML lang."""
 
-    return {"zh": "zh-CN", "en": "en", "ko": "ko"}.get(language, "zh-CN")
+    return {"vi": "vi", "zh": "zh-CN", "en": "en", "ko": "ko"}.get(language, "vi")
 
 
 def _poster_label(language: str, label: str) -> str:
     translated = _POSTER_LABELS.get(language, {}).get(label)
     if translated:
         return translated
-    if language == "en" and label.startswith("观察 "):
+    if language in ("en", "vi") and label.startswith("观察 "):
         return label.replace("观察 ", "Watch ", 1)
     if language == "ko" and label.startswith("观察 "):
         return label.replace("观察 ", "관찰 ", 1)
@@ -1276,7 +1305,7 @@ def _stock_data_from_payload(
 def _market_title(markdown_text: str) -> str:
     first_title = next((title for title, _body, _level in _extract_sections(markdown_text)), "")
     language = _poster_language(markdown_text)
-    if language in {"en", "ko"} and _is_market_review_title(first_title):
+    if language in {"en", "ko", "vi"} and _is_market_review_title(first_title):
         return first_title
     market = _market_label(first_title)
     if market:

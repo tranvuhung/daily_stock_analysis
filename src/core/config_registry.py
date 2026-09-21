@@ -779,6 +779,69 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         ],
         "warning_codes": ["secret_value"],
     },
+    "SUPPORTED_MARKETS": {
+        "title": "Enabled Markets",
+        "description": (
+            "Comma-separated allowlist of markets the deployment serves. "
+            "Disabled markets are never instantiated as data sources and never "
+            "issue requests. Use 'all' to enable every market. Defaults to 'vn'. "
+            "Note: when both 'vn' and 'us' are enabled, bare 3-letter codes "
+            "(HPG/FPT/VNM) are ambiguous and resolve to US; write Vietnamese "
+            "symbols as HPG.VN or vnHPG in that case."
+        ),
+        "category": "data_source",
+        "data_type": "string",
+        "ui_control": "text",
+        "is_sensitive": False,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": "vn",
+        "options": ["vn", "cn", "hk", "us", "jp", "kr", "tw", "all"],
+        "validation": {
+            "allowed_values": ["vn", "cn", "hk", "us", "jp", "kr", "tw", "all"],
+            "multi_value": True,
+            "delimiter": ",",
+        },
+        "examples": ["SUPPORTED_MARKETS=vn", "SUPPORTED_MARKETS=vn,cn", "SUPPORTED_MARKETS=all"],
+        "display_order": 1,
+        "help_key": "settings.data_source.SUPPORTED_MARKETS",
+        "docs": [
+            {
+                "label": "Market support and rollback",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/market-support.md",
+            },
+        ],
+    },
+    "VNSTOCK_ENABLED": {
+        "title": "Enable vnstock Source (optional)",
+        "description": (
+            "Enable the optional vnstock-backed Vietnamese data source. vnstock is "
+            "licensed 'Custom (Personal Use)' (not open source) and pulls in the "
+            "vnai telemetry dependency, so it is not installed by default; install "
+            "requirements-vn-optional.txt first. The default VCI -> SSI chain does "
+            "not require it."
+        ),
+        "category": "data_source",
+        "data_type": "boolean",
+        "ui_control": "switch",
+        "is_sensitive": False,
+        "is_required": False,
+        "is_editable": True,
+        # 注册表里 default_value 统一是字符串（对外 schema 的类型契约），
+        # 布尔字段用 "true"/"false"，与 TICKFLOW_BATCH_DAILY_ENABLED 一致。
+        "default_value": "false",
+        "options": [],
+        "validation": {},
+        "display_order": 16,
+        "help_key": "settings.data_source.VNSTOCK_ENABLED",
+        "examples": ["VNSTOCK_ENABLED=false", "VNSTOCK_ENABLED=true"],
+        "docs": [
+            {
+                "label": "Data source stability and fallback",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/data-source-stability.md",
+            },
+        ],
+    },
     "TICKFLOW_API_KEY": {
         "title": "TickFlow API Key",
         "description": "API key for optional TickFlow A-share daily K-lines, realtime quotes, stock list/name lookup, and market review enhancement. Permission failures fail open to existing providers.",
@@ -2619,26 +2682,22 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     },
     "REPORT_LANGUAGE": {
         "title": "Report Language",
-        "description": "Default output language for reports, Agent Chat fallback replies, and notification templates. Supported values: zh, en, ko.",
+        "description": "Output language for reports, Agent Chat fallback replies, and notification templates. Reports are produced in Vietnamese only; historical records stored as zh/en/ko still render in their original language.",
         "category": "notification",
         "data_type": "string",
         "ui_control": "select",
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        "default_value": "zh",
+        "default_value": "vi",
         "options": [
-            {"label": "Chinese", "value": "zh"},
-            {"label": "English", "value": "en"},
-            {"label": "Korean", "value": "ko"},
+            {"label": "Vietnamese", "value": "vi"},
         ],
-        "validation": {"enum": ["zh", "en", "ko"]},
+        "validation": {"enum": ["vi"]},
         "display_order": 56,
         "help_key": "settings.notification.report_output",
         "examples": [
-            "REPORT_LANGUAGE=zh",
-            "REPORT_LANGUAGE=en",
-            "REPORT_LANGUAGE=ko",
+            "REPORT_LANGUAGE=vi",
         ],
         "docs": [
             {

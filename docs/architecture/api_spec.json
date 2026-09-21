@@ -3198,18 +3198,14 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": [
-                  "zh",
-                  "en",
-                  "ko"
-                ]
+                "const": "vi"
               },
               {
                 "type": "null"
               }
             ],
             "title": "Report Language",
-            "description": "Output language for this analysis report; falls back to the global REPORT_LANGUAGE when omitted"
+            "description": "Output language for this analysis report. Reports are produced in Vietnamese only; falls back to the global REPORT_LANGUAGE when omitted"
           },
           "skills": {
             "anyOf": [
@@ -6141,11 +6137,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": [
-                  "zh",
-                  "en",
-                  "ko"
-                ]
+                "const": "vi"
               },
               {
                 "type": "null"

@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] Web 自动补全遇到越南市场标的直接抛异常并降级为纯输入框（`MARKET_BADGE_CONFIG` 缺少 `VN`），同时补齐 `Market` 类型联合与越南代码/指数的前端校验正则。
+- [修复] 越南语报告生成失败：`_get_source_display_name` 直接按语言键索引，遇到 `vi` 抛 `KeyError` 导致整份本地报告无法保存；改为回退英文再回退原始来源名。
+- [修复] 越南语报告中的中文残留：市场状态行、DecisionSignal 摘要此前因为只判断 `en`/`ko` 前缀而落到中文分支；成交量/成交额改用越南语量级（`triệu` / `tỷ VND`）而不是中文的 `万` / `亿元`。
+- [修复] 新增 `localize_volume_status`：LLM 会照抄 prompt schema 里的中文示例值（如 `缩量`、`缩量 (Khối lượng thấp)`），现在在渲染边界统一归一并翻译，不依赖模型是否遵守输出语言指令。
+- [新功能] 越南指数（`VNINDEX` / `VN30` / `HNXIndex` 等）新增实时行情：SSI 全市场快照只含成分股，改由 `VciFetcher` 从最新日线推导并带上 `provider_timestamp`，避免 `/stocks/{code}/quote` 返回 404。
+- [文档] 新增 `.claude/skills/run-app/SKILL.md`，固化本仓库的启动与冒烟流程（含 `STOCK_LIST` 优先读 `.env` 文件、`WEBUI_ENABLED` 导致一次性分析不退出等实测踩坑）。
+- [新功能] 新增 `scripts/run-app.sh`，把 `run-app` skill 的启动流程固化为可执行脚本：`serve` / `dry-run` / `analyze` / `smoke` / `stop` / `build-web` 六个子命令，自动生成临时 env 文件（不改动仓库 `.env`，权限 600）、清理端口、等待 `/api/v1/health` 并跑冒烟；端口、市场、股票列表等均可用 `RUN_*` 环境变量覆盖。
+- [文档] `data_provider/` 的越南数据源、`data_provider/base.py` 与 `src/core/pipeline.py` 的注释与 docstring 全量改写为越南语（246 条注释 + 74 条 docstring）；运行期日志、诊断文案与 `多头排列`/`极度萎缩` 这类 canonical 枚举值保持原样，因为它们是 `src/report_language.py` 的映射键与 API 契约的一部分。
+- [测试] `test_count_set_to_zero_once_search_is_attempted` 改为先剔除注释行再取窗口。该用例以固定 600 字符窗口读取 `pipeline.py` 源码，注释长度变化即会误报；顺序约束本身未变，与同类中相邻用例的既有做法保持一致。
+
+- [改进] 报告输出语言切换为**仅越南语**：`REPORT_LANGUAGE` 只接受 `vi`（未配置时也默认 `vi`），`_REPORT_LABELS` 新增完整越南语标签集（133 项）、术语表、分享图文案与空新闻披露语；`zh`/`en`/`ko` 保留在渲染层，历史记录仍按原语言渲染。
+- [修复] 补齐越南语术语的反向识别：`_OPERATION_ADVICE_CANONICAL_MAP` 等 canonical 表和 `decision_action` 新增越南语键，否则 LLM 返回的「Mua」「Bán」无法归一，`decision_type` 会退回默认值。
+- [修复] 新增越南语否定词识别（`không` / `chưa` / `đừng` / `hạn chế` 等）。此前「Không nên mua」（不建议买入）会被解析成 **buy** 信号。
+- [修复] `REPORT_LANGUAGE` 未配置时不再硬编码回退 `zh`，避免每次加载配置都触发一次「zh 不可选」告警。
+- [改进] `AnalyzeRequest` / `MarketReviewRequest` / `DecisionSignalCreateRequest` 的 `report_language` 收敛为 `Literal["vi"]`；`docs/architecture/api_spec.json` 同步更新。
+
+- [新功能] 新增市场白名单 `SUPPORTED_MARKETS`（唯一真源 `src/core/markets.py`），**默认只启用越南市场**；停用市场不实例化数据源、不发出任何请求，设为 `all` 可完整回滚到此前的多市场行为。
+- [新功能] 接入越南市场数据源：`VciFetcher`（Vietcap 公开接口，日线 + 指数 + 全量代码表）与 `SsiFetcher`（SSI iBoard 全市场实时快照 + 日线兜底），两者均无需 API Key；支持 `HPG` / `HPG.VN` / `vnHPG` 三种写法归一到同一 canonical_id。
+- [新功能] 新增可选数据源 `VnstockFetcher`，需 `VNSTOCK_ENABLED=true` 且单独安装 `requirements-vn-optional.txt`；`vnstock` 许可证为 Custom (Personal Use) 且引入遥测依赖 `vnai`，因此不进默认依赖。
+- [改进] `market_review_region`、`trading_calendar`、`data_capability_service`、`config_registry` 的市场列表统一派生自市场注册表，不再各自硬编码；`compute_effective_region` 移除重复的市场常量。
+- [改进] 只启用越南时大盘复盘直接跳过并记录原因，不再回退到 `cn`（此前会用已停用的 A 股数据源生成无数据支撑的复盘）。
+- [改进] `/api/v1/data/overview` 对已停用市场的 provider 返回 `status=unconfigured` 并附 `market_disabled` warning；`ProviderCapabilityStatus` 枚举未新增取值，现有客户端契约不变。
+- [文档] `docs/market-support.md` 增补市场白名单、越南数据源矩阵、已知边界与回滚方式。
+
 - [新功能] Web/API runtime scheduler 硬超时后扫描已落库分析历史，**默认发送**部分完成通知（`DSA_TIMEOUT_PARTIAL_NOTIFY` 未设置或为 true；此前超时不推送已落库个股），并在 `last_error` 中记录 `completed/pending` 摘要；可用 `DSA_TIMEOUT_PARTIAL_NOTIFY=false` 关闭推送（Refs #2328）。
 - [测试] 修复股票名称解析冷启动超时并发测试的同步竞态：在放行后台抓取前确认两个等待者均已结束并返回空结果，避免 Docker 发布门禁偶发失败。
 - [文档] 将仓库内所有 SerpApi 链接统一更新为新的赞助转化追踪地址。

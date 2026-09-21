@@ -90,6 +90,7 @@ class ReportLanguageTestCase(unittest.TestCase):
 class KoreanReportLanguageTestCase(unittest.TestCase):
     def test_korean_is_supported(self) -> None:
         self.assertIn("ko", SUPPORTED_REPORT_LANGUAGES)
+        self.assertIn("vi", SUPPORTED_REPORT_LANGUAGES)
 
     def test_normalize_korean_aliases(self) -> None:
         self.assertEqual(normalize_report_language("ko"), "ko")
@@ -98,8 +99,81 @@ class KoreanReportLanguageTestCase(unittest.TestCase):
         self.assertEqual(normalize_report_language("kr"), "ko")
 
     def test_unknown_language_falls_back_to_default(self) -> None:
-        self.assertEqual(normalize_report_language("fr"), "zh")
-        self.assertEqual(normalize_report_language(None), "zh")
+        # 默认输出语言已切换为越南语；zh/en/ko 仍可渲染历史记录。
+        self.assertEqual(normalize_report_language("fr"), "vi")
+        self.assertEqual(normalize_report_language(None), "vi")
+        self.assertEqual(normalize_report_language("fr", default="zh"), "zh")
+
+    def test_vietnamese_aliases(self) -> None:
+        for alias in ("vi", "VI", "vn", "vie", "vietnamese", "Tiếng Việt", "vi-VN"):
+            self.assertEqual(normalize_report_language(alias), "vi", alias)
+
+    def test_only_vietnamese_is_selectable(self) -> None:
+        from src.report_language import is_selectable_report_language_value
+
+        self.assertTrue(is_selectable_report_language_value("vi"))
+        self.assertTrue(is_selectable_report_language_value("vietnamese"))
+        for legacy in ("zh", "en", "ko"):
+            self.assertFalse(is_selectable_report_language_value(legacy), legacy)
+
+    def test_vietnamese_labels_cover_full_english_key_set(self) -> None:
+        from src.report_language import get_report_labels
+
+        self.assertEqual(
+            set(get_report_labels("vi")), set(get_report_labels("en"))
+        )
+
+    def test_vietnamese_terms_round_trip_to_canonical(self) -> None:
+        """LLM 现在输出越南语，系统必须能把它归一回 canonical 值。"""
+        from src.report_language import (
+            infer_decision_type_from_advice,
+            localize_operation_advice,
+            localize_trend_prediction,
+        )
+
+        self.assertEqual(localize_operation_advice("Mua", "en"), "Buy")
+        self.assertEqual(localize_operation_advice("Bán mạnh", "en"), "Strong Sell")
+        self.assertEqual(localize_trend_prediction("Đi ngang", "en"), "Sideways")
+        self.assertEqual(infer_decision_type_from_advice("Mua"), "buy")
+        self.assertEqual(infer_decision_type_from_advice("Bán"), "sell")
+
+    def test_volume_status_placeholders_are_localized(self) -> None:
+        """LLM 常照抄 prompt schema 里的中文示例值（放量/缩量/平量）。
+
+        渲染边界必须做归一翻译，否则越南语报告里会出现中文。真实运行中已观察到
+        这个泄漏。
+        """
+        from src.report_language import localize_volume_status
+
+        self.assertEqual(localize_volume_status("缩量", "vi"), "Khối lượng cạn")
+        self.assertEqual(localize_volume_status("放量", "vi"), "Khối lượng tăng")
+        self.assertEqual(localize_volume_status("巨量", "vi"), "Bùng nổ khối lượng")
+        self.assertEqual(localize_volume_status("平量", "vi"), "Khối lượng bình thường")
+        # 英文与越南语输入也要能归一
+        self.assertEqual(localize_volume_status("shrinking", "vi"), "Khối lượng cạn")
+        self.assertEqual(localize_volume_status("Khối lượng cạn", "zh"), "缩量")
+        # 模型常返回复合值（真实运行中观察到 "缩量 (Khối lượng thấp)"）
+        self.assertEqual(
+            localize_volume_status("缩量 (Khối lượng thấp)", "vi"), "Khối lượng cạn"
+        )
+        self.assertEqual(localize_volume_status("放量 / expanding", "vi"), "Khối lượng tăng")
+        # 空值与未知值原样返回，不抛异常
+        self.assertEqual(localize_volume_status("", "vi"), "")
+        self.assertEqual(localize_volume_status("không rõ", "vi"), "không rõ")
+
+    def test_vietnamese_negation_is_not_read_as_a_buy_signal(self) -> None:
+        """"Không nên mua" 必须解析为 hold，绝不能被当成买入信号。"""
+        from src.report_language import infer_decision_type_from_advice
+
+        for advice in (
+            "Không nên mua",
+            "Chưa nên mua",
+            "Không mua vào lúc này",
+            "Hạn chế mua đuổi",
+            "Đừng bán",
+            "Chưa vội bán",
+        ):
+            self.assertEqual(infer_decision_type_from_advice(advice), "hold", advice)
 
     def test_korean_labels_cover_full_english_key_set(self) -> None:
         ko_labels = get_report_labels("ko")

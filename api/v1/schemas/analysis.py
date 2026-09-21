@@ -81,10 +81,10 @@ class AnalyzeRequest(BaseModel):
         True,
         description="Whether to send push notifications (Telegram, Enterprise WeChat, etc.)"
     )
-    report_language: Optional[Literal["zh", "en", "ko"]] = Field(
+    report_language: Optional[Literal["vi"]] = Field(
         None,
         validation_alias=AliasChoices("report_language", "reportLanguage"),
-        description="Output language for this analysis report; falls back to the global REPORT_LANGUAGE when omitted",
+        description="Output language for this analysis report. Reports are produced in Vietnamese only; falls back to the global REPORT_LANGUAGE when omitted",
     )
     skills: Optional[List[str]] = Field(
         None,
@@ -104,7 +104,7 @@ class AnalyzeRequest(BaseModel):
             "original_query": "茅台",
             "selection_source": "autocomplete",
             "notify": True,
-            "report_language": "zh",
+            "report_language": "vi",
             "skills": ["bull_trend"]
         }
     })
@@ -117,10 +117,10 @@ class MarketReviewRequest(BaseModel):
         True,
         description="Whether to send push notifications after the market review completes",
     )
-    report_language: Optional[Literal["zh", "en", "ko"]] = Field(
+    report_language: Optional[Literal["vi"]] = Field(
         None,
         validation_alias=AliasChoices("report_language", "reportLanguage"),
-        description="Output language for this market review report; falls back to the global REPORT_LANGUAGE when omitted",
+        description="Output language for this market review report. Reports are produced in Vietnamese only; falls back to the global REPORT_LANGUAGE when omitted",
     )
     region: Optional[str] = Field(
         None,

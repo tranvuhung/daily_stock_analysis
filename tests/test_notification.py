@@ -965,7 +965,9 @@ class TestNotificationServiceReportGeneration(unittest.TestCase):
     def test_source_labels_render_in_all_supported_languages(
         self, mock_get_config: mock.MagicMock
     ):
+        # 中文 / 韩文用全角冒号，越南语和英文用半角冒号加空格。
         labels_by_language = {
+            "vi": "Nguồn dữ liệu",
             "zh": "数据来源",
             "en": "Data Sources",
             "ko": "데이터 출처",
@@ -991,8 +993,11 @@ class TestNotificationServiceReportGeneration(unittest.TestCase):
                             [result], report_type, report_date="2026-08-27"
                         )
 
+                        from src.report_language import get_label_separator
+
+                        separator = get_label_separator(language)
                         self.assertIn(
-                            f"*📋 {expected_label}：daily:AlphaFetcher*",
+                            f"*📋 {expected_label}{separator}daily:AlphaFetcher*",
                             out,
                         )
 

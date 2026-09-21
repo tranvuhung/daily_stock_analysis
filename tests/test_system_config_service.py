@@ -2484,9 +2484,11 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         self.assertEqual(agent_arch_schema["validation"]["enum"], ["single", "multi"])
 
         report_language_schema = items["REPORT_LANGUAGE"]["schema"]
-        self.assertEqual(report_language_schema["validation"]["enum"], ["zh", "en", "ko"])
-        self.assertEqual(report_language_schema["options"][1]["value"], "en")
-        self.assertEqual(report_language_schema["options"][2]["value"], "ko")
+        # 报告只产出越南语，配置项因此只暴露一个可选值。
+        self.assertEqual(report_language_schema["validation"]["enum"], ["vi"])
+        self.assertEqual(report_language_schema["options"][0]["value"], "vi")
+        self.assertEqual(report_language_schema["options"][0]["label"], "Vietnamese")
+        self.assertEqual(report_language_schema["default_value"], "vi")
 
         self.assertEqual(items["AGENT_ORCHESTRATOR_TIMEOUT_S"]["schema"]["default_value"], "600")
         self.assertTrue(items["AGENT_DEEP_RESEARCH_BUDGET"]["schema"]["is_editable"])
@@ -2576,17 +2578,20 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         self.assertEqual(issues["GENERATION_BACKEND_MAX_CONCURRENCY"]["expected"], "<=16")
         self.assertEqual(issues["LOCAL_CLI_BACKEND_MAX_CONCURRENCY"]["expected"], "<=4")
 
-    def test_validate_accepts_report_language_english(self) -> None:
-        validation = self.service.validate(items=[{"key": "REPORT_LANGUAGE", "value": "en"}])
+    def test_validate_accepts_report_language_vietnamese(self) -> None:
+        validation = self.service.validate(items=[{"key": "REPORT_LANGUAGE", "value": "vi"}])
 
         self.assertTrue(validation["valid"])
         self.assertEqual(validation["issues"], [])
 
-    def test_validate_accepts_report_language_korean(self) -> None:
-        validation = self.service.validate(items=[{"key": "REPORT_LANGUAGE", "value": "ko"}])
-
-        self.assertTrue(validation["valid"])
-        self.assertEqual(validation["issues"], [])
+    def test_validate_rejects_legacy_report_languages(self) -> None:
+        """zh/en/ko 仍能渲染历史记录，但不能再被配置成输出语言。"""
+        for legacy in ("zh", "en", "ko"):
+            with self.subTest(language=legacy):
+                validation = self.service.validate(
+                    items=[{"key": "REPORT_LANGUAGE", "value": legacy}]
+                )
+                self.assertFalse(validation["valid"], legacy)
 
     def test_validate_accepts_comma_separated_market_review_region(self) -> None:
         validation = self.service.validate(

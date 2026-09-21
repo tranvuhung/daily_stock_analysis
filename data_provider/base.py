@@ -1,20 +1,22 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-数据源基类与管理器
+Lớp cơ sở và manager cho các nguồn dữ liệu
 ===================================
 
-设计模式：策略模式 (Strategy Pattern)
-- BaseFetcher: 抽象基类，定义统一接口
-- DataFetcherManager: 策略管理器，实现自动切换
+Mẫu thiết kế: Strategy Pattern
+- BaseFetcher: lớp trừu tượng, định nghĩa giao diện thống nhất
+- DataFetcherManager: quản lý chiến lược, tự động chuyển nguồn
 
-防封禁策略：
-1. 每个 Fetcher 内置流控逻辑
-2. 失败自动切换到下一个数据源
-3. 指数退避重试机制
+Chiến lược tránh bị chặn:
+1. Mỗi Fetcher tự có logic điều tiết tần suất
+2. Thất bại thì tự động chuyển sang nguồn kế tiếp
+3. Cơ chế retry với backoff luỹ thừa
 """
 
+import os
 import logging
+import re
 import random
 import time
 from threading import BoundedSemaphore, RLock, Thread
@@ -33,11 +35,11 @@ from .fundamental_adapter import AkshareFundamentalAdapter
 from .yfinance_fundamental_adapter import YfinanceFundamentalAdapter
 from .realtime_types import CircuitBreaker
 
-# 配置日志
+# Cấu hình logging
 logger = logging.getLogger(__name__)
 
 
-# === 标准化列名定义 ===
+# === Định nghĩa tên cột chuẩn hoá ===
 STANDARD_COLUMNS = ['date', 'open', 'high', 'low', 'close', 'volume', 'amount', 'pct_chg']
 
 
@@ -99,6 +101,25 @@ def normalize_stock_code(stock_code: str) -> str:
     code = stock_code.strip()
     upper = code.upper()
 
+    # Việt Nam: ``vnHPG`` / ``HPG.VN`` đều quy về mã trần ``HPG`` (đúng cách viết mà
+    # provider yêu cầu). Khác với HK vẫn giữ tiền tố ``HK``, mã trần của Việt Nam
+    # chính là dạng chuẩn mà sàn và người dùng đang dùng.
+    # Lưu ý: khi bật đồng thời vn và us, mã trần 3 ký tự thực sự chồng lấn không
+    # gian mã của hai thị trường; sau khi quy chuẩn thì không còn phân biệt được
+    # nữa, phải khử nhập nhằng bằng tiền tố tường minh ở tầng stock_list_parser.
+    if upper.endswith(".VN"):
+        candidate = upper[:-3]
+        if _VN_STOCK_CODE_RE.match(candidate):
+            return candidate
+    # Tiền tố ``vn`` bắt buộc viết thường, thống nhất với quy ước sẵn có của tiền
+    # tố ``us``; những mã viết hoa toàn bộ như ``VNRDF`` phải coi là ticker Mỹ,
+    # không được cắt thành ``RDF``.
+    if code[:2] == "vn" and len(code) > 2:
+        candidate = upper[2:]
+        # ``VN30``/``VNINDEX`` bản thân là mã chỉ số, không được cắt như tiền tố ``vn``
+        if upper not in VN_INDEX_SYMBOLS and _VN_STOCK_CODE_RE.match(candidate):
+            return candidate
+
     # Normalize HK prefix to a canonical 5-digit form (e.g. hk1810 -> HK01810)
     if upper.startswith('HK') and not upper.startswith('HK.'):
         candidate = upper[2:]
@@ -154,7 +175,7 @@ ETF_PREFIXES = ("51", "52", "56", "58", "15", "16", "18")
 
 
 def _is_us_market(code: str) -> bool:
-    """判断是否为美股/美股指数代码（不含中文前后缀）。"""
+    """Kiểm tra có phải mã cổ phiếu/chỉ số Mỹ hay không (không kèm tiền tố/hậu tố)."""
     from .us_index_mapping import is_us_stock_code, is_us_index_code
 
     normalized = (code or "").strip().upper()
@@ -163,12 +184,13 @@ def _is_us_market(code: str) -> bool:
 
 def _is_hk_market(code: str) -> bool:
     """
-    判定是否为港股代码。
+    Kiểm tra có phải mã cổ phiếu Hồng Kông hay không.
 
-    支持 ``.HK`` 后缀、``HK00700`` 前缀形式，以及 4-5 位纯数字裸码
-    （A 股 ETF/股票为 6 位，与港股 4-5 位裸数字不冲突）。``YfinanceFetcher``
-    与 ``AkshareFetcher`` / ``LongbridgeFetcher`` 的 ``_is_hk_code`` 与本
-    函数对裸港股码的位数范围保持一致。
+    Hỗ trợ hậu tố ``.HK``, dạng tiền tố ``HK00700``, và mã trần thuần số 4-5 chữ
+    số (ETF/cổ phiếu A-share có 6 chữ số nên không xung đột với mã trần 4-5 chữ
+    số của HK). Hàm ``_is_hk_code`` trong ``YfinanceFetcher``,
+    ``AkshareFetcher`` và ``LongbridgeFetcher`` dùng cùng khoảng độ dài với hàm
+    này cho mã HK dạng trần.
     """
     normalized = (code or "").strip().upper()
     if normalized.endswith(".HK"):
@@ -183,26 +205,29 @@ def _is_hk_market(code: str) -> bool:
 
 
 def _is_jp_market(code: str) -> bool:
-    """判定是否为日本 Yahoo Finance suffix 代码（如 7203.T）。"""
+    """Kiểm tra có phải mã Nhật theo hậu tố Yahoo Finance hay không (ví dụ 7203.T)."""
     return is_suffix_market_symbol(code, "jp")
 
 
 def _is_kr_market(code: str) -> bool:
-    """判定是否为韩国 Yahoo Finance suffix 代码（如 005930.KS / 035720.KQ）。"""
+    """Kiểm tra có phải mã Hàn Quốc theo hậu tố Yahoo Finance hay không
+    (ví dụ 005930.KS / 035720.KQ)."""
     return is_suffix_market_symbol(code, "kr")
 
 
 def _is_tw_market(code: str) -> bool:
-    """判定是否为台湾 Yahoo Finance suffix 代码（TWSE 上市 2330.TW / TPEx 上柜 6505.TWO）。
+    """Kiểm tra có phải mã Đài Loan theo hậu tố Yahoo Finance hay không
+    (niêm yết TWSE 2330.TW / giao dịch TPEx 6505.TWO).
 
-    台股 base 为 4-6 位（普通股 4 位，ETF/其他至 6 位，如 00878 / 006208）。
-    仅带 .TW/.TWO 后缀的代码才识别为台股，裸 6 位代码仍按 A 股语义处理。
+    Phần gốc của mã Đài Loan dài 4-6 ký tự (cổ phiếu thường 4 ký tự, ETF và loại
+    khác tới 6 ký tự, ví dụ 00878 / 006208). Chỉ mã có hậu tố .TW/.TWO mới được
+    nhận là cổ phiếu Đài Loan; mã trần 6 chữ số vẫn hiểu theo ngữ nghĩa A-share.
     """
     return is_suffix_market_symbol(code, "tw")
 
 
 def _is_etf_code(code: str) -> bool:
-    """判定 A 股 ETF 基金代码（保守规则）。"""
+    """Nhận diện mã quỹ ETF của A-share (quy tắc thận trọng)."""
     normalized = normalize_stock_code(code)
     return (
         normalized.isdigit()
@@ -240,19 +265,119 @@ def _is_meaningful_chip_distribution(chip: Any) -> bool:
     )
 
 
+# Mã chỉ số Việt Nam. API của VCI phân biệt hoa/thường (``HNXINDEX`` trả về rỗng,
+# phải là ``HNXIndex`` mới có dữ liệu), nên ở đây lưu đúng cách viết mà provider
+# yêu cầu; khoá là phần người dùng nhập đã quy chuẩn về chữ hoa.
+VN_INDEX_SYMBOLS = {
+    "VNINDEX": "VNINDEX",
+    "VN30": "VN30",
+    "VN100": "VN100",
+    "HNXINDEX": "HNXIndex",
+    "HNX30": "HNX30",
+    "HNXUPCOMINDEX": "HNXUpcomIndex",
+    "UPCOMINDEX": "HNXUpcomIndex",
+    "UPCOM": "HNXUpcomIndex",
+}
+
+# Mã cổ phiếu/ETF Việt Nam cố định 3 ký tự chữ hoa hoặc số (đã đối chiếu bảng mã
+# đầy đủ của VCI: 1602 mã thuần chữ + 151 mã có số, ví dụ ``X77``/``VW3``).
+# Các mã 8-9 ký tự là chứng quyền, phái sinh và trái phiếu, hiện chưa đưa vào
+# phạm vi phân tích.
+_VN_STOCK_CODE_RE = re.compile(r"^[A-Z][A-Z0-9]{2}$")
+
+
+def is_vn_index_code(code: str) -> bool:
+    """Có phải mã chỉ số Việt Nam đã đăng ký hay không."""
+
+    return (code or "").strip().upper() in VN_INDEX_SYMBOLS
+
+
+def get_vn_index_provider_symbol(code: str) -> Optional[str]:
+    """Chuyển mã chỉ số Việt Nam người dùng nhập sang đúng cách viết provider yêu cầu."""
+
+    return VN_INDEX_SYMBOLS.get((code or "").strip().upper())
+
+
+def _is_vn_market(code: str) -> bool:
+    """Kiểm tra có phải mã cổ phiếu / chỉ số Việt Nam hay không.
+
+    Chấp nhận ba cách viết:
+    - Hậu tố tường minh ``HPG.VN``
+    - Chỉ số đã đăng ký ``VNINDEX`` / ``VN30`` / ``HNXIndex`` / ``HNXUpcomIndex``
+    - Mã trần ``HPG`` (3 ký tự chữ hoa hoặc số)
+
+    Mã trần chồng lấn thật sự với regex ticker Mỹ ``^[A-Z]{1,5}$`` (``FPT``/``VNM``
+    vừa là cổ phiếu Việt Nam vừa có thể bị hiểu là ticker Mỹ). Vì vậy mã trần chỉ
+    được nhận là Việt Nam khi **thị trường Mỹ chưa bật**; khi bật cả hai thị trường
+    thì bắt buộc viết ``HPG.VN`` hoặc ``vnHPG`` để tránh nhận nhầm một cách âm thầm.
+    Tiền tố ``vn`` đã bị cắt thành mã trần ngay ở bước :func:`normalize_stock_code`;
+    lúc đó nếu thị trường Mỹ cũng đang bật thì luồng sẽ rơi vào nhánh nhập nhằng bên
+    dưới, và phía gọi tự xử lý theo tiền tố tường minh.
+    """
+
+    normalized = (code or "").strip().upper()
+    if not normalized:
+        return False
+
+    if normalized.endswith(".VN"):
+        base = normalized[:-3]
+        return bool(_VN_STOCK_CODE_RE.match(base))
+
+    if normalized in VN_INDEX_SYMBOLS:
+        return True
+
+    # Tiền tố tường minh ``vnHPG``. Theo đúng quy ước sẵn có của repo với tiền tố
+    # ``us``: **tiền tố bắt buộc viết thường** (trong ``stock_list_parser``,
+    # ``usAAPL`` là dạng có tiền tố, còn ``USFD`` viết hoa toàn bộ là ticker trần).
+    # Nếu không, ticker Mỹ 5 ký tự viết hoa (ví dụ ``VNRDF``) sẽ bị cắt nhầm thành
+    # mã Việt Nam. ``VN30`` / ``VNINDEX`` đã được trả về ở nhánh chỉ số phía trên
+    # nên không xuống tới đây.
+    raw = (code or "").strip()
+    if raw[:2] == "vn" and _VN_STOCK_CODE_RE.match(raw[2:].upper()):
+        return True
+
+    if not _VN_STOCK_CODE_RE.match(normalized):
+        return False
+
+    from src.core.markets import is_market_enabled
+
+    return not is_market_enabled("us")
+
+
+# market -> hàm nhận diện. ``cn`` không nằm ở đây: nó là nhánh dự phòng mang tính
+# lịch sử, không có quy tắc nhận diện thuận (mã 6 số trần, ETF, mã sàn Bắc Kinh đều
+# về nó), nên được xử lý riêng.
+_MARKET_DETECTORS = {
+    "vn": _is_vn_market,
+    "hk": _is_hk_market,
+    "us": _is_us_market,
+    "jp": _is_jp_market,
+    "kr": _is_kr_market,
+    "tw": _is_tw_market,
+}
+
+
 def _market_tag(code: str) -> str:
-    """返回市场标签: cn/us/hk/jp/kr/tw."""
-    if _is_us_market(code):
-        return "us"
-    if _is_hk_market(code):
-        return "hk"
-    if _is_jp_market(code):
-        return "jp"
-    if _is_kr_market(code):
-        return "kr"
-    if _is_tw_market(code):
-        return "tw"
-    return "cn"
+    """Trả về nhãn thị trường: vn/cn/us/hk/jp/kr/tw; thị trường chưa bật trả ``unknown``.
+
+    Thứ tự nhận diện lấy từ ``detect_order`` trong :mod:`src.core.markets`, và chỉ
+    duyệt các thị trường đang được ``SUPPORTED_MARKETS`` bật. Trước đây chỗ này là
+    một chuỗi if viết cứng, thêm thị trường mới phải sửa nhiều nơi cùng lúc; giờ chỉ
+    cần thêm một dòng vào registry và đăng ký hàm nhận diện.
+    """
+
+    from src.core.markets import enabled_markets, is_market_enabled
+
+    for market in enabled_markets():
+        detector = _MARKET_DETECTORS.get(market)
+        if detector is not None and detector(code):
+            return market
+
+    # ``cn`` là nhánh dự phòng: mọi mã không nhánh nào ở trên nhận đều xử lý như
+    # cổ phiếu A-share, giữ nguyên hành vi lịch sử.
+    if is_market_enabled("cn"):
+        return "cn"
+    return "unknown"
 
 
 def is_bse_code(code: str) -> bool:
@@ -286,7 +411,7 @@ def is_st_stock(name: str) -> bool:
 
 def is_kc_cy_stock(code: str) -> bool:
     """
-    Check if the stock is a STAR Market (科创板) or ChiNext (创业板) stock based on its code.
+    Check if the stock is a STAR Market or ChiNext stock based on its code.
 
     - STAR Market: Codes starting with 688
     - ChiNext: Codes starting with 300
@@ -314,124 +439,124 @@ def canonical_stock_code(code: str) -> str:
 
 
 class DataFetchError(Exception):
-    """数据获取异常基类"""
+    """Lớp cơ sở cho các ngoại lệ khi lấy dữ liệu"""
     pass
 
 
 class RateLimitError(DataFetchError):
-    """API 速率限制异常"""
+    """Ngoại lệ khi bị giới hạn tần suất gọi API"""
     pass
 
 
 class DataSourceUnavailableError(DataFetchError):
-    """数据源不可用异常"""
+    """Ngoại lệ khi nguồn dữ liệu không khả dụng"""
     pass
 
 
 class BaseFetcher(ABC):
     """
-    数据源抽象基类
-    
-    职责：
-    1. 定义统一的数据获取接口
-    2. 提供数据标准化方法
-    3. 实现通用的技术指标计算
-    
-    子类实现：
-    - _fetch_raw_data(): 从具体数据源获取原始数据
-    - _normalize_data(): 将原始数据转换为标准格式
+    Lớp trừu tượng cho nguồn dữ liệu
+
+    Trách nhiệm:
+    1. Định nghĩa giao diện lấy dữ liệu thống nhất
+    2. Cung cấp phương thức chuẩn hoá dữ liệu
+    3. Hiện thực phần tính chỉ báo kỹ thuật dùng chung
+
+    Lớp con phải hiện thực:
+    - _fetch_raw_data(): lấy dữ liệu thô từ nguồn cụ thể
+    - _normalize_data(): chuyển dữ liệu thô về định dạng chuẩn
     """
     
     name: str = "BaseFetcher"
-    priority: int = 99  # 优先级数字越小越优先
+    priority: int = 99  # Số ưu tiên càng nhỏ càng được chọn trước
     allow_empty_daily_data: bool = False
     
     @abstractmethod
     def _fetch_raw_data(self, stock_code: str, start_date: str, end_date: str) -> pd.DataFrame:
         """
-        从数据源获取原始数据（子类必须实现）
-        
+        Lấy dữ liệu thô từ nguồn (lớp con bắt buộc hiện thực)
+
         Args:
-            stock_code: 股票代码，如 '600519', '000001'
-            start_date: 开始日期，格式 'YYYY-MM-DD'
-            end_date: 结束日期，格式 'YYYY-MM-DD'
-            
+            stock_code: mã cổ phiếu, ví dụ '600519', '000001'
+            start_date: ngày bắt đầu, định dạng 'YYYY-MM-DD'
+            end_date: ngày kết thúc, định dạng 'YYYY-MM-DD'
+
         Returns:
-            原始数据 DataFrame（列名因数据源而异）
+            DataFrame dữ liệu thô (tên cột khác nhau tuỳ nguồn)
         """
         pass
     
     @abstractmethod
     def _normalize_data(self, df: pd.DataFrame, stock_code: str) -> pd.DataFrame:
         """
-        标准化数据列名（子类必须实现）
+        Chuẩn hoá tên cột dữ liệu (lớp con bắt buộc hiện thực)
 
-        将不同数据源的列名统一为：
+        Quy tên cột của các nguồn khác nhau về cùng một bộ:
         ['date', 'open', 'high', 'low', 'close', 'volume', 'amount', 'pct_chg']
         """
         pass
 
     def get_main_indices(self, region: str = "cn") -> Optional[List[Dict[str, Any]]]:
         """
-        获取主要指数实时行情
+        Lấy giá realtime của các chỉ số chính
 
         Args:
-            region: 市场区域，cn=A股 us=美股
+            region: khu vực thị trường, cn=A-share us=Mỹ
 
         Returns:
-            List[Dict]: 指数列表，每个元素为字典，包含:
-                - code: 指数代码
-                - name: 指数名称
-                - current: 当前点位
-                - change: 涨跌点数
-                - change_pct: 涨跌幅(%)
-                - volume: 成交量
-                - amount: 成交额
+            List[Dict]: danh sách chỉ số, mỗi phần tử là dict gồm:
+                - code: mã chỉ số
+                - name: tên chỉ số
+                - current: điểm số hiện tại
+                - change: số điểm tăng/giảm
+                - change_pct: % tăng/giảm
+                - volume: khối lượng giao dịch
+                - amount: giá trị giao dịch
         """
         return None
 
     def get_market_stats(self) -> Optional[Dict[str, Any]]:
         """
-        获取市场涨跌统计
+        Lấy thống kê tăng/giảm của thị trường
 
         Returns:
-            Dict: 包含:
-                - up_count: 上涨家数
-                - down_count: 下跌家数
-                - flat_count: 平盘家数
-                - limit_up_count: 涨停家数
-                - limit_down_count: 跌停家数
-                - total_amount: 两市成交额
+            Dict: gồm:
+                - up_count: số mã tăng
+                - down_count: số mã giảm
+                - flat_count: số mã đứng giá
+                - limit_up_count: số mã trần
+                - limit_down_count: số mã sàn
+                - total_amount: tổng giá trị giao dịch hai sàn
         """
         return None
 
     def get_sector_rankings(self, n: int = 5) -> Optional[Tuple[List[Dict], List[Dict]]]:
         """
-        获取板块涨跌榜
+        Lấy bảng xếp hạng tăng/giảm theo nhóm ngành
 
         Args:
-            n: 返回前n个
+            n: số lượng phần tử đầu cần trả về
 
         Returns:
-            Tuple: (领涨板块列表, 领跌板块列表)
+            Tuple: (danh sách nhóm dẫn dắt tăng, danh sách nhóm dẫn dắt giảm)
         """
         return None
 
     def get_concept_rankings(self, n: int = 5) -> Optional[Tuple[List[Dict], List[Dict]]]:
         """
-        获取概念/题材涨跌榜。
+        Lấy bảng xếp hạng tăng/giảm theo nhóm khái niệm/chủ đề.
 
         Returns:
-            Tuple: (领涨概念列表, 领跌概念列表)
+            Tuple: (danh sách khái niệm dẫn dắt tăng, danh sách dẫn dắt giảm)
         """
         return None
 
     def get_hot_stocks(self, n: int = 10) -> Optional[List[Dict[str, Any]]]:
         """
-        获取市场人气股榜。
+        Lấy bảng xếp hạng cổ phiếu được quan tâm nhiều nhất.
 
         Returns:
-            List[Dict]: 人气股列表
+            List[Dict]: danh sách cổ phiếu được quan tâm
         """
         return None
 
@@ -441,11 +566,11 @@ class BaseFetcher(ABC):
         n: int = 20,
     ) -> Optional[List[Dict[str, Any]]]:
         """
-        获取涨停池/连板梯队。
+        Lấy danh sách mã trần / nhóm mã trần nhiều phiên liên tiếp.
 
         Args:
-            date: YYYYMMDD，默认由具体数据源决定
-            n: 返回条数
+            date: YYYYMMDD, mặc định do từng nguồn cụ thể quyết định
+            n: số bản ghi trả về
         """
         return None
 
@@ -457,29 +582,29 @@ class BaseFetcher(ABC):
         days: int = 30
     ) -> pd.DataFrame:
         """
-        获取日线数据（统一入口）
-        
-        流程：
-        1. 计算日期范围
-        2. 调用子类获取原始数据
-        3. 标准化列名
-        4. 计算技术指标
-        
+        Lấy dữ liệu nến ngày (điểm vào thống nhất)
+
+        Quy trình:
+        1. Tính khoảng ngày
+        2. Gọi lớp con để lấy dữ liệu thô
+        3. Chuẩn hoá tên cột
+        4. Tính các chỉ báo kỹ thuật
+
         Args:
-            stock_code: 股票代码
-            start_date: 开始日期（可选）
-            end_date: 结束日期（可选，默认今天）
-            days: 获取天数（当 start_date 未指定时使用）
-            
+            stock_code: mã cổ phiếu
+            start_date: ngày bắt đầu (tuỳ chọn)
+            end_date: ngày kết thúc (tuỳ chọn, mặc định hôm nay)
+            days: số ngày cần lấy (dùng khi không chỉ định start_date)
+
         Returns:
-            标准化的 DataFrame，包含技术指标
+            DataFrame đã chuẩn hoá, kèm các chỉ báo kỹ thuật
         """
-        # 计算日期范围
+        # Tính khoảng ngày
         if end_date is None:
             end_date = datetime.now().strftime('%Y-%m-%d')
         
         if start_date is None:
-            # 默认获取最近 30 个交易日（按日历日估算，多取一些）
+            # Mặc định lấy 30 phiên gần nhất (ước lượng theo ngày lịch nên lấy dư một chút)
             from datetime import timedelta
             start_dt = datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=days * 2)
             start_date = start_dt.strftime('%Y-%m-%d')
@@ -488,7 +613,7 @@ class BaseFetcher(ABC):
         logger.info(f"[{self.name}] 开始获取 {stock_code} 日线数据: 范围={start_date} ~ {end_date}")
         
         try:
-            # Step 1: 获取原始数据
+            # Bước 1: lấy dữ liệu thô
             raw_df = self._fetch_raw_data(stock_code, start_date, end_date)
             
             if raw_df is None:
@@ -503,13 +628,13 @@ class BaseFetcher(ABC):
                     return pd.DataFrame(columns=STANDARD_COLUMNS)
                 raise DataFetchError(f"[{self.name}] 未获取到 {stock_code} 的数据")
             
-            # Step 2: 标准化列名
+            # Bước 2: chuẩn hoá tên cột
             df = self._normalize_data(raw_df, stock_code)
             
-            # Step 3: 数据清洗
+            # Bước 3: làm sạch dữ liệu
             df = self._clean_data(df)
             
-            # Step 4: 计算技术指标
+            # Bước 4: tính các chỉ báo kỹ thuật
             df = self._calculate_indicators(df)
 
             elapsed = time.time() - request_start
@@ -530,58 +655,59 @@ class BaseFetcher(ABC):
     
     def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        数据清洗
-        
-        处理：
-        1. 确保日期列格式正确
-        2. 数值类型转换
-        3. 去除空值行
-        4. 按日期排序
+        Làm sạch dữ liệu
+
+        Xử lý:
+        1. Đảm bảo cột ngày đúng định dạng
+        2. Ép kiểu số
+        3. Loại bỏ dòng rỗng
+        4. Sắp xếp theo ngày
         """
         df = df.copy()
         
-        # 确保日期列为 datetime 类型
+        # Đảm bảo cột ngày có kiểu datetime
         if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'])
         
-        # 数值列类型转换
+        # Ép kiểu cho các cột số
         numeric_cols = ['open', 'high', 'low', 'close', 'volume', 'amount', 'pct_chg']
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         
-        # 去除关键列为空的行
+        # Loại bỏ các dòng rỗng ở cột trọng yếu
         df = df.dropna(subset=['close', 'volume'])
         
-        # 按日期升序排序
+        # Sắp xếp tăng dần theo ngày
         df = df.sort_values('date', ascending=True).reset_index(drop=True)
         
         return df
     
     def _calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        计算技术指标
-        
-        计算指标：
-        - MA5, MA10, MA20: 移动平均线
-        - Volume_Ratio: 量比（今日成交量 / 5日平均成交量）
+        Tính các chỉ báo kỹ thuật
+
+        Các chỉ báo được tính:
+        - MA5, MA10, MA20: đường trung bình động
+        - Volume_Ratio: tỷ lệ khối lượng (khối lượng hôm nay / trung bình 5 phiên)
         """
         df = df.copy()
         
-        # 移动平均线
+        # Đường trung bình động
         df['ma5'] = df['close'].rolling(window=5, min_periods=1).mean()
         df['ma10'] = df['close'].rolling(window=10, min_periods=1).mean()
         df['ma20'] = df['close'].rolling(window=20, min_periods=1).mean()
         
-        # 量比：当日成交量 / 5日平均成交量
-        # 注意：此处的 volume_ratio 是“日线成交量 / 前5日均量(shift 1)”的相对倍数，
-        # 与部分交易软件口径的“分时量比（同一时刻对比）”不同，含义更接近“放量倍数”。
-        # 该行为目前保留（按需求不改逻辑）。
+        # Tỷ lệ khối lượng: khối lượng phiên hiện tại / khối lượng trung bình 5 phiên.
+        # Lưu ý: volume_ratio ở đây là bội số của "khối lượng nến ngày / trung bình 5
+        # phiên trước (shift 1)", khác với cách tính "tỷ lệ khối lượng trong phiên
+        # (so cùng thời điểm)" của một số phần mềm giao dịch; ý nghĩa gần với "bội số
+        # tăng khối lượng" hơn. Hành vi này được giữ nguyên (yêu cầu không đổi logic).
         avg_volume_5 = df['volume'].rolling(window=5, min_periods=1).mean()
         df['volume_ratio'] = df['volume'] / avg_volume_5.shift(1)
         df['volume_ratio'] = df['volume_ratio'].fillna(1.0)
         
-        # 保留2位小数
+        # Giữ 2 chữ số thập phân
         for col in ['ma5', 'ma10', 'ma20', 'volume_ratio']:
             if col in df.columns:
                 df[col] = df[col].round(2)
@@ -591,10 +717,10 @@ class BaseFetcher(ABC):
     @staticmethod
     def random_sleep(min_seconds: float = 1.0, max_seconds: float = 3.0) -> None:
         """
-        智能随机休眠（Jitter）
-        
-        防封禁策略：模拟人类行为的随机延迟
-        在请求之间加入不规则的等待时间
+        Nghỉ ngẫu nhiên thông minh (Jitter)
+
+        Chiến lược tránh bị chặn: tạo độ trễ ngẫu nhiên mô phỏng hành vi con người,
+        chèn thời gian chờ không đều giữa các request
         """
         sleep_time = random.uniform(min_seconds, max_seconds)
         logger.debug(f"随机休眠 {sleep_time:.2f} 秒...")
@@ -603,20 +729,23 @@ class BaseFetcher(ABC):
 
 class DataFetcherManager:
     """
-    数据源策略管理器
-    
-    职责：
-    1. 管理多个数据源（按优先级排序）
-    2. 自动故障切换（Failover）
-    3. 提供统一的数据获取接口
-    
-    切换策略：
-    - 优先使用高优先级数据源
-    - 失败后自动切换到下一个
-    - 所有数据源都失败时抛出异常
+    Manager chiến lược cho các nguồn dữ liệu
+
+    Trách nhiệm:
+    1. Quản lý nhiều nguồn dữ liệu (sắp xếp theo mức ưu tiên)
+    2. Tự động chuyển nguồn khi có sự cố (Failover)
+    3. Cung cấp giao diện lấy dữ liệu thống nhất
+
+    Chiến lược chuyển nguồn:
+    - Ưu tiên dùng nguồn có mức ưu tiên cao
+    - Thất bại thì tự động chuyển sang nguồn kế tiếp
+    - Ném ngoại lệ khi tất cả nguồn đều thất bại
     """
 
     _DAILY_MARKET_FETCHER_SUPPORT = {
+        "VciFetcher": {"vn"},
+        "SsiFetcher": {"vn"},
+        "VnstockFetcher": {"vn"},
         "EfinanceFetcher": {"cn"},
         "TencentFetcher": {"cn"},
         "AkshareFetcher": {"cn", "hk"},
@@ -656,10 +785,10 @@ class DataFetcherManager:
 
     def __init__(self, fetchers: Optional[List[BaseFetcher]] = None):
         """
-        初始化管理器
-        
+        Khởi tạo manager
+
         Args:
-            fetchers: 数据源列表（可选，默认按优先级自动创建）
+            fetchers: danh sách nguồn dữ liệu (tuỳ chọn, mặc định tự tạo theo mức ưu tiên)
         """
         self._fetchers: List[BaseFetcher] = []
         self._fetchers_lock = RLock()
@@ -670,11 +799,11 @@ class DataFetcherManager:
         self._stock_name_cache_lock = RLock()
         
         if fetchers:
-            # 按优先级排序
+            # Sắp xếp theo mức ưu tiên
             self._fetchers = sorted(fetchers, key=lambda f: f.priority)
             self._refresh_fetcher_indexes_locked()
         else:
-            # 默认数据源将在首次使用时延迟加载
+            # Các nguồn mặc định sẽ được nạp trễ (lazy) ở lần dùng đầu tiên
             self._init_default_fetchers()
         self._fundamental_adapter = AkshareFundamentalAdapter()
         self._yfinance_fundamental_adapter = YfinanceFundamentalAdapter()
@@ -767,6 +896,98 @@ class DataFetcherManager:
         method = getattr(fetcher, method_name)
         with self._get_fetcher_call_lock(fetcher):
             return method(*args, **kwargs)
+
+    @classmethod
+    def _filter_fetchers_by_enabled_markets(
+        cls, fetchers: List[BaseFetcher]
+    ) -> List[BaseFetcher]:
+        """Loại bỏ các nguồn mà mọi thị trường chúng hỗ trợ đều đã bị tắt.
+
+        Nguồn chỉ phục vụ thị trường đã tắt thì không còn lý do tồn tại: giữ lại sẽ
+        khiến chúng bị dò tìm khả dụng lặp đi lặp lại trong mỗi lần
+        ``_filter_fetchers_by_capability``, đồng thời làm ``/api/v1/data/overview``
+        báo ra những provider không dùng tới.
+
+        Các nguồn chưa đăng ký trong ``_DAILY_MARKET_FETCHER_SUPPORT`` đều được giữ
+        lại - chưa đăng ký nghĩa là "không rõ phủ thị trường nào", nên thận trọng
+        không loại.
+        """
+
+        from src.core.markets import enabled_markets
+
+        enabled = set(enabled_markets())
+        kept: List[BaseFetcher] = []
+        dropped: List[str] = []
+        for fetcher in fetchers:
+            supported = cls._DAILY_MARKET_FETCHER_SUPPORT.get(fetcher.name)
+            if supported is not None and not (supported & enabled):
+                dropped.append(fetcher.name)
+                continue
+            kept.append(fetcher)
+
+        if dropped:
+            logger.info(
+                "[数据源初始化] 跳过仅服务已停用市场的数据源: %s（当前启用市场: %s）",
+                ", ".join(dropped),
+                ", ".join(sorted(enabled)),
+            )
+        return kept
+
+    def _vn_realtime_source_order(self) -> List[str]:
+        """Thứ tự nguồn dữ liệu cho giá realtime Việt Nam.
+
+        Mặc định là ``SsiFetcher``; nếu ``REALTIME_SOURCE_PRIORITY`` có ghi tường
+        minh token của nguồn Việt Nam (``ssi`` / ``vci``) thì chạy theo thứ tự người
+        dùng cấu hình - dùng chung ngữ nghĩa cấu hình với A-share, tránh việc riêng
+        Việt Nam lại phải thêm một công tắc mới.
+        """
+
+        from src.config import get_config
+
+        token_to_fetcher = {"ssi": "SsiFetcher", "vci": "VciFetcher"}
+        configured = str(
+            getattr(get_config(), "realtime_source_priority", "") or ""
+        ).lower()
+        ordered = [
+            token_to_fetcher[token.strip()]
+            for token in configured.split(",")
+            if token.strip() in token_to_fetcher
+        ]
+        # Snapshot toàn thị trường của SSI chỉ có cổ phiếu thành phần, còn VCI phụ
+        # trách các chỉ số đã đăng ký (suy ra từ nến ngày mới nhất). Vì vậy cả hai đều
+        # phải nằm trong chuỗi nguồn, thứ tự là "cổ phiếu ưu tiên SSI, chỉ số do VCI
+        # đảm nhận".
+        for default_name in ("SsiFetcher", "VciFetcher"):
+            if default_name not in ordered:
+                ordered.append(default_name)
+        return ordered
+
+    @staticmethod
+    def _require_enabled_market(market: str, stock_code: str) -> None:
+        """Từ chối mã thuộc thị trường chưa bật, TRƯỚC khi phát bất kỳ request mạng nào.
+
+        Cổng chặn đặt ở tầng manager chứ không phải ở từng nơi gọi: mục đích của
+        ``SUPPORTED_MARKETS`` là "thị trường đã tắt thì không gửi đi một request nào".
+        Nếu chỉ lọc ở CLI/pipeline thì sẽ lọt các lối vào gọi thẳng manager như API,
+        Bot và các tool của Agent.
+        """
+
+        from src.core.markets import ALL_MARKET_CODES, enabled_markets, is_market_enabled
+
+        if is_market_enabled(market):
+            return
+
+        if market in ALL_MARKET_CODES:
+            reason = (
+                f"市场 {market} 未启用（当前 SUPPORTED_MARKETS={','.join(enabled_markets())}）"
+            )
+        else:
+            reason = (
+                f"无法识别 {stock_code} 所属市场（当前 SUPPORTED_MARKETS="
+                f"{','.join(enabled_markets())}）"
+            )
+        logger.info("[市场过滤] %s: %s", stock_code, reason)
+        raise DataFetchError(f"{stock_code}: {reason}")
 
     @classmethod
     def _filter_daily_fetchers_for_market(
@@ -1554,7 +1775,8 @@ class DataFetcherManager:
             pass
 
     def _get_fundamental_cache_key(self, stock_code: str, budget_seconds: Optional[float] = None) -> str:
-        """生成基本面缓存 key（包含预算分桶以避免低预算结果污染高预算请求）。"""
+        """Sinh key cache dữ liệu cơ bản (có phân nhóm theo ngân sách để kết quả ngân sách
+        thấp không làm bẩn request ngân sách cao)."""
         normalized_code = normalize_stock_code(stock_code)
         if budget_seconds is None:
             return f"{normalized_code}|budget=default"
@@ -1768,21 +1990,25 @@ class DataFetcherManager:
     
     def _init_default_fetchers(self) -> None:
         """
-        初始化默认数据源列表
+        Khởi tạo danh sách nguồn dữ liệu mặc định
 
-        优先级动态调整逻辑：
-        - 如果配置了 TUSHARE_TOKEN：实例化 TushareFetcher，并按其内部逻辑提升优先级
-        - 如果配置了 Longbridge OAuth 或 Legacy 凭据：实例化 LongbridgeFetcher 作为美股/港股兜底
-        - 未配置的可选数据源不实例化，避免在批量拉取时反复探测无效源
-        - 默认优先级：
-          0. EfinanceFetcher (Priority 0) - 最高优先级
+        Logic điều chỉnh mức ưu tiên động:
+        - Nếu đã cấu hình TUSHARE_TOKEN: khởi tạo TushareFetcher và nâng mức ưu tiên
+          theo logic nội bộ của nó
+        - Nếu đã cấu hình Longbridge OAuth hoặc credential Legacy: khởi tạo
+          LongbridgeFetcher làm lớp dự phòng cho US/HK
+        - Các nguồn tuỳ chọn chưa cấu hình thì không khởi tạo, tránh việc dò tìm lặp
+          lại những nguồn vô hiệu khi kéo dữ liệu hàng loạt
+        - Mức ưu tiên mặc định:
+          0. EfinanceFetcher (Priority 0) - ưu tiên cao nhất
           1. AkshareFetcher (Priority 1)
-          2. PytdxFetcher (Priority 2) - 通达信
+          2. PytdxFetcher (Priority 2) - Tongdaxin
           3. BaostockFetcher (Priority 3)
           4. YfinanceFetcher (Priority 4)
-          5. TencentFetcher (Priority 5) - A 股最终兜底
+          5. TencentFetcher (Priority 5) - lớp dự phòng cuối cho A-share
         """
         from src.config import get_config
+        from src.core.markets import is_market_enabled
         from .efinance_fetcher import EfinanceFetcher
         from .tencent_fetcher import TencentFetcher
         from .akshare_fetcher import AkshareFetcher
@@ -1794,18 +2020,48 @@ class DataFetcherManager:
         from .longbridge_fetcher import LongbridgeFetcher
         from .futu_fetcher import FutuFetcher
         config = get_config()
-        # 创建所有数据源实例（优先级在各 Fetcher 的 __init__ 中确定）
+
+        # Nguồn dữ liệu Việt Nam: VCI cung cấp nến ngày và bảng mã, SSI cung cấp
+        # snapshot realtime toàn thị trường và nến ngày dự phòng. Cả hai đều là
+        # endpoint công khai, không cần credential, nên chỉ dựa vào công tắc thị
+        # trường để quyết định có khởi tạo hay không.
+        vn_fetchers: List[BaseFetcher] = []
+        if is_market_enabled("vn"):
+            from .vci_fetcher import VciFetcher
+            from .ssi_fetcher import SsiFetcher
+
+            vn_fetchers.extend([VciFetcher(), SsiFetcher()])
+
+            # vnstock là phụ thuộc tuỳ chọn: giấy phép của nó là "Custom (Personal Use)"
+            # và kéo theo vnai - gói gửi dữ liệu sử dụng về phía tác giả. Vì vậy không
+            # đưa vào requirements.txt; chỉ bật khi đặt tường minh VNSTOCK_ENABLED=true
+            # và máy đã cài sẵn.
+            if str(os.getenv("VNSTOCK_ENABLED", "false")).strip().lower() == "true":
+                try:
+                    from .vnstock_fetcher import VnstockFetcher
+
+                    vn_fetchers.append(VnstockFetcher())
+                except ImportError as exc:
+                    logger.warning(
+                        "[数据源初始化] VNSTOCK_ENABLED=true 但 vnstock 不可用，已跳过: %s",
+                        exc,
+                    )
+            else:
+                logger.debug("[数据源初始化] 跳过未启用的 VnstockFetcher")
+
+        # Khởi tạo tất cả instance nguồn dữ liệu (mức ưu tiên được xác định trong
+        # __init__ của từng Fetcher)
         efinance = EfinanceFetcher()
         tencent = TencentFetcher()
         akshare = AkshareFetcher()
-        pytdx = PytdxFetcher()      # 通达信数据源（可配 PYTDX_HOST/PYTDX_PORT）
+        pytdx = PytdxFetcher()      # Nguồn Tongdaxin (có thể cấu hình PYTDX_HOST/PYTDX_PORT)
         baostock = BaostockFetcher()
         yfinance = YfinanceFetcher()
         optional_fetchers: List[BaseFetcher] = []
 
         tushare_token = (getattr(config, "tushare_token", None) or "").strip()
         if tushare_token:
-            optional_fetchers.append(TushareFetcher())  # 会根据 Token 配置自动调整优先级
+            optional_fetchers.append(TushareFetcher())  # Mức ưu tiên tự động điều chỉnh theo cấu hình Token
         else:
             logger.debug("[数据源初始化] 跳过未配置的 TushareFetcher")
 
@@ -1824,12 +2080,12 @@ class DataFetcherManager:
             logger.debug("[data source init] skip TickFlowFetcher because TICKFLOW_API_KEY is not configured")
 
         if LongbridgeFetcher.has_configured_credentials(config):
-            optional_fetchers.append(LongbridgeFetcher())  # 长桥（美股/港股兜底，懒加载）
+            optional_fetchers.append(LongbridgeFetcher())  # Longbridge (dự phòng cho US/HK, nạp trễ)
         else:
             logger.debug("[数据源初始化] 跳过未配置的 LongbridgeFetcher")
 
         if FutuFetcher.has_configured_endpoint():
-            optional_fetchers.append(FutuFetcher())  # 富途（港股，依赖 OpenD）
+            optional_fetchers.append(FutuFetcher())  # Futu (thị trường HK, phụ thuộc OpenD)
         else:
             logger.debug("[数据源初始化] 跳过未配置的 FutuFetcher")
 
@@ -1847,29 +2103,34 @@ class DataFetcherManager:
         else:
             logger.debug("[数据源初始化] 跳过未配置的 AlphaVantageFetcher")
 
-        # 初始化数据源列表
+        # Khởi tạo danh sách nguồn dữ liệu
+        candidates: List[BaseFetcher] = [
+            *vn_fetchers,
+            efinance,
+            akshare,
+            pytdx,
+            baostock,
+            yfinance,
+            tencent,
+            *optional_fetchers,
+        ]
+        candidates = self._filter_fetchers_by_enabled_markets(candidates)
+
         self._ensure_concurrency_guards()
         with self._fetchers_lock:
-            self._fetchers = [
-                efinance,
-                akshare,
-                pytdx,
-                baostock,
-                yfinance,
-                tencent,
-                *optional_fetchers,
-            ]
+            self._fetchers = candidates
 
-            # 按优先级排序（Tushare 如果配置了 Token 且初始化成功，优先级为 0）
+            # Sắp xếp theo mức ưu tiên (Tushare nếu đã cấu hình Token và khởi tạo thành công
+            # thì có mức ưu tiên 0)
             self._fetchers.sort(key=lambda f: f.priority)
             self._refresh_fetcher_indexes_locked()
 
-        # 构建优先级说明
+        # Dựng phần mô tả thứ tự ưu tiên
         priority_info = ", ".join([f"{f.name}(P{f.priority})" for f in self._get_fetchers_snapshot()])
         logger.info(f"已初始化 {len(self._fetchers)} 个数据源（按优先级）: {priority_info}")
     
     def add_fetcher(self, fetcher: BaseFetcher) -> None:
-        """添加数据源并重新排序"""
+        """Thêm nguồn dữ liệu rồi sắp xếp lại"""
         self._ensure_concurrency_guards()
         with self._fetchers_lock:
             self._fetchers.append(fetcher)
@@ -1884,26 +2145,27 @@ class DataFetcherManager:
         days: int = 30
     ) -> Tuple[pd.DataFrame, str]:
         """
-        获取日线数据（自动切换数据源）
-        
-        故障切换策略：
-        1. 美股指数/美股股票直接路由到 YfinanceFetcher
-        2. 当前注册表已识别的 A 股指数使用固定指数数据源链
-        3. 其他代码从最高优先级数据源开始尝试
-        4. 捕获异常后自动切换到下一个并记录失败原因
-        5. 指数全源失败返回标准空结果；非指数全源失败抛出详细异常
-        
+        Lấy dữ liệu nến ngày (tự động chuyển nguồn)
+
+        Chiến lược chuyển nguồn khi sự cố:
+        1. Chỉ số Mỹ / cổ phiếu Mỹ định tuyến thẳng tới YfinanceFetcher
+        2. Chỉ số A-share đã có trong registry dùng chuỗi nguồn chỉ số cố định
+        3. Các mã còn lại thử lần lượt từ nguồn có mức ưu tiên cao nhất
+        4. Bắt ngoại lệ xong thì tự chuyển sang nguồn kế tiếp và ghi lại lý do thất bại
+        5. Chỉ số mà mọi nguồn đều hỏng thì trả kết quả rỗng chuẩn; mã không phải chỉ
+           số mà mọi nguồn đều hỏng thì ném ngoại lệ kèm chi tiết
+
         Args:
-            stock_code: 股票代码
-            start_date: 开始日期
-            end_date: 结束日期
-            days: 获取天数
-            
+            stock_code: mã cổ phiếu
+            start_date: ngày bắt đầu
+            end_date: ngày kết thúc
+            days: số ngày cần lấy
+
         Returns:
-            Tuple[DataFrame, str]: (数据, 成功的数据源名称)
-            
+            Tuple[DataFrame, str]: (dữ liệu, tên nguồn đã lấy thành công)
+
         Raises:
-            DataFetchError: 非指数代码的所有数据源都失败时抛出
+            DataFetchError: ném ra khi mã không phải chỉ số và mọi nguồn đều thất bại
         """
         from .us_index_mapping import is_us_index_code, is_us_stock_code
 
@@ -1928,19 +2190,37 @@ class DataFetcherManager:
         errors = []
         request_start = time.time()
 
-        # 快速路径：美股使用专用数据源路由；港股先过滤不支持港股日线的数据源
-        #   - 配置长桥凭据后: Longbridge 为首选, YFinance/AkShare 兜底
-        #   - 未配置长桥:     YFinance 为首选（美股）, 通用 fetcher 循环（港股）
-        #   - 美股指数:       始终 YFinance 为首选（Longbridge 不提供指数K线）
-        is_us_index = is_us_index_code(stock_code)
-        is_us = is_us_index or is_us_stock_code(stock_code)
-        is_hk = (not is_us) and _is_hk_market(stock_code)
-        is_jp = (not is_us) and (not is_hk) and _is_jp_market(stock_code)
-        is_kr = (not is_us) and (not is_hk) and _is_kr_market(stock_code)
-        is_tw = (not is_us) and (not is_hk) and _is_tw_market(stock_code)
-        market = "us" if is_us else "hk" if is_hk else "jp" if is_jp else "kr" if is_kr else "tw" if is_tw else "cn"
-        if market != "cn":
-            fetchers = self._filter_daily_fetchers_for_market(fetchers, market)
+        # Đường nhanh: US dùng định tuyến nguồn chuyên biệt; HK lọc trước các nguồn
+        # không hỗ trợ nến ngày HK
+        #   - Đã cấu hình credential Longbridge: Longbridge ưu tiên, YFinance/AkShare dự phòng
+        #   - Chưa cấu hình Longbridge:          YFinance ưu tiên (US), vòng lặp fetcher chung (HK)
+        #   - Chỉ số Mỹ:                         luôn ưu tiên YFinance (Longbridge không có nến chỉ số)
+        # Xác định thị trường trước, rồi mới suy ra các biến boolean theo thị trường.
+        # Trước đây mỗi biến boolean tự nhận diện độc lập nên có thể lệch với
+        # ``market``: mã trần Việt Nam (HPG/FPT) cũng khớp regex ticker Mỹ, bị
+        # ``is_us`` cho là đúng và lọt vào nhánh định tuyến riêng của thị trường Mỹ.
+        # Nhận diện thị trường bằng **input gốc, trước khi quy chuẩn**:
+        # ``normalize_stock_code`` sẽ rút ``HPG.VN`` thành mã trần ``HPG``, mà mã trần
+        # lại trùng hình dạng với ticker Mỹ. Nếu nhận diện sau khi quy chuẩn thì khi
+        # bật đồng thời vn và us, cách viết tường minh ``HPG.VN`` sẽ bị hiểu nhầm là
+        # cổ phiếu Mỹ, và người dùng mất luôn phương tiện khử nhập nhằng.
+        market = _market_tag(raw_stock_code) if raw_stock_code else "unknown"
+        if market == "unknown":
+            market = _market_tag(stock_code)
+        self._require_enabled_market(market, stock_code)
+        is_us = market == "us"
+        is_us_index = is_us and is_us_index_code(stock_code)
+        is_hk = market == "hk"
+        is_jp = market == "jp"
+        is_kr = market == "kr"
+        is_tw = market == "tw"
+        # Lọc theo năng lực cho **mọi** thị trường (kể cả cn). Trước đây cn bị bỏ qua vì
+        # khi đó tất cả nguồn đã đăng ký đều tình cờ hỗ trợ A-share; sau khi thêm nguồn
+        # Việt Nam, VciFetcher/SsiFetcher sẽ bị đem đi chạy mã A-share và chắc chắn
+        # thất bại - vừa phí request vừa làm nhiễu log lỗi.
+        # Mọi nguồn A-share trong ``_DAILY_MARKET_FETCHER_SUPPORT`` đều khai báo cn,
+        # nên lọc cho cn không làm hỏng chuỗi nguồn sẵn có.
+        fetchers = self._filter_daily_fetchers_for_market(fetchers, market)
         fetchers = self._filter_fetchers_by_capability(fetchers, capability="daily_data")
         total_fetchers = len(fetchers)
 
@@ -1950,20 +2230,22 @@ class DataFetcherManager:
             logger.error(f"[数据源终止] {stock_code} 获取失败: {error_summary}")
             raise DataFetchError(error_summary)
 
-        # 美股（含美股指数）使用专用路由；港股走下方通用数据源循环
+        # US (kể cả chỉ số Mỹ) dùng định tuyến chuyên biệt; HK đi tiếp vòng lặp nguồn chung bên dưới
         # Failover chain: Finnhub(P2) -> AlphaVantage(P3) -> Yfinance(P4) -> Longbridge(P5)
         # When Longbridge preferred: Longbridge -> Finnhub -> AlphaVantage -> Yfinance
         if is_us:
             prefer_lb = self._longbridge_preferred(capability="daily_data") and not is_us_index
             if is_us_index:
-                # 指数始终 YFinance 首选（Longbridge 不提供指数K线）
+                # Chỉ số luôn ưu tiên YFinance (Longbridge không cung cấp nến chỉ số)
                 source_order = ["YfinanceFetcher", "FinnhubFetcher"]
             elif prefer_lb:
                 source_order = ["LongbridgeFetcher", "FinnhubFetcher", "AlphaVantageFetcher", "YfinanceFetcher"]
             else:
                 source_order = ["FinnhubFetcher", "AlphaVantageFetcher", "YfinanceFetcher", "LongbridgeFetcher"]
-            # 消费各数据源当前优先级(含 *_PRIORITY 环境变量):默认优先级与内置链路一致,
-            # 单项调整(如 YFINANCE_PRIORITY=0)即时生效;指数/Longbridge preferred 的锚定首选不被普通优先级覆盖
+            # Đọc mức ưu tiên hiện tại của từng nguồn (gồm cả biến môi trường *_PRIORITY):
+            # ưu tiên mặc định khớp với chuỗi nguồn dựng sẵn, chỉnh riêng lẻ (ví dụ
+            # YFINANCE_PRIORITY=0) có hiệu lực ngay; lựa chọn đầu đã neo cho chỉ số /
+            # Longbridge preferred không bị mức ưu tiên thông thường ghi đè
             pin_first = bool(is_us_index or prefer_lb)
             source_order = self._order_us_sources_by_priority(source_order, pin_first=pin_first)
             market_label = "美股指数" if is_us_index else "美股"
@@ -2135,10 +2417,10 @@ class DataFetcherManager:
                 if attempt < total_fetchers:
                     next_fetcher = fetchers[attempt]
                     logger.info(f"[数据源切换] {stock_code}: [{fetcher.name}] -> [{next_fetcher.name}]")
-                # 继续尝试下一个数据源
+                # Tiếp tục thử nguồn kế tiếp
                 continue
         
-        # 所有数据源都失败
+        # Tất cả nguồn đều thất bại
         error_summary = f"所有数据源获取 {stock_code} 失败:\n" + "\n".join(errors)
         elapsed = time.time() - request_start
         logger.error(f"[数据源终止] {stock_code} 获取失败: elapsed={elapsed:.2f}s\n{error_summary}")
@@ -2146,28 +2428,29 @@ class DataFetcherManager:
     
     @property
     def available_fetchers(self) -> List[str]:
-        """返回可用数据源名称列表"""
+        """Trả về danh sách tên các nguồn dữ liệu khả dụng"""
         return [f.name for f in self._get_fetchers_snapshot()]
     
     def prefetch_realtime_quotes(self, stock_codes: List[str]) -> int:
         """
-        批量预取实时行情数据（在分析开始前调用）
-        
-        策略：
-        1. 检查优先级中是否包含适合预取的数据源（efinance/akshare_em/tushare/tickflow）
-        2. 如果不包含，跳过预取（新浪/腾讯是单股票查询，无需预取）
-        3. 如果自选股数量 >= 5 且使用可预取数据源，则预取填充缓存
-        
-        这样做的好处：
-        - 使用新浪/腾讯时：每只股票独立查询，无全量拉取问题
-        - 使用 efinance/东财/Tushare 时：预取一次，后续缓存命中
-        - 使用 TickFlow 时：按当前自选股批量预取，避免逐股重复请求
-        
+        Prefetch giá realtime hàng loạt (gọi trước khi bắt đầu phân tích)
+
+        Chiến lược:
+        1. Kiểm tra danh sách ưu tiên có nguồn nào phù hợp để prefetch không
+           (efinance/akshare_em/tushare/tickflow)
+        2. Nếu không có thì bỏ qua prefetch (Sina/Tencent truy vấn từng mã nên không cần)
+        3. Nếu số mã theo dõi >= 5 và đang dùng nguồn prefetch được thì prefetch để nạp cache
+
+        Lợi ích:
+        - Khi dùng Sina/Tencent: mỗi mã truy vấn độc lập, không có vấn đề kéo toàn bộ
+        - Khi dùng efinance/Eastmoney/Tushare: prefetch một lần, các lần sau trúng cache
+        - Khi dùng TickFlow: prefetch hàng loạt theo danh mục hiện tại, tránh lặp request từng mã
+
         Args:
-            stock_codes: 待分析的股票代码列表
-            
+            stock_codes: danh sách mã cổ phiếu cần phân tích
+
         Returns:
-            预取的股票数量（0 表示跳过预取）
+            Số mã đã prefetch (0 nghĩa là đã bỏ qua prefetch)
         """
         # Normalize all codes, preserving explicit index identities
         # (``sh000016`` / ``csi930955``) so the prefetch never degrades an
@@ -2185,24 +2468,24 @@ class DataFetcherManager:
 
         config = get_config()
 
-        # Issue #455: PREFETCH_REALTIME_QUOTES=false 可禁用预取，避免全市场拉取
+        # Issue #455: PREFETCH_REALTIME_QUOTES=false để tắt prefetch, tránh kéo toàn thị trường
         if not getattr(config, "prefetch_realtime_quotes", True):
             logger.debug("[预取] component=realtime_prefetch action=skip reason=disabled")
             return 0
 
-        # 如果实时行情被禁用，跳过预取
+        # Nếu giá realtime bị tắt thì bỏ qua prefetch
         if not config.enable_realtime_quote:
             logger.debug("[预取] component=realtime_prefetch action=skip reason=realtime_quote_disabled")
             return 0
         
-        # 检查优先级中是否包含适合批量预取的数据源
-        # efinance/akshare_em/tushare 通过一次调用填充全市场缓存；
-        # tickflow 通过 symbols 批量接口预取当前自选股缓存。
+        # Kiểm tra trong danh sách ưu tiên có nguồn nào phù hợp để prefetch hàng loạt
+        # efinance/akshare_em/tushare chỉ cần một lời gọi là nạp đầy cache toàn thị trường;
+        # tickflow prefetch cache danh mục theo dõi qua API symbols hàng loạt.
         priority = config.realtime_source_priority.lower()
         prefetch_sources = ['efinance', 'akshare_em', 'tushare', 'tickflow']
         
-        # 如果优先级中前两个都不是可预取数据源，跳过预取
-        # 因为新浪/腾讯是单股票查询，不需要预取
+        # Nếu hai vị trí đầu trong danh sách ưu tiên đều không phải nguồn prefetch được
+        # thì bỏ qua, vì Sina/Tencent chỉ truy vấn từng mã nên không cần prefetch
         priority_list = [s.strip() for s in priority.split(',')]
         first_prefetch_source_index = None
         for i, source in enumerate(priority_list):
@@ -2210,7 +2493,7 @@ class DataFetcherManager:
                 first_prefetch_source_index = i
                 break
         
-        # 如果没有可预取数据源，或者它排在第 3 位之后，跳过预取
+        # Không có nguồn prefetch được, hoặc nó xếp sau vị trí thứ 3, thì bỏ qua prefetch
         if first_prefetch_source_index is None or first_prefetch_source_index >= 2:
             logger.info(
                 "[预取] component=realtime_prefetch action=skip reason=no_early_prefetch_source priority=%s",
@@ -2218,7 +2501,7 @@ class DataFetcherManager:
             )
             return 0
         
-        # 如果股票数量少于 5 个，不进行批量预取（逐个查询更高效）
+        # Dưới 5 mã thì không prefetch hàng loạt (truy vấn từng mã hiệu quả hơn)
         if len(stock_codes) < 5:
             logger.info(
                 "[预取] component=realtime_prefetch action=skip reason=small_batch "
@@ -2236,7 +2519,8 @@ class DataFetcherManager:
             stock_codes[0],
         )
         
-        # TickFlow 使用 symbols 批量接口；其他可预取源通过首次查询触发自身缓存。
+        # TickFlow dùng API symbols hàng loạt; các nguồn prefetch khác kích hoạt cache
+        # của chính chúng qua lần truy vấn đầu tiên.
         if prefetch_source == "tickflow":
             fetcher = self._get_fetcher_by_name("TickFlowFetcher", capability="realtime_quote")
             if fetcher is None or not hasattr(fetcher, "prefetch_realtime_quotes"):
@@ -2259,7 +2543,7 @@ class DataFetcherManager:
                 return 0
 
         try:
-            # 用第一只股票触发全量拉取
+            # Dùng mã đầu tiên để kích hoạt việc kéo toàn bộ
             first_code = stock_codes[0]
             quote = self.get_realtime_quote(first_code)
             
@@ -2339,6 +2623,9 @@ class DataFetcherManager:
         if fetcher_name == "AkshareFetcher" and kw.get("source") == "hk":
             return "akshare_hk"
         mapping = {
+            "VciFetcher": "vci",
+            "SsiFetcher": "ssi",
+            "VnstockFetcher": "vnstock",
             "LongbridgeFetcher": "longbridge",
             "FutuFetcher": "futu",
             "YfinanceFetcher": "yfinance",
@@ -2385,23 +2672,23 @@ class DataFetcherManager:
     
     def get_realtime_quote(self, stock_code: str, *, log_final_failure: bool = True):
         """
-        获取实时行情数据（自动故障切换）
-        
-        故障切换策略（按配置的优先级）：
-        1. 美股：使用 YfinanceFetcher.get_realtime_quote()
+        Lấy giá realtime (tự động chuyển nguồn khi sự cố)
+
+        Chiến lược chuyển nguồn (theo mức ưu tiên đã cấu hình):
+        1. Thị trường Mỹ: dùng YfinanceFetcher.get_realtime_quote()
         2. EfinanceFetcher.get_realtime_quote()
-        3. AkshareFetcher.get_realtime_quote(source="em")  - 东财
-        4. AkshareFetcher.get_realtime_quote(source="sina") - 新浪
-        5. AkshareFetcher.get_realtime_quote(source="tencent") - 腾讯
-        6. 返回 None（降级兜底）
-        
+        3. AkshareFetcher.get_realtime_quote(source="em")  - Eastmoney
+        4. AkshareFetcher.get_realtime_quote(source="sina") - Sina
+        5. AkshareFetcher.get_realtime_quote(source="tencent") - Tencent
+        6. Trả về None (hạ cấp dự phòng)
+
         Args:
-            stock_code: 股票代码
+            stock_code: mã cổ phiếu
             log_final_failure: Whether to emit the final "all sources failed"
                 summary log when no realtime quote is available.
-            
+
         Returns:
-            UnifiedRealtimeQuote 对象，所有数据源都失败则返回 None
+            Đối tượng UnifiedRealtimeQuote; trả None nếu mọi nguồn đều thất bại
         """
         raw_stock_code = (stock_code or "").strip()
         # Normalize code (strip SH/SZ prefix etc.)
@@ -2413,15 +2700,15 @@ class DataFetcherManager:
 
         config = get_config()
 
-        # 如果实时行情功能被禁用，直接返回 None
+        # Nếu tính năng giá realtime bị tắt thì trả về None ngay
         if not config.enable_realtime_quote:
             logger.debug(f"[实时行情] 功能已禁用，跳过 {stock_code}")
             return None
 
         # ----------------------------------------------------------
-        # 已登记 A 股指数 — 固定实时行情链（Story 1.5）
-        #   显式指数身份在 normalize 前解析，避免 sh000016 被剥成
-        #   股票 000016 后误取同名股票行情。
+        # Chỉ số A-share đã đăng ký - chuỗi giá realtime cố định (Story 1.5)
+        #   Danh tính chỉ số tường minh được phân giải TRƯỚC khi normalize, tránh việc
+        #   sh000016 bị cắt thành mã cổ phiếu 000016 rồi lấy nhầm giá của cổ phiếu trùng tên.
         # ----------------------------------------------------------
         index_target = parse_analysis_target(raw_stock_code)
         if index_target.asset_type == ParseStatus.INDEX:
@@ -2430,10 +2717,10 @@ class DataFetcherManager:
             )
 
         # ----------------------------------------------------------
-        # 美股 (指数 + 个股) / 港股 — 专用双源路由
-        #   配置长桥后: Longbridge 首选, YFinance/AkShare 补充
-        #   未配置长桥: YFinance/AkShare 首选, Longbridge 补充
-        #   美股指数:   始终 YFinance 首选（Longbridge 不提供指数行情）
+        # US (chỉ số + cổ phiếu) / HK - định tuyến hai nguồn chuyên biệt
+        #   Đã cấu hình Longbridge: Longbridge ưu tiên, YFinance/AkShare bổ sung
+        #   Chưa cấu hình Longbridge: YFinance/AkShare ưu tiên, Longbridge bổ sung
+        #   Chỉ số Mỹ: luôn ưu tiên YFinance (Longbridge không cung cấp giá chỉ số)
         # ----------------------------------------------------------
         is_us_index = is_us_index_code(stock_code)
         is_us = is_us_index or _is_us_code(stock_code)
@@ -2441,6 +2728,48 @@ class DataFetcherManager:
         is_jp = (not is_us) and (not is_hk) and _is_jp_market(stock_code)
         is_kr = (not is_us) and (not is_hk) and _is_kr_market(stock_code)
         is_tw = (not is_us) and (not is_hk) and _is_tw_market(stock_code)
+
+        # Thị trường chưa bật thì hạ cấp thẳng về None: quy ước sẵn có của luồng giá
+        # realtime là thất bại trả None chứ không ném exception. Giữ nhất quán ở đây để
+        # một thị trường bị tắt không làm gãy cả lượt phân tích.
+        from src.core.markets import is_market_enabled as _is_market_enabled
+
+        # Như trên: nhận diện bằng input gốc để cách viết tường minh kiểu ``HPG.VN``
+        # không bị bước quy chuẩn xoá mất.
+        market = _market_tag(raw_stock_code) if raw_stock_code else "unknown"
+        if market == "unknown":
+            market = _market_tag(stock_code)
+        if not _is_market_enabled(market):
+            if log_final_failure:
+                logger.info(
+                    "[实时行情] %s 所属市场未启用（market=%s），跳过",
+                    stock_code,
+                    market,
+                )
+            return None
+
+        # ----------------------------------------------------------
+        # Việt Nam - ưu tiên snapshot toàn thị trường của SSI, VCI dự phòng
+        #   SSI chỉ cần một request là phủ toàn bộ mã của HOSE/HNX/UPCOM, nên truy vấn
+        #   từng mã gần như luôn trúng cache;
+        #   VCI chỉ có nến ngày, không có endpoint realtime riêng, nên ở đây chỉ có duy
+        #   nhất một chuỗi realtime là SSI; thất bại thì trả None (thống nhất với ngữ
+        #   nghĩa hạ cấp realtime của các thị trường khác).
+        # ----------------------------------------------------------
+        if market == "vn":
+            for source_name in self._vn_realtime_source_order():
+                quote = self._try_fetcher_quote(stock_code, source_name)
+                if quote is not None:
+                    logger.info(
+                        "[实时行情] 越南 %s 成功获取 (来源: %s)", stock_code, source_name
+                    )
+                    return self._enrich_realtime_quote(
+                        quote,
+                        realtime_cache_ttl=getattr(config, "realtime_cache_ttl", None),
+                    )
+            if log_final_failure:
+                logger.info("[实时行情] 越南 %s 无可用数据源", stock_code)
+            return None
 
         if is_jp or is_kr or is_tw:
             market_label = "日股" if is_jp else "韩股" if is_kr else "台股"
@@ -2512,12 +2841,14 @@ class DataFetcherManager:
                         primary_src_index = index
                         logger.info("[实时行情] 港股 %s 成功获取 (来源: %s)", stock_code, fetcher_name)
                         break
-                    # 该源失败：记住它的 token，供后续成功源作为 fallback_from 使用。
+                    # Nguồn này thất bại: ghi nhớ token của nó để nguồn thành công sau đó dùng
+                    # làm fallback_from.
                     if fallback_from is None:
                         fallback_from = self._realtime_fetcher_token(fetcher_name, **fetcher_kw)
                 if primary_quote is not None:
-                    # 用后续数据源补充缺失字段（volume_ratio / turnover_rate / 估值 / 市值），
-                    # 保持与美股路径一致的 _supplement_quote 补字段能力。
+                    # Dùng các nguồn kế tiếp để bù các trường còn thiếu (volume_ratio /
+                    # turnover_rate / định giá / vốn hoá), giữ khả năng bù trường
+                    # _supplement_quote giống với nhánh thị trường Mỹ.
                     for source in hk_priority[primary_src_index + 1:]:
                         mapped = source_map.get(source)
                         if mapped is None:
@@ -2562,7 +2893,7 @@ class DataFetcherManager:
                 logger.info(f"[实时行情] {market_label} {stock_code} 无可用数据源")
             return None
         
-        # 获取配置的数据源优先级
+        # Lấy thứ tự ưu tiên nguồn dữ liệu đã cấu hình
         source_priority = [
             source.strip().lower()
             for source in config.realtime_source_priority.split(',')
@@ -2724,7 +3055,7 @@ class DataFetcherManager:
                 realtime_cache_ttl=getattr(config, "realtime_cache_ttl", None),
             )
 
-        # 所有数据源都失败，返回 None（降级兜底）
+        # Tất cả nguồn đều thất bại, trả về None (hạ cấp dự phòng)
         if log_final_failure:
             if errors:
                 logger.info(f"[实时行情] {stock_code} 所有数据源均失败: {'; '.join(errors)}")
@@ -2765,12 +3096,14 @@ class DataFetcherManager:
         return filled
 
     def _order_us_sources_by_priority(self, source_order: List[str], *, pin_first: bool) -> List[str]:
-        """按各数据源当前优先级重排美股日线路由(消费既有 *_PRIORITY 配置)。
+        """Sắp xếp lại định tuyến nến ngày thị trường Mỹ theo mức ưu tiên hiện tại của
+        từng nguồn (đọc cấu hình *_PRIORITY sẵn có).
 
-        稳定排序:各源默认优先级(Finnhub=2/AlphaVantage=3/Yfinance=4/Longbridge=5)
-        与内置链路一致,默认行为不变;单项 *_PRIORITY 调整即时生效。
-        pin_first=True 时保持链路首位(指数固定 Yfinance、Longbridge preferred),
-        其余成员按优先级排序。
+        Sắp xếp ổn định: mức ưu tiên mặc định của các nguồn
+        (Finnhub=2/AlphaVantage=3/Yfinance=4/Longbridge=5) khớp với chuỗi nguồn dựng
+        sẵn nên hành vi mặc định không đổi; chỉnh riêng một *_PRIORITY có hiệu lực ngay.
+        Khi pin_first=True thì giữ nguyên vị trí đầu chuỗi (chỉ số cố định Yfinance,
+        Longbridge preferred), các thành viên còn lại sắp theo mức ưu tiên.
         """
         self._ensure_concurrency_guards()
         if not source_order:
@@ -2877,19 +3210,19 @@ class DataFetcherManager:
 
     def get_chip_distribution(self, stock_code: str):
         """
-        获取筹码分布数据（带熔断和多数据源降级）
+        Lấy dữ liệu phân bố chip (có circuit breaker và hạ cấp qua nhiều nguồn)
 
-        策略：
-        1. 检查配置开关
-        2. 检查熔断器状态
-        3. 依次尝试多个数据源：数据源优先级与获取daily的数据优先级一致
-        4. 所有数据源失败则返回 None（降级兜底）
+        Chiến lược:
+        1. Kiểm tra công tắc cấu hình
+        2. Kiểm tra trạng thái circuit breaker
+        3. Thử lần lượt nhiều nguồn: thứ tự ưu tiên giống với khi lấy dữ liệu nến ngày
+        4. Mọi nguồn thất bại thì trả None (hạ cấp dự phòng)
 
         Args:
-            stock_code: 股票代码
+            stock_code: mã cổ phiếu
 
         Returns:
-            ChipDistribution 对象，失败则返回 None
+            Đối tượng ChipDistribution; trả None nếu thất bại
         """
         # Normalize code (strip SH/SZ prefix etc.)
         stock_code = normalize_stock_code(stock_code)
@@ -2899,7 +3232,7 @@ class DataFetcherManager:
 
         config = get_config()
 
-        # 如果筹码分布功能被禁用，直接返回 None
+        # Nếu tính năng phân bố chip bị tắt thì trả về None ngay
         if not config.enable_chip_distribution:
             logger.debug(f"[筹码分布] 功能已禁用，跳过 {stock_code}")
             return None
@@ -2907,17 +3240,17 @@ class DataFetcherManager:
         circuit_breaker = get_chip_circuit_breaker()
 
         candidate_fetchers = []
-        # 直接遍历管理器已经按 priority 排好序的数据源列表
+        # Duyệt thẳng danh sách nguồn mà manager đã sắp xếp sẵn theo priority
         for fetcher in self._get_fetchers_snapshot():
-            # 只处理实现了筹码分布逻辑的数据源
+            # Chỉ xử lý các nguồn có hiện thực logic phân bố chip
             if not hasattr(fetcher, 'get_chip_distribution'):
                 continue
 
             fetcher_name = fetcher.name
-            # 动态生成熔断器的 key，例如 "TushareFetcher" -> "tushare_chip"
+            # Sinh key của circuit breaker một cách động, ví dụ "TushareFetcher" -> "tushare_chip"
             source_key = f"{fetcher_name.replace('Fetcher', '').lower()}_chip"
 
-            # 检查熔断器状态
+            # Kiểm tra trạng thái circuit breaker
             if not circuit_breaker.is_available(source_key):
                 logger.debug(f"[熔断] {fetcher_name} 筹码接口处于熔断状态，尝试下一个")
                 continue
@@ -2968,7 +3301,8 @@ class DataFetcherManager:
                             "[筹码分布] %s 返回字段不完整或占位值，继续尝试下一个数据源",
                             fetcher_name,
                         )
-                    # 空结果或占位结果：释放 HALF_OPEN 探测名额，避免卡死
+                    # Kết quả rỗng hoặc chỉ là placeholder: trả lại suất thăm dò HALF_OPEN để
+                    # không bị kẹt
                     circuit_breaker.record_inconclusive(source_key)
             except Exception as e:
                 error_type, error_reason = summarize_exception(e)
@@ -2991,22 +3325,22 @@ class DataFetcherManager:
 
     def get_stock_name(self, stock_code: str, allow_realtime: bool = True) -> Optional[str]:
         """
-        获取股票中文名称（自动切换数据源）
-        
-        尝试从多个数据源获取股票名称：
-        1. 先从内存缓存中获取（如果有）
-        2. 再尝试本地维护映射与 stocks.index.json 索引
-        3. 然后按需查询实时行情
-        4. 依次尝试各个数据源的 get_stock_name 方法
-        
+        Lấy tên cổ phiếu (tự động chuyển nguồn)
+
+        Thử lấy tên cổ phiếu từ nhiều nguồn:
+        1. Đọc từ cache trong bộ nhớ trước (nếu có)
+        2. Rồi thử bảng ánh xạ cục bộ và index stocks.index.json
+        3. Sau đó truy vấn giá realtime khi cần
+        4. Cuối cùng thử lần lượt phương thức get_stock_name của từng nguồn
+
         Args:
-            stock_code: 股票代码
+            stock_code: mã cổ phiếu
             allow_realtime: Whether to query realtime quote first. Set False when
                 caller only wants lightweight prefetch without triggering heavy
                 realtime source calls.
-            
+
         Returns:
-            股票中文名称，所有数据源都失败则返回 None
+            Tên cổ phiếu; trả None nếu mọi nguồn đều thất bại
         """
         raw_stock_code = (stock_code or "").strip()
         target = parse_analysis_target(raw_stock_code)
@@ -3025,7 +3359,7 @@ class DataFetcherManager:
         stock_code = normalize_stock_code(stock_code)
         static_name = STOCK_NAME_MAP.get(stock_code)
 
-        # 1. 先检查缓存
+        # 1. Kiểm tra cache trước
         cached_name = self._get_cached_stock_name(stock_code)
         if cached_name is not None:
             return cached_name
@@ -3037,7 +3371,7 @@ class DataFetcherManager:
         if is_meaningful_stock_name(index_name, stock_code):
             return self._cache_stock_name(stock_code, index_name) or index_name
 
-        # 2. 尝试从实时行情中获取（最快，可按需禁用）
+        # 2. Thử lấy từ giá realtime (nhanh nhất, có thể tắt khi cần)
         if allow_realtime:
             quote = self.get_realtime_quote(raw_stock_code or stock_code, log_final_failure=False)
             if quote and hasattr(quote, 'name') and is_meaningful_stock_name(getattr(quote, 'name', ''), stock_code):
@@ -3046,7 +3380,7 @@ class DataFetcherManager:
                 logger.info(f"[股票名称] 从实时行情获取: {stock_code} -> {name}")
                 return name
 
-        # 3. 依次尝试各个数据源
+        # 3. Lần lượt thử từng nguồn dữ liệu
         from .akshare_fetcher import _is_us_code
         is_us = _is_us_code(stock_code)
         _US_CAPABLE_FETCHERS = {"YfinanceFetcher", "LongbridgeFetcher", "FinnhubFetcher", "AlphaVantageFetcher"}
@@ -3067,7 +3401,7 @@ class DataFetcherManager:
                 logger.debug(f"[股票名称] {fetcher.name} 获取失败: {e}")
                 continue
 
-        # 4. 所有数据源都失败
+        # 4. Tất cả nguồn đều thất bại
         logger.warning(f"[股票名称] 所有数据源都无法获取 {stock_code} 的名称")
         return ""
 
@@ -3177,21 +3511,21 @@ class DataFetcherManager:
 
     def batch_get_stock_names(self, stock_codes: List[str]) -> Dict[str, str]:
         """
-        批量获取股票中文名称
-        
-        先尝试从支持批量查询的数据源获取股票列表，
-        然后再逐个查询缺失的股票名称。
-        
+        Lấy tên cổ phiếu hàng loạt
+
+        Trước hết thử lấy danh sách cổ phiếu từ những nguồn hỗ trợ truy vấn hàng loạt,
+        sau đó mới tra từng mã còn thiếu tên.
+
         Args:
-            stock_codes: 股票代码列表
-            
+            stock_codes: danh sách mã cổ phiếu
+
         Returns:
-            {股票代码: 股票名称} 字典
+            Dict {mã cổ phiếu: tên cổ phiếu}
         """
         result = {}
         missing_codes = set(stock_codes)
         
-        # 1. 先检查缓存
+        # 1. Kiểm tra cache trước
         self._ensure_concurrency_guards()
         with self._stock_name_cache_lock:
             for code in stock_codes:
@@ -3203,7 +3537,7 @@ class DataFetcherManager:
         if not missing_codes:
             return result
         
-        # 2. 尝试批量获取股票列表
+        # 2. Thử lấy danh sách cổ phiếu theo lô
         for fetcher in self._get_fetchers_snapshot():
             if not hasattr(fetcher, 'get_stock_list') or not missing_codes:
                 continue
@@ -3234,7 +3568,7 @@ class DataFetcherManager:
                 logger.debug(f"[股票名称] {fetcher.name} 批量获取失败: {e}")
                 continue
         
-        # 3. 逐个获取剩余的
+        # 3. Lấy từng mã còn lại
         for code in list(missing_codes):
             name = self.get_stock_name(code)
             if name:
@@ -3245,7 +3579,7 @@ class DataFetcherManager:
         return result
 
     def get_main_indices(self, region: str = "cn") -> List[Dict[str, Any]]:
-        """获取主要指数实时行情（自动切换数据源）"""
+        """Lấy giá realtime của các chỉ số chính (tự động chuyển nguồn)"""
         if region == "cn":
             tickflow_fetcher = self._get_tickflow_fetcher()
             if tickflow_fetcher is not None:
@@ -3271,7 +3605,7 @@ class DataFetcherManager:
         return []
 
     def get_market_stats(self, *, purpose: str = "unspecified") -> Dict[str, Any]:
-        """获取市场涨跌统计（自动切换数据源）"""
+        """Lấy thống kê tăng/giảm của thị trường (tự động chuyển nguồn)"""
         logger.info("[MarketStats] component=market_stats action=start purpose=%s", purpose)
         tickflow_fetcher = self._get_tickflow_fetcher()
         if tickflow_fetcher is not None:
@@ -4034,7 +4368,8 @@ class DataFetcherManager:
                 ["not supported for offshore market"],
             )
 
-        # institution: tw (台股) has a free official 三大法人 (institutional net buy/sell)
+        # institution: tw (thị trường Đài Loan) has a free official three-institutional-investor
+    # (institutional net buy/sell)
         # feed (TWSE T86 / TPEx OpenAPI); every other offshore market keeps not_supported.
         # tw-only + strictly additive + fail-open: any error or no-data -> not_supported,
         # which never interrupts the main analysis. Raw net figures only — no derived
@@ -4129,7 +4464,7 @@ class DataFetcherManager:
             "boards": boards_status,
         }
         # tw institution (when present) counts toward the OVERALL status so a report that
-        # only has 三大法人 data still surfaces fundamentals (consumers key off the top-level
+        # only has three-institutional-investor data still surfaces fundamentals (consumers key off the top-level
         # status). Futu capital_flow / boards count the same way when they are available.
         status_values = list(active_statuses.values())
         if institution_status == "ok":
@@ -4498,7 +4833,7 @@ class DataFetcherManager:
         return result_ctx
 
     def get_capital_flow_context(self, stock_code: str, budget_seconds: Optional[float] = None) -> Dict[str, Any]:
-        """资金流向块（fail-open）。"""
+        """Khối dòng tiền (fail-open)."""
         from src.config import get_config
 
         config = get_config()
@@ -4562,7 +4897,7 @@ class DataFetcherManager:
         )
 
     def get_dragon_tiger_context(self, stock_code: str, budget_seconds: Optional[float] = None) -> Dict[str, Any]:
-        """龙虎榜块（fail-open）。"""
+        """Khối bảng giao dịch khối lượng lớn - Dragon-Tiger (fail-open)."""
         from src.config import get_config
 
         config = get_config()
@@ -4612,7 +4947,7 @@ class DataFetcherManager:
         )
 
     def get_board_context(self, stock_code: str, budget_seconds: Optional[float] = None) -> Dict[str, Any]:
-        """板块榜单块（fail-open）。"""
+        """Khối bảng xếp hạng nhóm ngành (fail-open)."""
         from src.config import get_config
 
         config = get_config()
@@ -4677,7 +5012,7 @@ class DataFetcherManager:
             source_chain: List[Dict[str, Any]] = []
             last_error = ""
 
-            # 直接遍历管理器已经按 priority 排好序的数据源列表
+            # Duyệt thẳng danh sách nguồn mà manager đã sắp xếp sẵn theo priority
             for fetcher in self._fetchers:
                 if not hasattr(fetcher, 'get_sector_rankings'):
                     continue
@@ -4723,8 +5058,8 @@ class DataFetcherManager:
             return [], [], source_chain, last_error
 
     def get_sector_rankings(self, n: int = 5) -> Tuple[List[Dict], List[Dict]]:
-        """获取板块涨跌榜（自动切换数据源）"""
-        # 按需求固定回退顺序：Akshare(EM) -> Akshare(Sina) -> Tushare -> Efinance
+        """Lấy bảng xếp hạng tăng/giảm theo nhóm ngành (tự động chuyển nguồn)"""
+        # Thứ tự dự phòng cố định theo yêu cầu: Akshare(EM) -> Akshare(Sina) -> Tushare -> Efinance
         top, bottom, _, last_error = self._get_sector_rankings_with_meta(n)
         if top or bottom:
             return top, bottom
@@ -4741,7 +5076,7 @@ class DataFetcherManager:
             cls._concept_rankings_cache.clear()
 
     def get_concept_rankings(self, n: int = 5) -> Tuple[List[Dict], List[Dict]]:
-        """获取概念/题材涨跌榜（自动切换数据源）。"""
+        """Lấy bảng xếp hạng tăng/giảm theo nhóm khái niệm/chủ đề (tự động chuyển nguồn)."""
         try:
             normalized_n = int(n)
         except (TypeError, ValueError):
@@ -4792,7 +5127,7 @@ class DataFetcherManager:
             return self._copy_ranking_rows(cached_top), self._copy_ranking_rows(cached_bottom)
 
     def get_hot_stocks(self, n: int = 10) -> List[Dict[str, Any]]:
-        """获取市场人气股榜（自动切换数据源）。"""
+        """Lấy bảng xếp hạng cổ phiếu được quan tâm nhiều nhất (tự động chuyển nguồn)."""
         last_error = ""
         for fetcher in self._fetchers:
             try:
@@ -4814,7 +5149,7 @@ class DataFetcherManager:
         date: Optional[str] = None,
         n: int = 20,
     ) -> List[Dict[str, Any]]:
-        """获取涨停池与连板梯队（自动切换数据源）。"""
+        """Lấy danh sách mã trần và nhóm mã trần nhiều phiên liên tiếp (tự động chuyển nguồn)."""
         last_error = ""
         for fetcher in self._fetchers:
             try:

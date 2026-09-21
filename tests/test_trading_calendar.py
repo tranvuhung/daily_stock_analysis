@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Regression tests for effective trading date resolution."""
 
+import os
 import json
 from datetime import date, datetime, time, timezone
 from types import SimpleNamespace
@@ -882,11 +883,26 @@ class ComputeEffectiveRegionTestCase(unittest.TestCase):
     """Regression tests for compute_effective_region subset logic."""
 
     def test_get_open_markets_today_fail_open_includes_new_markets(self):
+        # ``vn`` 没有 exchange-calendars 日历，走 fail-open 分支，与其他市场
+        # 一样出现在结果里。测试进程的 SUPPORTED_MARKETS 为 all（见 conftest）。
         with patch.object(trading_calendar, "_XCALS_AVAILABLE", False):
             self.assertEqual(
                 trading_calendar.get_open_markets_today(),
-                {"cn", "hk", "us", "jp", "kr", "tw"},
+                {"vn", "cn", "hk", "us", "jp", "kr", "tw"},
             )
+
+    def test_get_open_markets_today_honors_supported_markets(self):
+        from src.core import markets as markets_registry
+
+        with patch.dict(os.environ, {"SUPPORTED_MARKETS": "vn"}, clear=False):
+            markets_registry.reset_cache()
+            try:
+                with patch.object(trading_calendar, "_XCALS_AVAILABLE", False):
+                    self.assertEqual(
+                        trading_calendar.get_open_markets_today(), {"vn"}
+                    )
+            finally:
+                markets_registry.reset_cache()
 
     def test_both_all_open_returns_comma_joined_supported_markets(self):
         result = trading_calendar.compute_effective_region("both", {"cn", "hk", "us", "jp", "kr"})

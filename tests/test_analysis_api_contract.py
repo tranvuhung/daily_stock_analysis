@@ -314,7 +314,7 @@ class AnalysisApiContractTestCase(unittest.TestCase):
 
         request = analysis_endpoint_module.MarketReviewRequest(
             send_notification=True,
-            report_language="en",
+            report_language="vi",
         )
         config = SimpleNamespace(trading_day_check_enabled=False, report_language="zh", market_review_region="cn")
         lock_token = object()
@@ -358,7 +358,7 @@ class AnalysisApiContractTestCase(unittest.TestCase):
         self.assertEqual(call_kwargs["trigger_source"], "api")
         runtime_config = call_kwargs.get("config")
         self.assertIsNotNone(runtime_config)
-        self.assertEqual(getattr(runtime_config, "report_language", None), "en")
+        self.assertEqual(getattr(runtime_config, "report_language", None), "vi")
         self.assertIsNot(runtime_config, config)
 
     def test_trigger_market_review_accepts_camel_case_report_language_alias(self) -> None:
@@ -367,7 +367,7 @@ class AnalysisApiContractTestCase(unittest.TestCase):
 
         request = analysis_endpoint_module.MarketReviewRequest.model_validate({
             "send_notification": True,
-            "reportLanguage": "en",
+            "reportLanguage": "vi",
         })
         config = SimpleNamespace(trading_day_check_enabled=False, report_language="zh", market_review_region="cn")
         task_payload: dict[str, object] = {}
@@ -407,7 +407,7 @@ class AnalysisApiContractTestCase(unittest.TestCase):
 
         call_kwargs = run_market_review.call_args.kwargs
         runtime_config = call_kwargs.get("config")
-        self.assertEqual(getattr(runtime_config, "report_language", None), "en")
+        self.assertEqual(getattr(runtime_config, "report_language", None), "vi")
         self.assertEqual(call_kwargs["trigger_source"], "api")
 
     def test_trigger_market_review_passes_canonical_request_region_without_mutating_config(self) -> None:
@@ -828,7 +828,7 @@ class AnalysisApiContractTestCase(unittest.TestCase):
         )
         self.assertEqual(status.result.report["summary"]["operation_advice"], "不建议买入")
         self.assertEqual(status.result.report["summary"]["action"], "avoid")
-        self.assertEqual(status.result.report["summary"]["action_label"], "回避")
+        self.assertEqual(status.result.report["summary"]["action_label"], "Tránh")
 
     def test_get_analysis_status_prefers_raw_result_action_over_summary_action(self) -> None:
         if get_analysis_status is None or analysis_endpoint_module is None:
@@ -1353,7 +1353,7 @@ class AnalysisApiContractTestCase(unittest.TestCase):
                 code="AAPL",
                 name="Apple",
                 report_type="detailed",
-                raw_result={"report_language": "en", "model_used": "test-model"},
+                raw_result={"report_language": "vi", "model_used": "test-model"},
                 context_snapshot={
                     "enhanced_context": {
                         "realtime": {
@@ -1397,7 +1397,7 @@ class AnalysisApiContractTestCase(unittest.TestCase):
                 code="MSFT",
                 name="Microsoft",
                 report_type="detailed",
-                raw_result={"report_language": "en", "model_used": "test-model"},
+                raw_result={"report_language": "vi", "model_used": "test-model"},
                 context_snapshot={
                     "enhanced_context": {
                         "realtime": {
@@ -2446,7 +2446,7 @@ class AnalysisApiContractTestCase(unittest.TestCase):
 
         report = _build_analysis_report(
             report_data={
-                "meta": {"report_language": "en"},
+                "meta": {"report_language": "vi"},
                 "summary": {"analysis_summary": "English output"},
                 "strategy": {},
                 "details": {},
@@ -2458,7 +2458,7 @@ class AnalysisApiContractTestCase(unittest.TestCase):
             fallback_fundamental_payload=None,
         )
 
-        self.assertEqual(report.meta.report_language, "en")
+        self.assertEqual(report.meta.report_language, "vi")
 
     def test_load_sync_fundamental_sources_uses_query_and_code_for_fallback(self) -> None:
         if _load_sync_fundamental_sources is None:
@@ -3589,7 +3589,7 @@ class AnalysisApiContractTestCase(unittest.TestCase):
         request = analysis_endpoint_module.AnalyzeRequest.model_validate({
             "stock_code": "600519",
             "async_mode": True,
-            "reportLanguage": "en",
+            "reportLanguage": "vi",
         })
 
         with patch("api.v1.endpoints.analysis.get_task_queue", return_value=queue):
@@ -3605,7 +3605,7 @@ class AnalysisApiContractTestCase(unittest.TestCase):
             analysis_phase="auto",
             force_refresh=False,
             notify=True,
-            report_language="en",
+            report_language="vi",
         )
 
     def test_trigger_analysis_async_passes_and_returns_analysis_phase(self) -> None:

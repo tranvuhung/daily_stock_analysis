@@ -725,7 +725,7 @@ def _save_reused_market_review_report(
         return
     title = (
         "# 🎯 Market Review"
-        if str(getattr(config, "report_language", "zh")).strip().lower() == "en"
+        if str(getattr(config, "report_language", "zh")).strip().lower() in ("en", "vi")
         else "# 🎯 大盘复盘"
     )
     if not any(body.startswith(item) for item in ("# 🎯 大盘复盘", "# 🎯 Market Review")):

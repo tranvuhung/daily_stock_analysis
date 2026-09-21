@@ -112,7 +112,7 @@ logger = logging.getLogger(__name__)
 def _localized_text(language: Any, *, en: str, zh: str, ko: str) -> str:
     """Pick a deterministic fallback string for the report language (zh/en/ko)."""
     normalized = normalize_report_language(language)
-    if normalized == "en":
+    if normalized in ("en", "vi"):
         return en
     if normalized == "ko":
         return ko
@@ -250,9 +250,9 @@ def _legacy_audit_marker_specs(
     add("stock_code", code)
     add("stock_name", stock_name)
     add("analysis_date", context.get("date"))
-    add("market_phase", "## Market Phase Context" if report_language in ("en", "ko") else "## 市场阶段上下文")
-    add("daily_market_context", "## Daily Market Context" if report_language in ("en", "ko") else "## 大盘环境摘要")
-    add("market_structure_context", "## Market Structure Context" if report_language in ("en", "ko") else "## 市场结构上下文")
+    add("market_phase", "## Market Phase Context" if report_language in ("en", "ko", "vi") else "## 市场阶段上下文")
+    add("daily_market_context", "## Daily Market Context" if report_language in ("en", "ko", "vi") else "## 大盘环境摘要")
+    add("market_structure_context", "## Market Structure Context" if report_language in ("en", "ko", "vi") else "## 市场结构上下文")
     add("analysis_context_pack", analysis_context_pack_summary)
     add("quote", "## 📈 技术面数据")
     add("news_context", "## 📰 舆情情报" if news_context else None)
@@ -1530,6 +1530,11 @@ def _set_structural_hold_wording(
     calibrate_score: bool = False,
 ) -> None:
     advice_map = {
+        "vi": {
+            "range": "Quan sát vùng dao động",
+            "shakeout": "Quan sát rũ bỏ",
+            "hold": "Nắm giữ và quan sát",
+        },
         "zh": {
             "range": "震荡观望",
             "shakeout": "洗盘观察",
@@ -1546,9 +1551,22 @@ def _set_structural_hold_wording(
             "hold": "보유 관찰",
         },
     }
-    advice_default = {"zh": "持有观察", "en": "Hold and watch", "ko": "보유 관찰"}.get(language, "Hold and watch")
-    advice = advice_map.get(language, advice_map["en"]).get(advice_key, advice_default)
+    advice_default = {
+        "vi": "Nắm giữ và quan sát",
+        "zh": "持有观察",
+        "en": "Hold and watch",
+        "ko": "보유 관찰",
+    }.get(language, "Nắm giữ và quan sát")
+    advice = advice_map.get(language, advice_map["vi"]).get(advice_key, advice_default)
     reason_templates = {
+        "vi": {
+            "buy_near_resistance": "Giá đang sát vùng kháng cự và chưa xác nhận dòng tiền lớn vào, nên việc mua đuổi nhịp hồi là không khả thi.",
+            "buy_with_outflow": "Dòng tiền lớn đang rút ra, mâu thuẫn với khuyến nghị mua; nên chờ xác nhận hỗ trợ hoặc dòng tiền quay lại.",
+            "sell_near_support": "Giá đang sát vùng hỗ trợ và chưa có dòng tiền rút ra kéo dài, một phiên giảm chưa đủ cơ sở để bán.",
+            "sell_with_inflow": "Dòng tiền lớn đang vào, mâu thuẫn với khuyến nghị bán; tạm xử lý theo hướng nắm giữ và theo dõi ngưỡng hỗ trợ.",
+            "hold_shakeout": "Giá lùi về sát hỗ trợ nhưng chưa xác nhận dòng tiền rút ra, phù hợp xử lý như một nhịp rũ bỏ.",
+            "hold_mid_range": "Giá nằm giữa hỗ trợ và kháng cự, dòng tiền chưa rõ ràng, nên quan sát vùng dao động sẽ khả thi hơn.",
+        },
         "zh": {
             "buy_near_resistance": "价格接近压力位且主力资金未确认流入，不宜仅因短线反弹追买。",
             "buy_with_outflow": "主力资金流出与买入结论冲突，买点需等待支撑确认或资金回流。",
@@ -1574,7 +1592,7 @@ def _set_structural_hold_wording(
             "hold_mid_range": "가격이 지지선과 저항선 사이이고 자금 흐름이 불명확해 박스권 관망이 더 실행 가능합니다.",
         },
     }
-    reason = reason_templates.get(language, reason_templates["en"]).get(reason_key, "")
+    reason = reason_templates.get(language, reason_templates["vi"]).get(reason_key, "")
     if calibrate_score:
         final_action = "watch" if advice_key in {"range", "shakeout"} else "hold"
         _bound_hold_watch_sentiment_score(result, reason=reason, final_action=final_action)
@@ -1582,7 +1600,7 @@ def _set_structural_hold_wording(
     if advice_key == "range":
         if language == "zh" and "震荡" not in str(result.trend_prediction):
             result.trend_prediction = "震荡"
-        elif language == "en":
+        elif language in ("en", "vi"):
             result.trend_prediction = "Sideways"
         elif language == "ko":
             result.trend_prediction = "횡보"
@@ -2389,7 +2407,20 @@ class GeminiAnalyzer:
                 .replace("{default_skill_policy_section}", default_skill_policy_section)
                 .replace("{skills_section}", skills_section)
             )
-        if lang == "en":
+        if lang == "vi":
+            return base_prompt + """
+
+## Output Language (highest priority)
+
+- Keep all JSON keys unchanged.
+- `decision_type` must remain `buy|hold|sell`.
+- All human-readable JSON values must be written in Vietnamese (Tiếng Việt), with correct diacritics.
+- Use standard Vietnamese securities terminology (mua / nắm giữ / bán, hỗ trợ / kháng cự, cắt lỗ, khối lượng).
+- Use the company's common Vietnamese name when you are confident; otherwise keep the listed name instead of inventing one.
+- This includes `stock_name`, `trend_prediction`, `operation_advice`, `confidence_level`, nested dashboard text, checklist items, and all narrative summaries.
+- Placeholder values and bracketed prefixes shown inside the JSON schema above (for example `放量/缩量/平量` or `【最新消息】`) are illustrative Chinese samples. Never copy them verbatim — write the Vietnamese equivalent, and drop Chinese bracket prefixes entirely.
+"""
+        if lang in ("en", "vi"):
             return base_prompt + """
 
 ## Output Language (highest priority)
@@ -3735,7 +3766,7 @@ class GeminiAnalyzer:
             field = str(details.get("field") or "GENERATION_BACKEND")
             requested_backend = str(details.get("requested_backend") or backend_error.backend)
             reason = str(details.get("reason") or backend_error.error_code.value)
-            if report_language == "en":
+            if report_language in ("en", "vi"):
                 summary = (
                     "AI analysis is unavailable because the generation backend "
                     f"cannot start: {backend_error.error_code.value}."
@@ -3922,7 +3953,7 @@ class GeminiAnalyzer:
                 result = self._parse_response(response_text, code, name)
                 result.raw_response = response_text
                 result.search_performed = bool(news_context)
-                result.market_snapshot = self._build_market_snapshot(context)
+                result.market_snapshot = self._build_market_snapshot(context, report_language)
                 result.model_used = model_used
                 result.report_language = report_language
                 normalize_chip_structure_availability(result, context.get("chip"))
@@ -4048,8 +4079,8 @@ class GeminiAnalyzer:
         quote_rows.extend(
             [
                 f"| {pct_chg_label} | {today.get('pct_chg', 'N/A')}% |",
-                f"| {volume_label} | {self._format_volume(today.get('volume'))} |",
-                f"| {amount_label} | {self._format_amount(today.get('amount'))} |",
+                f"| {volume_label} | {self._format_volume(today.get('volume'), report_language)} |",
+                f"| {amount_label} | {self._format_amount(today.get('amount'), report_language)} |",
             ]
         )
         quote_rows_text = "\n".join(quote_rows)
@@ -4114,8 +4145,8 @@ class GeminiAnalyzer:
 | **换手率** | **{rt.get('turnover_rate', 'N/A')}%** | |
 | 市盈率(动态) | {rt.get('pe_ratio', 'N/A')} | |
 | 市净率 | {rt.get('pb_ratio', 'N/A')} | |
-| 总市值 | {self._format_amount(rt.get('total_mv'))} | |
-| 流通市值 | {self._format_amount(rt.get('circ_mv'))} | |
+| 总市值 | {self._format_amount(rt.get('total_mv'), report_language)} | |
+| 流通市值 | {self._format_amount(rt.get('circ_mv'), report_language)} | |
 | 60日涨跌幅 | {rt.get('change_60d', 'N/A')}% | 中期表现 |
 """
 
@@ -4270,7 +4301,7 @@ class GeminiAnalyzer:
             chip_instruction = (
                 "Do not fabricate profit ratio, average cost, or concentration. Mention chip data "
                 "unavailability only once in the report; do not repeat per-field no-data text in `chip_structure`."
-                if report_language in ("en", "ko")
+                if report_language in ("en", "ko", "vi")
                 else "请勿编造获利比例、平均成本或集中度；报告中只说明一次筹码数据不可用，不要把“数据缺失，无法判断”逐字段重复写入 `chip_structure`。"
             )
             prompt += f"""
@@ -4467,7 +4498,20 @@ class GeminiAnalyzer:
  
 请输出完整的 JSON 格式决策仪表盘。"""
 
-        if report_language == "en":
+        if report_language == "vi":
+            prompt += """
+
+### Output language requirements (highest priority)
+- Keep every JSON key exactly as defined above; do not translate keys.
+- `decision_type` must remain `buy`, `hold`, or `sell`.
+- All human-readable JSON values must be in Vietnamese (Tiếng Việt), with correct diacritics.
+- Use standard Vietnamese securities terminology (mua / nắm giữ / bán, hỗ trợ / kháng cự, cắt lỗ, khối lượng).
+- Placeholder values and bracketed prefixes shown inside the JSON schema above (for example `放量/缩量/平量` or `【最新消息】`) are illustrative Chinese samples. Never copy them verbatim — write the Vietnamese equivalent, and drop Chinese bracket prefixes entirely.
+- This includes `stock_name`, `trend_prediction`, `operation_advice`, `confidence_level`, all nested dashboard text, checklist items, and every summary field.
+- Use the company's common Vietnamese name when you are confident. If not, keep the listed company name rather than inventing one.
+- When data is missing, explain it in Vietnamese instead of Chinese or English.
+"""
+        elif report_language in ("en", "vi"):
             prompt += """
 
 ### Output language requirements (highest priority)
@@ -4501,21 +4545,46 @@ class GeminiAnalyzer:
         
         return prompt
     
-    def _format_volume(self, volume: Optional[float]) -> str:
-        """格式化成交量显示"""
+    def _format_volume(self, volume: Optional[float], language: Optional[str] = None) -> str:
+        """格式化成交量显示。
+
+        越南语报告使用越南语的十进制量级（nghìn / triệu / tỷ），而不是中文的
+        万/亿：后者在越南语语境里既看不懂，量级分组也不同（万=1e4 对应越南语
+        没有的单位）。
+        """
         if volume is None:
             return 'N/A'
+        lang = normalize_report_language(
+            language if language is not None else getattr(self, "report_language", None)
+        )
+        if lang == "vi":
+            if volume >= 1e9:
+                return f"{volume / 1e9:.2f} tỷ cp"
+            if volume >= 1e6:
+                return f"{volume / 1e6:.2f} triệu cp"
+            if volume >= 1e3:
+                return f"{volume / 1e3:.2f} nghìn cp"
+            return f"{volume:.0f} cp"
         if volume >= 1e8:
             return f"{volume / 1e8:.2f} 亿股"
         elif volume >= 1e4:
             return f"{volume / 1e4:.2f} 万股"
         else:
             return f"{volume:.0f} 股"
-    
-    def _format_amount(self, amount: Optional[float]) -> str:
-        """格式化成交额显示"""
+
+    def _format_amount(self, amount: Optional[float], language: Optional[str] = None) -> str:
+        """格式化成交额显示（越南语按 triệu / tỷ VND）。"""
         if amount is None:
             return 'N/A'
+        lang = normalize_report_language(
+            language if language is not None else getattr(self, "report_language", None)
+        )
+        if lang == "vi":
+            if amount >= 1e9:
+                return f"{amount / 1e9:.2f} tỷ VND"
+            if amount >= 1e6:
+                return f"{amount / 1e6:.2f} triệu VND"
+            return f"{amount:.0f} VND"
         if amount >= 1e8:
             return f"{amount / 1e8:.2f} 亿元"
         elif amount >= 1e4:
@@ -4541,7 +4610,9 @@ class GeminiAnalyzer:
         except (TypeError, ValueError):
             return 'N/A'
 
-    def _build_market_snapshot(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_market_snapshot(
+        self, context: Dict[str, Any], report_language: Optional[str] = None
+    ) -> Dict[str, Any]:
         """构建当日行情快照（展示用）"""
         today = context.get('today', {}) or {}
         realtime = context.get('realtime', {}) or {}
@@ -4575,8 +4646,8 @@ class GeminiAnalyzer:
             "pct_chg": self._format_percent(today.get('pct_chg')),
             "change_amount": self._format_price(change_amount),
             "amplitude": self._format_percent(amplitude),
-            "volume": self._format_volume(today.get('volume')),
-            "amount": self._format_amount(today.get('amount')),
+            "volume": self._format_volume(today.get('volume'), report_language),
+            "amount": self._format_amount(today.get('amount'), report_language),
         }
 
         if realtime:
@@ -4601,7 +4672,7 @@ class GeminiAnalyzer:
     def _build_integrity_complement_prompt(self, missing_fields: List[str], report_language: str = "zh") -> str:
         """Build complement instruction for missing mandatory fields."""
         report_language = normalize_report_language(report_language)
-        if report_language in ("en", "ko"):
+        if report_language in ("en", "ko", "vi"):
             lines = ["### Completion requirements: fill the missing mandatory fields below and output the full JSON again:"]
             for f in missing_fields:
                 if f == "sentiment_score":
@@ -4672,7 +4743,7 @@ class GeminiAnalyzer:
         """Build retry prompt using the previous response as the complement baseline."""
         complement = self._build_integrity_complement_prompt(missing_fields, report_language=report_language)
         previous_output = previous_response.strip()
-        if normalize_report_language(report_language) in ("en", "ko"):
+        if normalize_report_language(report_language) in ("en", "ko", "vi"):
             prefix = "### The previous output is below. Complete the missing fields based on that output and return the full JSON again. Do not omit existing fields:"
         else:
             prefix = "### 上一次输出如下，请在该输出基础上补齐缺失字段，并重新输出完整 JSON。不要省略已有字段："

@@ -78,6 +78,16 @@ def _make_service():
     return NotificationService()
 
 
+VI_NO_CHANNEL_DISCLOSURE = (
+    "⚠️ Chưa cấu hình kênh tìm kiếm tin tức; "
+    "phân tích này không sử dụng bằng chứng từ tin tức."
+)
+VI_ZERO_HIT_DISCLOSURE = (
+    "⚠️ Lần chạy này không lấy được dữ liệu tin tức nào; "
+    "các kết luận bên dưới không dựa trên bằng chứng tin tức."
+)
+
+
 class EmptyNewsDisclosureTestCase(unittest.TestCase):
     def setUp(self):
         self.service = _make_service()
@@ -311,6 +321,7 @@ class SupportedLanguageDisclosureTestCase(unittest.TestCase):
     """每种受支持报告语言都必须显式映射，不能把未知语言默认为中文。"""
 
     EXPECTED = {
+        "vi": (VI_NO_CHANNEL_DISCLOSURE, VI_ZERO_HIT_DISCLOSURE),
         "zh": (NO_CHANNEL_DISCLOSURE, ZERO_HIT_DISCLOSURE),
         "en": (EN_NO_CHANNEL_DISCLOSURE, EN_ZERO_HIT_DISCLOSURE),
         "ko": (KO_NO_CHANNEL_DISCLOSURE, KO_ZERO_HIT_DISCLOSURE),
@@ -440,7 +451,11 @@ class PipelineCountSemanticsTestCase(unittest.TestCase):
         """检索一旦发起就置 0，不能等到拿到结果对象才赋值。"""
         src = self._read_pipeline_source()
         idx = src.index("开始多维度情报搜索")
-        window = src[idx : idx + 600]
+        # Chỉ xét phần mã, giống cách làm của ca kiểm thử ngay bên dưới: ràng buộc ở đây
+        # là thứ tự câu lệnh, nên độ dài của comment không được phép làm hỏng nó.
+        window = "\n".join(
+            line for line in src[idx:].splitlines() if not line.strip().startswith("#")
+        )[:600]
 
         self.assertIn("news_result_count = 0", window)
         self.assertLess(

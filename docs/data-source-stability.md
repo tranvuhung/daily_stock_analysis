@@ -19,6 +19,9 @@
 
 | 场景 | 已接入源 | 默认使用方式 | 失败处理 |
 | --- | --- | --- | --- |
+| 越南个股日线 / 技术面 | VCI (Vietcap)、SSI iBoard | `DataFetcherManager` 按 priority 尝试：VCI → SSI。两者都是公开接口，无需 API Key | VCI 失败后回退 SSI；连续失败会短期熔断该源；两源皆失败抛出汇总异常 |
+| 越南实时行情 | SSI iBoard | 全市场快照（HOSE/HNX/UPCOM 各一次请求，共 1526 个标的），逐股查询命中进程内缓存 | 快照失败返回 None 降级为历史收盘价；单个交易所失败不影响其余两个 |
+| 越南指数日线 | VCI (Vietcap) | `VNINDEX` / `VN30` / `HNXIndex` / `HNX30` / `HNXUpcomIndex`，走与个股相同的日线接口 | 与个股同链路，失败后回退 SSI |
 | A 股个股日线 / 技术面 | Efinance、Tencent、AkShare、Tushare、TickFlow、Pytdx、Baostock、YFinance | `DataFetcherManager` 按 priority 尝试；配置 `TUSHARE_TOKEN` 后 Tushare 自动进入候选源 | 单源失败后尝试下一个源；连续失败会短期熔断该源 |
 | 已登记 A 股指数日线 / 技术面 | Tencent、AkShare、TickFlow、YFinance | 当前 5 个 `IndexRegistry` 标的固定按 Tencent → AkShare → TickFlow → YFinance 尝试，不读取普通日 K 的 `*_PRIORITY` 配置 | 未配置、熔断、异常或空结果均继续下一源；全部失败返回空结果并记录汇总告警 |
 | A 股实时行情 | Tencent、AkShare Sina、Efinance、AkShare EM、Tushare | `REALTIME_SOURCE_PRIORITY` 控制顺序，默认偏向 Tencent / Sina 这类轻量源 | 失败源记录 `fallback_from`，成功源继续返回 |
@@ -28,6 +31,32 @@
 | 选股热点题材 | EastMoney provider、参考 AlphaSift 的 hotspot 实现、last-good cache | 未指定 provider 时默认使用 EastMoney provider | 实时失败时回退热点缓存；无缓存时返回稳定空态和可读错误 |
 | 港股 | Futu、Longbridge、YFinance、AkShare、Tushare | 配置 `FUTU_OPEND_HOST` 后 Futu 作为实时与基本面主源，按 `FUTU_HK_REALTIME_SOURCE_PRIORITY` 顺序尝试 | Futu 失败时回退 Longbridge / AkShare / YFinance；Longbridge 冷却或失败时继续回退 YFinance / 其他可用源 |
 | 美股 | Longbridge、YFinance、AkShare、Tushare、Finnhub、AlphaVantage、Stooq | 配置 Longbridge 凭证后参与美股日线/实时主链；YFinance 保持实时基础 fallback；Finnhub/AlphaVantage 可补充已有报价字段并参与日线链 | Longbridge 冷却或失败时实时主链回退 YFinance；两者都失败时不把补充源伪装成可独立返回报价的 fallback |
+
+## 越南市场（默认启用）
+
+部署默认 `SUPPORTED_MARKETS=vn`，只启用越南市场；其余市场的数据源不会被实例化，也不会发出任何请求。设为 `all` 可完整回滚。详见 [市场支持边界](market-support.md#市场白名单与越南市场supported_markets)。
+
+降级链：
+
+```mermaid
+flowchart LR
+    Q[越南标的请求] --> K{日线还是实时?}
+    K -->|日线| V[VciFetcher]
+    V -->|成功| OK[返回并记录 source]
+    V -->|失败/空| S1[SsiFetcher 图表接口]
+    S1 -->|成功| OK
+    S1 -->|失败| VS{VNSTOCK_ENABLED?}
+    VS -->|是且已安装| VN2[VnstockFetcher]
+    VS -->|否| FAIL[抛出汇总异常]
+    VN2 -->|失败| FAIL
+    K -->|实时| S2[SsiFetcher 全市场快照]
+    S2 -->|成功| OK
+    S2 -->|失败| NONE[返回 None，降级为历史收盘价]
+```
+
+⚠️ **单位口径**：VCI 日线与 SSI 快照使用「盾」（HPG 报 `21300`），SSI 图表接口与 `vnstock` 使用「千盾」（报 `21.3`）。后两者在归一化时统一乘 1000。这个差异出错时**不会抛异常**，只会让均线、涨跌幅和止损价静默偏离 1000 倍，因此 `tests/test_vn_source_drift.py` 对跨源收盘价一致性和绝对量级都设了断言，并随 `network-smoke` 定时运行。
+
+⚠️ **无交易日历**：`exchange-calendars` 未收录 HOSE/HNX/UPCOM，越南的交易日判断走既有 fail-open 分支（任何日期都视为交易日），长假期间会照常发起请求。
 
 ## 统一数据能力只读契约
 

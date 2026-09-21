@@ -136,6 +136,7 @@ class ParseStatus:
 # their own — they degrade to ``stock`` if the registry doesn't claim the
 # code (contract #3).
 _EXCHANGE_PREFIX_TO_CODE = {
+    "vn": "VN",
     "sh": "SH",
     "sz": "SZ",
     "bj": "BJ",
@@ -186,6 +187,80 @@ _KNOWN_PREFIXES_SORTED = tuple(
 # ``us``-prefixed tokens must use a valid uppercase US ticker base — see
 # the guard in ``parse_analysis_target`` for the full rationale.
 _US_TICKER_SHAPE_RE = re.compile(r"^[A-Z]{1,5}(\.[A-Z]{1,2})?$")
+
+
+# 越南股票/ETF 代码固定 3 位（以 VCI 全量代码表核对：1602 个纯字母 + 151 个
+# 含数字）。8-9 位的权证/期货/债券当前不纳入分析范围。
+_VN_CODE_SHAPE_RE = re.compile(r"^[A-Z][A-Z0-9]{2}$")
+
+# 越南指数。VCI 接口对大小写敏感，这里保存 provider 要求的精确写法。
+_VN_INDEX_CANONICAL = {
+    "VNINDEX": "VNINDEX",
+    "VN30": "VN30",
+    "VN100": "VN100",
+    "HNXINDEX": "HNXIndex",
+    "HNX30": "HNX30",
+    "HNXUPCOMINDEX": "HNXUpcomIndex",
+    "UPCOMINDEX": "HNXUpcomIndex",
+    "UPCOM": "HNXUpcomIndex",
+}
+
+
+def _classify_vn_token(raw_input: str, raw: str) -> Optional["AnalysisTarget"]:
+    """把越南代码归一成 ``AnalysisTarget``；不是越南代码时返回 ``None``。
+
+    返回的 ``asset_type`` 始终是 ``stock``，指数也不例外：``ParseStatus.INDEX``
+    在 ``DataFetcherManager`` 里被路由到 A 股专用的指数链
+    （``_get_cn_index_daily_data``），越南指数必须走普通日线链路才能命中
+    ``VciFetcher``。
+    """
+
+    from src.core.markets import is_market_enabled
+
+    if not is_market_enabled("vn"):
+        return None
+
+    token = (raw or "").strip()
+    if not token:
+        return None
+
+    upper = token.upper()
+    bare: Optional[str] = None
+
+    if upper.endswith(".VN") and _VN_CODE_SHAPE_RE.match(upper[:-3]):
+        bare = upper[:-3]
+    elif (
+        len(token) > 2
+        # 前缀必须小写，与 ``us`` 前缀的既有约定一致（``usAAPL`` 是前缀形式，
+        # 全大写 ``USFD`` 是裸 ticker）。否则 ``VNRDF`` 这类美股 ticker 会被
+        # 误剥成越南代码 ``RDF``。
+        and token[:2] == "vn"
+        and upper not in _VN_INDEX_CANONICAL
+        and _VN_CODE_SHAPE_RE.match(upper[2:])
+    ):
+        bare = upper[2:]
+    elif upper in _VN_INDEX_CANONICAL:
+        bare = _VN_INDEX_CANONICAL[upper]
+    elif _VN_CODE_SHAPE_RE.match(upper):
+        # 裸代码与美股 ticker 空间重叠；只有美股停用时才无歧义地判为越南。
+        # 两个市场同时启用（回滚配置）时返回 None，让 token 继续走既有的美股
+        # 分支，保持回滚前后行为一致；用户可以写 ``HPG.VN`` 显式消歧。
+        if is_market_enabled("us"):
+            return None
+        bare = upper
+
+    if bare is None:
+        return None
+
+    return AnalysisTarget(
+        raw_input=raw_input,
+        asset_type=ParseStatus.STOCK,
+        canonical_id=bare,
+        display_code=bare,
+        exchange="VN",
+        normalized_prefix="vn",
+        normalized_code=bare,
+    )
 
 
 def _split_prefix(token: str) -> Tuple[Optional[str], str]:
@@ -725,6 +800,20 @@ def parse_analysis_target(
             normalized_prefix=None,
             normalized_code=raw,
         )
+
+    # ------------------------------------------------------------------
+    # Vietnam (issue: VN-only deployment)
+    # ------------------------------------------------------------------
+    # 越南分支放在 ``_normalize_code_and_exchange`` 之前，原因是越南股票代码
+    # （固定 3 位大写字母数字，如 ``HPG``/``FPT``/``X77``）与美股 ticker 正则
+    # ``^[A-Z]{1,5}$`` 真实重叠，一旦进入下面的归一化就会被判成美股。
+    #
+    # 这里统一把 ``HPG`` / ``vnHPG`` / ``HPG.VN`` 收敛成同一个 canonical_id
+    # ``HPG``。三种写法如果落到不同 canonical_id，会在 ``stock_daily`` 的
+    # ``(code, date)`` 唯一键上产生重复行，也会让断点续传判定失效。
+    vn_target = _classify_vn_token(raw_input, raw)
+    if vn_target is not None:
+        return vn_target
 
     # Reuse the repository's existing normalization contract
     # (``src.services.stock_code_utils._normalize_code_and_exchange``) so

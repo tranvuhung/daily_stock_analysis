@@ -720,7 +720,7 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertFalse(result.success)
         self.assertEqual(result.sentiment_score, 50)
-        self.assertEqual(result.operation_advice, "观望")
+        self.assertEqual(result.operation_advice, "Quan sát")
         self.assertIn("Max steps exceeded", result.error_message)
 
     def test_convert_agent_dashboard_preserves_explicit_action(self):
@@ -752,9 +752,9 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertEqual(result.operation_advice, "持有观察")
         self.assertEqual(result.decision_type, "hold")
         self.assertEqual(result.action, "watch")
-        self.assertEqual(result.action_label, "观望")
+        self.assertEqual(result.action_label, "Quan sát")
         self.assertEqual(raw_result["action"], "watch")
-        self.assertEqual(raw_result["action_label"], "观望")
+        self.assertEqual(raw_result["action_label"], "Quan sát")
 
     def test_final_action_refresh_preserves_explicit_action_when_advice_is_unchanged(self):
         """Pre-save refresh must not overwrite an explicit Agent action without a final advice rewrite."""
@@ -791,9 +791,9 @@ class TestAgentResultConversion(unittest.TestCase):
 
         self.assertEqual(result.operation_advice, "持有观察")
         self.assertEqual(result.action, "watch")
-        self.assertEqual(result.action_label, "观望")
+        self.assertEqual(result.action_label, "Quan sát")
         self.assertEqual(raw_result["action"], "watch")
-        self.assertEqual(raw_result["action_label"], "观望")
+        self.assertEqual(raw_result["action_label"], "Quan sát")
 
     def test_final_action_refresh_ignores_stale_pre_guardrail_action(self):
         """Post-processing can rewrite advice; refreshed action must follow the final advice."""
@@ -830,7 +830,7 @@ class TestAgentResultConversion(unittest.TestCase):
         )
 
         self.assertEqual(result.action, "hold")
-        self.assertEqual(result.action_label, "持有")
+        self.assertEqual(result.action_label, "Nắm giữ")
 
     def test_final_action_refresh_keeps_ambiguous_action_fail_closed(self):
         """Pipeline refresh must not invent an action outside the shared resolver."""
@@ -911,7 +911,7 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(result.sentiment_score, 64)
         self.assertEqual(result.trend_prediction, "多头排列")
-        self.assertEqual(result.operation_advice, "买入")
+        self.assertEqual(result.operation_advice, "Mua")
         self.assertEqual(result.decision_type, "buy")
         self.assertIn("trend:fallback", result.data_sources)
 
@@ -951,7 +951,7 @@ class TestAgentResultConversion(unittest.TestCase):
         ok, missing = check_content_integrity(result)
         self.assertTrue(ok, missing)
         self.assertEqual(result.sentiment_score, 68)
-        self.assertEqual(result.analysis_summary, "趋势结论：多头排列；操作建议：买入。")
+        self.assertEqual(result.analysis_summary, "Nhận định xu hướng: 多头排列; khuyến nghị hành động: Mua.")
         self.assertEqual(result.dashboard["sentiment_score"], 68)
         self.assertEqual(result.dashboard["core_conclusion"]["one_sentence"], result.analysis_summary)
         self.assertEqual(result.dashboard["intelligence"]["risk_alerts"], ["跌破 MA20 需止损"])
@@ -986,7 +986,7 @@ class TestAgentResultConversion(unittest.TestCase):
             "q-dict-advice",
         )
 
-        self.assertEqual(result.operation_advice, "买入")
+        self.assertEqual(result.operation_advice, "Mua")
         self.assertEqual(result.decision_type, "buy")
 
     def test_convert_missing_decision_type_preserves_conditional_hold_advice(self):
@@ -1198,11 +1198,11 @@ class TestAgentResultConversion(unittest.TestCase):
 
         self.assertEqual(result.sentiment_score, 66)
         self.assertEqual(result.trend_prediction, "多头排列")
-        self.assertEqual(result.operation_advice, "买入")
+        self.assertEqual(result.operation_advice, "Mua")
         self.assertEqual(result.decision_type, "buy")
         self.assertEqual(result.dashboard["sentiment_score"], 66)
         self.assertEqual(result.dashboard["trend_prediction"], "多头排列")
-        self.assertEqual(result.dashboard["operation_advice"], "买入")
+        self.assertEqual(result.dashboard["operation_advice"], "Mua")
     def test_convert_empty_dashboard_backfills_localized_trend_fallback_for_en(self):
         """English reports should keep trend/advice fallback values localized."""
         pipeline = self._make_pipeline()
@@ -1326,10 +1326,10 @@ class TestAgentResultConversion(unittest.TestCase):
 
         self.assertEqual(result.sentiment_score, 66)
         self.assertEqual(result.trend_prediction, "多头排列")
-        self.assertEqual(result.operation_advice, "买入")
+        self.assertEqual(result.operation_advice, "Mua")
         self.assertEqual(result.decision_type, "buy")
         self.assertEqual(result.dashboard["sentiment_score"], 66)
-        self.assertEqual(result.dashboard["operation_advice"], "买入")
+        self.assertEqual(result.dashboard["operation_advice"], "Mua")
         self.assertEqual(result.dashboard["core_conclusion"]["one_sentence"], "AI 已给出的核心结论")
         self.assertEqual(result.dashboard["intelligence"]["risk_alerts"], ["AI 风险"])
         self.assertEqual(result.dashboard["battle_plan"]["sniper_points"]["stop_loss"], 108.5)
@@ -1422,7 +1422,7 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertEqual(result.dashboard["sentiment_score"], 62)
         self.assertEqual(result.dashboard["core_conclusion"]["one_sentence"], result.analysis_summary)
         self.assertEqual(result.dashboard["intelligence"]["risk_alerts"], ["趋势跌破支撑需减仓"])
-        self.assertEqual(result.dashboard["battle_plan"]["sniper_points"]["stop_loss"], "待补充")
+        self.assertEqual(result.dashboard["battle_plan"]["sniper_points"]["stop_loss"], "Chưa có")
 
     def test_convert_invalid_dashboard_normalizes_strong_trend_decision_type(self):
         """Fallback preserves strong advice text while keeping stable decision_type values."""
@@ -1433,8 +1433,8 @@ class TestAgentResultConversion(unittest.TestCase):
         from src.stock_analyzer import BuySignal, TrendAnalysisResult, TrendStatus
 
         cases = [
-            (BuySignal.STRONG_BUY, "buy", "强烈买入"),
-            (BuySignal.STRONG_SELL, "sell", "强烈卖出"),
+            (BuySignal.STRONG_BUY, "buy", "Mua mạnh"),
+            (BuySignal.STRONG_SELL, "sell", "Bán mạnh"),
         ]
 
         for buy_signal, expected_decision, expected_advice in cases:

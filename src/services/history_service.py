@@ -1132,21 +1132,25 @@ class HistoryService:
         report_language = normalize_report_language(getattr(result, "report_language", "zh"))
         labels = get_report_labels(report_language)
 
-        def _label(en: str, zh: str, ko: str) -> str:
+        def _label(en: str, zh: str, ko: str, vi: str = "") -> str:
+            # vi 省略时回退英文而不是中文：当前部署只产出越南语报告，
+            # 缺译时英文比中文更可用。
+            if report_language == "vi":
+                return vi or en
             if report_language == "en":
                 return en
             if report_language == "ko":
                 return ko
             return zh
 
-        analysis_date_label = _label("Analysis Date", "分析日期", "분석일")
-        report_time_label = _label("Report Time", "报告生成时间", "생성 시각")
-        reason_label = _label("Rationale", "操作理由", "판단 근거")
-        risk_warning_label = _label("Risk Warning", "风险提示", "리스크 경고")
-        technical_heading = _label("Technicals", "技术面", "기술적 분석")
-        ma_label = _label("Moving Averages", "均线", "이동평균")
-        volume_analysis_label = _label("Volume", "量能", "거래량")
-        news_heading = _label("News Flow", "消息面", "뉴스 흐름")
+        analysis_date_label = _label("Analysis Date", "分析日期", "분석일", "Ngày phân tích")
+        report_time_label = _label("Report Time", "报告生成时间", "생성 시각", "Thời điểm tạo báo cáo")
+        reason_label = _label("Rationale", "操作理由", "판단 근거", "Lý do khuyến nghị")
+        risk_warning_label = _label("Risk Warning", "风险提示", "리스크 경고", "Cảnh báo rủi ro")
+        technical_heading = _label("Technicals", "技术面", "기술적 분석", "Phân tích kỹ thuật")
+        ma_label = _label("Moving Averages", "均线", "이동평균", "Đường trung bình")
+        volume_analysis_label = _label("Volume", "量能", "거래량", "Khối lượng")
+        news_heading = _label("News Flow", "消息面", "뉴스 흐름", "Dòng tin tức")
 
         # Escape markdown special characters in stock name
         name_escaped = self._escape_md(

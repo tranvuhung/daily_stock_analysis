@@ -18,6 +18,8 @@ from src.config import get_config
 from src.market_phase_summary import format_public_market_status_line, format_public_phase_pack_excerpt
 from src.report_language import (
     get_localized_stock_name,
+    get_label_separator,
+    localize_volume_status,
     get_report_labels,
     get_signal_level,
     get_chip_unavailable_reason,
@@ -137,6 +139,8 @@ def render(
         or getattr(get_config(), "report_language", "zh")
     )
     labels = get_report_labels(report_language)
+    # 中文/韩文用全角冒号，越南语与英文用半角冒号加空格。
+    label_sep = get_label_separator(report_language)
 
     # Build template context with pre-computed signal levels (sorted by score)
     sorted_results = sorted(results, key=lambda x: x.sentiment_score, reverse=True)
@@ -222,6 +226,9 @@ def render(
         "sell_count": sell_count,
         "hold_count": hold_count,
         "labels": labels,
+        "label_sep": label_sep,
+        "localize_volume_status": localize_volume_status,
+        "report_language": report_language,
         "report_language": report_language,
         "models_used": models_used,
         "show_llm_model": show_llm_model,
@@ -251,6 +258,7 @@ def render(
     if extra_context:
         safe_extra_context = dict(extra_context)
         safe_extra_context.pop("labels", None)
+        safe_extra_context.pop("label_sep", None)
         safe_extra_context.pop("report_language", None)
         context.update(safe_extra_context)
 

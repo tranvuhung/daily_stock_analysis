@@ -33,6 +33,7 @@ from src.services.run_diagnostics import (
 from src.schemas.market_light import MARKET_LIGHT_REGIONS
 from src.utils.market_review_region import (
     MARKET_REVIEW_REGION_ORDER,
+    enabled_market_review_regions,
     normalize_market_review_region_lenient,
 )
 
@@ -114,7 +115,7 @@ def _collect_market_light_snapshot(
 
 def _get_market_review_text(language: str) -> dict[str, str]:
     normalized = normalize_report_language(language)
-    if normalized == "en":
+    if normalized in ("en", "vi"):
         return {
             "root_title": "# 🎯 Market Review",
             "push_title": "🎯 Market Review",
@@ -165,10 +166,21 @@ def _market_review_region_metadata(region: Any) -> str:
 
 
 def _resolve_market_review_regions(raw_region: Optional[str]) -> list[str]:
-    """Normalize MARKET_REVIEW_REGION into an ordered, non-empty region list."""
+    """Normalize MARKET_REVIEW_REGION into an ordered region list.
 
-    normalized = normalize_market_review_region_lenient(raw_region) or "cn"
-    return normalized.split(",")
+    当 ``SUPPORTED_MARKETS`` 下没有任何支持复盘的市场时返回空列表，调用方据此
+    跳过复盘。此前这里无条件回退到 ``cn``，在只启用越南的部署里会去调用已经
+    停用的 A 股数据源，生成一份没有数据支撑的复盘报告。
+    """
+
+    normalized = normalize_market_review_region_lenient(raw_region)
+    if normalized:
+        return normalized.split(",")
+
+    enabled = enabled_market_review_regions()
+    if not enabled:
+        return []
+    return [enabled[0]]
 
 
 def run_market_review(
@@ -213,6 +225,16 @@ def run_market_review(
         else (getattr(runtime_config, 'market_review_region', 'cn') or 'cn')
     )
     run_markets = _resolve_market_review_regions(raw_region)
+    if not run_markets:
+        # 当前 SUPPORTED_MARKETS 下没有任何支持大盘复盘的市场（例如只启用越南，
+        # 其复盘 profile/prompt 尚未实现）。跳过而不是回退到 A 股。
+        logger.info(
+            "[MarketReview] component=market_review action=skip "
+            "reason=no_enabled_review_market trigger_source=%s query_id=%s",
+            trigger_source,
+            history_query_id,
+        )
+        return None
     persist_region = ','.join(run_markets) if len(run_markets) > 1 else run_markets[0]
     logger.info(
         "[MarketReview] component=market_review action=start trigger_source=%s query_id=%s region=%s",
@@ -663,7 +685,7 @@ def _render_sector_payload_markdown_block(
     if not sector_block:
         return ""
     language = normalize_report_language(payload.get("language"))
-    title = "Sector Highlights" if language == "en" else "板块主线"
+    title = "Sector Highlights" if language in ("en", "vi") else "板块主线"
     heading = f"{title_prefix} / {title}" if title_prefix else title
     return f"### {heading}\n\n{sector_block}".strip()
 
@@ -739,7 +761,7 @@ def _render_sector_payload_block(payload: Dict[str, Any]) -> str:
     language = normalize_report_language(payload.get("language"))
     lines = []
     if top:
-        if language == "en":
+        if language in ("en", "vi"):
             lines.extend(["#### Leading Sectors", "| Rank | Sector | Change |", "|------|--------|--------|"])
         else:
             lines.extend(["#### 领涨板块 Top 5", "| 排名 | 板块 | 涨跌幅 |", "|------|------|--------|"])
@@ -751,7 +773,7 @@ def _render_sector_payload_block(payload: Dict[str, Any]) -> str:
     if bottom:
         if lines:
             lines.append("")
-        if language == "en":
+        if language in ("en", "vi"):
             lines.extend(["#### Lagging Sectors", "| Rank | Sector | Change |", "|------|--------|--------|"])
         else:
             lines.extend(["#### 领跌板块 Top 5", "| 排名 | 板块 | 涨跌幅 |", "|------|------|--------|"])
@@ -794,7 +816,7 @@ def _persist_market_review_history(
 
         report_language = normalize_report_language(getattr(config, "report_language", "zh"))
         summary = _summarize_market_review(review_report, report_language)
-        if report_language == "en":
+        if report_language in ("en", "vi"):
             stock_name = "Market Review"
             operation_advice = "View review"
             trend_prediction = "Market review"
@@ -906,7 +928,7 @@ def _build_market_review_context_overview(
         metadata["scope"] = diagnostic_snapshot.get("scope") or metadata["scope"]
 
     label = (
-        "Market review" if report_language == "en"
+        "Market review" if report_language in ("en", "vi")
         else "시황 리뷰" if report_language == "ko"
         else "大盘复盘"
     )
@@ -946,6 +968,8 @@ def _summarize_market_review(review_report: str, report_language: str) -> str:
         text = line.strip().lstrip("#").strip()
         if text and not text.startswith("---") and not text.startswith(">"):
             return text[:200]
+    if report_language == "vi":
+        return "Đã tạo báo cáo tổng kết thị trường."
     if report_language == "en":
         return "Market review report generated."
     if report_language == "ko":

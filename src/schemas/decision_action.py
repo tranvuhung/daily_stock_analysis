@@ -30,14 +30,14 @@ _ACTION_VALUES = set(get_args(DecisionAction))
 _NON_STOCK_REPORT_TYPES = {"market_review"}
 
 _ACTION_LABELS: Dict[str, Dict[str, str]] = {
-    "buy": {"zh": "买入", "en": "Buy", "ko": "매수"},
-    "add": {"zh": "加仓", "en": "Add", "ko": "추가 매수"},
-    "hold": {"zh": "持有", "en": "Hold", "ko": "보유"},
-    "reduce": {"zh": "减仓", "en": "Reduce", "ko": "비중축소"},
-    "sell": {"zh": "卖出", "en": "Sell", "ko": "매도"},
-    "watch": {"zh": "观望", "en": "Watch", "ko": "관망"},
-    "avoid": {"zh": "回避", "en": "Avoid", "ko": "회피"},
-    "alert": {"zh": "预警", "en": "Alert", "ko": "경고"},
+    "buy": {"vi": "Mua", "zh": "买入", "en": "Buy", "ko": "매수"},
+    "add": {"vi": "Mua thêm", "zh": "加仓", "en": "Add", "ko": "추가 매수"},
+    "hold": {"vi": "Nắm giữ", "zh": "持有", "en": "Hold", "ko": "보유"},
+    "reduce": {"vi": "Giảm tỷ trọng", "zh": "减仓", "en": "Reduce", "ko": "비중축소"},
+    "sell": {"vi": "Bán", "zh": "卖出", "en": "Sell", "ko": "매도"},
+    "watch": {"vi": "Quan sát", "zh": "观望", "en": "Watch", "ko": "관망"},
+    "avoid": {"vi": "Tránh", "zh": "回避", "en": "Avoid", "ko": "회피"},
+    "alert": {"vi": "Cảnh báo", "zh": "预警", "en": "Alert", "ko": "경고"},
 }
 
 _EXPLICIT_ALIASES: Dict[str, DecisionAction] = {
@@ -46,11 +46,30 @@ _EXPLICIT_ALIASES: Dict[str, DecisionAction] = {
     "trim": "reduce",
     "strong sell": "sell",
     "wait": "watch",
+    # Tiếng Việt — khớp chính xác với nhãn do report_language sinh ra.
+    # Ưu tiên khớp nguyên văn ở đây thay vì thêm vào _ACTION_PHRASES, vì
+    # "mua" là chuỗi con của "mua thêm": nếu cả hai cùng nằm trong phần dò
+    # cụm từ, một câu chứa "mua thêm" sẽ khớp đồng thời buy và add rồi bị
+    # coi là nhập nhằng và trả về None.
+    "mua": "buy",
+    "mua mạnh": "buy",
+    "mua thêm": "add",
+    "nắm giữ": "hold",
+    "nắm giữ và quan sát": "hold",
+    "quan sát": "watch",
+    "giảm tỷ trọng": "reduce",
+    "bán": "sell",
+    "bán mạnh": "sell",
+    "tránh": "avoid",
+    "cảnh báo": "alert",
 }
 
 _ACTION_PHRASES: Dict[DecisionAction, tuple[str, ...]] = {
     "avoid": (
         "不建议买入",
+        "không nên mua",
+        "tránh mua",
+        "không mua",
         "避免买入",
         "do not buy",
         "don't buy",
@@ -61,6 +80,7 @@ _ACTION_PHRASES: Dict[DecisionAction, tuple[str, ...]] = {
     ),
     "alert": (
         "风险预警",
+        "cảnh báo rủi ro",
         "触发告警",
         "risk alert",
         "警惕",
@@ -68,6 +88,8 @@ _ACTION_PHRASES: Dict[DecisionAction, tuple[str, ...]] = {
     ),
     "buy": (
         "强烈买入",
+        "mua vào",
+        "giải ngân",
         "strong_buy",
         "strong buy",
         "买入",
@@ -77,29 +99,38 @@ _ACTION_PHRASES: Dict[DecisionAction, tuple[str, ...]] = {
     ),
     "add": (
         "加仓",
+        "tăng tỷ trọng",
+        "gia tăng tỷ trọng",
         "增持",
         "accumulate",
         "add",
     ),
     "hold": (
         "持有观察",
+        "tiếp tục nắm giữ",
         "洗盘观察",
         "持有",
         "hold",
     ),
     "watch": (
         "观望",
+        "tiếp tục quan sát",
+        "chờ tín hiệu",
         "等待",
         "wait",
         "watch",
     ),
     "reduce": (
         "减仓",
+        "hạ tỷ trọng",
+        "chốt bớt",
         "trim",
         "reduce",
     ),
     "sell": (
         "强烈卖出",
+        "bán ra",
+        "thoát hàng",
         "strong_sell",
         "strong sell",
         "卖出",
@@ -356,13 +387,15 @@ def normalize_decision_action(value: Any) -> Optional[DecisionAction]:
     return None
 
 
-def localize_action_label(action: Any, language: Optional[str] = "zh") -> Optional[str]:
+def localize_action_label(action: Any, language: Optional[str] = None) -> Optional[str]:
     """Return a localized display label for a decision action."""
 
     normalized = _explicit_action(action)
     if not normalized:
         return None
-    return _ACTION_LABELS[normalized][normalize_report_language(language)]
+    labels = _ACTION_LABELS[normalized]
+    # 未登记的语言不应让调用方 500：退回英文，再退回该动作的任一标签。
+    return labels.get(normalize_report_language(language)) or labels.get("en") or normalized
 
 
 def build_action_fields(

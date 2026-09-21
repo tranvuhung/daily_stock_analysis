@@ -90,6 +90,26 @@ const bseSuggestion = {
   score: 100,
 };
 
+const vnSuggestion = {
+  canonicalCode: "HPG",
+  displayCode: "HPG",
+  nameZh: "Hòa Phát",
+  market: "VN" as const,
+  matchType: "exact" as const,
+  matchField: "code" as const,
+  score: 100,
+};
+
+const vnIndexSuggestion = {
+  canonicalCode: "VNINDEX",
+  displayCode: "VNINDEX",
+  nameZh: "Chỉ số VN-Index",
+  market: "VN" as const,
+  matchType: "exact" as const,
+  matchField: "code" as const,
+  score: 100,
+};
+
 const krSuggestion = {
   canonicalCode: "000660.KS",
   displayCode: "000660.KS",
@@ -605,6 +625,44 @@ describe('StockAutocomplete', () => {
 
       expect(input).not.toHaveAttribute('data-autocomplete-mode', 'fallback');
       expect(screen.getByText('000660.KS')).toBeInTheDocument();
+    });
+
+    it('renders VN market badges without falling back to plain input', () => {
+      // 回归：MARKET_BADGE_CONFIG 里没有 VN 时，MarketBadge 会抛异常，
+      // 整个自动补全降级成纯输入框（只能在真实运行里发现）。
+      autocompleteHookImpl = () => ({
+        query: '',
+        setQuery: vi.fn(),
+        suggestions: [vnSuggestion, vnIndexSuggestion],
+        isOpen: true,
+        highlightedIndex: 0,
+        setHighlightedIndex: vi.fn(),
+        highlightPrevious: vi.fn(),
+        highlightNext: vi.fn(),
+        handleSelect: vi.fn(),
+        close: vi.fn(),
+        reset: vi.fn(),
+        isComposing: false,
+        setIsComposing: vi.fn(),
+        runtimeFallback: false,
+        error: null,
+      });
+
+      render(
+        <StockAutocomplete
+          value="HPG"
+          onChange={mockOnChange}
+          onSubmit={mockOnSubmit}
+        />
+      );
+
+      const input = screen.getByDisplayValue('HPG');
+      fireEvent.focus(input);
+
+      expect(input).not.toHaveAttribute('data-autocomplete-mode', 'fallback');
+      expect(screen.getAllByText('VN')).toHaveLength(2);
+      expect(screen.getByText('Hòa Phát')).toBeInTheDocument();
+      expect(screen.getByText('Chỉ số VN-Index')).toBeInTheDocument();
     });
 
     it('renders KR and JP market badges in the suggestion list', () => {

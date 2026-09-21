@@ -89,6 +89,51 @@ PY
 
 回滚方式：从 `MARKET_REVIEW_REGION` 合法值、Web 设置枚举、MarketProfile/MarketStrategy、`_MARKET_REVIEW_MARKETS` 和本文档中移除 `jp` / `kr`。
 
+## 市场白名单与越南市场（SUPPORTED_MARKETS）
+
+系统现在通过 `SUPPORTED_MARKETS` 控制部署实际服务哪些市场，唯一真源是 `src/core/markets.py`。**默认值是 `vn`（只启用越南）**。此前市场列表在仓库里被独立重复声明了至少 8 处，彼此并不同步；本轮把它们统一派生自该注册表。
+
+停用的市场不是"能用但不推荐"，而是**一个请求都不会发出**：
+
+- `DataFetcherManager._init_default_fetchers()` 不实例化只服务停用市场的数据源；
+- `get_daily_data()` / `get_realtime_quote()` 在进入任何网络调用前按市场拦截；
+- `StockAnalysisPipeline.run()` 在提交线程池之前剔除停用市场的代码；
+- `/api/v1/data/overview` 把这些 provider 标为 `unconfigured` 并附带 `market_disabled` warning。
+
+合法值：`vn` / `cn` / `hk` / `us` / `jp` / `kr` / `tw`，支持逗号分隔；`all` 表示全部启用。非法值记录 warning 后回退默认值，不会导致进程启动失败。
+
+### 越南市场数据源
+
+| 场景 | 数据源 | 说明 |
+| --- | --- | --- |
+| 日线 / 指数日线 | `VciFetcher`（Priority 0） | `POST trading.vietcap.com.vn/api/chart/OHLCChart/gap-chart`，无需 API Key。**一次只能查一个代码**（传多个返回空数组），因此不实现批量日线预取 |
+| 实时行情 | `SsiFetcher`（Priority 1） | `GET iboard-query.ssi.com.vn/stock/exchange/{hose,hnx,upcom}`，**一次请求覆盖整个交易所**（HOSE 408 / HNX 299 / UPCOM 819），`prefetch_realtime_quotes` 三个请求即可覆盖全市场 |
+| 日线兜底 | `SsiFetcher` | `GET iboard-api.ssi.com.vn/statistics/charts/history`（TradingView UDF 格式） |
+| 可选补充 | `VnstockFetcher`（Priority 2） | 需 `VNSTOCK_ENABLED=true` 且已安装 `vnstock`，默认不启用 |
+
+支持的代码写法（三者归一到同一个 `canonical_id`，避免 `stock_daily` 出现重复行）：
+
+- 裸代码：`HPG`、`FPT`、`X77`（固定 3 位大写字母数字）
+- 显式后缀：`HPG.VN`
+- 显式前缀：`vnHPG`（**前缀必须小写**，与 `us` 前缀的既有约定一致；全大写的 `VNHPG` 会按美股 ticker 处理，避免 `VNRDF` 这类 5 位美股代码被误剥成 `RDF`）
+
+指数：`VNINDEX`、`VN30`、`VN100`、`HNXIndex`、`HNX30`、`HNXUpcomIndex`。用户输入大小写不敏感，但发往 VCI 的写法**大小写敏感**（`HNXINDEX` 返回空、`HNXIndex` 才有数据），映射表在 `data_provider/base.py:VN_INDEX_SYMBOLS`。
+
+### 已知边界
+
+- **单位不一致是本次接入最大的风险点**：VCI 日线与 SSI 快照用「盾」（21300），而 SSI 图表接口与 `vnstock` 用「千盾」（21.3）。两个后者在归一化时统一乘 1000。口径错了不会抛异常，只会让均线、止损价静默偏离 1000 倍，因此 `tests/test_vn_source_drift.py` 专门断言了跨源收盘价一致性。
+- **没有交易日历**：`exchange-calendars` 的 102 个日历里没有 HOSE/HNX/UPCOM，`is_market_open('vn')` 走既有 fail-open 分支（任何日期都视为交易日）。影响是春节等长假会照常发起请求，不影响正确性。`market_phase` 对越南返回 `unknown`。
+- **没有大盘复盘**：`market_profile.py` / `market_strategy.py` / `market_context.py` 的 prompt 是按市场手写的，越南尚未实现。`MarketSpec.supports_market_review=False`，`MARKET_REVIEW_REGION` 在只启用越南时解析为空并跳过复盘，而不是回退到 `cn`。
+- **没有基本面 / 资金流 / 板块**：这些能力当前只有 A 股实现，越南按 `not_supported` 降级。
+- **选股引擎不支持**：`src/services/screening/pipeline.py` 仍限定 `cn`/`us`。
+- **报告语言**：已切换为**仅越南语**。`REPORT_LANGUAGE` 只接受 `vi`，请求 schema 收敛为 `Literal["vi"]`；`zh`/`en`/`ko` 保留在渲染层以便历史记录按原语言显示。Web UI 语言与报告语言仍是两套独立契约。
+- **权证 / 期货 / 债券不纳入**：VCI 代码表里的 8-9 位代码（`CFPT2314`、`VN30F2512`）当前不参与分析。
+- **同时启用 `vn` 和 `us` 时裸代码有歧义**：`HPG`/`FPT`/`VNM` 同时满足越南代码形状和美股 ticker 正则 `^[A-Z]{1,5}$`。此时按既有美股语义处理（保证回滚行为不变），越南标的需写成 `HPG.VN` 或 `vnHPG`。市场判定发生在 `normalize_stock_code` 之前，因此这两种显式写法不会被归一化抹掉。
+
+### 回滚方式
+
+设置 `SUPPORTED_MARKETS=all` 即可恢复本次改动前的全部市场行为：所有原有数据源重新实例化，代码归属判定顺序与改动前逐项一致（`tests/test_vn_market_routing.py::MarketTagTestCase::test_enabling_all_markets_preserves_legacy_classification` 覆盖）。没有数据库迁移，没有表结构变更。若需彻底移除，revert 本次改动即可。
+
 ## 台湾个股支持（suffix-only，Issue #1772 / #1777）
 
 当前阶段支持手动输入台湾股票的 Yahoo Finance 后缀代码，进入既有个股分析、历史保存、报告渲染、DecisionSignal、Portfolio 和 Intelligence 链路。TWSE 上市股票使用 `.TW` 后缀，TPEx 上柜（柜买）股票使用 `.TWO` 后缀，二者折叠为同一 `tw` 市场标签。

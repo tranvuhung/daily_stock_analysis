@@ -122,7 +122,7 @@ def test_service_normalizes_fields_and_partial_plan_quality(isolated_db) -> None
     assert item["stock_code"] == "600519"
     assert item["market"] == "cn"
     assert item["action"] == "buy"
-    assert item["action_label"] == "买入"
+    assert item["action_label"] == "Mua"
     assert item["confidence"] == 0.72
     assert item["score"] == 83
     assert item["entry_low"] == 1680.5

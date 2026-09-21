@@ -33,8 +33,14 @@ class TestMarketAnalyzerStrategyPrompt(unittest.TestCase):
     """Validate strategy section is injected into prompt/report."""
 
     def test_cn_prompt_contains_strategy_plan_section(self):
-        analyzer = MarketAnalyzer(region="cn")
-        prompt = analyzer._build_review_prompt(MarketOverview(date="2026-02-24"), [])
+        # 默认输出语言已切到越南语，中文 prompt 需显式指定 report_language=zh；
+        # 这条用例验证的是中文 A 股复盘 prompt 结构，与默认语言无关。
+        with patch(
+            "src.market_analyzer.get_config",
+            return_value=SimpleNamespace(report_language="zh"),
+        ):
+            analyzer = MarketAnalyzer(region="cn")
+            prompt = analyzer._build_review_prompt(MarketOverview(date="2026-02-24"), [])
 
         self.assertIn("明日交易计划", prompt)
         self.assertIn("A股市场三段式复盘策略", prompt)

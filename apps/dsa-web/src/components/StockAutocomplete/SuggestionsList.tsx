@@ -77,6 +77,7 @@ export function SuggestionsList({
 }
 
 const MARKET_BADGE_CONFIG = {
+  VN: { label: 'VN', className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-500' },
   CN: { label: 'A-share', className: 'border-danger/25 bg-danger/10 text-danger' },
   HK: { label: 'HK', className: 'border-success/25 bg-success/10 text-success' },
   US: { label: 'US', className: 'border-cyan/25 bg-cyan/10 text-cyan' },

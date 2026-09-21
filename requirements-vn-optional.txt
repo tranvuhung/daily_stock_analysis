@@ -1,0 +1,16 @@
+# 越南市场可选依赖（默认不安装）
+#
+# vnstock 的许可证是 "Custom (Personal Use)"，不是开源许可：
+#   https://vnstocks.com/onboard/giay-phep-su-dung
+# 它还会引入 vnai，向作者侧上报使用数据。
+#
+# 本仓库是 MIT 许可、并且会以服务形式部署，因此默认链路只用
+# VciFetcher + SsiFetcher（两者都是公开 HTTP 接口，无需 API Key，
+# 也不引入额外依赖）。
+#
+# 只有在你确认自己的使用场景符合 vnstock 许可证、并接受它的遥测行为时，
+# 才安装本文件并设置 VNSTOCK_ENABLED=true：
+#
+#   pip install -r requirements-vn-optional.txt
+#
+vnstock>=4.0.8

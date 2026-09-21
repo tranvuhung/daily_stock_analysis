@@ -2633,7 +2633,7 @@ class BacktestServiceTestCase(unittest.TestCase):
         item = data["items"][0]
         self.assertEqual(item["operation_advice"], "持有")
         self.assertEqual(item["action"], "buy")
-        self.assertEqual(item["action_label"], "买入")
+        self.assertEqual(item["action_label"], "Mua")
 
     def test_get_recent_evaluations_prefers_persisted_raw_action(self) -> None:
         service = BacktestService(self.db)
@@ -2671,7 +2671,7 @@ class BacktestServiceTestCase(unittest.TestCase):
         item = data["items"][0]
         self.assertEqual(item["operation_advice"], "持有观察")
         self.assertEqual(item["action"], "watch")
-        self.assertEqual(item["action_label"], "观望")
+        self.assertEqual(item["action_label"], "Quan sát")
         self.assertEqual(item["position_recommendation"], "long")
 
     def test_get_recent_evaluations_supports_tracking_fields_and_analysis_date_filters(self) -> None:
@@ -2809,7 +2809,7 @@ class BacktestServiceTestCase(unittest.TestCase):
         self.assertEqual(evaluations["items"][0]["engine_version"], "v1")
         self.assertEqual(evaluations["items"][0]["operation_advice"], "买入")
         self.assertEqual(evaluations["items"][0]["action"], "buy")
-        self.assertEqual(evaluations["items"][0]["action_label"], "买入")
+        self.assertEqual(evaluations["items"][0]["action_label"], "Mua")
         self.assertEqual(evaluations["items"][0]["position_recommendation"], "long")
 
         # Without explicit eval_window_days, summary infers the smallest
@@ -2920,7 +2920,7 @@ class BacktestServiceTestCase(unittest.TestCase):
         self.assertEqual(data["total"], 2)
         self.assertEqual(len(data["items"]), 2)
         self.assertEqual(data["items"][0]["action"], "watch")
-        self.assertEqual(data["items"][0]["action_label"], "观望")
+        self.assertEqual(data["items"][0]["action_label"], "Quan sát")
 
     def test_phase_filter_without_window_matches_summary_window(self) -> None:
         service = BacktestService(self.db)

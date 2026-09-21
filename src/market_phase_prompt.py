@@ -58,11 +58,11 @@ def format_market_phase_prompt_section(
 
     # Korean reuses the English structural context; the output-language
     # directive (see decision agent) constrains the model to write in Korean.
-    lang = "en" if str(report_language or "").lower() in {"en", "ko"} else "zh"
+    lang = "en" if str(report_language or "").lower() in {"en", "ko", "vi"} else "zh"
     raw_phase = market_phase_context.get("phase")
     phase = raw_phase if isinstance(raw_phase, str) and raw_phase in _KNOWN_PHASES else "unknown"
 
-    if lang == "en":
+    if lang in ("en", "vi"):
         return _format_en(market_phase_context, phase)
     return _format_zh(market_phase_context, phase)
 
@@ -191,11 +191,11 @@ def _phase_rule_en(ctx: Dict[str, Any], phase: str) -> str:
 def _warning_text(value: Any, *, lang: str) -> str:
     if not isinstance(value, list):
         return ""
-    labels = _WARNING_LABELS_EN if lang == "en" else _WARNING_LABELS_ZH
+    labels = _WARNING_LABELS_EN if lang in ("en", "vi") else _WARNING_LABELS_ZH
     rendered = [labels[item] for item in value if isinstance(item, str) and item in labels]
     if not rendered:
         return ""
-    if lang == "en":
+    if lang in ("en", "vi"):
         return ", ".join(rendered)
     return "、".join(rendered)
 

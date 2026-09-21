@@ -38,6 +38,8 @@ from src.notification_noise import (
     release_notification_noise,
 )
 from src.report_language import (
+    localize_volume_status,
+    get_label_separator,
     get_localized_stock_name,
     get_report_labels,
     get_signal_level,
@@ -426,6 +428,7 @@ class NotificationService(
         lines: List[str],
         result: AnalysisResult,
         labels: Dict[str, str],
+        label_sep: str = ": ",
     ) -> bool:
         data_sources = getattr(result, "data_sources", None)
         if not isinstance(data_sources, str):
@@ -433,7 +436,7 @@ class NotificationService(
         data_sources = data_sources.strip()
         if not data_sources:
             return False
-        lines.append(f"*📋 {labels['data_sources_label']}：{data_sources}*")
+        lines.append(f"*📋 {labels['data_sources_label']}{label_sep}{data_sources}*")
         return True
 
     def generate_aggregate_report(
@@ -918,13 +921,14 @@ class NotificationService(
             report_date = datetime.now().strftime('%Y-%m-%d')
         report_language = self._get_report_language(results)
         labels = get_report_labels(report_language)
+        label_sep = get_label_separator(report_language)
 
         # 标题
         report_lines = [
             f"# 📅 {report_date} {labels['report_title']}",
             "",
             f"> {labels['analyzed_prefix']} **{len(results)}** {labels['stock_unit']} | "
-            f"{labels['generated_at_label']}：{datetime.now().strftime('%H:%M:%S')}",
+            f"{labels['generated_at_label']}{label_sep}{datetime.now().strftime('%H:%M:%S')}",
         ]
         self._append_market_status_line(report_lines, results, report_language)
         report_lines.extend(["---", ""])
@@ -977,9 +981,9 @@ class NotificationService(
                 report_lines.extend([
                     f"### {emoji} {self._get_display_name(result, report_language)} ({result.code})",
                     "",
-                    f"**{labels['action_advice_label']}：{signal_text}** | "
-                    f"**{labels['score_label']}：{result.sentiment_score}** | "
-                    f"**{labels['trend_label']}：{localize_trend_prediction(result.trend_prediction, report_language)}** | "
+                    f"**{labels['action_advice_label']}{label_sep}{signal_text}** | "
+                    f"**{labels['score_label']}{label_sep}{result.sentiment_score}** | "
+                    f"**{labels['trend_label']}{label_sep}{localize_trend_prediction(result.trend_prediction, report_language)}** | "
                     f"**Confidence：{confidence_stars}**",
                     "",
                 ])
@@ -1086,7 +1090,7 @@ class NotificationService(
                 # 数据来源说明
                 if hasattr(result, 'search_performed') and result.search_performed:
                     report_lines.append("*🔍 已执行联网搜索*")
-                self._append_data_sources_line(report_lines, result, labels)
+                self._append_data_sources_line(report_lines, result, labels, label_sep)
 
                 # 错误信息（如果有）
                 if not result.success and result.error_message:
@@ -1104,7 +1108,7 @@ class NotificationService(
         # 底部信息（去除免责声明）
         report_lines.extend([
             "",
-            f"*{labels['generated_at_label']}：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*",
+            f"*{labels['generated_at_label']}{label_sep}{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*",
         ])
 
         return "\n".join(report_lines)
@@ -1272,20 +1276,25 @@ class NotificationService(
         config = get_config()
         report_language = self._get_report_language(results)
         labels = get_report_labels(report_language)
+        label_sep = get_label_separator(report_language)
 
-        def _nlabel(en: str, zh: str, ko: str) -> str:
+        def _nlabel(en: str, zh: str, ko: str, vi: str = "") -> str:
+            # vi 省略时回退英文而不是中文：当前部署只产出越南语报告，
+            # 缺译时英文比中文更可用。
+            if report_language == "vi":
+                return vi or en
             if report_language == "en":
                 return en
             if report_language == "ko":
                 return ko
             return zh
 
-        reason_label = _nlabel("Rationale", "操作理由", "판단 근거")
-        risk_warning_label = _nlabel("Risk Warning", "风险提示", "리스크 경고")
-        technical_heading = _nlabel("Technicals", "技术面", "기술적 분석")
-        ma_label = _nlabel("Moving Averages", "均线", "이동평균")
-        volume_analysis_label = _nlabel("Volume", "量能", "거래량")
-        news_heading = _nlabel("News Flow", "消息面", "뉴스 흐름")
+        reason_label = _nlabel("Rationale", "操作理由", "판단 근거", "Lý do khuyến nghị")
+        risk_warning_label = _nlabel("Risk Warning", "风险提示", "리스크 경고", "Cảnh báo rủi ro")
+        technical_heading = _nlabel("Technicals", "技术面", "기술적 분석", "Phân tích kỹ thuật")
+        ma_label = _nlabel("Moving Averages", "均线", "이동평균", "Đường trung bình")
+        volume_analysis_label = _nlabel("Volume", "量能", "거래량", "Khối lượng")
+        news_heading = _nlabel("News Flow", "消息面", "뉴스 흐름", "Dòng tin tức")
         if getattr(config, 'report_renderer_enabled', False) and results:
             from src.services.report_renderer import render
             out = render(
@@ -1336,7 +1345,7 @@ class NotificationService(
                     news_disclosure = self._empty_news_disclosure(r, report_language)
                     if news_disclosure:
                         report_lines.append(news_disclosure)
-                    self._append_data_sources_line(report_lines, r, labels)
+                    self._append_data_sources_line(report_lines, r, labels, label_sep)
             report_lines.extend([
                 "",
                 "---",
@@ -1460,7 +1469,7 @@ class NotificationService(
                     # 量能分析
                     if vol_data:
                         report_lines.extend([
-                            f"**{labels['volume_label']}**: {labels['volume_ratio_label']} {vol_data.get('volume_ratio', 'N/A')} ({vol_data.get('volume_status', '')}) | "
+                            f"**{labels['volume_label']}**: {labels['volume_ratio_label']} {vol_data.get('volume_ratio', 'N/A')} ({localize_volume_status(vol_data.get('volume_status', ''), report_language)}) | "
                             f"{labels['turnover_rate_label']} {vol_data.get('turnover_rate', 'N/A')}%",
                             f"💡 *{vol_data.get('volume_meaning', '')}*",
                             "",
@@ -1602,7 +1611,7 @@ class NotificationService(
                             report_lines.append(f"{result.news_summary}")
                         report_lines.append("")
 
-                if self._append_data_sources_line(report_lines, result, labels):
+                if self._append_data_sources_line(report_lines, result, labels, label_sep):
                     report_lines.append("")
 
                 report_lines.extend([
@@ -1613,11 +1622,11 @@ class NotificationService(
         # 底部（去除免责声明）
         report_lines.extend([
             "",
-            f"*{labels['generated_at_label']}：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*",
+            f"*{labels['generated_at_label']}{label_sep}{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*",
         ])
         models = self._collect_models_used(results)
         if models:
-            report_lines.append(f"*{labels['analysis_model_label']}：{', '.join(models)}*")
+            report_lines.append(f"*{labels['analysis_model_label']}{label_sep}{', '.join(models)}*")
 
         return "\n".join(report_lines)
 
@@ -1910,6 +1919,7 @@ class NotificationService(
             report_date = datetime.now().strftime('%Y-%m-%d')
         report_language = self._get_report_language(results)
         labels = get_report_labels(report_language)
+        label_sep = get_label_separator(report_language)
         config = get_config()
         if getattr(config, 'report_renderer_enabled', False) and results:
             from src.services.report_renderer import render
@@ -1947,7 +1957,7 @@ class NotificationService(
             news_disclosure = self._empty_news_disclosure(r, report_language)
             if news_disclosure:
                 lines.append(news_disclosure)
-            if self._append_data_sources_line(lines, r, labels):
+            if self._append_data_sources_line(lines, r, labels, label_sep):
                 lines.append("")
         lines.append("")
         lines.append(f"*{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
@@ -2120,6 +2130,9 @@ class NotificationService(
 
     # Display name mapping for realtime data sources
     _SOURCE_DISPLAY_NAMES = {
+        "vci": {"vi": "VCI (Vietcap)", "zh": "VCI (Vietcap)", "en": "VCI (Vietcap)"},
+        "ssi": {"vi": "SSI iBoard", "zh": "SSI iBoard", "en": "SSI iBoard"},
+        "vnstock": {"vi": "vnstock", "zh": "vnstock", "en": "vnstock"},
         "tencent": {"zh": "腾讯财经", "en": "Tencent Finance"},
         "akshare_em": {"zh": "东方财富", "en": "Eastmoney"},
         "akshare_sina": {"zh": "新浪财经", "en": "Sina Finance"},
@@ -2137,7 +2150,10 @@ class NotificationService(
         mapping = self._SOURCE_DISPLAY_NAMES.get(raw_source)
         if not mapping:
             return raw_source
-        return mapping[normalize_report_language(language)]
+        # 未登记的语言退回英文再退回原始来源名。此前这里直接索引，越南语报告
+        # 会抛 KeyError 并让整份本地报告生成失败（只在真实运行里才暴露）。
+        normalized = normalize_report_language(language)
+        return mapping.get(normalized) or mapping.get("en") or raw_source
 
     def _append_market_snapshot(self, lines: List[str], result: AnalysisResult) -> None:
         snapshot = getattr(result, 'market_snapshot', None)

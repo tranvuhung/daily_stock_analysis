@@ -300,28 +300,28 @@ class MarketAnalyzer:
     def _get_market_scope_name(self, review_language: str | None = None) -> str:
         review_language = review_language or self._get_review_language()
         if self.region == "us":
-            return "US market" if review_language == "en" else "美股市场"
+            return "US market" if review_language in ("en", "vi") else "美股市场"
         if self.region == "hk":
-            return "Hong Kong market" if review_language == "en" else "港股市场"
+            return "Hong Kong market" if review_language in ("en", "vi") else "港股市场"
         if self.region == "jp":
-            return "Japan market" if review_language == "en" else "日本市场"
+            return "Japan market" if review_language in ("en", "vi") else "日本市场"
         if self.region == "kr":
-            return "Korea market" if review_language == "en" else "韩国市场"
-        if review_language == "en":
+            return "Korea market" if review_language in ("en", "vi") else "韩国市场"
+        if review_language in ("en", "vi"):
             return "A-share market"
         return "A股市场"
 
     def _get_turnover_unit_label(self) -> str:
         """Return the turnover unit label for the current market/language."""
         if self.region == "us":
-            return "USD bn" if self._get_review_language() == "en" else "十亿美元"
+            return "USD bn" if self._get_review_language() in ("en", "vi") else "十亿美元"
         if self.region == "hk":
-            return "HKD bn" if self._get_review_language() == "en" else "十亿港元"
+            return "HKD bn" if self._get_review_language() in ("en", "vi") else "十亿港元"
         if self.region == "jp":
-            return "JPY bn" if self._get_review_language() == "en" else "十亿日元"
+            return "JPY bn" if self._get_review_language() in ("en", "vi") else "十亿日元"
         if self.region == "kr":
-            return "KRW bn" if self._get_review_language() == "en" else "十亿韩元"
-        return "CNY 100m" if self._get_review_language() == "en" else "亿"
+            return "KRW bn" if self._get_review_language() in ("en", "vi") else "十亿韩元"
+        return "CNY 100m" if self._get_review_language() in ("en", "vi") else "亿"
 
     def _format_turnover_value(self, amount_raw: float) -> str:
         """Format raw turnover according to market-specific units."""
@@ -342,7 +342,7 @@ class MarketAnalyzer:
         return "🟢" if change_pct > 0 else "🔴"
 
     def _get_review_title(self, date: str) -> str:
-        if self._get_review_language() == "en":
+        if self._get_review_language() in ("en", "vi"):
             market_names = {
                 "us": "US Market Recap",
                 "hk": "HK Market Recap",
@@ -354,7 +354,7 @@ class MarketAnalyzer:
         return f"## {date} 大盘复盘"
 
     def _get_index_hint(self) -> str:
-        if self._get_review_language() == "en":
+        if self._get_review_language() in ("en", "vi"):
             if self.region == "us":
                 return "Analyze the key moves in the S&P 500, Nasdaq, Dow, and other major indices."
             if self.region == "hk":
@@ -367,7 +367,7 @@ class MarketAnalyzer:
         return self.profile.prompt_index_hint
 
     def _get_strategy_prompt_block(self) -> str:
-        if self.region == "hk" and self._get_review_language() == "en":
+        if self.region == "hk" and self._get_review_language() in ("en", "vi"):
             return """## Strategy Blueprint: Hong Kong Market Regime Strategy
 Focus on HSI trend, southbound flow dynamics, and sector rotation to define next-session risk posture.
 
@@ -394,7 +394,7 @@ Focus on HSI trend, southbound flow dynamics, and sector rotation to define next
 - Risk-on: broad index breakout with expanding southbound participation.
 - Neutral: mixed index signals; focus on selective relative strength.
 - Risk-off: failed breakouts and rising volatility; prioritize capital preservation."""
-        if self.region == "jp" and self._get_review_language() == "en":
+        if self.region == "jp" and self._get_review_language() in ("en", "vi"):
             return """## Strategy Blueprint: Japan Market Regime Strategy
 Focus on Nikkei 225, TOPIX, currency dynamics, and global risk appetite to define the next-session trading plan.
 
@@ -421,7 +421,7 @@ Focus on Nikkei 225, TOPIX, currency dynamics, and global risk appetite to defin
 - Risk-on: major indices rise together with improving external risk appetite and stronger leadership.
 - Neutral: index divergence or FX disruption; avoid chasing and wait for confirmation.
 - Risk-off: major indices weaken or external risk rises; prioritize position control."""
-        if self.region == "kr" and self._get_review_language() == "en":
+        if self.region == "kr" and self._get_review_language() in ("en", "vi"):
             return """## Strategy Blueprint: Korea Market Regime Strategy
 Focus on KOSPI, KOSDAQ, semiconductor heavyweights, and global technology risk appetite to define the next-session trading plan.
 
@@ -466,7 +466,7 @@ Focus on KOSPI, KOSDAQ, semiconductor heavyweights, and global technology risk a
 - 进攻：主板块联动上行且量能/风险位同步改善。
 - 均衡：指数分化或量能未明显放大，仓位保守执行。
 - 防守：突破失守且波动率抬升时，优先减码并保留反弹可交易性。"""
-        if not (self.region == "cn" and self._get_review_language() == "en"):
+        if not (self.region == "cn" and self._get_review_language() in ("en", "vi")):
             return self.strategy.to_prompt_block()
         return """## Strategy Blueprint: A-share Three-Phase Recap Strategy
 Focus on index trend, liquidity, and sector rotation to shape the next-session trading plan.
@@ -497,19 +497,19 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
 
     def _get_strategy_markdown_block(self, review_language: str | None = None) -> str:
         review_language = review_language or self._get_review_language()
-        if self.region == "hk" and review_language == "en":
+        if self.region == "hk" and review_language in ("en", "vi"):
             return """### 6. Strategy Framework
 - **Trend Regime**: Classify the market as momentum, range, or risk-off based on HSI/HSTECH/HSCEI alignment.
 - **Capital Flows**: Track southbound flow direction and macro narrative for risk appetite signals.
 - **Sector Themes**: Focus on tech/internet platform persistence and financials/property policy sensitivity.
 """
-        if self.region == "jp" and review_language == "en":
+        if self.region == "jp" and review_language in ("en", "vi"):
             return """### 6. Strategy Framework
 - **Trend Regime**: Classify Japan equities as advancing, range-bound, or defensive based on Nikkei 225/TOPIX alignment.
 - **Macro & FX**: Track yen, rates, and global risk appetite for exporter and financial-sector implications.
 - **Theme Signals**: Focus on semiconductor, automation, auto-chain, financial, and domestic-demand rotation.
 """
-        if self.region == "kr" and review_language == "en":
+        if self.region == "kr" and review_language in ("en", "vi"):
             return """### 6. Strategy Framework
 - **Trend Regime**: Classify Korea equities as advancing, range-bound, or defensive based on KOSPI/KOSDAQ alignment.
 - **Technology Cycle**: Track semiconductor, AI hardware, and global technology read-through for market risk appetite.
@@ -521,7 +521,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
 - **资金与情绪**：结合波动率、宽度和主题轮动评估风险偏好。
 - **主题主线**：识别可延续和可放大的行业主线与防守线索。
 """
-        if not (self.region == "cn" and review_language == "en"):
+        if not (self.region == "cn" and review_language in ("en", "vi")):
             return self.strategy.to_markdown_block()
         return """### 6. Strategy Framework
 - **Trend Structure**: Determine whether the market is in an uptrend, range, or defensive phase.
@@ -531,7 +531,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
 
     def _get_market_mood_text(self, mood_key: str, review_language: str | None = None) -> str:
         review_language = review_language or self._get_review_language()
-        if review_language == "en":
+        if review_language in ("en", "vi"):
             mapping = {
                 "strong_up": "strong gains",
                 "mild_up": "moderate gains",
@@ -1139,7 +1139,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         sector_block = self._build_sector_block(overview)
         patterns = (
             _ENGLISH_SECTION_PATTERNS
-            if self._get_review_language() == "en"
+            if self._get_review_language() in ("en", "vi")
             else _CHINESE_SECTION_PATTERNS
         )
 
@@ -1167,7 +1167,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             if review == original_review and sector_block not in review:
                 fallback_heading = (
                     "### 4. Sector Highlights"
-                    if self._get_review_language() == "en"
+                    if self._get_review_language() in ("en", "vi")
                     else "### 三、板块主线"
                 )
                 review = f"{review.rstrip()}\n\n{fallback_heading}\n{sector_block}\n"
@@ -1200,7 +1200,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         if not has_stats and not has_market_signal:
             return ""
         light = self.build_market_light_snapshot(overview) if has_market_signal else None
-        if self._get_review_language() == "en":
+        if self._get_review_language() in ("en", "vi"):
             lines = []
             if isinstance(light, dict):
                 lines.extend(
@@ -1261,7 +1261,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         else:
             status = "red"
 
-        if self._get_review_language() == "en":
+        if self._get_review_language() in ("en", "vi"):
             label_map = {
                 "green": "risk-on",
                 "yellow": "balanced",
@@ -1350,7 +1350,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         """构建指数行情表格"""
         if not overview.indices:
             return ""
-        if self._get_review_language() == "en":
+        if self._get_review_language() in ("en", "vi"):
             lines = [
                 f"| Index | Last | Change % | Open | High | Low | Amplitude | Turnover ({self._get_turnover_unit_label()}) |",
                 "|-------|------|----------|------|------|-----|-----------|-----------------|",
@@ -1398,7 +1398,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
                     f"| {rank} | {item.get('name', '-')} | {self._format_signed_pct(item.get('change_pct'))} |"
                 )
 
-        if language == "en":
+        if language in ("en", "vi"):
             append_ranking("#### Leading Industry Sectors", "Sector", overview.top_sectors)
             append_ranking("#### Lagging Industry Sectors", "Sector", overview.bottom_sectors)
             append_ranking("#### Leading Concept Themes", "Concept", overview.top_concepts)
@@ -1415,7 +1415,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         if not news:
             return ""
         language = self._get_review_language()
-        if language == "en":
+        if language in ("en", "vi"):
             lines = [
                 "#### News Catalysts",
             ]
@@ -1440,7 +1440,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
 
     @classmethod
     def _format_news_catalyst_line(cls, idx: int, item: Any, *, language: str = "zh") -> str:
-        fallback_title = "Untitled catalyst" if language == "en" else "未命名线索"
+        fallback_title = "Untitled catalyst" if language in ("en", "vi") else "未命名线索"
         title = cls._compact_news_text(cls._get_news_field(item, "title"), limit=90) or fallback_title
         source = cls._compact_news_text(cls._get_news_field(item, "source"), limit=40)
         date_text = cls._compact_news_text(cls._get_news_field(item, "published_date"), limit=24)
@@ -1449,7 +1449,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         if url:
             title_text = f"[{title_text}]({url})"
         meta_parts = [part for part in (source, date_text) if part]
-        if language == "en":
+        if language in ("en", "vi"):
             meta = f" ({' / '.join(meta_parts)})" if meta_parts else ""
         else:
             meta = f"（{' / '.join(meta_parts)}）" if meta_parts else ""
@@ -1540,7 +1540,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             data_quality = "partial"
 
         score = int(round(breadth_score * 0.45 + index_score * 0.35 + limit_score * 0.20))
-        if self._get_review_language() == "en":
+        if self._get_review_language() in ("en", "vi"):
             if score >= 70:
                 label = "risk-on"
             elif score >= 55:
@@ -1573,7 +1573,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
 
     def _build_output_template_sections(self, review_language: str) -> str:
         """Build LLM output sections according to market data capabilities."""
-        if review_language == "en":
+        if review_language in ("en", "vi"):
             if self.profile.has_market_stats and self.profile.has_sector_rankings:
                 return """### 3. Fund Flows
 (Interpret what turnover, participation, and flow signals imply.)
@@ -1686,7 +1686,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         stats_block = ""
         sector_block = ""
         data_limits_block = ""
-        if review_language == "en":
+        if review_language in ("en", "vi"):
             if self.profile.has_market_stats:
                 stats_block = f"""## Market Breadth
 - Advancers: {overview.up_count} | Decliners: {overview.down_count} | Flat: {overview.flat_count}
@@ -1736,7 +1736,7 @@ Concept lagging: {bottom_concepts_text if bottom_concepts_text else "N/A"}"""
             if not indices_text
             else ""
         )
-        if review_language == "en":
+        if review_language in ("en", "vi"):
             data_no_indices_hint = (
                 "Note: Market data fetch failed. Rely mainly on [Market News] for qualitative analysis. Do not invent index levels."
                 if not indices_text
@@ -1779,7 +1779,7 @@ Concept lagging: {bottom_concepts_text if bottom_concepts_text else "N/A"}"""
             else "报告要像交易员盘后工作台：先给结论，再按指数、新闻催化和计划展开"
         )
 
-        if review_language == "en":
+        if review_language in ("en", "vi"):
             report_title = self._get_review_title(overview.date).removeprefix("## ").strip()
             return f"""You are a professional {self._get_market_scope_name('en')} analyst. Please produce a concise market recap report based on the data below.
 
@@ -1923,13 +1923,13 @@ Output the report content directly, no extra commentary.
             indices_text += f"- **{idx.name}**: {idx.current:.2f} ({marker} {idx.change_pct:+.2f}%)\n"
         
         # 板块信息
-        separator = ", " if template_language == "en" else "、"
+        separator = ", " if template_language in ("en", "vi") else "、"
         top_text = separator.join([s['name'] for s in overview.top_sectors[:3]])
         bottom_text = separator.join([s['name'] for s in overview.bottom_sectors[:3]])
         top_concept_text = separator.join([s['name'] for s in overview.top_concepts[:3]])
         bottom_concept_text = separator.join([s['name'] for s in overview.bottom_concepts[:3]])
 
-        if template_language == "en":
+        if template_language in ("en", "vi"):
             stats_section = ""
             if self._supports_market_light() or self.profile.has_market_stats:
                 stats_block = self._build_stats_block(overview)

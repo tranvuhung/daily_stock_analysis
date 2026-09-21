@@ -82,7 +82,7 @@ _NEGATION_PREFIXES_KO = ("하지", "권하지 않", "금지", "삼가", "불필�
 
 
 def _recap_patterns_for(language: str) -> tuple[str, ...]:
-    if language == "en":
+    if language in ("en", "vi"):
         return _EN_POSTMARKET_RECAP_PATTERNS
     if language == "ko":
         return _KO_POSTMARKET_RECAP_PATTERNS
@@ -90,7 +90,7 @@ def _recap_patterns_for(language: str) -> tuple[str, ...]:
 
 
 def _immediate_markers_for(language: str) -> tuple[str, ...]:
-    if language == "en":
+    if language in ("en", "vi"):
         return _IMMEDIATE_ACTION_MARKERS_EN
     if language == "ko":
         return _IMMEDIATE_ACTION_MARKERS_KO
@@ -98,7 +98,7 @@ def _immediate_markers_for(language: str) -> tuple[str, ...]:
 
 
 def _negations_for(language: str) -> tuple[str, ...]:
-    if language == "en":
+    if language in ("en", "vi"):
         return _NEGATION_PREFIXES_EN
     if language == "ko":
         return _NEGATION_PREFIXES_KO
@@ -106,7 +106,7 @@ def _negations_for(language: str) -> tuple[str, ...]:
 
 
 def _reason_text(language: str, *, en: str, zh: str, ko: str) -> str:
-    if language == "en":
+    if language in ("en", "vi"):
         return en
     if language == "ko":
         return ko
@@ -257,7 +257,7 @@ def _phase_warning_limitations(summary: Optional[Mapping[str, Any]], *, language
     warnings = _list_strings(summary.get("warnings"))
     if not warnings:
         return []
-    if language == "en":
+    if language in ("en", "vi"):
         return [f"market phase warning: {item}" for item in warnings]
     if language == "ko":
         return [f"시장 단계 경고: {item}" for item in warnings]
@@ -317,7 +317,7 @@ def _contains_non_negated_marker(text: str, markers: tuple[str, ...], *, languag
 
 
 def _is_negated_marker(text: str, marker_index: int, *, language: str) -> bool:
-    window = 24 if language == "en" else 8
+    window = 24 if language in ("en", "vi") else 8
     prefix = text[max(0, marker_index - window):marker_index].rstrip()
     negations = _negations_for(language)
     return any(prefix.endswith(item) for item in negations)

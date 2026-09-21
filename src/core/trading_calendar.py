@@ -22,6 +22,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from src.core.markets import ALL_MARKETS, enabled_markets
 from src.services.market_symbol_utils import get_suffix_market
 
 logger = logging.getLogger(__name__)
@@ -37,17 +38,19 @@ except ImportError:
         "Run: pip install exchange-calendars"
     )
 
-# Market -> exchange code (exchange-calendars)
-MARKET_EXCHANGE = {"cn": "XSHG", "hk": "XHKG", "us": "XNYS", "jp": "XTKS", "kr": "XKRX", "tw": "XTAI"}
+# Market -> exchange code (exchange-calendars), derived from the market registry.
+# 只包含 exchange-calendars 实际收录的市场；越南（HOSE/HNX/UPCOM）不在该库的
+# 102 个日历里，因此不会出现在这里，交易日判断沿用本模块既有的 fail-open 分支。
+MARKET_EXCHANGE = {
+    spec.code: spec.xcals_code
+    for spec in sorted(ALL_MARKETS.values(), key=lambda item: item.detect_order)
+    if spec.xcals_code
+}
 
-# Market -> IANA timezone for "today"
+# Market -> IANA timezone for "today"（含没有交易日历的市场，如越南）
 MARKET_TIMEZONE = {
-    "cn": "Asia/Shanghai",
-    "hk": "Asia/Hong_Kong",
-    "us": "America/New_York",
-    "jp": "Asia/Tokyo",
-    "kr": "Asia/Seoul",
-    "tw": "Asia/Taipei",
+    spec.code: spec.timezone
+    for spec in sorted(ALL_MARKETS.values(), key=lambda item: item.detect_order)
 }
 
 # P0 market phase baseline (Issue #1386). This is an intentionally small
@@ -58,6 +61,8 @@ MARKET_TIMEZONE = {
 # KR 10 min). Without an entry here .get(market, 0) yields a zero-width
 # window, so the last regular-session minutes stay INTRADAY until POSTMARKET.
 _CLOSING_AUCTION_WINDOW_MINUTES = {
+    # 越南 HOSE 收盘集合竞价 ATC 为 14:30-14:45。
+    "vn": 15,
     "cn": 3,
     "hk": 10,
     "us": 5,
@@ -134,6 +139,17 @@ def get_market_for_stock(code: str) -> Optional[str]:
     code = (code or "").strip().upper()
 
     from data_provider import is_us_stock_code, is_us_index_code, is_hk_stock_code
+    from data_provider.base import _is_vn_market
+    from src.core.markets import is_market_enabled
+
+    # 越南必须排在美股之前判定：越南裸代码（HPG/FPT）同时满足美股 ticker 正则，
+    # 先判美股会让它们在美股停用时被当成"今日休市"，整轮分析被跳过。
+    #
+    # 这里刻意**不**调用 ``_market_tag``：后者有一个"其余都算 A 股"的兜底分支，
+    # 而本函数的契约是无法识别时返回 ``None``（调用方据此 fail-open）。借用
+    # ``_market_tag`` 会让 ``UNKNOWN`` 之类的占位代码被判成 ``cn``。
+    if is_market_enabled("vn") and _is_vn_market(code):
+        return "vn"
 
     if is_us_stock_code(code) or is_us_index_code(code):
         return "us"
@@ -583,13 +599,21 @@ def get_open_markets_today() -> Set[str]:
     """
     Get markets that are open today (by each market's local timezone).
 
+    只考虑 ``SUPPORTED_MARKETS`` 启用的市场：停用市场不应影响"今天是否需要
+    执行分析"的判断，否则关掉一个市场之后，它仍然能让整轮任务被认为有开市。
+
     Returns:
         Set of market keys that are trading today
     """
+    candidates = {
+        mkt: tz_name
+        for mkt, tz_name in MARKET_TIMEZONE.items()
+        if mkt in enabled_markets()
+    }
     if not _XCALS_AVAILABLE:
-        return set(MARKET_TIMEZONE)
+        return set(candidates)
     result: Set[str] = set()
-    for mkt, tz_name in MARKET_TIMEZONE.items():
+    for mkt, tz_name in candidates.items():
         try:
             tz = ZoneInfo(tz_name)
             today = datetime.now(tz).date()
@@ -616,16 +640,26 @@ def compute_effective_region(
         '': all relevant markets closed, skip market review
         'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'both': effective subset for today
     """
-    markets = ("cn", "hk", "us", "jp", "kr")
-    normalized = (config_region or "cn").strip().lower()
+    # 与 ``MARKET_REVIEW_REGION`` 的解析口径保持一致：只认当前启用且支持
+    # 大盘复盘的市场。此前这里硬编码了一份市场列表，与
+    # ``market_review_region.py`` 各自维护，容易漂移。
+    from src.utils.market_review_region import enabled_market_review_regions
+
+    markets = enabled_market_review_regions()
+    if not markets:
+        # 没有任何可复盘市场（例如只启用越南）：跳过复盘而不是回退到 cn。
+        return ""
+
+    default_region = markets[0]
+    normalized = (config_region or default_region).strip().lower()
     if not normalized:
-        normalized = "cn"
+        normalized = default_region
 
     requested = {
         item.strip() for item in normalized.split(",") if item.strip()
     }
     if not requested:
-        requested = {"cn"}
+        requested = {default_region}
 
     if "both" in requested:
         requested = set(markets)
@@ -635,7 +669,7 @@ def compute_effective_region(
 
     if not requested:
         # No valid market token left after filtering; follow parser fallback behavior.
-        requested = {"cn"}
+        requested = {default_region}
 
     # single explicit region: keep single-region return semantics (empty when closed)
     if len(requested) == 1:

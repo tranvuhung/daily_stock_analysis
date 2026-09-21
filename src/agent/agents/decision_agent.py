@@ -49,7 +49,7 @@ Requirements:
 - Highlight the main signal, key reasoning, and major risks
 - Do NOT output JSON or code fences unless the user explicitly asks for them
 """
-            if report_language == "en":
+            if report_language in ("en", "vi"):
                 return prompt + "\nAlways answer in English.\n"
             if report_language == "ko":
                 return prompt + "\n항상 한국어로 답변하세요.\n"
@@ -132,7 +132,16 @@ should sum to 100; all-zero means no effective signal and must not be faked.
 ``strongest_bullish_signal`` is the name of the strongest bullish signal (e.g., MACD golden cross, earnings surprise, low valuation).
 ``strongest_bearish_signal`` is the name of the strongest bearish signal (e.g., MA death cross, earnings warning, high valuation).
 """
-        if report_language == "en":
+        if report_language == "vi":
+            return prompt + """
+
+## Output Language
+- Keep every JSON key unchanged.
+- `decision_type` must remain `buy|hold|sell`.
+- Write all human-readable JSON values in Vietnamese (Tiếng Việt), with correct diacritics.
+- Use standard Vietnamese securities terminology (mua / nắm giữ / bán, hỗ trợ / kháng cự, cắt lỗ).
+"""
+        if report_language in ("en", "vi"):
             return prompt + """
 
 ## Output Language

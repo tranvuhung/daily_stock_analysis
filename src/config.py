@@ -23,6 +23,9 @@ from dataclasses import dataclass, field
 
 from src.core.config_manager import unescape_compose_sensitive_env_value
 from src.report_language import (
+    DEFAULT_REPORT_LANGUAGE,
+    SELECTABLE_REPORT_LANGUAGES,
+    is_selectable_report_language_value,
     is_supported_report_language_value,
     normalize_report_language,
 )
@@ -73,6 +76,7 @@ from src.llm.hermes import (
     route_has_hermes,
 )
 from src.scheduler import normalize_schedule_times
+from src.core.markets import DEFAULT_SUPPORTED_MARKETS, enabled_markets
 from src.utils.market_review_region import normalize_market_review_region_lenient
 
 logger = logging.getLogger(__name__)
@@ -1124,7 +1128,7 @@ class Config:
 
     # 报告类型：simple(精简) 或 full(完整)
     report_type: str = "simple"
-    report_language: str = "zh"
+    report_language: str = DEFAULT_REPORT_LANGUAGE
 
     # 仅分析结果摘要：true 时只推送汇总，不含个股详情（Issue #262）
     report_summary_only: bool = False
@@ -1204,7 +1208,11 @@ class Config:
     run_immediately: bool = True              # 启动时是否立即执行一次（非定时模式）
     market_review_enabled: bool = True        # 是否启用大盘复盘
     daily_market_context_enabled: bool = True   # 是否将大盘环境摘要用于个股分析 Prompt 与保守护栏
+    # 启用的市场白名单（唯一真源：src/core/markets.py）。默认只启用越南市场；
+    # 设为 all 或逗号列表（如 vn,cn）可重新启用其他市场，是本项改动的回滚开关。
+    supported_markets: str = DEFAULT_SUPPORTED_MARKETS
     # 大盘复盘市场区域：cn(A股)、hk(港股)、us(美股)、jp(日股)、kr(韩股)、both(全部市场)
+    # 实际可选值受 supported_markets 约束
     market_review_region: str = "cn"
     market_review_color_scheme: str = "green_up"
     # 交易日检查：默认启用，非交易日跳过执行；设为 false 或 --force-run 可强制执行（Issue #373）
@@ -2184,6 +2192,7 @@ class Config:
             run_immediately=legacy_run_immediately,
             market_review_enabled=os.getenv('MARKET_REVIEW_ENABLED', 'true').lower() == 'true',
             daily_market_context_enabled=os.getenv('DAILY_MARKET_CONTEXT_ENABLED', 'true').lower() == 'true',
+            supported_markets=",".join(enabled_markets()),
             market_review_region=cls._parse_market_review_region(
                 os.getenv('MARKET_REVIEW_REGION', 'cn')
             ),
@@ -2873,19 +2882,28 @@ class Config:
         if file_value is not None:
             return file_value
 
-        return env_value or "zh"
+        # 未配置时返回当前默认语言，而不是写死的 "zh"：写死会让每次加载配置都
+        # 触发一次"zh 不可选"的告警，即使用户根本没有配置过 REPORT_LANGUAGE。
+        return env_value or DEFAULT_REPORT_LANGUAGE
 
     @classmethod
     def _parse_report_language(cls, value: Optional[str]) -> str:
-        """Parse REPORT_LANGUAGE, fallback to zh for invalid values."""
-        normalized = normalize_report_language(value, default="zh")
+        """Parse REPORT_LANGUAGE, fallback to the default for non-selectable values.
+
+        报告只产出越南语，因此这里按 ``SELECTABLE_REPORT_LANGUAGES`` 校验，而不是
+        渲染层认识的全部语言：``zh``/``en``/``ko`` 仍能渲染历史记录，但不能再被
+        配置成输出语言。
+        """
         raw = (value or "").strip()
-        if raw and not is_supported_report_language_value(raw):
+        if raw and not is_selectable_report_language_value(raw):
             logging.getLogger(__name__).warning(
-                "REPORT_LANGUAGE '%s' invalid, fallback to 'zh' (valid: zh/en/ko)",
+                "REPORT_LANGUAGE '%s' 不可选，已回退为 '%s'（当前仅支持：%s）",
                 value,
+                DEFAULT_REPORT_LANGUAGE,
+                "/".join(SELECTABLE_REPORT_LANGUAGES),
             )
-        return normalized
+            return DEFAULT_REPORT_LANGUAGE
+        return normalize_report_language(raw, default=DEFAULT_REPORT_LANGUAGE)
 
     @classmethod
     def _parse_news_strategy_profile(cls, value: Optional[str]) -> str:
@@ -2910,14 +2928,31 @@ class Config:
     @classmethod
     def _parse_market_review_region(cls, value: str) -> str:
         """解析大盘复盘市场区域，非法值记录警告后回退为 cn"""
+        from src.utils.market_review_region import enabled_market_review_regions
+
         normalized = normalize_market_review_region_lenient(value)
         if normalized is not None:
             return normalized
 
-        logging.getLogger(__name__).warning(
-            f"MARKET_REVIEW_REGION 配置值 '{value}' 无效，已回退为默认值 'cn'（合法值：cn / hk / us / jp / kr / both；支持逗号分隔有效值）"
+        logger = logging.getLogger(__name__)
+        enabled = enabled_market_review_regions()
+        if not enabled:
+            # 当前 SUPPORTED_MARKETS 下没有任何支持大盘复盘的市场（例如只启用
+            # 越南）。回退成空串而不是 'cn'：'cn' 会让复盘链路去调用已停用市场
+            # 的数据源，产生没有数据支撑的复盘报告。
+            logger.info(
+                "MARKET_REVIEW_REGION=%r 被忽略：当前 SUPPORTED_MARKETS 下没有"
+                "支持大盘复盘的市场，大盘复盘将跳过。",
+                value,
+            )
+            return ''
+
+        fallback = enabled[0]
+        logger.warning(
+            f"MARKET_REVIEW_REGION 配置值 '{value}' 无效，已回退为默认值 '{fallback}'"
+            f"（合法值：{' / '.join((*enabled, 'both'))}；支持逗号分隔有效值）"
         )
-        return 'cn'
+        return fallback
 
     @classmethod
     def _parse_market_review_color_scheme(cls, value: str) -> str:

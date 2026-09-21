@@ -129,30 +129,33 @@ def test_analyze_request_supports_legacy_strategies_dict_input() -> None:
 def test_request_models_accept_report_language_camel_case_alias() -> None:
     analyze_request = AnalyzeRequest.model_validate({
         "stock_code": "600519",
-        "reportLanguage": "en",
+        "reportLanguage": "vi",
     })
-    assert analyze_request.report_language == "en"
+    assert analyze_request.report_language == "vi"
 
     market_review_request = MarketReviewRequest.model_validate({
         "send_notification": False,
-        "reportLanguage": "en",
+        "reportLanguage": "vi",
     })
-    assert market_review_request.report_language == "en"
+    assert market_review_request.report_language == "vi"
 
 
-def test_request_models_accept_korean_report_language() -> None:
-    analyze_request = AnalyzeRequest.model_validate({
-        "stock_code": "005930.KS",
-        "report_language": "ko",
-    })
-    assert analyze_request.report_language == "ko"
+def test_request_models_reject_legacy_report_languages() -> None:
+    """报告只产出越南语；历史记录里的 zh/en/ko 不经过请求 schema。"""
+    import pytest
+    from pydantic import ValidationError
 
-    market_review_request = MarketReviewRequest.model_validate({
-        "send_notification": False,
-        "report_language": "ko",
-    })
-    assert market_review_request.report_language == "ko"
-
+    for legacy in ("zh", "en", "ko"):
+        with pytest.raises(ValidationError):
+            AnalyzeRequest.model_validate({
+                "stock_code": "600519",
+                "report_language": legacy,
+            })
+        with pytest.raises(ValidationError):
+            MarketReviewRequest.model_validate({
+                "send_notification": False,
+                "report_language": legacy,
+            })
 
 @pytest.mark.parametrize(
     ("raw_region", "expected"),

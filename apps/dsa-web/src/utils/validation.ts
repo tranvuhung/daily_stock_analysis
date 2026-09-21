@@ -7,6 +7,13 @@ interface ValidationResult {
 const SUPPORTED_QUERY_CHARACTERS = /^[A-Z0-9.\u3400-\u9FFF\s]+$/;
 
 const STOCK_CODE_PATTERNS = [
+  // Vietnam: tickers are exactly 3 uppercase alphanumerics (HPG / FPT / X77).
+  // Pure-letter codes also match the US ticker pattern below; that ambiguity is
+  // resolved server-side by SUPPORTED_MARKETS.
+  /^[A-Z][A-Z0-9]{2}$/, // Vietnam bare ticker
+  /^[A-Z][A-Z0-9]{2}\.VN$/, // Vietnam explicit suffix, for example HPG.VN
+  /^VN[A-Z][A-Z0-9]{2}$/, // Vietnam explicit prefix, for example vnHPG
+  /^(VNINDEX|VN30|VN100|HNXINDEX|HNX30|HNXUPCOMINDEX|UPCOMINDEX)$/, // Vietnam indices
   /^\d{6}$/, // A-share 6-digit code
   /^(SH|SZ|BJ)\d{6}$/, // A-share code with exchange prefix (also covers index canonical sh000016 / sh000300)
   /^\d{6}\.(SH|SZ|SS|BJ)$/, // A-share code with exchange suffix
@@ -29,7 +36,7 @@ export const looksLikeStockCode = (value: string): boolean => {
 };
 
 /**
- * Validate common A-share, HK, US, JP, and KR stock code formats.
+ * Validate common Vietnam, A-share, HK, US, JP, and KR stock code formats.
  */
 export const validateStockCode = (value: string): ValidationResult => {
   const normalized = value.trim().toUpperCase();

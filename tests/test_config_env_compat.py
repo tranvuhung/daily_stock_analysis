@@ -92,6 +92,9 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
             {
                 "STOCK_LIST": "600519",
                 "MARKET_REVIEW_REGION": "cn,us,jp",
+                # clear=True 会连 SUPPORTED_MARKETS 一起清掉，而市场白名单默认
+                # 只启用越南；这里显式声明本用例依赖的多市场 allowlist。
+                "SUPPORTED_MARKETS": "all",
             },
             clear=True,
         ):
@@ -109,6 +112,9 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
             {
                 "STOCK_LIST": "600519",
                 "MARKET_REVIEW_REGION": "cn,eu,us,kr,xx",
+                # clear=True 会连 SUPPORTED_MARKETS 一起清掉，而市场白名单默认
+                # 只启用越南；这里显式声明本用例依赖的多市场 allowlist。
+                "SUPPORTED_MARKETS": "all",
             },
             clear=True,
         ):
@@ -130,6 +136,9 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
             {
                 "STOCK_LIST": "600519",
                 "MARKET_REVIEW_REGION": "eu,apac",
+                # clear=True 会连 SUPPORTED_MARKETS 一起清掉，而市场白名单默认
+                # 只启用越南；这里显式声明本用例依赖的多市场 allowlist。
+                "SUPPORTED_MARKETS": "all",
             },
             clear=True,
         ):
@@ -594,9 +603,13 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
                 },
                 clear=True,
             ):
+                # 优先级判定在 resolve 层；parse 层现在只接受 vi，无法再用
+                # 最终值区分 zh/en，因此这里直接断言 resolve 的结果。
+                resolved = Config._resolve_report_language_env_value("en")
                 config = Config._load_from_env()
 
-        self.assertEqual(config.report_language, "en")
+        self.assertEqual(resolved, "en")
+        self.assertEqual(config.report_language, "vi")
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
@@ -616,9 +629,12 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
                 },
                 clear=True,
             ):
+                resolved = Config._resolve_report_language_env_value(None)
                 config = Config._load_from_env()
 
-        self.assertEqual(config.report_language, "en")
+        # .env 里的值仍被读到（resolve 层），但输出语言固定为越南语。
+        self.assertEqual(resolved, "en")
+        self.assertEqual(config.report_language, "vi")
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
@@ -922,9 +938,16 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
 
     def test_parse_report_language_accepts_known_alias_without_warning(self) -> None:
         with self.assertNoLogs("src.config", level="WARNING"):
-            parsed = Config._parse_report_language("zh-cn")
+            parsed = Config._parse_report_language("vietnamese")
 
-        self.assertEqual(parsed, "zh")
+        self.assertEqual(parsed, "vi")
+
+    def test_parse_report_language_rejects_legacy_languages_with_warning(self) -> None:
+        """zh/en/ko 仍用于渲染历史记录，但不能再被配置成输出语言。"""
+        for legacy in ("zh", "zh-cn", "en", "ko"):
+            with self.subTest(language=legacy):
+                with self.assertLogs("src.config", level="WARNING"):
+                    self.assertEqual(Config._parse_report_language(legacy), "vi")
 
     def test_parse_market_review_region_accepts_jp_kr_values_and_comma_lists(self) -> None:
         self.assertEqual(Config._parse_market_review_region("jp"), "jp")

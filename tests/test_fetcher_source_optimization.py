@@ -115,6 +115,10 @@ class TestFetcherSourceOptimization(unittest.TestCase):
                 "LONGBRIDGE_APP_KEY": "",
                 "LONGBRIDGE_APP_SECRET": "",
                 "LONGBRIDGE_ACCESS_TOKEN": "",
+                # 本用例断言的是"未配置凭据的可选数据源不会被实例化"，与市场
+                # 白名单无关。固定为 cn 可以把越南数据源排除在断言之外，否则
+                # 列表会随 SUPPORTED_MARKETS 变化。
+                "SUPPORTED_MARKETS": "cn",
             },
         ), patch("data_provider.efinance_fetcher.EfinanceFetcher", return_value=_StubFetcher("EfinanceFetcher", 0)), patch(
             "data_provider.tencent_fetcher.TencentFetcher",
