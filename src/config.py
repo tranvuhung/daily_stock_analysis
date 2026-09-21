@@ -1815,9 +1815,14 @@ class Config:
             longbridge_app_secret=os.getenv('LONGBRIDGE_APP_SECRET') or None,
             longbridge_access_token=os.getenv('LONGBRIDGE_ACCESS_TOKEN') or None,
             longbridge_oauth_client_id=os.getenv('LONGBRIDGE_OAUTH_CLIENT_ID') or None,
+            # Mặc định TẮT: địa chỉ remote mặc định trỏ tới stocks.index.json của
+            # dự án A-share gốc, không chứa mã Việt Nam nào, nên bật lên sẽ ghi đè
+            # bảng mã nội bộ và làm autocomplete của Web UI không tìm thấy HPG /
+            # FPT / VNINDEX — hỏng âm thầm, không báo lỗi. Muốn bật lại thì trỏ
+            # STOCK_INDEX_REMOTE_URL sang nhánh có bảng mã Việt Nam trước.
             stock_index_remote_update_enabled=parse_env_bool(
                 os.getenv('STOCK_INDEX_REMOTE_UPDATE_ENABLED'),
-                default=True,
+                default=False,
             ),
             generation_backend=generation_backend,
             generation_fallback_backend=generation_fallback_backend,

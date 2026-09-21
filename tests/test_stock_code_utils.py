@@ -103,24 +103,11 @@ class TestBuildDailyCodeCandidates:
         assert identity.refill_code == ""
         assert identity.code_candidates == ("005930",)
 
-    def test_cross_market_bare_code_without_hint_fails_closed(self):
-        assert resolve_daily_stock_identity("8035") is None
-
-    def test_cross_market_suffix_code_does_not_add_ambiguous_bare_alias(self):
-        identity = resolve_daily_stock_identity("8035.T")
-
-        assert identity is not None
-        assert identity.market == "jp"
-        assert identity.code_candidates == ("8035.T",)
-
-    def test_cross_market_hk_code_does_not_add_ambiguous_bare_alias(self):
-        identity = resolve_daily_stock_identity("08035.HK")
-
-        assert identity is not None
-        assert identity.market == "hk"
-        assert "8035" not in identity.code_candidates
-        assert "08035.HK" in identity.code_candidates
-        assert "8035.HK" in identity.code_candidates
+    # Ba ca kiểm thử đa thị trường (mã trần 8035 trùng giữa JP và HK) đã bị bỏ
+    # cùng đợt cắt ``apps/dsa-web/public/stocks.index.json`` xuống chỉ còn mã Việt
+    # Nam: bảng mã không còn bản ghi ngoài VN nên không còn tình huống nhập nhằng
+    # giữa các thị trường để kiểm tra. Nếu sau này khôi phục mã đa thị trường,
+    # xem lại lịch sử git để lấy lại chúng.
 
     def test_trusted_legacy_jp_identity_keeps_its_raw_bare_code(self):
         identity = resolve_daily_stock_identity("8035", market_hint="jp")
@@ -371,17 +358,12 @@ class TestResolveIndexStockCodeForAnalysis:
     # ------------------------------------------------------------------
     # PR #2267 review remediation — registered CSI explicit identity
     # convergence (resolver / task dedupe key / history candidates).
+    #
+    # Ca ``test_registered_csi_forms_converge_to_parser_canonical`` đã bị bỏ cùng
+    # đợt cắt ``apps/dsa-web/public/stocks.index.json`` xuống chỉ còn mã Việt Nam:
+    # nó dựa vào bản ghi chỉ số A-share ``csi930955`` trong bảng mã, nay không còn.
+    # Ca "chưa đăng ký" bên dưới vẫn giữ vì không phụ thuộc dữ liệu đó.
     # ------------------------------------------------------------------
-
-    @pytest.mark.parametrize(
-        "code",
-        ["csi930955", "930955.CSI", "CSI930955", "  csi930955  ", "930955.csi"],
-    )
-    def test_registered_csi_forms_converge_to_parser_canonical(self, code):
-        """All registered CSI explicit forms resolve to the parser canonical
-        ``csi930955`` so the resolver and task dedupe key do not split the same
-        index into distinct keys."""
-        assert resolve_index_stock_code_for_analysis(code) == "csi930955"
 
     @pytest.mark.parametrize(
         "code,expected",

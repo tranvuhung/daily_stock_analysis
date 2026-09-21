@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [改进] `apps/dsa-web/public/stocks.index.json` 裁剪为**只保留越南标的**：33264 条 -> 1553 条（1523 只股票 + 24 只 ETF + 6 个指数），体积 3.4 MB -> 138 KB。Web UI 自动补全不再混进美股与 A 股条目。`scripts/generate_vn_index.py` 的合并逻辑不受影响（其他市场保留 0 条）。
+- [修复] `STOCK_INDEX_REMOTE_UPDATE_ENABLED` 默认值改为 `false`（`src/config.py`、`src/core/config_registry.py`、`.env.example` 三处同步）。默认远程地址指向上游 A 股项目的 `stocks.index.json`，不含任何越南标的，开启后会覆盖内置越南代码表并让 Web UI 自动补全搜不到 HPG / FPT / VNINDEX——且不报错，表现只是「输入后没有下拉建议」，缓存 TTL 48 小时使问题延迟复现。
+- [测试] 移除 `tests/test_stock_code_utils.py` 中 8 个依赖多市场代码表的用例（5 个 `registered CSI` 收敛用例依赖 A 股指数 `csi930955`；3 个 `cross_market_*` 用例依赖 JP/HK 之间裸码 8035 的重叠）。索引裁剪后这些前提不复存在，原用例位置留有注释说明去向。
 - [新功能] 越南市场新增第三兜底日线源：`YfinanceFetcher` 现在为 `vn` 服务（Priority 4，仅在 VCI 与 SSI 都失败时调用），通过 `.VN` 后缀取 HOSE 个股日线，无需 API Key。实测覆盖 HOSE 20/20、HNX 0/20、UPCOM 0/20，因此只声明 `kline.daily`，不声明 `quote.realtime` / `index.daily` / `market.overview`；请求越南指数时直接抛 `DataFetchError` 且不发请求，避免把 `^VNINDEX.VN` 那一根垃圾 K 线当成数据。
 - [修复] 新增 `should_persist_daily_data()` 写入闸门：Yahoo 与 VCI 的复权基准不一致（MBB 实测除权日之前的历史整体相差固定系数 1.043938，近期交易日则完全一致），而 `save_daily_data` 以 `(code, date)` UPSERT，混写会在除权日留下约 4.4% 的假跳空且不报错。Yahoo 为越南标的取回的日线改为只服务当次分析，不写入 `stock_daily`；其他市场不受影响。
 - [修复] `_get_analysis_context_with_market_fallback` 纳入 `vn`：否则数据库里没有上下文时（正是 Yahoo 兜底的场景），个股分析会在完全没有历史行情的情况下继续跑。现在改为直接用内存中的日线构建分析上下文。

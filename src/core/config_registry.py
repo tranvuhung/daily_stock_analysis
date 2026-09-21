@@ -983,14 +983,21 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     },
     "STOCK_INDEX_REMOTE_UPDATE_ENABLED": {
         "title": "Remote Stock Index Updates",
-        "description": "Automatically refresh the local stock autocomplete index from the built-in GitHub main source.",
+        "description": (
+            "Automatically refresh the local stock autocomplete index from the built-in "
+            "GitHub main source. Disabled by default in this repository: the built-in "
+            "source is the upstream A-share project and contains no Vietnamese symbols, "
+            "so enabling it overwrites the bundled Vietnam index and silently breaks "
+            "Web UI autocomplete. Point STOCK_INDEX_REMOTE_URL at a branch that ships "
+            "the Vietnam index before turning this on."
+        ),
         "category": "data_source",
         "data_type": "boolean",
         "ui_control": "switch",
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        "default_value": "true",
+        "default_value": "false",
         "options": [],
         "validation": {},
         "display_order": 16,
