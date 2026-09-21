@@ -21,7 +21,7 @@ export const ReportMarkdown: React.FC<ReportMarkdownProps> = ({
   stockName,
   stockCode,
   onClose,
-  reportLanguage = 'zh',
+  reportLanguage = 'vi',
 }) => {
   const [isOpen, setIsOpen] = useState(true);
 

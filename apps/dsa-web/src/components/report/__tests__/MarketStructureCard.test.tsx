@@ -62,17 +62,19 @@ const context: MarketStructureContext = {
 };
 
 describe('MarketStructureCard', () => {
-  it('renders market layer and stock layer in Chinese', () => {
-    render(<MarketStructureCard context={context} language="zh" />);
+  it('renders market layer and stock layer in Vietnamese', () => {
+    render(<MarketStructureCard context={context} language="vi" />);
 
-    expect(screen.getByRole('region', { name: '题材主线与个股位置' })).toBeInTheDocument();
-    expect(screen.getByText('大盘题材层')).toBeVisible();
-    expect(screen.getByText('个股位置层')).toBeVisible();
-    expect(screen.getAllByText('部分可用')).toHaveLength(3);
+    expect(
+      screen.getByRole('region', { name: 'Dòng chủ đề và vị thế cổ phiếu' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Lớp chủ đề thị trường')).toBeVisible();
+    expect(screen.getByText('Lớp vị thế cổ phiếu')).toBeVisible();
+    expect(screen.getAllByText('Có một phần')).toHaveLength(3);
     expect(screen.getAllByText(/机器人概念/)).toHaveLength(3);
-    expect(screen.getByText('加速')).toBeVisible();
-    expect(screen.getByText('跟随')).toBeVisible();
-    expect(screen.getByText('题材主线数据不完整')).toBeVisible();
+    expect(screen.getByText('Tăng tốc')).toBeVisible();
+    expect(screen.getByText('Đi theo')).toBeVisible();
+    expect(screen.getByText('Dữ liệu dòng chủ đề chưa đầy đủ')).toBeVisible();
     expect(screen.getByText('leader_stocks')).toBeVisible();
   });
 
@@ -87,19 +89,7 @@ describe('MarketStructureCard', () => {
     expect(screen.getByText('Missing Evidence')).toBeVisible();
     expect(screen.getByText('Market theme data is incomplete')).toBeVisible();
     expect(screen.getByText('Stock board did not match theme rankings')).toBeVisible();
-    expect(screen.queryByText('题材主线数据不完整')).not.toBeInTheDocument();
-  });
-
-  it('renders Korean labels', () => {
-    render(<MarketStructureCard context={context} language="ko" />);
-
-    expect(screen.getByRole('region', { name: '테마 라인 및 종목 포지션' })).toBeInTheDocument();
-    expect(screen.getByText('시장 테마 레이어')).toBeVisible();
-    expect(screen.getByText('종목 포지션 레이어')).toBeVisible();
-    expect(screen.getByText('가속')).toBeVisible();
-    expect(screen.getByText('추종')).toBeVisible();
-    expect(screen.getByText('테마 데이터가 불완전합니다')).toBeVisible();
-    expect(screen.getByText('종목 보드가 테마 랭킹과 일치하지 않았습니다')).toBeVisible();
+    expect(screen.queryByText('Dữ liệu dòng chủ đề chưa đầy đủ')).not.toBeInTheDocument();
   });
 
   it('does not render unsupported or invalid context', () => {

@@ -18,7 +18,7 @@ const diagnosticSummary: RunDiagnosticSummary = {
   stockCode: '600519',
   triggerSource: 'web',
   status: 'degraded',
-  statusLabel: '部分降级',
+  statusLabel: 'Suy giảm một phần',
   reason: '实时行情 baostock 成功，前置数据源失败后已继续',
   copyText: 'trace_id: trace-1234567890abcdef\ndata_status: degraded',
   components: {
@@ -58,24 +58,24 @@ describe('ReportDiagnostics', () => {
     render(<ReportDiagnostics recordId={1} />);
 
     expect(historyApi.getDiagnostics).toHaveBeenCalledWith(1);
-    expect(await screen.findByText('运行状态')).toBeInTheDocument();
+    expect(await screen.findByText('Trạng thái chạy')).toBeInTheDocument();
     const panel = screen.getByTestId('run-diagnostics');
     expect(panel).not.toHaveAttribute('open');
-    expect(screen.getByText('部分降级')).toBeInTheDocument();
+    expect(screen.getByText('Suy giảm một phần')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('运行状态'));
+    fireEvent.click(screen.getByText('Trạng thái chạy'));
 
     expect(panel).toHaveAttribute('open');
-    expect(screen.getByText('最近失败后已降级')).toBeInTheDocument();
-    expect(screen.getByText('未配置')).toBeInTheDocument();
+    expect(screen.getByText('Đã suy giảm sau lần lỗi gần đây')).toBeInTheDocument();
+    expect(screen.getByText('Chưa cấu hình')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '复制排障信息' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sao chép thông tin gỡ lỗi' }));
 
     await waitFor(() => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith(diagnosticSummary.copyText);
     });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '已复制' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Đã sao chép' })).toBeInTheDocument();
     });
   });
 
@@ -94,7 +94,7 @@ describe('ReportDiagnostics', () => {
 
     render(<ReportDiagnostics recordId={1} onOpenRunFlow={onOpenRunFlow} />);
 
-    fireEvent.click(await screen.findByText('运行状态'));
+    fireEvent.click(await screen.findByText('Trạng thái chạy'));
     fireEvent.click(screen.getByRole('button', { name: 'View run flow for history record 1' }));
 
     expect(onOpenRunFlow).toHaveBeenCalledWith(1);
@@ -112,6 +112,6 @@ describe('ReportDiagnostics', () => {
     await waitFor(() => {
       expect(historyApi.getDiagnostics).toHaveBeenCalledTimes(2);
     });
-    expect(await screen.findByText('运行状态')).toBeInTheDocument();
+    expect(await screen.findByText('Trạng thái chạy')).toBeInTheDocument();
   });
 });

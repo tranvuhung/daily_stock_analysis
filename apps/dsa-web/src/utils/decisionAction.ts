@@ -13,15 +13,18 @@ export type DecisionActionLabelTextKey =
   | 'history.actionAlert';
 export type DecisionActionLabelTranslator = (key: DecisionActionLabelTextKey) => string;
 
+// Nhãn dự phòng khi không truyền translator vào buildDecisionActionLabelMap.
+// Lưu ý: các mảng cụm từ bên dưới KHÔNG phải nhãn — chúng dùng để nhận dạng văn
+// bản khuyến nghị do LLM sinh ra, nên phải giữ nguyên.
 export const DEFAULT_DECISION_ACTION_LABELS: DecisionActionLabelMap = {
-  buy: '买入',
-  add: '加仓',
-  hold: '持有',
-  reduce: '减仓',
-  sell: '卖出',
-  watch: '观望',
-  avoid: '回避',
-  alert: '预警',
+  buy: 'Mua',
+  add: 'Mua thêm',
+  hold: 'Nắm giữ',
+  reduce: 'Giảm tỷ trọng',
+  sell: 'Bán',
+  watch: 'Quan sát',
+  avoid: 'Tránh',
+  alert: 'Cảnh báo',
 };
 
 const resolveActionLabels = (labels?: Partial<DecisionActionLabelMap>): DecisionActionLabelMap => ({

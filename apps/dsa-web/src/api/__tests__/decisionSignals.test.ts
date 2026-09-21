@@ -100,7 +100,7 @@ describe('decisionSignalsApi', () => {
       status: 'active',
       expiresAt: '2026-06-12T08:00:00',
       metadata: { taskId: 'task-1' },
-      reportLanguage: 'zh',
+      reportLanguage: 'vi',
     });
 
     expect(post).toHaveBeenCalledWith('/api/v1/decision-signals', {
@@ -133,7 +133,7 @@ describe('decisionSignalsApi', () => {
       status: 'active',
       expires_at: '2026-06-12T08:00:00',
       metadata: { taskId: 'task-1' },
-      report_language: 'zh',
+      report_language: 'vi',
     });
     expect(response.created).toBe(false);
     expect(response.item.id).toBe(11);

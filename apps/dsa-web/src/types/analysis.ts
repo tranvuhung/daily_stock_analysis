@@ -44,7 +44,7 @@ export interface MarketReviewAccepted {
 
 // ============ Report Types ============
 
-export type ReportLanguage = 'zh' | 'en' | 'ko';
+export type ReportLanguage = 'vi' | 'en';
 
 export type MarketPhaseValue =
   | 'premarket'
@@ -89,21 +89,16 @@ export interface ReportMeta {
 
 /** Sentiment label */
 export type SentimentLabel =
-  | '极度悲观'
-  | '悲观'
-  | '中性'
-  | '乐观'
-  | '极度乐观'
+  | 'Rất bi quan'
+  | 'Bi quan'
+  | 'Trung tính'
+  | 'Lạc quan'
+  | 'Rất lạc quan'
   | 'Very Bearish'
   | 'Bearish'
   | 'Neutral'
   | 'Bullish'
-  | 'Very Bullish'
-  | '매우 비관'
-  | '비관'
-  | '중립'
-  | '낙관'
-  | '매우 낙관';
+  | 'Very Bullish';
 
 export type DecisionAction = 'buy' | 'add' | 'hold' | 'reduce' | 'sell' | 'watch' | 'avoid' | 'alert';
 
@@ -624,7 +619,7 @@ export interface ApiError {
 // ============ Helper Functions ============
 
 /** Get sentiment label by score */
-export const getSentimentLabel = (score: number, language: ReportLanguage = 'zh'): SentimentLabel => {
+export const getSentimentLabel = (score: number, language: ReportLanguage = 'vi'): SentimentLabel => {
   if (language === 'en') {
     if (score <= 20) return 'Very Bearish';
     if (score <= 40) return 'Bearish';
@@ -632,18 +627,11 @@ export const getSentimentLabel = (score: number, language: ReportLanguage = 'zh'
     if (score <= 80) return 'Bullish';
     return 'Very Bullish';
   }
-  if (language === 'ko') {
-    if (score <= 20) return '매우 비관';
-    if (score <= 40) return '비관';
-    if (score <= 60) return '중립';
-    if (score <= 80) return '낙관';
-    return '매우 낙관';
-  }
-  if (score <= 20) return '极度悲观';
-  if (score <= 40) return '悲观';
-  if (score <= 60) return '中性';
-  if (score <= 80) return '乐观';
-  return '极度乐观';
+  if (score <= 20) return 'Rất bi quan';
+  if (score <= 40) return 'Bi quan';
+  if (score <= 60) return 'Trung tính';
+  if (score <= 80) return 'Lạc quan';
+  return 'Rất lạc quan';
 };
 
 /** Get sentiment color by score */

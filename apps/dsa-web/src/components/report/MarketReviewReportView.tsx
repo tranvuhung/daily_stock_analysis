@@ -68,8 +68,13 @@ const stripTopHeading = (markdown: string, title?: string): string => {
 
   const heading = normalizeHeading(match[1]);
   const reportTitle = normalizeHeading(title || '');
+  // Đây là các chuỗi để NHẬN DẠNG tiêu đề do backend sinh ra, không phải nhãn giao
+  // diện. Giữ lại bản tiếng Trung để còn xử lý được nội dung cũ; bổ sung bản tiếng
+  // Việt cho nội dung hiện tại.
   const genericTitles = new Set([
     'market review',
+    'điểm lại thị trường',
+    'điểm lại thị trường chi tiết',
     '大盘复盘',
     '大盘复盘详情',
     'a股市场复盘',
@@ -84,20 +89,23 @@ const stripTopHeading = (markdown: string, title?: string): string => {
 };
 
 const getSectionIcon = (title: string): typeof FileText => {
+  // Các biểu thức dưới đây khớp TIÊU ĐỀ MỤC do backend sinh ra để chọn icon — là
+  // logic nhận dạng dữ liệu, không phải nhãn hiển thị. Phần tiếng Trung được giữ
+  // để tương thích nội dung cũ, phần tiếng Việt là bổ sung cho nội dung hiện tại.
   const normalized = normalizeHeading(title);
-  if (/指数|index|overview|大盘/.test(normalized)) {
+  if (/chỉ số|toàn thị trường|指数|index|overview|大盘/.test(normalized)) {
     return BarChart3;
   }
-  if (/情绪|赚钱|sentiment|breadth|temperature/.test(normalized)) {
+  if (/tâm lý|độ rộng|情绪|赚钱|sentiment|breadth|temperature/.test(normalized)) {
     return Gauge;
   }
-  if (/行业|板块|主题|轮动|sector|theme|rotation/.test(normalized)) {
+  if (/ngành|nhóm ngành|chủ đề|luân chuyển|行业|板块|主题|轮动|sector|theme|rotation/.test(normalized)) {
     return TrendingUp;
   }
-  if (/资金|成交|量能|flow|turnover|volume|capital/.test(normalized)) {
+  if (/dòng tiền|thanh khoản|giá trị giao dịch|资金|成交|量能|flow|turnover|volume|capital/.test(normalized)) {
     return WalletCards;
   }
-  if (/风险|机会|观察|risk|watch|next/.test(normalized)) {
+  if (/rủi ro|cơ hội|theo dõi|风险|机会|观察|risk|watch|next/.test(normalized)) {
     return ShieldAlert;
   }
   return FileText;
@@ -281,28 +289,28 @@ const MARKET_REVIEW_TEXT: Record<ReportLanguage, {
   leading: string;
   lagging: string;
 }> = {
-  zh: {
-    reviewSummary: '复盘摘要',
-    noReviewSummary: '暂无摘要',
-    noSentimentScore: '暂无评分',
-    rotationAndFunds: '轮动与资金',
-    noRotationView: '暂无轮动观点',
-    riskAndWatch: '风险与观察',
-    noRiskWatch: '暂无观察重点',
-    structuredMarketData: '结构化大盘数据',
-    noBreadthData: '暂无数据',
-    advancers: '上涨家数',
-    decliners: '下跌家数',
-    limitUpDown: '涨停/跌停',
-    turnover: '成交额',
-    index: '指数',
-    last: '最新',
-    change: '涨跌幅',
-    highLow: '高/低',
-    industryBoards: '行业板块',
-    conceptBoards: '概念板块',
-    leading: '领涨',
-    lagging: '领跌',
+  vi: {
+    reviewSummary: 'Tóm tắt điểm lại',
+    noReviewSummary: 'Chưa có tóm tắt',
+    noSentimentScore: 'Chưa có điểm',
+    rotationAndFunds: 'Luân chuyển và dòng tiền',
+    noRotationView: 'Chưa có nhận định luân chuyển',
+    riskAndWatch: 'Rủi ro và theo dõi',
+    noRiskWatch: 'Chưa có trọng tâm theo dõi',
+    structuredMarketData: 'Dữ liệu thị trường có cấu trúc',
+    noBreadthData: 'Chưa có dữ liệu',
+    advancers: 'Số mã tăng',
+    decliners: 'Số mã giảm',
+    limitUpDown: 'Trần/Sàn',
+    turnover: 'Giá trị giao dịch',
+    index: 'Chỉ số',
+    last: 'Mới nhất',
+    change: 'Biến động',
+    highLow: 'Cao/Thấp',
+    industryBoards: 'Nhóm ngành',
+    conceptBoards: 'Nhóm khái niệm',
+    leading: 'Dẫn dắt',
+    lagging: 'Suy yếu',
   },
   en: {
     reviewSummary: 'Review Summary',
@@ -327,29 +335,6 @@ const MARKET_REVIEW_TEXT: Record<ReportLanguage, {
     leading: 'Leading',
     lagging: 'Lagging',
   },
-  ko: {
-    reviewSummary: '리뷰 요약',
-    noReviewSummary: '요약 없음',
-    noSentimentScore: '점수 없음',
-    rotationAndFunds: '순환과 자금',
-    noRotationView: '순환 관점 없음',
-    riskAndWatch: '리스크와 관찰',
-    noRiskWatch: '관찰 포인트 없음',
-    structuredMarketData: '구조화 시장 데이터',
-    noBreadthData: '데이터 없음',
-    advancers: '상승 종목 수',
-    decliners: '하락 종목 수',
-    limitUpDown: '상한가/하한가',
-    turnover: '거래대금',
-    index: '지수',
-    last: '현재',
-    change: '등락률',
-    highLow: '고가/저가',
-    industryBoards: '업종 섹터',
-    conceptBoards: '테마 섹터',
-    leading: '강세',
-    lagging: '약세',
-  },
 };
 
 const formatRankingChange = (value: unknown): string => {
@@ -366,7 +351,7 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
   recordId,
   content: providedContent,
   payload: providedPayload,
-  reportLanguage = 'zh',
+  reportLanguage = 'vi',
   className = '',
   onOpenRunFlow,
 }) => {

@@ -30,7 +30,7 @@ const combinedMarketReviewPayload: MarketReviewPayload = {
   version: 1,
   kind: 'market_review',
   region: 'cn,hk',
-  language: 'zh',
+  language: 'vi',
   rootTitle: '大盘复盘',
   markets: {
     cn: {
@@ -123,8 +123,8 @@ describe('MarketReviewReportView', () => {
     expect(screen.getByText('No rotation view yet')).toBeInTheDocument();
     expect(screen.getByText('Risks & Watchlist')).toBeInTheDocument();
     expect(screen.getByText('No key observations yet')).toBeInTheDocument();
-    expect(screen.queryByText('复盘摘要')).not.toBeInTheDocument();
-    expect(screen.queryByText('暂无摘要')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tóm tắt điểm lại')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chưa có tóm tắt')).not.toBeInTheDocument();
   });
 
   it('renders structured data for every market in a combined market review payload', () => {
@@ -132,7 +132,7 @@ describe('MarketReviewReportView', () => {
       <MarketReviewReportView
         payload={combinedMarketReviewPayload}
         content="# 大盘复盘"
-        reportLanguage="zh"
+        reportLanguage="vi"
       />,
     );
 
@@ -149,12 +149,12 @@ describe('MarketReviewReportView', () => {
       <MarketReviewReportView
         payload={combinedMarketReviewPayload}
         content="# 大盘复盘"
-        reportLanguage="zh"
+        reportLanguage="vi"
       />,
     );
 
-    expect(screen.getAllByText('行业板块')).toHaveLength(2);
-    expect(screen.getAllByText('概念板块')).toHaveLength(2);
+    expect(screen.getAllByText('Nhóm ngành')).toHaveLength(2);
+    expect(screen.getAllByText('Nhóm khái niệm')).toHaveLength(2);
     expect(screen.getByText('半导体')).toBeInTheDocument();
     expect(screen.getByText('机器人概念')).toBeInTheDocument();
     expect(screen.getByText('+4.20%')).toBeInTheDocument();
@@ -166,19 +166,19 @@ describe('MarketReviewReportView', () => {
       <MarketReviewReportView
         payload={combinedMarketReviewPayload}
         content="# 大盘复盘"
-        reportLanguage="zh"
+        reportLanguage="vi"
       />,
     );
 
-    expect(screen.getByText('结构化大盘数据')).toBeInTheDocument();
-    expect(screen.getAllByText('上涨家数')).toHaveLength(2);
-    expect(screen.getAllByText('下跌家数')).toHaveLength(2);
-    expect(screen.getAllByText('涨停/跌停')).toHaveLength(2);
-    expect(screen.getAllByText('成交额')).toHaveLength(2);
-    expect(screen.getAllByText('指数')).toHaveLength(2);
-    expect(screen.getAllByText('最新')).toHaveLength(2);
-    expect(screen.getAllByText('涨跌幅')).toHaveLength(2);
-    expect(screen.getAllByText('高/低')).toHaveLength(2);
+    expect(screen.getByText('Dữ liệu thị trường có cấu trúc')).toBeInTheDocument();
+    expect(screen.getAllByText('Số mã tăng')).toHaveLength(2);
+    expect(screen.getAllByText('Số mã giảm')).toHaveLength(2);
+    expect(screen.getAllByText('Trần/Sàn')).toHaveLength(2);
+    expect(screen.getAllByText('Giá trị giao dịch')).toHaveLength(2);
+    expect(screen.getAllByText('Chỉ số')).toHaveLength(2);
+    expect(screen.getAllByText('Mới nhất')).toHaveLength(2);
+    expect(screen.getAllByText('Biến động')).toHaveLength(2);
+    expect(screen.getAllByText('Cao/Thấp')).toHaveLength(2);
     expect(screen.queryByText('Structured Market Data')).not.toBeInTheDocument();
     expect(screen.queryByText('Advancers')).not.toBeInTheDocument();
     expect(screen.queryByText('Index')).not.toBeInTheDocument();
@@ -295,7 +295,7 @@ describe('MarketReviewReportView', () => {
         payload={combinedMarketReviewPayload}
         content="# 大盘复盘"
         recordId={7}
-        reportLanguage="zh"
+        reportLanguage="vi"
         onOpenRunFlow={onOpenRunFlow}
       />,
     );

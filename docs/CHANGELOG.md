@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] 报告页界面文案此前整体显示为中文：`normalizeReportLanguage` 没有 `vi` 分支且默认回退 `'zh'`，而后端自迁移后只发 `vi`（`api/v1/schemas/analysis.py: Literal["vi"]`），于是每份报告都落进中文标签集。现 `REPORT_TEXT` 去掉 `zh`/`ko` 并新增 `vi`，`ReportLanguage` 收敛为 `'vi' | 'en'`，非 `en` 的任何取值（含旧记录里的 `zh`/`ko`）一律回退 `vi`。
+- [修复] 同步改造 `AnalysisContextSummary`、`MarketStructureCard`、`MarketReviewReportView`、`ReportDiagnostics`、`ReportNews` 的标签表，以及 `SentimentLabel` 与 `decisionAction.ts` 的兜底动作标签；11 个组件的语言 prop 默认值从 `'zh'` 改为 `'vi'`（该默认值正是 `zh` 退出联合类型后把 prop 类型放宽成 `string` 的原因）。
+- [改进] 三处中文**刻意保留**，因为它们是对后端返回值的匹配逻辑而非展示文案：`MarketReviewReportView` 的 `genericTitles` 与 `getSectionIcon`、`ReportOverview` 的 `normalizeBoardType`、`decisionAction.ts` 的否定语判定词表。删除会破坏既有内容的渲染与解析，因此改为并列补充越南语模式。
 - [新功能] 本地资讯池支持越南市场：`_ALLOWED_MARKETS` 增加 `vn`，并内置 6 个越南语 RSS 模板（CafeF 4 个、VnExpress、Vietstock，均已实测可用）。此前 `_load_persisted_intelligence_context` 按 `market="vn"` 查询，而 `vn` 不是合法市场，导致越南标的的市场级资讯源根本无法创建。
 - [修复] 越南标的的新闻检索此前用错语言：`_US_STOCK_RE`（`^[A-Za-z]{1,5}$`）匹配所有越南裸码，HPG/FPT 被当成美股走英文查询；越南指数因 `src/core/pipeline.py` 对指数传空 code 而落入中文分支，VNINDEX 被用「研报 目标价 评级 / 上交所 深交所 cninfo」检索。现新增越南语查询分支（置于美股分支之前），指数走 `is_vn_index_code` 保留代码，A 股与美股查询保持不变。
 - [修复] Brave 搜索对越南标的错误地发送 `country=US`（`_is_us_stock` 复用同一个美股正则），现返回 `search_lang=vi, country=VN`。

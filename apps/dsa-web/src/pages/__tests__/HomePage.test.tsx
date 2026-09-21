@@ -107,7 +107,7 @@ const historyReport = {
     stockCode: '600519',
     stockName: '贵州茅台',
     reportType: 'detailed' as const,
-    reportLanguage: 'zh' as const,
+    reportLanguage: 'vi' as const,
     createdAt: '2026-03-18T08:00:00Z',
   },
   summary: {
@@ -159,7 +159,7 @@ const marketReviewHistoryReport = {
     stockCode: 'MARKET',
     stockName: '大盘复盘',
     reportType: 'market_review' as const,
-    reportLanguage: 'zh' as const,
+    reportLanguage: 'vi' as const,
     createdAt: '2026-03-18T08:00:00Z',
   },
   summary: {
@@ -248,7 +248,7 @@ describe('HomePage', () => {
     vi.mocked(agentApi.getSkills).mockResolvedValue({ skills: [], default_skill_id: '' });
     vi.mocked(historyApi.getDiagnostics).mockResolvedValue({
       status: 'unknown',
-      statusLabel: '未知',
+      statusLabel: 'Không rõ',
       reason: '旧报告或诊断证据不足，无法判断本次运行状态',
       components: {},
       copyText: 'data_status: unknown',
@@ -405,7 +405,7 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByText('运行状态'));
+    fireEvent.click(await screen.findByText('Trạng thái chạy'));
     fireEvent.click(screen.getByRole('button', { name: 'View run flow for history record 1' }));
 
     await waitFor(() => {
@@ -930,7 +930,7 @@ describe('HomePage', () => {
             stockName: 'Apple',
             reportType: 'detailed' as const,
             sentimentScore: 68,
-            operationAdvice: '中性',
+            operationAdvice: 'Trung tính',
             createdAt: '2026-01-01T09:20:00+08:00',
           }],
         });
@@ -1057,7 +1057,7 @@ describe('HomePage', () => {
       stockName: 'Apple',
       reportType: 'detailed' as const,
       sentimentScore: 68,
-      operationAdvice: '中性',
+      operationAdvice: 'Trung tính',
       createdAt: '2026-01-01T09:20:00+08:00',
     };
     vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['AAPL']);
@@ -1157,7 +1157,7 @@ describe('HomePage', () => {
             stockName: 'Apple',
             reportType: 'detailed' as const,
             sentimentScore: 68,
-            operationAdvice: '中性',
+            operationAdvice: 'Trung tính',
             createdAt: `${todayInShanghai}T09:20:00`,
           }],
         });
@@ -1182,7 +1182,7 @@ describe('HomePage', () => {
             stockName: 'Apple',
             reportType: 'detailed' as const,
             sentimentScore: 68,
-            operationAdvice: '中性',
+            operationAdvice: 'Trung tính',
             createdAt: `${todayInShanghai}T09:20:00`,
           }],
         });
@@ -1354,7 +1354,7 @@ describe('HomePage', () => {
           stockName: 'Apple',
           reportType: 'detailed',
           sentimentScore: 68,
-          operationAdvice: '中性',
+          operationAdvice: 'Trung tính',
           createdAt: `${todayInShanghai}T09:20:00`,
         }],
       });
@@ -1403,7 +1403,7 @@ describe('HomePage', () => {
         stockCode: 'AAPL',
         stockName: 'Apple',
         reportType: 'detailed',
-        reportLanguage: 'zh',
+        reportLanguage: 'vi',
         createdAt: `${todayInShanghai}T09:20:00`,
       },
       summary: {
@@ -1447,7 +1447,7 @@ describe('HomePage', () => {
           stockName: 'Apple',
           reportType: 'detailed',
           sentimentScore: 68,
-          operationAdvice: '中性',
+          operationAdvice: 'Trung tính',
           createdAt: `${todayInShanghai}T09:20:00`,
         }],
       });
@@ -1546,7 +1546,7 @@ describe('HomePage', () => {
         stockCode: 'AAPL',
         stockName: 'Apple',
         reportType: 'detailed',
-        reportLanguage: 'zh',
+        reportLanguage: 'vi',
         createdAt: `${todayInShanghai}T09:20:00`,
       },
       summary: {
@@ -1589,7 +1589,7 @@ describe('HomePage', () => {
           stockName: 'Apple',
           reportType: 'detailed',
           sentimentScore: 68,
-          operationAdvice: '中性',
+          operationAdvice: 'Trung tính',
           createdAt: `${todayInShanghai}T09:20:00`,
         }],
       });
@@ -2541,7 +2541,7 @@ describe('HomePage', () => {
 
     expect(screen.getByText(/Stock 600519 is already being analyzed/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '关闭' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
 
     expect(screen.queryByText(/Stock 600519 is already being analyzed/)).not.toBeInTheDocument();
   });
@@ -2824,7 +2824,7 @@ describe('HomePage', () => {
 
     expect(await screen.findByRole('button', { name: 'Copy Markdown Source' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy Plain Text' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '复制 Markdown 源码' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sao chép mã nguồn Markdown' })).not.toBeInTheDocument();
   });
 
   it('scrolls the dashboard to market review feedback after toolbar clicks', async () => {
@@ -2958,7 +2958,7 @@ describe('HomePage', () => {
     expect(dashboardScroll).toContainElement(marketReviewReport);
     expect(marketReviewReport.className).not.toContain('max-h-64');
     expect(marketReviewReport.className).not.toContain('overflow-y-auto');
-    expect(screen.getByRole('heading', { name: '结构化大盘数据' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Dữ liệu thị trường có cấu trúc' })).toBeInTheDocument();
     expect(screen.getByText('3200')).toBeInTheDocument();
     expect(screen.getByText('3150.20')).toBeInTheDocument();
     expect(marketReviewReport.querySelector('h2, h3')?.textContent).not.toBe('A股市场复盘');
@@ -3203,7 +3203,7 @@ describe('HomePage', () => {
     fireEvent.change(input, { target: { value: 'AAPL' } });
 
     // Click "Reanalyze"
-    const reanalyzeButton = screen.getByRole('button', { name: '重新分析' });
+    const reanalyzeButton = screen.getByRole('button', { name: 'Phân tích lại' });
     fireEvent.click(reanalyzeButton);
 
     // Verify that analyzeAsync is called with the report's stock code, not the search box text
@@ -3332,7 +3332,7 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { name: '行业/主题轮动' })).toBeInTheDocument();
     expect(screen.getByText('赚钱效应')).toBeInTheDocument();
     expect(screen.getByRole('table')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '重新分析' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Phân tích lại' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ask AI' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Rerun market review' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'History trend' })).toBeInTheDocument();

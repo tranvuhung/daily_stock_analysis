@@ -7,7 +7,7 @@ const baseMeta = {
   stockCode: '600519',
   stockName: '贵州茅台',
   reportType: 'detailed' as const,
-  reportLanguage: 'zh' as const,
+  reportLanguage: 'vi' as const,
   createdAt: '2026-03-21T08:00:00Z',
 };
 
@@ -138,14 +138,14 @@ describe('ReportOverview', () => {
       />,
     );
 
-    expect(screen.getByText('关联板块')).toBeInTheDocument();
+    expect(screen.getByText('Nhóm ngành liên quan')).toBeInTheDocument();
     expect(screen.getByText('白酒')).toBeInTheDocument();
-    expect(screen.getAllByText('领涨')).toHaveLength(2);
+    expect(screen.getAllByText('Dẫn dắt')).toHaveLength(2);
     expect(screen.getByText('+2.31%')).toBeInTheDocument();
     expect(screen.getByText('+4.56%')).toBeInTheDocument();
-    expect(screen.getByText('领跌')).toBeInTheDocument();
+    expect(screen.getByText('Suy yếu')).toBeInTheDocument();
     expect(screen.getByText('-1.20%')).toBeInTheDocument();
-    expect(screen.queryByText('中性')).not.toBeInTheDocument();
+    expect(screen.queryByText('Trung tính')).not.toBeInTheDocument();
   });
 
   it('does not apply industry ranking to a concept board with the same name', () => {
@@ -168,8 +168,8 @@ describe('ReportOverview', () => {
     );
 
     expect(screen.getByText('白酒')).toBeInTheDocument();
-    expect(screen.getByText('关联板块')).toBeInTheDocument();
-    expect(screen.getByText('领跌')).toBeInTheDocument();
+    expect(screen.getByText('Nhóm ngành liên quan')).toBeInTheDocument();
+    expect(screen.getByText('Suy yếu')).toBeInTheDocument();
     expect(screen.getByText('-3.20%')).toBeInTheDocument();
     expect(screen.queryByText('+2.31%')).not.toBeInTheDocument();
   });
@@ -201,7 +201,7 @@ describe('ReportOverview', () => {
       />,
     );
 
-    const relatedBoardsRegion = screen.getByRole('region', { name: '关联板块' });
+    const relatedBoardsRegion = screen.getByRole('region', { name: 'Nhóm ngành liên quan' });
 
     expect(within(relatedBoardsRegion).getByText(sectorRankingBoard)).toBeInTheDocument();
     expect(within(relatedBoardsRegion).getByText(conceptRankingBoard)).toBeInTheDocument();
@@ -225,12 +225,12 @@ describe('ReportOverview', () => {
       />,
     );
 
-    const actionAdviceTitle = screen.getByText('操作建议');
-    const relatedBoardsRegion = screen.getByRole('region', { name: '关联板块' });
+    const actionAdviceTitle = screen.getByText('Khuyến nghị hành động');
+    const relatedBoardsRegion = screen.getByRole('region', { name: 'Nhóm ngành liên quan' });
     const boardLists = container.querySelectorAll('.home-related-board-list');
 
     expect(actionAdviceTitle.compareDocumentPosition(relatedBoardsRegion) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText('关联板块')).toBeInTheDocument();
+    expect(screen.getByText('Nhóm ngành liên quan')).toBeInTheDocument();
     expect(screen.getByText('沪股通')).toBeInTheDocument();
     expect(boardLists[0]).toHaveClass(
       'flex-nowrap',
@@ -253,11 +253,11 @@ describe('ReportOverview', () => {
       />,
     );
 
-    expect(screen.getByText('关联板块')).toBeInTheDocument();
+    expect(screen.getByText('Nhóm ngành liên quan')).toBeInTheDocument();
     expect(screen.getByText('半导体')).toBeInTheDocument();
-    expect(screen.queryByText('中性')).not.toBeInTheDocument();
-    expect(screen.queryByText('领涨')).not.toBeInTheDocument();
-    expect(screen.queryByText('领跌')).not.toBeInTheDocument();
+    expect(screen.queryByText('Trung tính')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dẫn dắt')).not.toBeInTheDocument();
+    expect(screen.queryByText('Suy yếu')).not.toBeInTheDocument();
   });
 
   it('shows only the board when a matching ranking has no change percent', () => {
@@ -275,17 +275,17 @@ describe('ReportOverview', () => {
       />,
     );
 
-    expect(screen.getByText('关联板块')).toBeInTheDocument();
+    expect(screen.getByText('Nhóm ngành liên quan')).toBeInTheDocument();
     expect(screen.getByText('白酒')).toBeInTheDocument();
     expect(screen.queryByText('行业')).not.toBeInTheDocument();
-    expect(screen.queryByText('领涨')).not.toBeInTheDocument();
-    expect(screen.queryByText('领跌')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dẫn dắt')).not.toBeInTheDocument();
+    expect(screen.queryByText('Suy yếu')).not.toBeInTheDocument();
   });
 
   it('hides related boards section when no boards are available', () => {
     render(<ReportOverview meta={baseMeta} summary={baseSummary} details={{ belongBoards: [] }} />);
 
-    expect(screen.queryByText('板块联动')).not.toBeInTheDocument();
+    expect(screen.queryByText('LIÊN THÔNG NHÓM NGÀNH')).not.toBeInTheDocument();
   });
 
   it('renders the persisted empty-news disclosure beside the core conclusion', () => {
@@ -318,9 +318,9 @@ describe('ReportOverview', () => {
       />,
     );
 
-    expect(screen.getByText('关联板块')).toBeInTheDocument();
+    expect(screen.getByText('Nhóm ngành liên quan')).toBeInTheDocument();
     expect(screen.getByText('白酒')).toBeInTheDocument();
-    expect(screen.getByText('领跌')).toBeInTheDocument();
+    expect(screen.getByText('Suy yếu')).toBeInTheDocument();
     expect(screen.getByText('-2.50%')).toBeInTheDocument();
   });
 

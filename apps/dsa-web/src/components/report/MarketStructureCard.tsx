@@ -27,38 +27,38 @@ const STATUS_VARIANT: Record<MarketStructureStatus, BadgeVariant> = {
 };
 
 const TEXT = {
-  zh: {
-    eyebrow: '市场位置',
-    title: '题材主线与个股位置',
-    marketLayer: '大盘题材层',
-    stockLayer: '个股位置层',
-    activeThemes: '活跃题材',
-    leadingConcepts: '领涨概念',
-    leadingIndustries: '领涨行业',
-    primaryTheme: '主关联题材',
-    themePhase: '题材阶段',
-    stockRole: '个股位置',
-    riskTags: '风险标签',
-    dataQuality: '数据质量',
-    missingFields: '缺失证据',
-    empty: '暂无',
+  vi: {
+    eyebrow: 'VỊ THẾ THỊ TRƯỜNG',
+    title: 'Dòng chủ đề và vị thế cổ phiếu',
+    marketLayer: 'Lớp chủ đề thị trường',
+    stockLayer: 'Lớp vị thế cổ phiếu',
+    activeThemes: 'Chủ đề đang hoạt động',
+    leadingConcepts: 'Nhóm khái niệm dẫn dắt',
+    leadingIndustries: 'Ngành dẫn dắt',
+    primaryTheme: 'Chủ đề liên quan chính',
+    themePhase: 'Giai đoạn chủ đề',
+    stockRole: 'Vị thế cổ phiếu',
+    riskTags: 'Nhãn rủi ro',
+    dataQuality: 'Chất lượng dữ liệu',
+    missingFields: 'Bằng chứng còn thiếu',
+    empty: 'Chưa có',
     status: {
-      ok: '可用',
-      partial: '部分可用',
-      unknown: '未知',
-      not_supported: '不支持',
+      ok: 'Có sẵn',
+      partial: 'Có một phần',
+      unknown: 'Không rõ',
+      not_supported: 'Không hỗ trợ',
     },
     phase: {
-      warming: '升温',
-      accelerating: '加速',
-      cooling: '降温',
-      unknown: '未知',
+      warming: 'Đang nóng lên',
+      accelerating: 'Tăng tốc',
+      cooling: 'Hạ nhiệt',
+      unknown: 'Không rõ',
     },
     role: {
-      leader: '龙头',
-      follower: '跟随',
-      edge: '边缘关联',
-      unknown: '未知',
+      leader: 'Dẫn dắt',
+      follower: 'Đi theo',
+      edge: 'Liên quan ngoại vi',
+      unknown: 'Không rõ',
     },
   },
   en: {
@@ -95,57 +95,20 @@ const TEXT = {
       unknown: 'Unknown',
     },
   },
-  ko: {
-    eyebrow: '시장 포지션',
-    title: '테마 라인 및 종목 포지션',
-    marketLayer: '시장 테마 레이어',
-    stockLayer: '종목 포지션 레이어',
-    activeThemes: '활성 테마',
-    leadingConcepts: '선도 테마',
-    leadingIndustries: '선도 산업',
-    primaryTheme: '주요 관련 테마',
-    themePhase: '테마 단계',
-    stockRole: '종목 역할',
-    riskTags: '리스크 태그',
-    dataQuality: '데이터 품질',
-    missingFields: '부족한 근거',
-    empty: '없음',
-    status: {
-      ok: '사용 가능',
-      partial: '일부 사용',
-      unknown: '알 수 없음',
-      not_supported: '미지원',
-    },
-    phase: {
-      warming: '온도 상승',
-      accelerating: '가속',
-      cooling: '쿨다운',
-      unknown: '알 수 없음',
-    },
-    role: {
-      leader: '리더',
-      follower: '추종',
-      edge: '엣지',
-      unknown: '알 수 없음',
-    },
-  },
 } as const;
 
 const RISK_TAG_TEXT = {
-  zh: {
-    theme_data_partial: '题材主线数据不完整',
-    stock_theme_evidence_partial: '个股板块未匹配到市场题材榜单，个股位置按降级证据处理',
-    board_membership_missing: '缺少个股所属板块证据，无法判断题材位置',
+  vi: {
+    theme_data_partial: 'Dữ liệu dòng chủ đề chưa đầy đủ',
+    stock_theme_evidence_partial:
+      'Nhóm ngành của cổ phiếu không khớp bảng xếp hạng chủ đề, vị thế cổ phiếu được xử lý theo bằng chứng suy giảm',
+    board_membership_missing:
+      'Thiếu bằng chứng về nhóm ngành của cổ phiếu, không xác định được vị thế chủ đề',
   },
   en: {
     theme_data_partial: 'Market theme data is incomplete',
     stock_theme_evidence_partial: 'Stock board did not match theme rankings',
     board_membership_missing: 'Stock board membership evidence is missing',
-  },
-  ko: {
-    theme_data_partial: '테마 데이터가 불완전합니다',
-    stock_theme_evidence_partial: '종목 보드가 테마 랭킹과 일치하지 않았습니다',
-    board_membership_missing: '종목 보드 근거가 없어 테마 위치를 판단할 수 없습니다',
   },
 } as const;
 
@@ -176,11 +139,7 @@ export const MarketStructureCard: React.FC<MarketStructureCardProps> = ({ contex
   }
 
   const reportLanguage = normalizeReportLanguage(language);
-  const text = reportLanguage === 'en'
-    ? TEXT.en
-    : reportLanguage === 'ko'
-      ? TEXT.ko
-      : TEXT.zh;
+  const text = reportLanguage === 'en' ? TEXT.en : TEXT.vi;
   const marketTheme = context.marketThemeContext;
   const stockPosition = context.stockMarketPosition;
   if (!marketTheme || !stockPosition) {

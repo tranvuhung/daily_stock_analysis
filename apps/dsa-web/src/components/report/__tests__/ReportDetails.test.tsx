@@ -40,10 +40,10 @@ describe('ReportDetails', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '原始分析结果' }));
-    fireEvent.click(screen.getByRole('button', { name: '分析快照' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kết quả phân tích gốc' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ảnh chụp phân tích' }));
 
-    const [rawCopyButton, snapshotCopyButton] = screen.getAllByRole('button', { name: '复制' });
+    const [rawCopyButton, snapshotCopyButton] = screen.getAllByRole('button', { name: 'Sao chép' });
 
     await act(async () => {
       fireEvent.click(rawCopyButton);
@@ -51,8 +51,8 @@ describe('ReportDetails', () => {
     });
 
     expect(writeTextMock).toHaveBeenNthCalledWith(1, JSON.stringify(details.rawResult, null, 2));
-    expect(screen.getByRole('button', { name: '已复制' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: '复制' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Đã sao chép!' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Sao chép' })).toHaveLength(1);
 
     await act(async () => {
       fireEvent.click(snapshotCopyButton);
@@ -60,13 +60,13 @@ describe('ReportDetails', () => {
     });
 
     expect(writeTextMock).toHaveBeenNthCalledWith(2, JSON.stringify(details.contextSnapshot, null, 2));
-    expect(screen.getAllByRole('button', { name: '已复制' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Đã sao chép!' })).toHaveLength(2);
 
     act(() => {
       vi.advanceTimersByTime(2000);
     });
 
-    expect(screen.getAllByRole('button', { name: '复制' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Sao chép' })).toHaveLength(2);
   });
 
   it('does not render when details and record id are both absent', () => {

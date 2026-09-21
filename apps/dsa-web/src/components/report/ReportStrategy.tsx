@@ -37,7 +37,7 @@ const StrategyItem: React.FC<StrategyItemProps> = ({
 /**
  * Strategy levels section component - terminal style
  */
-export const ReportStrategy: React.FC<ReportStrategyProps> = ({ strategy, language = 'zh' }) => {
+export const ReportStrategy: React.FC<ReportStrategyProps> = ({ strategy, language = 'vi' }) => {
   if (!strategy) {
     return null;
   }

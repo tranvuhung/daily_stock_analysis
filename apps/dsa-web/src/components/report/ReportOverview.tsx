@@ -50,10 +50,12 @@ const normalizeBoardType = (value?: string): 'sector' | 'concept' | null => {
   if (!normalized) {
     return null;
   }
-  if (['行业', '行业板块', 'industry', 'sector'].includes(normalized)) {
+  // Giá trị so khớp đến từ backend (không phải nhãn hiển thị): giữ bản tiếng Trung
+  // cho dữ liệu cũ, thêm bản tiếng Việt cho dữ liệu hiện tại.
+  if (['ngành', 'nhóm ngành', '行业', '行业板块', 'industry', 'sector'].includes(normalized)) {
     return 'sector';
   }
-  if (['概念', '概念板块', '题材', 'concept', 'theme'].includes(normalized)) {
+  if (['khái niệm', 'chủ đề', '概念', '概念板块', '题材', 'concept', 'theme'].includes(normalized)) {
     return 'concept';
   }
   return null;

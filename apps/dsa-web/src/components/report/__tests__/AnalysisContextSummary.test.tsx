@@ -28,7 +28,7 @@ const overview: AnalysisContextPackOverview = {
   blocks: [
     {
       key: 'quote',
-      label: '行情',
+      label: 'giá',
       status: 'available',
       source: 'mock_quote',
       warnings: [],
@@ -36,7 +36,7 @@ const overview: AnalysisContextPackOverview = {
     },
     {
       key: 'news',
-      label: '新闻',
+      label: 'tin tức',
       status: 'missing',
       source: null,
       warnings: ['news_provider_timeout'],
@@ -44,7 +44,7 @@ const overview: AnalysisContextPackOverview = {
     },
     {
       key: 'fundamentals',
-      label: '基本面',
+      label: 'cơ bản',
       status: 'fetch_failed',
       source: 'fundamental_pipeline',
       warnings: [],
@@ -127,37 +127,37 @@ describe('AnalysisContextSummary', () => {
 
     const panel = screen.getByTestId('analysis-context-summary');
     expect(panel).not.toHaveAttribute('open');
-    expect(within(panel).getAllByText('输入数据块')[0]).toBeVisible();
-    expect(screen.getAllByText('可用 1')[0]).toBeVisible();
-    expect(screen.getAllByText('缺失 1')[0]).toBeVisible();
-    expect(screen.getAllByText('抓取失败 1')[0]).toBeVisible();
-    expect(screen.getAllByText('质量分 82/100 可用')[0]).toBeVisible();
-    expect(screen.getByText('触发来源: api')).toBeVisible();
-    expect(screen.getByText('来源: mock_quote')).not.toBeVisible();
+    expect(within(panel).getAllByText('Khối dữ liệu đầu vào')[0]).toBeVisible();
+    expect(screen.getAllByText('Có sẵn 1')[0]).toBeVisible();
+    expect(screen.getAllByText('Thiếu 1')[0]).toBeVisible();
+    expect(screen.getAllByText('Lấy dữ liệu thất bại 1')[0]).toBeVisible();
+    expect(screen.getAllByText('Điểm chất lượng 82/100 Dùng được')[0]).toBeVisible();
+    expect(screen.getByText('Nguồn kích hoạt: api')).toBeVisible();
+    expect(screen.getByText('Nguồn: mock_quote')).not.toBeVisible();
 
-    fireEvent.click(within(panel).getAllByText('输入数据块')[0]);
+    fireEvent.click(within(panel).getAllByText('Khối dữ liệu đầu vào')[0]);
 
     expect(panel).toHaveAttribute('open');
-    expect(screen.getByText('行情')).toBeInTheDocument();
-    expect(screen.getByText('来源: mock_quote')).toBeVisible();
-    expect(screen.getByText('告警:')).toBeInTheDocument();
+    expect(screen.getByText('giá')).toBeInTheDocument();
+    expect(screen.getByText('Nguồn: mock_quote')).toBeVisible();
+    expect(screen.getByText('Cảnh báo:')).toBeInTheDocument();
     expect(screen.getByText(/intraday_realtime_overlay/)).toBeInTheDocument();
-    expect(screen.getByText('数据限制:')).toBeInTheDocument();
-    expect(screen.getByText(/基本面：抓取失败/)).toBeInTheDocument();
+    expect(screen.getByText('Giới hạn dữ liệu:')).toBeInTheDocument();
+    expect(screen.getByText(/cơ bản: Lấy dữ liệu thất bại/)).toBeInTheDocument();
     expect(screen.getByText(/news_provider_timeout/)).toBeInTheDocument();
-    expect(screen.getByText(/说明: 新闻未进入本次 LLM 分析，结论未使用新闻上下文/)).toBeInTheDocument();
-    expect(screen.getByText(/诊断码: news_context_missing/)).toBeInTheDocument();
-    expect(screen.getByText(/报告页相关资讯由独立接口补充，显示与否不代表已进入本次分析/)).toBeInTheDocument();
-    expect(screen.getByText('来源: 未记录输入来源')).toBeInTheDocument();
+    expect(screen.getByText(/Diễn giải: Tin tức không đi vào lượt chạy LLM này/)).toBeInTheDocument();
+    expect(screen.getByText(/Mã chẩn đoán: news_context_missing/)).toBeInTheDocument();
+    expect(screen.getByText(/mục tin liên quan trên trang báo cáo do một API riêng bổ sung/)).toBeInTheDocument();
+    expect(screen.getByText('Nguồn: Không ghi nhận nguồn đầu vào')).toBeInTheDocument();
     expect(screen.queryByText(/^处理:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^范围:/)).not.toBeInTheDocument();
-    const fundamentalsBlock = screen.getByText('基本面').closest('.home-subpanel');
+    const fundamentalsBlock = screen.getByText('cơ bản').closest('.home-subpanel');
     expect(fundamentalsBlock).not.toBeNull();
     const fundamentals = within(fundamentalsBlock as HTMLElement);
-    expect(fundamentals.getByText(/说明: 基本面抓取失败，本次分析未使用基本面数据/)).toBeInTheDocument();
-    expect(fundamentals.getByText(/诊断码: fundamental_pipeline_failed/)).toBeInTheDocument();
-    expect(screen.getAllByText('新闻结果数: 3').some((item) => item.textContent === '新闻结果数: 3')).toBe(true);
-    expect(screen.getAllByText('本次分析输入')[0]).toBeVisible();
+    expect(fundamentals.getByText(/Diễn giải: Lấy dữ liệu cơ bản thất bại/)).toBeInTheDocument();
+    expect(fundamentals.getByText(/Mã chẩn đoán: fundamental_pipeline_failed/)).toBeInTheDocument();
+    expect(screen.getAllByText('Số kết quả tin tức: 3').some((item) => item.textContent === 'Số kết quả tin tức: 3')).toBe(true);
+    expect(screen.getAllByText('Đầu vào của lượt phân tích này')[0]).toBeVisible();
   });
 
   it('localizes the collapsed summary for english reports', () => {
@@ -188,7 +188,7 @@ describe('AnalysisContextSummary', () => {
       ...overview,
       blocks: [{
         key: 'fundamentals',
-        label: '基本面',
+        label: 'cơ bản',
         status: 'available',
         source: null,
         warnings: [],
@@ -208,11 +208,11 @@ describe('AnalysisContextSummary', () => {
 
     render(<AnalysisContextSummary overview={availableFundamentalsOverview} />);
 
-    fireEvent.click(screen.getAllByText('输入数据块')[0]);
+    fireEvent.click(screen.getAllByText('Khối dữ liệu đầu vào')[0]);
 
-    expect(screen.getByText(/说明: 未记录基本面来源链元数据/)).toBeInTheDocument();
-    expect(screen.getByText(/基本面是否进入本次分析以当前状态为准/)).toBeInTheDocument();
-    expect(screen.getByText(/诊断码: fundamental_source_chain_missing/)).toBeInTheDocument();
+    expect(screen.getByText(/Diễn giải: Không ghi nhận metadata chuỗi nguồn của dữ liệu cơ bản/)).toBeInTheDocument();
+    expect(screen.getByText(/lấy theo trạng thái hiện tại/)).toBeInTheDocument();
+    expect(screen.getByText(/Mã chẩn đoán: fundamental_source_chain_missing/)).toBeInTheDocument();
     expect(screen.queryByText(/本次分析未使用基本面数据/)).not.toBeInTheDocument();
   });
 
@@ -221,7 +221,7 @@ describe('AnalysisContextSummary', () => {
       ...overview,
       blocks: [{
         key: 'fundamentals',
-        label: '基本面',
+        label: 'cơ bản',
         status: 'fetch_failed',
         source: 'fundamental_pipeline',
         warnings: [],
@@ -241,10 +241,10 @@ describe('AnalysisContextSummary', () => {
 
     render(<AnalysisContextSummary overview={unknownReasonOverview} />);
 
-    fireEvent.click(screen.getAllByText('输入数据块')[0]);
+    fireEvent.click(screen.getAllByText('Khối dữ liệu đầu vào')[0]);
 
-    expect(screen.getByText(/说明: 数据抓取失败，本次分析未使用该数据；请检查数据源、网络或限流后重新分析/)).toBeInTheDocument();
-    expect(screen.getByText(/诊断码: brand_new_internal_code/)).toBeInTheDocument();
+    expect(screen.getByText(/Diễn giải: Lấy dữ liệu thất bại, lượt phân tích này không dùng dữ liệu đó/)).toBeInTheDocument();
+    expect(screen.getByText(/Mã chẩn đoán: brand_new_internal_code/)).toBeInTheDocument();
     expect(screen.queryByText(/^处理:/)).not.toBeInTheDocument();
   });
 
@@ -253,7 +253,7 @@ describe('AnalysisContextSummary', () => {
       ...overview,
       blocks: [{
         key: 'chip',
-        label: '筹码',
+        label: 'phân bổ cổ phiếu',
         status: 'not_supported',
         source: null,
         warnings: [],
@@ -273,10 +273,10 @@ describe('AnalysisContextSummary', () => {
 
     render(<AnalysisContextSummary overview={unsupportedChipOverview} />);
 
-    fireEvent.click(screen.getAllByText('输入数据块')[0]);
+    fireEvent.click(screen.getAllByText('Khối dữ liệu đầu vào')[0]);
 
-    expect(screen.getByText(/说明: 当前市场或标的不支持筹码数据，本次分析未使用该指标；请结合其他指标判断/)).toBeInTheDocument();
-    expect(screen.getByText(/诊断码: chip_not_supported/)).toBeInTheDocument();
+    expect(screen.getByText(/Diễn giải: Thị trường hoặc mã hiện tại không hỗ trợ dữ liệu phân bổ cổ phiếu/)).toBeInTheDocument();
+    expect(screen.getByText(/Mã chẩn đoán: chip_not_supported/)).toBeInTheDocument();
     expect(screen.queryByText(/^处理:/)).not.toBeInTheDocument();
   });
 
@@ -286,7 +286,7 @@ describe('AnalysisContextSummary', () => {
       blocks: [
         {
           key: 'quote',
-          label: '行情',
+          label: 'giá',
           status: 'fallback',
           source: 'cached_quote',
           warnings: ['quote_fallback'],
@@ -294,7 +294,7 @@ describe('AnalysisContextSummary', () => {
         },
         {
           key: 'fundamental',
-          label: '基本面',
+          label: 'cơ bản',
           status: 'stale',
           source: 'fundamental_cache',
           warnings: ['stale_fundamental'],
@@ -302,7 +302,7 @@ describe('AnalysisContextSummary', () => {
         },
         {
           key: 'technical',
-          label: '技术',
+          label: 'kỹ thuật',
           status: 'partial',
           source: 'technical_pipeline',
           warnings: ['technical_partial'],
@@ -310,7 +310,7 @@ describe('AnalysisContextSummary', () => {
         },
         {
           key: 'chip',
-          label: '筹码',
+          label: 'phân bổ cổ phiếu',
           status: 'estimated',
           source: 'estimated_chip',
           warnings: [],
@@ -318,7 +318,7 @@ describe('AnalysisContextSummary', () => {
         },
         {
           key: 'daily_bars',
-          label: '日线',
+          label: 'nến ngày',
           status: 'not_supported',
           source: null,
           warnings: [],
@@ -341,25 +341,25 @@ describe('AnalysisContextSummary', () => {
 
     const panel = screen.getByTestId('analysis-context-summary');
     expect(panel).not.toHaveAttribute('open');
-    expect(within(panel).getByText('可用 0')).toBeVisible();
-    expect(within(panel).getByText('缺失 0')).toBeVisible();
-    expect(within(panel).getAllByText('降级 1')[0]).toBeVisible();
-    expect(within(panel).getAllByText('过期 1')[0]).toBeVisible();
-    expect(within(panel).getAllByText('估算 1')[0]).toBeVisible();
-    expect(within(panel).getAllByText('部分可用 1')[0]).toBeVisible();
-    expect(within(panel).getAllByText('不支持 1')[0]).toBeVisible();
+    expect(within(panel).getByText('Có sẵn 0')).toBeVisible();
+    expect(within(panel).getByText('Thiếu 0')).toBeVisible();
+    expect(within(panel).getAllByText('Dự phòng 1')[0]).toBeVisible();
+    expect(within(panel).getAllByText('Quá hạn 1')[0]).toBeVisible();
+    expect(within(panel).getAllByText('Ước tính 1')[0]).toBeVisible();
+    expect(within(panel).getAllByText('Có một phần 1')[0]).toBeVisible();
+    expect(within(panel).getAllByText('Không hỗ trợ 1')[0]).toBeVisible();
 
-    fireEvent.click(within(panel).getAllByText('输入数据块')[0]);
+    fireEvent.click(within(panel).getAllByText('Khối dữ liệu đầu vào')[0]);
 
-    const quoteBlock = screen.getByText('行情').closest('.home-subpanel');
+    const quoteBlock = screen.getByText('giá').closest('.home-subpanel');
     expect(quoteBlock).not.toBeNull();
-    expect(within(quoteBlock as HTMLElement).getByText('说明: 本次分析使用了备用数据路径；请结合来源和告警复核结果')).toBeInTheDocument();
+    expect(within(quoteBlock as HTMLElement).getByText('Diễn giải: Lượt phân tích này dùng đường dữ liệu dự phòng; hãy đối chiếu nguồn và cảnh báo để rà soát kết quả')).toBeInTheDocument();
     expect(within(quoteBlock as HTMLElement).queryByText(/^处理:/)).not.toBeInTheDocument();
 
-    expect(screen.getByText('说明: 本次分析使用的不是最新数据；请检查更新时间并按需重新分析')).toBeInTheDocument();
-    expect(screen.getByText('说明: 仅部分数据进入本次分析，相关结论可能不完整；请检查告警和数据源后重新分析')).toBeInTheDocument();
-    expect(screen.getByText('说明: 本次分析使用了估算数据；请结合原始数据复核结果')).toBeInTheDocument();
-    expect(screen.getByText('说明: 当前市场或标的不支持该数据，本次分析未使用该数据；请结合其他指标判断')).toBeInTheDocument();
+    expect(screen.getByText('Diễn giải: Lượt phân tích này dùng dữ liệu có thể không phải mới nhất; hãy kiểm tra thời điểm cập nhật và phân tích lại nếu cần')).toBeInTheDocument();
+    expect(screen.getByText('Diễn giải: Chỉ một phần dữ liệu đi vào lượt phân tích này nên kết luận liên quan có thể thiếu; hãy kiểm tra cảnh báo và nguồn rồi phân tích lại')).toBeInTheDocument();
+    expect(screen.getByText('Diễn giải: Lượt phân tích này dùng dữ liệu ước tính; hãy đối chiếu với dữ liệu gốc để rà soát kết quả')).toBeInTheDocument();
+    expect(screen.getByText('Diễn giải: Thị trường hoặc mã hiện tại không hỗ trợ dữ liệu này nên lượt phân tích không dùng; hãy kết hợp các chỉ báo khác')).toBeInTheDocument();
   });
 
   it('does not render without an overview', () => {
@@ -388,7 +388,7 @@ describe('AnalysisContextSummary', () => {
 
     render(<AnalysisContextSummary overview={unsafeOverview} />);
 
-    fireEvent.click(screen.getAllByText('输入数据块')[0]);
+    fireEvent.click(screen.getAllByText('Khối dữ liệu đầu vào')[0]);
 
     expect(screen.queryByText('raw trend payload')).not.toBeInTheDocument();
     expect(screen.queryByText('完整新闻正文不应出现')).not.toBeInTheDocument();
@@ -414,7 +414,7 @@ describe('ReportSummary analysis context placement', () => {
         stockCode: '600519',
         stockName: '贵州茅台',
         reportType: 'detailed',
-        reportLanguage: 'zh',
+        reportLanguage: 'vi',
         createdAt: '2026-04-10T12:00:00',
         marketPhaseSummary: {
           market: 'cn',
@@ -453,7 +453,7 @@ describe('ReportSummary analysis context placement', () => {
       report,
       diagnosticSummary: {
         status: 'normal',
-        statusLabel: '正常',
+        statusLabel: 'Bình thường',
         reason: '运行正常',
         components: {},
         copyText: '',
@@ -464,30 +464,30 @@ describe('ReportSummary analysis context placement', () => {
     render(<ReportSummary data={result} />);
 
     await waitFor(() => {
-      expect(screen.getByText('暂无相关资讯')).toBeInTheDocument();
+      expect(screen.getByText('Chưa có tin liên quan')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('市场阶段: CN · 盘中')).toBeInTheDocument();
-    expect(screen.getByText('Partial bar')).toBeInTheDocument();
-    expect(screen.getAllByText('质量分 82/100 可用')[0]).toBeInTheDocument();
+    expect(screen.getByText('Giai đoạn thị trường: CN · Trong phiên')).toBeInTheDocument();
+    expect(screen.getByText('Nến chưa hoàn chỉnh')).toBeInTheDocument();
+    expect(screen.getAllByText('Điểm chất lượng 82/100 Dùng được')[0]).toBeInTheDocument();
 
-    const strategy = screen.getByText('狙击点位');
-    const news = screen.getByText('相关资讯');
+    const strategy = screen.getByText('Vùng giá hành động');
+    const news = screen.getByText('Tin liên quan');
     const diagnostics = screen.getByTestId('run-diagnostics');
     const contextSummary = screen.getByTestId('analysis-context-summary');
     expect(contextSummary).not.toHaveAttribute('open');
     expect(diagnostics).not.toHaveAttribute('open');
-    const traceability = screen.getByText('数据追溯');
+    const traceability = screen.getByText('Truy vết dữ liệu');
 
     expect(strategy.compareDocumentPosition(news) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(news.compareDocumentPosition(contextSummary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(contextSummary.compareDocumentPosition(diagnostics) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(diagnostics.compareDocumentPosition(traceability) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    fireEvent.click(within(contextSummary).getAllByText('输入数据块')[0]);
-    expect(within(contextSummary).getByText(/说明: 新闻未进入本次 LLM 分析，结论未使用新闻上下文/)).toBeInTheDocument();
-    expect(within(contextSummary).getByText(/报告页相关资讯由独立接口补充，显示与否不代表已进入本次分析/)).toBeInTheDocument();
+    fireEvent.click(within(contextSummary).getAllByText('Khối dữ liệu đầu vào')[0]);
+    expect(within(contextSummary).getByText(/Diễn giải: Tin tức không đi vào lượt chạy LLM này/)).toBeInTheDocument();
+    expect(within(contextSummary).getByText(/mục tin liên quan trên trang báo cáo do một API riêng bổ sung/)).toBeInTheDocument();
     expect(screen.queryByText('AI 建议 / 决策信号')).not.toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: '题材主线与个股位置' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Dòng chủ đề và vị thế cổ phiếu' })).not.toBeInTheDocument();
     expect(screen.queryByText('Robotics')).not.toBeInTheDocument();
   });
 });

@@ -15,24 +15,21 @@ interface ReportNewsProps {
 }
 
 const NEWS_SOURCE_TEXT = {
-  zh: {
-    sourceLabel: '相关资讯/后续检索',
-    sourceHint: '来源：报告页补充资讯；是否用于分析以输入数据块为准。',
+  vi: {
+    sourceLabel: 'Tin liên quan / tra cứu bổ sung',
+    sourceHint:
+      'Nguồn: tin bổ sung trên trang báo cáo; phần thực sự dùng cho phân tích xem ở khối dữ liệu đầu vào.',
   },
   en: {
     sourceLabel: 'Related news / follow-up retrieval',
     sourceHint: 'Source: supplemental report-page news; analysis input is shown in Input Blocks.',
-  },
-  ko: {
-    sourceLabel: '관련 뉴스 / 후속 검색',
-    sourceHint: '출처: 리포트 페이지 보충 뉴스이며, 분석 사용 여부는 입력 데이터 블록 기준입니다.',
   },
 } as const;
 
 /**
  * News section component - terminal style
  */
-export const ReportNews: React.FC<ReportNewsProps> = ({ recordId, limit = 8, language = 'zh' }) => {
+export const ReportNews: React.FC<ReportNewsProps> = ({ recordId, limit = 8, language = 'vi' }) => {
   const reportLanguage = normalizeReportLanguage(language);
   const text = getReportText(reportLanguage);
   const sourceText = NEWS_SOURCE_TEXT[reportLanguage];
