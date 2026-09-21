@@ -290,7 +290,7 @@ describe('HomePage', () => {
     expect(dashboard.firstElementChild?.className).toContain('min-h-0');
     expect(dashboard.querySelector('.flex-1.flex.min-h-0.overflow-hidden')).toBeTruthy();
     expect(screen.getByTestId('home-dashboard-scroll')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter a stock code or name, e.g. 600519, Kweichow Moutai, AAPL')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Enter a stock code, name, or company')).toBeInTheDocument();
     expect(await screen.findByText('趋势维持强势')).toBeInTheDocument();
     expect(
       screen.getByRole('button', {
@@ -2509,7 +2509,7 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
-    const input = await screen.findByPlaceholderText('Enter a stock code or name, e.g. 600519, Kweichow Moutai, AAPL');
+    const input = await screen.findByPlaceholderText('Enter a stock code, name, or company');
     fireEvent.change(input, { target: { value: '600519' } });
     fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
 
@@ -2533,7 +2533,7 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
-    await screen.findByPlaceholderText('Enter a stock code or name, e.g. 600519, Kweichow Moutai, AAPL');
+    await screen.findByPlaceholderText('Enter a stock code, name, or company');
 
     act(() => {
       useStockPoolStore.setState({ duplicateError: 'Stock 600519 is already being analyzed, please wait' });
@@ -2765,7 +2765,7 @@ describe('HomePage', () => {
       </UiLanguageProvider>,
     );
 
-    fireEvent.change(await screen.findByPlaceholderText('Enter a stock code or name, e.g. 600519, Kweichow Moutai, AAPL'), {
+    fireEvent.change(await screen.findByPlaceholderText('Enter a stock code, name, or company'), {
       target: { value: 'AAPL' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
@@ -3199,7 +3199,7 @@ describe('HomePage', () => {
     await screen.findByText('趋势维持强势');
 
     // Type something else in the search box
-    const input = screen.getByPlaceholderText('Enter a stock code or name, e.g. 600519, Kweichow Moutai, AAPL');
+    const input = screen.getByPlaceholderText('Enter a stock code, name, or company');
     fireEvent.change(input, { target: { value: 'AAPL' } });
 
     // Click "Reanalyze"
@@ -3243,7 +3243,7 @@ describe('HomePage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Strategy' }));
     fireEvent.click(screen.getByRole('menuitemradio', { name: /成长质量/ }));
 
-    const input = screen.getByPlaceholderText('Enter a stock code or name, e.g. 600519, Kweichow Moutai, AAPL');
+    const input = screen.getByPlaceholderText('Enter a stock code, name, or company');
     fireEvent.change(input, { target: { value: '600519' } });
     fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
 

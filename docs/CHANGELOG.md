@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [改进] 股票搜索框与决策信号股票上下文的 placeholder 去掉 A 股示例（`600519, Kweichow Moutai, AAPL`），改为不绑定具体市场的「输入代码、名称或公司」，中英双语同步。
 - [修复] 报告页界面文案此前整体显示为中文：`normalizeReportLanguage` 没有 `vi` 分支且默认回退 `'zh'`，而后端自迁移后只发 `vi`（`api/v1/schemas/analysis.py: Literal["vi"]`），于是每份报告都落进中文标签集。现 `REPORT_TEXT` 去掉 `zh`/`ko` 并新增 `vi`，`ReportLanguage` 收敛为 `'vi' | 'en'`，非 `en` 的任何取值（含旧记录里的 `zh`/`ko`）一律回退 `vi`。
 - [修复] 同步改造 `AnalysisContextSummary`、`MarketStructureCard`、`MarketReviewReportView`、`ReportDiagnostics`、`ReportNews` 的标签表，以及 `SentimentLabel` 与 `decisionAction.ts` 的兜底动作标签；11 个组件的语言 prop 默认值从 `'zh'` 改为 `'vi'`（该默认值正是 `zh` 退出联合类型后把 prop 类型放宽成 `string` 的原因）。
 - [改进] 三处中文**刻意保留**，因为它们是对后端返回值的匹配逻辑而非展示文案：`MarketReviewReportView` 的 `genericTitles` 与 `getSectionIcon`、`ReportOverview` 的 `normalizeBoardType`、`decisionAction.ts` 的否定语判定词表。删除会破坏既有内容的渲染与解析，因此改为并列补充越南语模式。
