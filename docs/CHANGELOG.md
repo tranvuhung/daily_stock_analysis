@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [文档] `AGENTS.md` 改写为英文（`CLAUDE.md` 为软链接，同步生效）；`docs/CHANGELOG.md` 的类型标记 `新功能`/`改进`/`修复`/`文档`/`测试` 保持中文原样，它们是本文件正在使用的字面值，翻译会让规则与实际内容不符。
+- [文档] 根 `README.md` 改写为英文，并按当前默认行为说明「默认仅启用越南市场，其余市场可在配置中开启」；原中文内容移至 `docs/README_CN.md`（相对路径已按 `docs/` 层级修正），`docs/README_EN.md` 与 `docs/README_CHT.md` 仅更新语言切换行的指向。
 - [修复] Web 自动补全遇到越南市场标的直接抛异常并降级为纯输入框（`MARKET_BADGE_CONFIG` 缺少 `VN`），同时补齐 `Market` 类型联合与越南代码/指数的前端校验正则。
 - [修复] 越南语报告生成失败：`_get_source_display_name` 直接按语言键索引，遇到 `vi` 抛 `KeyError` 导致整份本地报告无法保存；改为回退英文再回退原始来源名。
 - [修复] 越南语报告中的中文残留：市场状态行、DecisionSignal 摘要此前因为只判断 `en`/`ko` 前缀而落到中文分支；成交量/成交额改用越南语量级（`triệu` / `tỷ VND`）而不是中文的 `万` / `亿元`。
