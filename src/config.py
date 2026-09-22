@@ -897,7 +897,10 @@ class Config:
     longbridge_app_secret: Optional[str] = None
     longbridge_access_token: Optional[str] = None
     longbridge_oauth_client_id: Optional[str] = None
-    stock_index_remote_update_enabled: bool = True
+    # Mặc định TẮT, khớp với ``_load_from_env``, ``config_registry`` và ``.env.example``:
+    # nguồn remote mặc định là chỉ mục A-share không có mã Việt Nam nào.
+    # Off by default, matching _load_from_env / config_registry / .env.example.
+    stock_index_remote_update_enabled: bool = False
 
     # === Built-in stock screening ===
     screening_enabled: bool = False

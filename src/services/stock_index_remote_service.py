@@ -58,7 +58,9 @@ class RemoteStockIndexResult:
 def settings_from_config(config: Any) -> RemoteStockIndexSettings:
     """Build remote stock-index settings from the application config object."""
     return RemoteStockIndexSettings(
-        enabled=bool(getattr(config, "stock_index_remote_update_enabled", True)),
+        # Thiếu thuộc tính thì mặc định TẮT — bật nhầm sẽ ghi đè bảng mã Việt Nam âm thầm.
+        # Fail safe to off: enabling it by accident silently overwrites the Vietnam index.
+        enabled=bool(getattr(config, "stock_index_remote_update_enabled", False)),
         url=DEFAULT_STOCK_INDEX_REMOTE_URL,
         ttl_hours=DEFAULT_STOCK_INDEX_REMOTE_TTL_HOURS,
         timeout_seconds=DEFAULT_STOCK_INDEX_REMOTE_TIMEOUT_SECONDS,

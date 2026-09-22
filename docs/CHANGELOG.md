@@ -104,6 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] `parseApiError` 缺参判定改为匹配英文后端文案 `must be provided`，修复 API 文案英文化后缺少 `stock_code` 时降级为通用错误提示的问题。
 - [修复] 热点题材兜底路线标题改用共享常量判定，避免文案与路线替换逻辑分别演进导致的静默失效。
 - [改进] `AlertRuleForm` 删除与 `locales/featureText` 重复的本地选项标签表，统一从 featureText 取双语标签，消除同一枚举在表单与列表页出现两套文案的漂移。
+- [修复] `STOCK_INDEX_REMOTE_UPDATE_ENABLED` 的「默认关闭」还有两处遗漏：`src/config.py` 的 dataclass 字段默认值仍是 `True`，`settings_from_config()` 的 `getattr` 兜底也是 `True`。运行期不受影响（`main.py` / `api/app.py` 都走 `Config.get_instance()` → `_load_from_env()`，那里早已是 `False`），但任何直接构造 `Config()` 的地方拿到的仍是「开启」，与 `.env.example`、配置注册表相反；缺省方向错误的兜底一旦被触发，就是静默覆盖内置越南代码表。两处统一改为 `False`。`RemoteStockIndexSettings.enabled` 保持 `True` 不动——它是测试夹具默认值，8 个用例靠它走刷新分支，而生产端 `settings_from_config()` 始终显式传值。
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
