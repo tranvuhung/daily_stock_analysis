@@ -162,8 +162,8 @@ class TestAnalyzerGenerateText:
         assert zh_by_name["market_phase"]["text"] == "## 市场阶段上下文"
         assert zh_by_name["daily_market_context"]["text"] == "## 大盘环境摘要"
         assert zh_by_name["analysis_context_pack"]["text"] == "pack summary"
-        assert zh_by_name["quote"]["text"] == "## 📈 技术面数据"
-        assert zh_by_name["news_context"]["text"] == "## 📰 舆情情报"
+        assert zh_by_name["quote"]["text"] == "## 📈 Technical Data"
+        assert zh_by_name["news_context"]["text"] == "## 📰 News Intelligence"
         assert {marker["message_role"] for marker in zh_markers} == {"user"}
 
         en_markers = _legacy_audit_marker_specs(

@@ -446,7 +446,7 @@ class TestAgentFactorySkillBaseline(unittest.TestCase):
             instructions="bull_trend instructions",
         )
 
-        self.assertIn("严进策略", kwargs["default_skill_policy"])
+        self.assertIn("Strict entry (never chase)", kwargs["default_skill_policy"])
         self.assertTrue(kwargs["use_legacy_default_prompt"])
         skill_manager.activate.assert_called_once_with(["bull_trend"])
 
@@ -467,7 +467,7 @@ class TestAgentFactorySkillBaseline(unittest.TestCase):
             instructions="bull_trend instructions",
         )
 
-        self.assertIn("严进策略", kwargs["default_skill_policy"])
+        self.assertIn("Strict entry (never chase)", kwargs["default_skill_policy"])
         self.assertTrue(kwargs["use_legacy_default_prompt"])
         skill_manager.activate.assert_called_once_with(["bull_trend"])
 
@@ -509,7 +509,7 @@ class TestAgentFactorySkillBaseline(unittest.TestCase):
             instructions="bull_trend instructions",
         )
 
-        self.assertIn("严进策略", kwargs["default_skill_policy"])
+        self.assertIn("Strict entry (never chase)", kwargs["default_skill_policy"])
         self.assertTrue(kwargs["use_legacy_default_prompt"])
         skill_manager.activate.assert_called_once_with(["bull_trend"])
 

@@ -58,6 +58,46 @@ CORE_TRADING_SKILL_POLICY_ZH = """## 默认技能基线（必须严格遵守）
 - 强势趋势股可适当放宽乖离率要求，轻仓追踪但需设止损
 """
 
+# Bản tiếng Anh của cùng bộ quy tắc, dùng cho prompt của GeminiAnalyzer.
+# Phải giữ đồng bộ từng mục với bản _ZH ở trên.
+# English variant of the same baseline, used by the GeminiAnalyzer prompt.
+# Keep it section-for-section in sync with the _ZH version above.
+CORE_TRADING_SKILL_POLICY_EN = """## Default Skill Baseline (must be followed strictly)
+
+The currently activated skills may add or refine analysis perspectives, but the default
+risk controls and trading rhythm below must always be respected.
+
+### 1. Strict entry (never chase)
+- **Never chase a rally**: do not buy when price is more than 5% above MA5
+- Bias < 2%: ideal buy zone
+- Bias 2-5%: small position only
+- Bias > 5%: chasing is forbidden — rate it "Watch"
+
+### 2. Trend trading (follow the trend)
+- **Bullish alignment requires**: MA5 > MA10 > MA20
+- Only trade bullish alignment; never touch bearish alignment
+- Moving averages fanning out upward is better than moving averages converging
+
+### 3. Efficiency first (chip structure)
+- Watch chip concentration: a 90% concentration below 15% means chips are concentrated
+- Profit-ratio analysis: be wary of profit taking when 70-90% of holders are in profit
+- Average cost vs current price: 5-15% above average cost is healthy
+
+### 4. Entry preference (pullback to support)
+- **Best entry**: a low-volume pullback that finds support at MA5
+- **Second-best entry**: a pullback that finds support at MA10
+- **Stand aside**: when price breaks below MA20
+
+### 5. Risk review focus
+- Share-reduction announcements, profit warnings, regulatory penalties, adverse industry policy, large lock-up expiries
+
+### 6. Valuation watch (PE/PB)
+- Call out a clearly elevated PE in the risk section
+
+### 7. Relaxation for strong trends
+- For a strongly trending stock the bias requirement may be relaxed: track it with a light position, but always set a stop loss
+"""
+
 TECHNICAL_SKILL_RULES_EN = """## Default Skill Baseline
 
 Treat the currently activated skills as the primary analysis lens, but keep the
@@ -79,7 +119,7 @@ def get_default_trading_skill_policy(*, explicit_skill_selection: bool) -> str:
     """
     if explicit_skill_selection:
         return ""
-    return CORE_TRADING_SKILL_POLICY_ZH
+    return CORE_TRADING_SKILL_POLICY_EN
 
 
 def get_default_technical_skill_policy(*, explicit_skill_selection: bool) -> str:

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [改进] `src/analyzer.py` 的 LLM prompt 全量改为英文：`LEGACY_DEFAULT_SYSTEM_PROMPT`、`SYSTEM_PROMPT`、`TEXT_SYSTEM_PROMPT` 与 `_format_prompt` 正文（约 560 行）。此前 prompt 对**所有**报告语言都是中文，只靠末尾的「输出语言」小节要求模型改用越南语，`_get_analysis_system_prompt` 甚至要额外加一句「上方 JSON 模板里的中文示例值只是占位、不要照抄」来打补丁。现改为「英文 prompt + 输出语言指令」，该补丁改写为对称形式（中文分支反过来提醒英文示例值只是占位）。
+- [修复] prompt 中的价格单位此前硬编码为 `元`（CNY），越南标的（VND）、台股（TWD）等全部显示错误。现按 `data_provider.base._market_tag` + `src.core.markets.get_spec` 取所属市场的报价币种；市场未识别或未启用时不再输出单位，避免表格里留下多余空格。注意不能用 `src/market_context.detect_market`，它只认 cn/hk/us，会把所有越南裸码判成美股。
+- [修复] prompt 此前要求模型「明确输出该股票的正确中文全称」，对越南语报告是错的；现改为按报告输出语言给出公司全称。
+- [改进] JSON 模板里的示例枚举值改为英文（`Strong Bullish/Bullish/Sideways/Bearish/Strong Bearish`、`High/Medium/Low`、`Expanding volume/...` 等）。改前逐项核对 `src/report_language.py` 的 canonical 映射表确认英文键已存在，因此 `decision_type` 归一化与既有中文历史数据的解析均不受影响；未新增或删除任何映射键。
+- [修复] 送入 prompt 的 `trend_status` / `volume_status` / `buy_signal` 此前是 `src/stock_analyzer.py` 的中文枚举原值，越南语报告的 prompt 因此中英混排。现在**渲染环节**用既有的 `localize_*` 函数翻译。必须放在渲染环节：`_infer_trend_direction` 与 `_sanitize_trend_analysis_for_prompt` 依赖中文原文做匹配，提前翻译会让趋势冲突过滤整体失效。`zh` 报告下这些函数是 no-op。
+- [改进] `src/analyzer.py` 的 20 处 `logger.*` 中文日志改为英文，保留既有前缀结构（`[LLM配置]` -> `[LLM config]` 等）以便继续 grep。注释与 docstring 改为越南语＋英语双语。
+- [改进] 新增 `CANONICAL_DECISION_SCALE_PROMPT_EN`（`src/schemas/decision_scale.py`）与 `CORE_TRADING_SKILL_POLICY_EN`（`src/agent/skills/defaults.py`），与既有 `_ZH` 版本逐条对应；`get_default_trading_skill_policy()` 改返回英文版。`_ZH` 版本保留导出。
+- [改进] `_legacy_audit_marker_specs` 的 `quote` / `news_context` 标记文本随 prompt 小节标题同步改为英文。这两个标记用于 `src/llm/usage.py` 的 prompt 审计定位，若不同步会静默失配。
+- [修复] `tests/test_analyzer_news_prompt.py` 中「implicit default run 保留注入的 default_skill_policy」一项此前是**空断言**：`LEGACY_DEFAULT_SYSTEM_PROMPT` 根本没有 `{default_skill_policy_section}` 占位符（只有 `SYSTEM_PROMPT` 有），注入的策略在 legacy 模式下会被丢弃，该断言只是碰巧匹配到内置中文基线里的同一句话。现改为断言内置基线本身。
+- [测试] 同步更新 prompt 断言：`tests/test_analyzer_news_prompt.py`、`tests/test_market_analyzer_generate_text.py`、`tests/test_pipeline_daily_market_context.py`、`tests/test_tw_report_consumption.py`、`tests/test_agent_pipeline.py`。报告渲染层（`TestTwInstitutionRender`）仍按语言输出本地化标签，未改动。
+
 - [改进] 股票搜索框与决策信号股票上下文的 placeholder 去掉 A 股示例（`600519, Kweichow Moutai, AAPL`），改为不绑定具体市场的「输入代码、名称或公司」，中英双语同步。
 - [修复] 报告页界面文案此前整体显示为中文：`normalizeReportLanguage` 没有 `vi` 分支且默认回退 `'zh'`，而后端自迁移后只发 `vi`（`api/v1/schemas/analysis.py: Literal["vi"]`），于是每份报告都落进中文标签集。现 `REPORT_TEXT` 去掉 `zh`/`ko` 并新增 `vi`，`ReportLanguage` 收敛为 `'vi' | 'en'`，非 `en` 的任何取值（含旧记录里的 `zh`/`ko`）一律回退 `vi`。
 - [修复] 同步改造 `AnalysisContextSummary`、`MarketStructureCard`、`MarketReviewReportView`、`ReportDiagnostics`、`ReportNews` 的标签表，以及 `SentimentLabel` 与 `decisionAction.ts` 的兜底动作标签；11 个组件的语言 prop 默认值从 `'zh'` 改为 `'vi'`（该默认值正是 `zh` 退出联合类型后把 prop 类型放宽成 `string` 的原因）。
