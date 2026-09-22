@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [新功能] `scripts/run-app.sh` 新增 `start`：在本机跑**真实服务**。直接读仓库 `.env`（真实 `data/stock_analysis.db`、`MARKET_REVIEW_ENABLED`、`WEBUI_AUTO_BUILD` 等一律不覆盖），执行 `main.py --serve --schedule`，即 FastAPI + Web UI + 进程内 runtime scheduler + bot client。等价于 `docker/docker-compose.yml` 的 `analyzer` + `server` 两个容器合并为单进程——`main.py:1636-1650` 明确让 scheduler 跑在 API 进程内，"keeps Web settings, status, and run-now actions attached to the real scheduler"。
+- [改进] 原有 `serve` / `dry-run` / `analyze` / `smoke` **行为完全不变**，仍是临时 `.env` + 临时 DB 的隔离验证环境，review 流程不受影响。两种模式的 PID 文件、日志、端口相互独立（真实服务用 `WEBUI_PORT`，默认 8000；验证环境固定 8765）。
+- [新功能] `status` 子命令：显示当前跑的是哪种模式、PID、端口与 `/api/v1/health` 结果。`stop` 现在同时停止两种模式。
+- [改进] `start` 默认传 `--no-run-immediately`。`.env` 里 `SCHEDULE_RUN_IMMEDIATELY=true` 和 `RUN_IMMEDIATELY=true`，不拦截的话一启动就会分析整个 `STOCK_LIST`，白白消耗 LLM 配额；需要时用 `--run-now` 显式开启。另有 `--no-notify`。
+- [新功能] `start` 启动前做三项预检：(1) 用 `data_provider.base._market_tag` 校验 `STOCK_LIST` 是否有标的属于已启用市场——当前 `.env` 是 A 股代码而市场默认 `vn`，定时任务会全部过滤掉、什么也不做；(2) 打印通知渠道是否具备投递条件，避免日后填了 `FEISHU_CHAT_ID` 后意外推送真实消息；(3) `WEBUI_AUTO_BUILD=true` 且缺少 `static/index.html` 时提示首次启动会跑 npm 构建。预检只读 `.env`，不修改用户的配置文件。
+- [修复] 停止服务后立刻重启常失败（`FastAPI port is not available`）。原 `free_port` 只用 `lsof -sTCP:LISTEN` 判断，而该命令看不到**客户端侧**残留的 CLOSED/TIME_WAIT 连接——实测 VS Code 自动转发端口就会留下这类 socket，照样让 `bind()` 失败。现改为轮询真正的 `bind()` 探测（与 `main.py:1275-1281` 完全一致），最长 45 秒；超时则打印 `lsof -i:PORT` 指出谁占着端口。
+- [文档] `.claude/skills/run-app/SKILL.md` 增加两种模式的对照表与 `start` 用法；验证流程部分保持不变。
+
 - [修复] Run Flow 面板在**任务运行中**仍显示中文进度文案。`src/core/pipeline.py` 的 11 处 `_emit_progress` 是硬编码中文，经 `progress_callback` → `task_queue.update_task_progress` → `task.message` → `src/services/run_flow.py:134,151,898,908,938` 直接渲染到面板与 SSE 流。上一轮只验证了**历史记录**的 Run Flow（该路径不读 `task.message`），因此漏掉。这些是自由文本、不带稳定标识，前端无法像 lane/node 标签那样自行翻译，所以在源头按 `REPORT_LANGUAGE` 本地化。
 - [改进] 进度文案表 `_PIPELINE_PROGRESS_MESSAGES` 与取值函数 `get_pipeline_progress_text()` 放在 `src/report_language.py`，沿用既有 `_PLACEHOLDER_BY_LANGUAGE` / `_UNKNOWN_BY_LANGUAGE` 的写法，四语齐备（zh/vi/en/ko），不新增并行模块。未知 stage 或缺参数都返回可用字符串，绝不向分析主流程抛异常。
 - [修复] `src/analyzer.py` 的 4 处 `_emit_progress` 同样是硬编码中文，与 pipeline 共用同一个 `progress_callback`（`pipeline.py:932`），因此也会渲染到 Run Flow。**这是靠实跑一次真实任务才发现的**：修完 pipeline 后面板仍显示 `LLM 已接收请求，等待响应`。现一并纳入同一张文案表（新增 `llm_wait` / `llm_accepted` / `llm_parsing` / `llm_retry`）。

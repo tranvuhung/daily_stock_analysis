@@ -13,18 +13,41 @@ LLM chép nguyên giá trị enum sai ngôn ngữ theo ví dụ trong prompt).
 
 ## Đường tắt: `scripts/run-app.sh`
 
-Toàn bộ quy trình dưới đây đã được đóng gói thành script. Phần còn lại của tài liệu này
-giải thích script làm gì và vì sao — đọc khi cần gỡ lỗi hoặc chạy tay từng bước.
+Script có **hai chế độ khác hẳn nhau** — đừng lẫn:
+
+| | `start` (dịch vụ thật) | `serve` (kiểm chứng) |
+| --- | --- | --- |
+| Cấu hình | `.env` thật của repo | `.env` tạm, ghi đè thị trường/mã/ngôn ngữ |
+| CSDL | `data/stock_analysis.db` **thật** | DB tạm trong `$TMPDIR` |
+| Cổng | `WEBUI_PORT` (mặc định 8000) | 8765 |
+| Scheduler | **Có** (18:00 hằng ngày) | Không |
+| Bot, market review | Theo `.env` | Tắt |
+
+Tài liệu dưới đây mô tả **chế độ kiểm chứng** — đó là thứ dùng cho quy trình review.
+Dùng `start` khi muốn chạy đúng dịch vụ như triển khai thật.
 
 ```bash
-./scripts/run-app.sh serve              # FastAPI + Web UI, chờ health rồi smoke test
+# --- Dịch vụ thật ---
+./scripts/run-app.sh start --background # FastAPI + Web UI + scheduler + bot, dùng .env & DB thật
+./scripts/run-app.sh start --run-now    # như trên, phân tích ngay khi khởi động (tốn quota LLM)
+./scripts/run-app.sh status             # chế độ nào đang chạy, PID, cổng, health
+
+# --- Môi trường kiểm chứng (dùng cho review) ---
+./scripts/run-app.sh serve              # FastAPI + Web UI cô lập, chờ health rồi smoke test
 ./scripts/run-app.sh serve --background # như trên nhưng chạy nền
 ./scripts/run-app.sh dry-run            # chỉ lấy dữ liệu, không gọi LLM
 ./scripts/run-app.sh analyze HPG        # một lượt phân tích thật + kiểm tra lẫn ngôn ngữ
 ./scripts/run-app.sh smoke              # smoke test dịch vụ đang chạy sẵn
-./scripts/run-app.sh stop               # dừng dịch vụ
+
+# --- Chung ---
+./scripts/run-app.sh stop               # dừng cả hai chế độ
 ./scripts/run-app.sh build-web          # npm run lint && npm run build
 ```
+
+`start` mặc định truyền `--no-run-immediately`: `.env` đang đặt `SCHEDULE_RUN_IMMEDIATELY=true`
+nên nếu không chặn thì vừa khởi động là phân tích toàn bộ `STOCK_LIST`. Trước khi chạy, `start`
+tiền kiểm và cảnh báo nếu `STOCK_LIST` không có mã nào thuộc thị trường đang bật — bẫy có thật,
+vì `.env` để `STOCK_LIST` là mã A-share trong khi thị trường mặc định là `vn`.
 
 Mọi giá trị đều override được: `RUN_PORT`, `RUN_MARKETS`, `RUN_STOCK_LIST`,
 `RUN_REPORT_LANGUAGE`, `RUN_DIR`, `RUN_HEALTH_TIMEOUT`… (`./scripts/run-app.sh --help`).
