@@ -7,9 +7,13 @@ import {
   formatDateTime,
   formatDuration,
   formatMetadataValue,
+  getRunFlowContextBlockLabel,
+  getRunFlowDataTypeLabel,
   getRunFlowNodeKindLabel,
+  getRunFlowNodeLabel,
   getRunFlowStatusLabel,
   RUN_FLOW_STATUS_STYLE,
+  runFlowMetadataString,
 } from './utils';
 
 interface RunFlowNodeDetailsProps {
@@ -29,6 +33,9 @@ interface DetailItem {
   startedAt?: string | null;
   endedAt?: string | null;
   message?: string | null;
+  // Mang theo metadata của node gốc để dịch nhãn từ ``data_type`` / ``block_key``.
+  // Carries the source node metadata so the label can be localized from its stable id.
+  metadata?: Record<string, unknown> | null;
 }
 
 const ALWAYS_HIDDEN_METADATA_KEYS = new Set([
@@ -205,7 +212,7 @@ export const RunFlowNodeDetails: React.FC<RunFlowNodeDetailsProps> = ({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="label-uppercase">{t('runFlow.nodeDetails.title')}</p>
-          <h3 className="mt-1 truncate text-base font-semibold text-foreground">{node.label}</h3>
+          <h3 className="mt-1 truncate text-base font-semibold text-foreground">{getRunFlowNodeLabel(node, t)}</h3>
           {node.message ? (
             <p className="mt-2 text-sm leading-6 text-secondary-text">{node.message}</p>
           ) : null}
@@ -274,7 +281,7 @@ export const RunFlowNodeDetails: React.FC<RunFlowNodeDetailsProps> = ({
                 {attempts.map((attempt, index) => (
                   <tr key={attempt.id || `${attempt.label}-${index}`}>
                     <td className="px-3 py-2 text-foreground">
-                      <span className="block font-medium">{attempt.label || attempt.provider || t('runFlow.valueUnavailable')}</span>
+                      <span className="block font-medium">{getRunFlowDataTypeLabel(runFlowMetadataString(attempt.metadata, 'dataType', 'data_type'), t, attempt.label) || attempt.provider || t('runFlow.valueUnavailable')}</span>
                       {attempt.provider ? <span className="mt-0.5 block text-muted-text">{attempt.provider}</span> : null}
                     </td>
                     <td className="px-3 py-2 text-secondary-text">{formatDetailStatus(attempt.status)}</td>
@@ -299,7 +306,7 @@ export const RunFlowNodeDetails: React.FC<RunFlowNodeDetailsProps> = ({
               <div key={block.id || `${block.label}-${index}`} className="rounded-lg border border-subtle bg-base/35 px-3 py-2 text-sm">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-foreground">{block.label || t('runFlow.valueUnavailable')}</p>
+                    <p className="truncate font-medium text-foreground">{getRunFlowContextBlockLabel(runFlowMetadataString(block.metadata, 'blockKey', 'block_key'), t, block.label) || t('runFlow.valueUnavailable')}</p>
                     {block.provider ? <p className="mt-0.5 truncate text-xs text-muted-text">{block.provider}</p> : null}
                   </div>
                   <span className="shrink-0 text-xs text-secondary-text">{formatDetailStatus(block.status)}</span>

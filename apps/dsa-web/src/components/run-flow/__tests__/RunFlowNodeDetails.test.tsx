@@ -17,7 +17,7 @@ describe('RunFlowNodeDetails', () => {
 
     render(<RunFlowNodeDetails node={node} />);
 
-    expect(screen.getByText('Task 队列')).toBeInTheDocument();
+    expect(screen.getByText('Task queue')).toBeInTheDocument();
     expect(screen.getByText('Kind')).toBeInTheDocument();
     expect(screen.getByText('Queue')).toBeInTheDocument();
     expect(screen.getByText('Started')).toBeInTheDocument();

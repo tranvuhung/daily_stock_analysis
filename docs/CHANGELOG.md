@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] Run Flow 面板里的中文标签现在跟随用户的界面语言开关（VI/EN），此前只跟随服务端固定文案。中文并不来自 `apps/dsa-web/src/components/run-flow`（该目录仅有 2 处中文，且都是事件过滤用的正则），而是来自后端 payload：上一轮 i18n 迁移只改完泳道和大部分节点名，`_DATA_TYPE_LABELS` 与多数 `title`/`message` 仍是中文。
+- [改进] 前端改为按后端已经下发的**稳定标识**翻译，无需改动 API 契约：泳道用 `lane.id`、数据源节点用 `node.metadata.data_type`、上下文块用 `metadata.block_key`、事件标题用 `event.type`、连线用 `edge.kind`。沿用 `components/run-flow/utils.ts` 既有的 `STATUS_LABEL_KEYS`/`EDGE_KIND_LABEL_KEYS` 写法，新增约 34 个 `runFlow.*` 键（`en` 与 `vi` 同步）。
+- [修复] 历史记录若缺少 `metadata.data_type`（旧数据），标签回退到后端原始 `label`，不会出现空白；对应测试用例保留。
+- [修复] 事件过滤器不再按显示文本做正则匹配。`RunFlowEventList` 原先用 `/fallback|retry|降级|重试/` 和 `/cancel|取消/` 匹配 `type + title + message`，一旦标签换语言就会静默失效。现改为按稳定字段判定：回退看 `provider_run` 的 `fallback_from`/`fallback_to` 与 `llm_run` 的 `fallback_model`，取消看 `event.type`。
+- [改进] 固定管线节点（`request` / `task_queue` / `context_pack` / `llm_*` / `history_save*` / `notification*`）按 `node.id` 前缀翻译，因此越南语界面下整张拓扑图都是越南语；通知节点保留后端拼接的渠道后缀（`· report` 是渠道名，不翻译）。
+- [改进] 节点标签不再重复拼接 provider。后端仍下发 `"<标签> · <provider>"`，但节点卡片本就单独渲染 `node.provider`，重复显示了两次。
+- [改进] 后端剩余中文散文改为英文：`src/services/run_flow.py`（`_DATA_TYPE_LABELS`、连线标签 `重试`/`调用`、`_context_block_message` / `_provider_run_message` / `_llm_run_message` / `_notification_run_message` / `_task_status_message` 等）与 `src/services/run_diagnostics.py` 的实时 SSE 流事件。两个文件各有一份**逐字节相同**的 `_DATA_TYPE_LABELS`，已同步修改并互相加注释，避免只改一处导致历史链路与实时链路语言不一致。
+- [测试] 新增 `apps/dsa-web/src/components/run-flow/__tests__/utils.test.ts`（13 例：双语标签、data_type 别名归一、缺失标识时的回退、camelCase/snake_case 元数据、事件标题与过滤谓词）。`RunFlowEventList.test.tsx` 的 fixture 改为贴合后端真实契约——回退事件是带 `fallbackFrom`/`fallbackTo` 的 `provider_run`，而不是并不存在的 `type: 'provider_fallback'`；旧用例只是靠标题里的「降级」二字才通过，并未验证契约。新增回归用例：标题与 message 全为越南语时过滤器仍然正确。
+
 - [改进] `src/analyzer.py` 的 LLM prompt 全量改为英文：`LEGACY_DEFAULT_SYSTEM_PROMPT`、`SYSTEM_PROMPT`、`TEXT_SYSTEM_PROMPT` 与 `_format_prompt` 正文（约 560 行）。此前 prompt 对**所有**报告语言都是中文，只靠末尾的「输出语言」小节要求模型改用越南语，`_get_analysis_system_prompt` 甚至要额外加一句「上方 JSON 模板里的中文示例值只是占位、不要照抄」来打补丁。现改为「英文 prompt + 输出语言指令」，该补丁改写为对称形式（中文分支反过来提醒英文示例值只是占位）。
 - [修复] prompt 中的价格单位此前硬编码为 `元`（CNY），越南标的（VND）、台股（TWD）等全部显示错误。现按 `data_provider.base._market_tag` + `src.core.markets.get_spec` 取所属市场的报价币种；市场未识别或未启用时不再输出单位，避免表格里留下多余空格。注意不能用 `src/market_context.detect_market`，它只认 cn/hk/us，会把所有越南裸码判成美股。
 - [修复] prompt 此前要求模型「明确输出该股票的正确中文全称」，对越南语报告是错的；现改为按报告输出语言给出公司全称。

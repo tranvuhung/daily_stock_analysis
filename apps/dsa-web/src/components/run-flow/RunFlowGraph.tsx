@@ -10,6 +10,9 @@ import {
   formatDuration,
   getNodeDisplayOrder,
   getRunFlowEdgeKindLabel,
+  getRunFlowEdgeLabel,
+  getRunFlowLaneLabel,
+  getRunFlowNodeLabel,
   getRunFlowStatusLabel,
   RUN_FLOW_STATUS_STYLE,
 } from './utils';
@@ -148,12 +151,16 @@ const getLaneRowHeight = (laneId: string): number => (
 
 const isExpandableNode = (node: RunFlowNode): boolean => node.metadata?.topologyGroup === 'provider_attempts';
 
-const getEdgeLabel = (label: string | null | undefined, t: RunFlowT): string | null => {
-  if (!label) return null;
-  if (label === 'Invoke') return t('runFlow.edgeLabel.invoke');
-  if (label === 'Details') return t('runFlow.edgeLabel.details');
-  return label;
-};
+/**
+ * ``Invoke`` / ``Details`` là nhãn tổng hợp do chính ``topologyViewModel`` sinh ra
+ * (cả hai đều mang ``kind: 'control'`` nên không thể phân biệt bằng ``kind``).
+ * Các nhãn còn lại đến từ backend và được dịch theo ``edge.kind`` thay vì dùng
+ * chuỗi đã dựng sẵn ở máy chủ.
+ * ``Invoke``/``Details`` are synthetic labels from topologyViewModel; every other label
+ * comes from the backend and is localized from ``edge.kind``.
+ */
+const getEdgeLabel = (edge: RunFlowEdge, t: RunFlowT): string | null =>
+  getRunFlowEdgeLabel(edge.label, edge.kind, t);
 
 const metadataString = (node: RunFlowNode, key: string): string | null => {
   const value = node.metadata?.[key];
@@ -609,12 +616,12 @@ export const RunFlowGraph: React.FC<RunFlowGraphProps> = ({
     displayLabel: string | null;
     showLabel: boolean;
   }>>((items, item) => {
-    const displayLabel = getEdgeLabel(item.edge.label, t);
+    const displayLabel = getEdgeLabel(item.edge, t);
     const labelKey = `${item.edge.to}:${displayLabel || ''}`;
     const duplicateLabel = items.some((existing) => (
       existing.relatedToSelected
-      && getEdgeLabel(existing.edge.label, t)
-      && `${existing.edge.to}:${getEdgeLabel(existing.edge.label, t)}` === labelKey
+      && getEdgeLabel(existing.edge, t)
+      && `${existing.edge.to}:${getEdgeLabel(existing.edge, t)}` === labelKey
     ));
     items.push({
       ...item,
@@ -738,7 +745,7 @@ export const RunFlowGraph: React.FC<RunFlowGraphProps> = ({
               className="absolute top-0 z-20 rounded-lg border border-subtle bg-base/75 px-3 py-2 text-xs font-medium text-secondary-text backdrop-blur-sm"
               style={{ left, width: metrics.nodeWidth }}
             >
-              {lane.label}
+              {getRunFlowLaneLabel(lane.id, t, lane.label)}
             </div>
             );
           })}
@@ -758,6 +765,7 @@ export const RunFlowGraph: React.FC<RunFlowGraphProps> = ({
             const nodeDensityClass = compact
               ? 'px-2.5 py-2 shadow-none hover:shadow-soft-card'
               : 'px-3 py-2 shadow-soft-card hover:shadow-lg';
+            const nodeLabel = getRunFlowNodeLabel(node, t);
             return (
               <div
                 key={node.id}
@@ -770,7 +778,7 @@ export const RunFlowGraph: React.FC<RunFlowGraphProps> = ({
                   data-testid={`run-flow-node-${node.id}`}
                   onClick={() => onSelectNode?.(node)}
                   aria-pressed={selected}
-                  aria-label={t('runFlow.graph.nodeAria', { label: node.label, status: statusLabel })}
+                  aria-label={t('runFlow.graph.nodeAria', { label: nodeLabel, status: statusLabel })}
                   data-layout-lane={node.laneIndex}
                   data-layout-row={node.row}
                   className={`box-border flex max-w-full min-w-0 flex-col items-start overflow-hidden rounded-lg border-2 text-left backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-primary/60 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan/15 ${nodeDensityClass} ${nodeStateClass} ${
@@ -780,7 +788,7 @@ export const RunFlowGraph: React.FC<RunFlowGraphProps> = ({
                 >
                   <span className="flex w-full min-w-0 items-start justify-between gap-2">
                     <span className="min-w-0 max-w-full overflow-hidden">
-                      <span className="block max-w-full truncate text-sm font-semibold text-foreground">{node.label}</span>
+                      <span className="block max-w-full truncate text-sm font-semibold text-foreground">{nodeLabel}</span>
                       {node.provider ? (
                         <span className="mt-0.5 block max-w-full truncate text-xs text-muted-text">{node.provider}</span>
                       ) : null}
@@ -805,7 +813,7 @@ export const RunFlowGraph: React.FC<RunFlowGraphProps> = ({
                   <button
                     type="button"
                     data-testid={`run-flow-node-${node.id}-toggle`}
-                    aria-label={expanded ? t('runFlow.graph.collapseNode', { label: node.label }) : t('runFlow.graph.expandNode', { label: node.label })}
+                    aria-label={expanded ? t('runFlow.graph.collapseNode', { label: nodeLabel }) : t('runFlow.graph.expandNode', { label: nodeLabel })}
                     aria-expanded={expanded}
                     onClick={(event) => {
                       event.stopPropagation();

@@ -534,17 +534,24 @@ def current_diagnostic_snapshot() -> Optional[Dict[str, Any]]:
         return None
 
 
+# Nhãn dự phòng khi client không tra được khoá. Web UI dịch theo
+# ``node.metadata.data_type`` (xem apps/dsa-web/src/components/run-flow/utils.ts),
+# nên bảng này chỉ còn là đường lùi cho bản ghi cũ và cho consumer khác của API.
+# Fallback labels only: the web UI localizes from ``node.metadata.data_type``.
+# ⚠️ Bảng này được nhân bản ở ``src/services/run_flow.py`` cho luồng lịch sử (REST)
+# — sửa một nơi phải sửa cả hai, nếu không hai luồng sẽ lệch ngôn ngữ.
+# ⚠️ Duplicated in ``src/services/run_flow.py``; keep both in sync.
 _DATA_TYPE_LABELS = {
-    "realtime_quote": "实时行情",
-    "daily_data": "日线K线",
-    "daily_bars": "日线K线",
-    "technical": "技术指标",
-    "news": "新闻舆情",
-    "news_search": "新闻舆情",
-    "fundamental": "基本面",
-    "fundamentals": "基本面",
-    "belong_boards": "所属板块",
-    "chip": "筹码结构",
+    "realtime_quote": "Realtime quote",
+    "daily_data": "Daily bars",
+    "daily_bars": "Daily bars",
+    "technical": "Technical indicators",
+    "news": "News",
+    "news_search": "News",
+    "fundamental": "Fundamentals",
+    "fundamentals": "Fundamentals",
+    "belong_boards": "Sector boards",
+    "chip": "Chip structure",
 }
 
 
@@ -655,9 +662,9 @@ def _provider_flow_event(
     node_id = f"provider_{data_type}_{provider_key}_{index}"
     started_at = _started_at_from_end_and_duration(run.created_at, run.latency_ms)
     message = (
-        f"{label} {run.provider} 成功"
+        f"{label} {run.provider} succeeded"
         if run.success
-        else f"{label} {run.provider} 失败：{run.error_message_sanitized or run.error_type or '未知错误'}"
+        else f"{label} {run.provider} failed: {run.error_message_sanitized or run.error_type or 'unknown error'}"
     )
     return {
         "timestamp": run.created_at,
@@ -748,9 +755,9 @@ def _llm_flow_event(
     node_id = f"llm_{call_type}_{index}"
     started_at = _started_at_from_end_and_duration(run.created_at, run.duration_ms)
     message = (
-        f"LLM {model} 成功"
+        f"LLM {model} succeeded"
         if run.success
-        else f"LLM {model} 失败：{run.error_message_sanitized or run.error_type or '未知错误'}"
+        else f"LLM {model} failed: {run.error_message_sanitized or run.error_type or 'unknown error'}"
     )
     return {
         "timestamp": run.created_at,
@@ -792,13 +799,13 @@ def _history_flow_event(
 ) -> Dict[str, Any]:
     node_id = "history_save" if index == 1 else f"history_save_{index}"
     status = "success" if run.report_saved else "failed"
-    message = "Report history saved" if run.report_saved else f"报告历史保存失败：{run.error_message_sanitized or '未知错误'}"
+    message = "Report history saved" if run.report_saved else f"Report history save failed: {run.error_message_sanitized or 'unknown error'}"
     return {
         "timestamp": run.created_at,
         "severity": "success" if run.report_saved else "danger",
         "type": "history_run",
         "node_id": node_id,
-        "title": "History saved successfully" if run.report_saved else "历史保存失败",
+        "title": "History saved successfully" if run.report_saved else "History save failed",
         "message": sanitize_diagnostic_text(message, max_length=220),
         "metadata": _clean_metadata(
             {

@@ -9,7 +9,10 @@ import {
   compactText,
   formatDateTime,
   formatMetadataValue,
+  getRunFlowEventTitle,
   getRunFlowSeverityLabel,
+  isRunFlowCancelEvent,
+  isRunFlowFallbackEvent,
   RUN_FLOW_SEVERITY_STYLE,
 } from './utils';
 
@@ -29,26 +32,25 @@ const FILTER_ICONS = {
   cancelled: XCircle,
 } as const;
 
-const eventText = (event: RunFlowEvent): string =>
-  `${event.type} ${event.title} ${event.message || ''}`.toLowerCase();
-
+// Bộ lọc chỉ dựa trên trường ổn định (`event.type`, `event.severity`, metadata), không
+// dựa vào văn bản hiển thị: nhãn giờ được dịch theo ngôn ngữ giao diện nên mọi phép khớp
+// theo chuỗi hiển thị sẽ hỏng âm thầm khi người dùng đổi ngôn ngữ.
+// Filters use stable fields only; matching rendered text would break on language switch.
 const matchesFilter = (event: RunFlowEvent, filter: EventFilter): boolean => {
   if (filter === 'all') return true;
-  const text = eventText(event);
   if (filter === 'important') {
     return event.severity === 'warning'
       || event.severity === 'danger'
-      || /fallback|retry|cancel|failed|error|timeout/.test(text);
+      || isRunFlowFallbackEvent(event)
+      || isRunFlowCancelEvent(event);
   }
   if (filter === 'problems') {
-    return event.severity === 'warning'
-      || event.severity === 'danger'
-      || /failed|error|timeout/.test(text);
+    return event.severity === 'warning' || event.severity === 'danger';
   }
   if (filter === 'fallback') {
-    return /fallback|retry|降级|重试/.test(text);
+    return isRunFlowFallbackEvent(event);
   }
-  return /cancel|取消/.test(text);
+  return isRunFlowCancelEvent(event);
 };
 
 export const RunFlowEventList: React.FC<RunFlowEventListProps> = ({
@@ -124,7 +126,7 @@ export const RunFlowEventList: React.FC<RunFlowEventListProps> = ({
                 </span>
                 <span className="font-mono text-[11px] text-muted-text">{compactText(event.type, 28)}</span>
               </div>
-              <p className="mt-2 text-sm font-medium text-foreground">{event.title}</p>
+              <p className="mt-2 text-sm font-medium text-foreground">{getRunFlowEventTitle(event, t)}</p>
               {event.message ? (
                 <p className="mt-1 text-xs leading-5 text-secondary-text">{event.message}</p>
               ) : null}
@@ -150,7 +152,7 @@ export const RunFlowEventList: React.FC<RunFlowEventListProps> = ({
               type="button"
               className="block w-full"
               onClick={() => onSelectNode(event.nodeId || '')}
-              aria-label={t('runFlow.events.openNode', { title: event.title })}
+              aria-label={t('runFlow.events.openNode', { title: getRunFlowEventTitle(event, t) })}
             >
               {content}
             </button>

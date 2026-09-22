@@ -21,10 +21,11 @@ const nodes: RunFlowNode[] = [
     id: 'news',
     lane: 'data_source',
     kind: 'data_source',
-    label: '新闻舆情',
+    label: 'News · AkShare',
     status: 'fallback',
     provider: 'AkShare',
     startedAt: '2026-06-08T10:00:00',
+    metadata: { dataType: 'news' },
   },
 ];
 
@@ -73,11 +74,12 @@ describe('RunFlowGraph', () => {
 
     expect(screen.getByText('Entry')).toBeInTheDocument();
     expect(screen.getByText('Data source')).toBeInTheDocument();
-    expect(screen.getAllByText('Fallback').length).toBeGreaterThan(0);
-    expect(screen.getByText('降级输入')).toBeInTheDocument();
+    // Chú giải hiển thị "Fallback", và nhãn cạnh nay cũng dịch từ `edge.kind` nên có >= 2.
+    // The legend shows "Fallback" and the edge label is now derived from `edge.kind` too.
+    expect(screen.getAllByText('Fallback').length).toBeGreaterThan(1);
     expect(screen.getByTestId('run-flow-node-news')).toHaveTextContent('Start');
     expect(screen.getByTestId('run-flow-node-news')).toHaveTextContent('2026');
-    expect(screen.getByRole('button', { name: '新闻舆情 node, status 降级回退' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'News node, status Fallback' })).toBeInTheDocument();
     const marker = container.querySelector('marker');
     expect(marker).toHaveAttribute('markerWidth', '4');
     expect(marker).toHaveAttribute('markerHeight', '4');
@@ -86,7 +88,7 @@ describe('RunFlowGraph', () => {
     fireEvent.mouseEnter(screen.getByTestId('run-flow-node-news'));
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '新闻舆情 node, status 降级回退' }));
+    fireEvent.click(screen.getByRole('button', { name: 'News node, status Fallback' }));
 
     expect(onSelectNode).toHaveBeenCalledWith(expect.objectContaining({ id: 'news' }));
   });
@@ -150,9 +152,10 @@ describe('RunFlowGraph', () => {
     const opacities = paths.map((path) => path.getAttribute('opacity'));
     expect(opacities.filter((opacity) => opacity === '0.82')).toHaveLength(1);
     expect(opacities.filter((opacity) => opacity === '0.18')).toHaveLength(2);
-    expect(screen.getByText('调度输入')).toBeInTheDocument();
-    expect(screen.queryByText('报告输出')).not.toBeInTheDocument();
-    expect(screen.getByText('降级输出')).toBeInTheDocument();
+    expect(screen.getAllByText('Control').length).toBeGreaterThan(0);
+    const svgLabels = Array.from(container.querySelectorAll('svg text')).map((el) => el.textContent);
+    expect(svgLabels).not.toContain('Data');
+    expect(svgLabels).toContain('Fallback');
   });
 
   it('distributes fan-out edge anchors instead of routing every line through the node center', () => {
@@ -375,7 +378,7 @@ describe('RunFlowGraph', () => {
     expect(startY).toBe(requestCenterY);
     expect(endX).toBe(llmLeft);
     expect(endY).toBe(llmCenterY);
-    const label = screen.getByText('跨泳道');
+    const label = Array.from(container.querySelectorAll('svg text')).find((el) => el.textContent === 'Data') as SVGTextElement;
     expect(label).toHaveAttribute('text-anchor', 'middle');
     expect(parseFloat(label.getAttribute('y') || '0')).toBeLessThan((startY + endY) / 2);
   });

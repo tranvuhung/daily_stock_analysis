@@ -52,13 +52,13 @@ const snapshot: RunFlowSnapshot = {
       id: 'news',
       lane: 'data_source',
       kind: 'data_source',
-      label: '新闻舆情',
+      label: 'News · AkShare',
       provider: 'AkShare',
       status: 'fallback',
       durationMs: 1200,
       attempts: 2,
       recordCount: 8,
-      message: '主数据源失败后降级成功',
+      message: 'Primary source failed, fallback succeeded',
       metadata: {
         fallbackFrom: 'Tushare',
         fallbackTo: 'AkShare',
@@ -68,7 +68,7 @@ const snapshot: RunFlowSnapshot = {
       id: 'llm',
       lane: 'analysis',
       kind: 'model',
-      label: 'LLM 生成',
+      label: 'LLM generation',
       provider: 'DeepSeek',
       status: 'success',
       durationMs: 1800,
@@ -99,7 +99,7 @@ const snapshot: RunFlowSnapshot = {
       severity: 'info',
       type: 'task_created',
       nodeId: 'request',
-      title: 'Task 创建',
+      title: 'Task created',
     },
     {
       id: 'evt-2',
@@ -289,14 +289,14 @@ describe('RunFlowPanel', () => {
     expect(screen.getByTestId('run-flow-events-column')).toHaveClass('xl:max-h-[calc(100vh-18rem)]');
     expect(screen.getByTestId('run-flow-graph')).toBeInTheDocument();
     expect(screen.getByTestId('run-flow-events')).toBeInTheDocument();
-    expect(await screen.findByTestId('run-flow-node-details')).toHaveTextContent('新闻舆情');
+    expect(await screen.findByTestId('run-flow-node-details')).toHaveTextContent('News');
 
-    fireEvent.click(screen.getByRole('button', { name: 'LLM 生成 node, status 成功' }));
+    fireEvent.click(screen.getByRole('button', { name: 'LLM generation node, status Success' }));
 
-    expect(screen.getByTestId('run-flow-node-details')).toHaveTextContent('LLM 生成');
+    expect(screen.getByTestId('run-flow-node-details')).toHaveTextContent('LLM generation');
     expect(screen.getByTestId('run-flow-node-details')).toHaveTextContent('DeepSeek');
 
-    fireEvent.click(screen.getByRole('button', { name: '新闻舆情 node, status 降级回退' }));
+    fireEvent.click(screen.getByRole('button', { name: 'News · AkShare node, status Fallback' }));
 
     expect(screen.getByTestId('run-flow-node-details')).toHaveTextContent('fallbackFrom');
     expect(screen.getByTestId('run-flow-node-details')).toHaveTextContent('Tushare');
@@ -313,7 +313,7 @@ describe('RunFlowPanel', () => {
           id: 'artifact',
           lane: 'artifact',
           kind: 'artifact',
-          label: '保存报告',
+          label: 'Save report',
           status: 'success',
         },
       ],
@@ -332,9 +332,9 @@ describe('RunFlowPanel', () => {
 
     render(<RunFlowPanel source={{ type: 'task', taskId: 'task-1' }} />);
 
-    expect(await screen.findByTestId('run-flow-node-details')).toHaveTextContent('新闻舆情');
-    expect(screen.getByText('Save')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '新闻舆情 node, status 降级回退' })).toHaveAttribute('aria-pressed', 'false');
+    expect(await screen.findByTestId('run-flow-node-details')).toHaveTextContent('News');
+    expect(screen.getAllByText('Data').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'News · AkShare node, status Fallback' })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('expands provider attempt groups from node details', async () => {
@@ -463,7 +463,10 @@ describe('RunFlowPanel', () => {
 
     expect(details).toHaveTextContent('ContextPack');
     expect(details).toHaveTextContent('Context inputs');
-    expect(details).toHaveTextContent('新闻');
+    // `block_key: 'news'` tra được khoá nên hiển thị nhãn đã dịch; `block_key: 'fundamental'`
+    // (số ít) không thuộc bộ khoá thật của backend nên lùi về nhãn thô — giữ cả hai nhánh.
+    // A known block_key renders the localized label; an unknown one falls back to the raw label.
+    expect(details).toHaveTextContent('News');
     expect(details).toHaveTextContent('基本面');
     expect(details).not.toHaveTextContent('context_status_counts');
   });
