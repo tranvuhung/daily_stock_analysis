@@ -17,6 +17,7 @@ from typing import Optional, Dict, Any, Callable, List
 
 from src.repositories.analysis_repo import AnalysisRepository
 from src.report_language import (
+    get_analysis_error_text,
     get_sentiment_label,
     get_localized_stock_name,
     localize_operation_advice,
@@ -162,11 +163,15 @@ class AnalysisService:
             
             if result is None:
                 logger.warning(f"分析股票 {stock_code} 返回空结果")
-                self.last_error = self.last_error or f"分析股票 {stock_code} 返回空结果"
+                self.last_error = self.last_error or get_analysis_error_text(
+                    "empty_result", report_language, code=stock_code
+                )
                 return None
 
             if not getattr(result, "success", True):
-                self.last_error = getattr(result, "error_message", None) or f"分析股票 {stock_code} 失败"
+                self.last_error = getattr(result, "error_message", None) or get_analysis_error_text(
+                    "failed", report_language, code=stock_code
+                )
                 logger.warning(f"分析股票 {stock_code} 未成功完成: {self.last_error}")
                 return None
             

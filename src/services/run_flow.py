@@ -11,6 +11,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from api.v1.schemas.run_flow import RunFlowSnapshot
 from src.analysis_context_pack_overview import extract_analysis_context_pack_overview
+from src.report_language import get_localized_stock_name
 from src.services.run_diagnostics import (
     safe_diagnostic_key,
     sanitize_diagnostic_metadata,
@@ -216,7 +217,14 @@ def build_history_run_flow_snapshot(
         or _safe_text(raw.get("stock_code") or raw.get("code"), max_length=32)
         or "unknown"
     )
-    stock_name = _safe_text(getattr(record, "name", None), max_length=80) or _safe_text(raw.get("name"), max_length=80)
+    # ``analysis_history.name`` có thể là chuỗi giữ chỗ ``股票{code}`` do
+    # ``src/core/pipeline.py`` ghi xuống, và nó lên thẳng tiêu đề panel
+    # (``RunFlowSummaryBar.tsx``). Đường chạy trực tiếp đã chuẩn hoá ở
+    # ``src/services/analysis_service.py:208``; đường lịch sử thì chưa, nên làm ở đây.
+    # The stored name may still be the ``股票{code}`` placeholder; the live path already
+    # normalizes it, the history path did not.
+    raw_stock_name = _safe_text(getattr(record, "name", None), max_length=80) or _safe_text(raw.get("name"), max_length=80)
+    stock_name = get_localized_stock_name(raw_stock_name, stock_code, raw.get("report_language")) if raw_stock_name else raw_stock_name
     created_at = _datetime_to_iso(getattr(record, "created_at", None))
     now_iso = _datetime_to_iso(generated_at or datetime.now()) or datetime.now().isoformat()
 

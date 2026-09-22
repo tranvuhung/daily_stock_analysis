@@ -452,6 +452,109 @@ _NO_DATA_BY_LANGUAGE = {
     "ko": "데이터 없음",
 }
 
+# Thông báo tiến độ của pipeline. Chuỗi này KHÔNG chỉ nằm trong log: nó đi qua
+# ``progress_callback`` -> ``task_queue.update_task_progress`` -> ``task.message`` và được
+# ``src/services/run_flow.py`` render thẳng vào panel Run Flow cũng như luồng SSE. Vì là văn
+# xuôi tự do, frontend không thể tự dịch như với nhãn có định danh ổn định — nên phải dịch
+# ngay tại nguồn theo ``REPORT_LANGUAGE`` của lượt chạy.
+# Pipeline progress messages. These are not log-only: they reach task.message and are rendered
+# verbatim in the Run Flow panel and the SSE stream, so they must be localized at the source.
+_PIPELINE_PROGRESS_MESSAGES: Dict[str, Dict[str, str]] = {
+    "prepare": {
+        "zh": "{name}：正在准备分析任务",
+        "vi": "{name}: đang chuẩn bị tác vụ phân tích",
+        "en": "{name}: preparing the analysis task",
+        "ko": "{name}: 분석 작업을 준비하는 중",
+    },
+    "market_ready": {
+        "zh": "{name}：行情数据准备完成",
+        "vi": "{name}: đã chuẩn bị xong dữ liệu giá",
+        "en": "{name}: market data ready",
+        "ko": "{name}: 시세 데이터 준비 완료",
+    },
+    "fetch_market": {
+        "zh": "{name}：正在获取行情与筹码数据",
+        "vi": "{name}: đang lấy dữ liệu giá và phân bố nắm giữ",
+        "en": "{name}: fetching quote and chip data",
+        "ko": "{name}: 시세 및 매물대 데이터를 가져오는 중",
+    },
+    "aggregate": {
+        "zh": "{name}：正在聚合基本面与趋势数据",
+        "vi": "{name}: đang tổng hợp dữ liệu cơ bản và xu hướng",
+        "en": "{name}: aggregating fundamental and trend data",
+        "ko": "{name}: 펀더멘털 및 추세 데이터를 집계하는 중",
+    },
+    "news": {
+        "zh": "{name}：正在检索新闻与舆情",
+        "vi": "{name}: đang tìm tin tức và tâm lý thị trường",
+        "en": "{name}: searching news and sentiment",
+        "ko": "{name}: 뉴스 및 여론을 검색하는 중",
+    },
+    "agent_switch": {
+        "zh": "{name}：正在切换 Agent 分析链路",
+        "vi": "{name}: đang chuyển sang luồng phân tích Agent",
+        "en": "{name}: switching to the Agent analysis path",
+        "ko": "{name}: 에이전트 분석 경로로 전환하는 중",
+    },
+    "context": {
+        "zh": "{name}：正在整理分析上下文",
+        "vi": "{name}: đang sắp xếp ngữ cảnh phân tích",
+        "en": "{name}: assembling the analysis context",
+        "ko": "{name}: 분석 컨텍스트를 정리하는 중",
+    },
+    "llm_request": {
+        "zh": "{name}：正在请求 LLM 生成报告",
+        "vi": "{name}: đang yêu cầu LLM sinh báo cáo",
+        "en": "{name}: requesting the report from the LLM",
+        "ko": "{name}: LLM에 보고서 생성을 요청하는 중",
+    },
+    "llm_streaming": {
+        "zh": "{name}：LLM 正在生成分析结果（已接收 {chars} 字符）",
+        "vi": "{name}: LLM đang sinh kết quả phân tích (đã nhận {chars} ký tự)",
+        "en": "{name}: the LLM is generating the analysis ({chars} characters received)",
+        "ko": "{name}: LLM이 분석 결과를 생성 중 ({chars}자 수신)",
+    },
+    # Bốn giai đoạn dưới đây do ``src/analyzer.py`` phát ra, đi chung
+    # ``progress_callback`` với pipeline (``pipeline.py:932``) nên cùng lọt ra Run Flow.
+    # Emitted by ``src/analyzer.py`` through the same progress callback.
+    "llm_wait": {
+        "zh": "{name}：LLM 请求前等待 {seconds} 秒",
+        "vi": "{name}: chờ {seconds} giây trước khi gọi LLM",
+        "en": "{name}: waiting {seconds}s before the LLM request",
+        "ko": "{name}: LLM 요청 전 {seconds}초 대기",
+    },
+    "llm_accepted": {
+        "zh": "{name}：LLM 已接收请求，等待响应",
+        "vi": "{name}: LLM đã nhận yêu cầu, đang chờ phản hồi",
+        "en": "{name}: the LLM accepted the request, awaiting the response",
+        "ko": "{name}: LLM이 요청을 수락했으며 응답 대기 중",
+    },
+    "llm_parsing": {
+        "zh": "{name}：LLM 返回完成，正在解析 JSON",
+        "vi": "{name}: LLM đã trả kết quả, đang phân tích JSON",
+        "en": "{name}: the LLM responded, parsing JSON",
+        "ko": "{name}: LLM 응답 완료, JSON 파싱 중",
+    },
+    "llm_retry": {
+        "zh": "{name}：报告字段不完整，正在补全重试（{attempt}/{total}）",
+        "vi": "{name}: báo cáo thiếu trường bắt buộc, đang thử bổ sung ({attempt}/{total})",
+        "en": "{name}: the report is missing required fields, retrying completion ({attempt}/{total})",
+        "ko": "{name}: 보고서 필수 항목 누락, 보완 재시도 중 ({attempt}/{total})",
+    },
+    "validate": {
+        "zh": "{name}：正在校验并整理分析结果",
+        "vi": "{name}: đang kiểm tra và sắp xếp kết quả phân tích",
+        "en": "{name}: validating and tidying the analysis result",
+        "ko": "{name}: 분석 결과를 검증하고 정리하는 중",
+    },
+    "save_report": {
+        "zh": "{name}：正在保存分析报告",
+        "vi": "{name}: đang lưu báo cáo phân tích",
+        "en": "{name}: saving the analysis report",
+        "ko": "{name}: 분석 보고서를 저장하는 중",
+    },
+}
+
 _CHIP_UNAVAILABLE_BY_LANGUAGE = {
     "zh": "筹码分布未启用或数据源暂不可用，未纳入筹码判断。",
     "vi": "Phân bố nắm giữ chưa được bật hoặc nguồn dữ liệu tạm thời không khả dụng, nên không đưa vào đánh giá.",
@@ -1166,6 +1269,62 @@ def get_unknown_text(language: Optional[str]) -> str:
 def get_no_data_text(language: Optional[str]) -> str:
     """Return localized data unavailable text."""
     return _NO_DATA_BY_LANGUAGE[normalize_report_language(language)]
+
+
+# Chuỗi lỗi phân tích cũng đi ra UI qua ``task.error`` -> sự kiện ``task_failed`` của
+# Run Flow (``src/services/run_flow.py:918``), nên cũng phải theo ngôn ngữ báo cáo.
+# Analysis error strings reach the Run Flow ``task_failed`` event via ``task.error``.
+_ANALYSIS_ERROR_MESSAGES: Dict[str, Dict[str, str]] = {
+    "empty_result": {
+        "zh": "分析股票 {code} 返回空结果",
+        "vi": "Phân tích mã {code} trả về kết quả rỗng",
+        "en": "Analysis of {code} returned an empty result",
+        "ko": "{code} 분석이 빈 결과를 반환했습니다",
+    },
+    "failed": {
+        "zh": "分析股票 {code} 失败",
+        "vi": "Phân tích mã {code} thất bại",
+        "en": "Analysis of {code} failed",
+        "ko": "{code} 분석에 실패했습니다",
+    },
+    "empty_result_generic": {
+        "zh": "分析返回空结果",
+        "vi": "Phân tích trả về kết quả rỗng",
+        "en": "Analysis returned an empty result",
+        "ko": "분석이 빈 결과를 반환했습니다",
+    },
+}
+
+
+def get_analysis_error_text(key: str, language: Optional[str], **params: Any) -> str:
+    """Trả chuỗi lỗi phân tích theo ngôn ngữ báo cáo. / Localized analysis error text."""
+    template = _ANALYSIS_ERROR_MESSAGES.get(key)
+    if not template:
+        return key
+    text = template[normalize_report_language(language)]
+    try:
+        return text.format(**params)
+    except (KeyError, IndexError):
+        return text
+
+
+def get_pipeline_progress_text(stage: str, language: Optional[str], **params: Any) -> str:
+    """Trả thông báo tiến độ của pipeline theo ngôn ngữ báo cáo.
+
+    Return the pipeline progress message for the given stage and report language.
+    ``stage`` lạ thì trả chính nó, để một giai đoạn mới thêm sau không làm sập luồng chạy.
+    An unknown stage returns the stage name itself so a newly added stage never breaks a run.
+    """
+    template = _PIPELINE_PROGRESS_MESSAGES.get(stage)
+    if not template:
+        return stage
+    text = template[normalize_report_language(language)]
+    try:
+        return text.format(**params)
+    except (KeyError, IndexError):
+        # Thiếu tham số thì vẫn phải trả chuỗi dùng được, không được ném lỗi ra luồng phân tích.
+        # A missing parameter must not raise into the analysis flow.
+        return text
 
 
 def get_chip_unavailable_text(language: Optional[str]) -> str:

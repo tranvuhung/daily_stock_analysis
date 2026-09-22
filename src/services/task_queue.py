@@ -33,6 +33,7 @@ from src.services.run_diagnostics import (
     get_current_diagnostic_context,
     reset_run_diagnostic_context,
 )
+from src.report_language import get_analysis_error_text
 from src.utils.analysis_metadata import SELECTION_SOURCES
 from src.services.stock_code_utils import resolve_index_stock_code_for_analysis
 
@@ -861,8 +862,12 @@ class AnalysisTaskQueue:
                 
                 return result
             else:
-                # 分析返回空结果
-                raise Exception(service.last_error or "分析返回空结果")
+                # Chuỗi này đi ra UI Run Flow qua ``task.error`` -> sự kiện ``task_failed``.
+                # This string reaches the Run Flow ``task_failed`` event via ``task.error``.
+                raise Exception(
+                    service.last_error
+                    or get_analysis_error_text("empty_result_generic", report_language)
+                )
                 
         except Exception as e:
             if "diag_token" in locals():

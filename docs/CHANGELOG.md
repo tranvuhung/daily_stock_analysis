@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] Run Flow 面板在**任务运行中**仍显示中文进度文案。`src/core/pipeline.py` 的 11 处 `_emit_progress` 是硬编码中文，经 `progress_callback` → `task_queue.update_task_progress` → `task.message` → `src/services/run_flow.py:134,151,898,908,938` 直接渲染到面板与 SSE 流。上一轮只验证了**历史记录**的 Run Flow（该路径不读 `task.message`），因此漏掉。这些是自由文本、不带稳定标识，前端无法像 lane/node 标签那样自行翻译，所以在源头按 `REPORT_LANGUAGE` 本地化。
+- [改进] 进度文案表 `_PIPELINE_PROGRESS_MESSAGES` 与取值函数 `get_pipeline_progress_text()` 放在 `src/report_language.py`，沿用既有 `_PLACEHOLDER_BY_LANGUAGE` / `_UNKNOWN_BY_LANGUAGE` 的写法，四语齐备（zh/vi/en/ko），不新增并行模块。未知 stage 或缺参数都返回可用字符串，绝不向分析主流程抛异常。
+- [修复] `src/analyzer.py` 的 4 处 `_emit_progress` 同样是硬编码中文，与 pipeline 共用同一个 `progress_callback`（`pipeline.py:932`），因此也会渲染到 Run Flow。**这是靠实跑一次真实任务才发现的**：修完 pipeline 后面板仍显示 `LLM 已接收请求，等待响应`。现一并纳入同一张文案表（新增 `llm_wait` / `llm_accepted` / `llm_parsing` / `llm_retry`）。
+- [修复] Run Flow 面板标题可能显示 `股票{code}`。`src/core/pipeline.py:612` 在查不到名称时写入该占位符并落库到 `analysis_history.name`，经 `run_flow.py:219` 直达 `RunFlowSummaryBar.tsx`。实时任务路径早已在 `analysis_service.py:208` 用 `get_localized_stock_name()` 归一化，历史路径没有；现在在渲染边界补上同一调用，语言取自 `raw_result.report_language`。
+- [改进] **刻意不改** `pipeline.py:612` 的 `股票{code}` 本身：它是被 `pipeline.py:2792`、`report_language.py:1262`、`src/analyzer.py` 多处匹配的占位符哨兵，改产生端而不改全部匹配端会静默失效。改为在显示边界翻译，哨兵与已落库数据均不变。
+- [修复] 三处中文错误文案也会经 `task.error` 进入 Run Flow 的 `task_failed` 事件，一并按报告语言本地化：`analysis_service.py:165,170` 与 `task_queue.py:865`。
+- [修复] `_progress_text()` 改为容忍未挂载 `config` 的 pipeline。它运行在 `_emit_progress` 的 try/except **之前**，最初实现会让部分构造的 pipeline（`__new__`）抛 `AttributeError`，导致 `process_single_stock` 返回 `None`——由 `tests/test_pipeline_single_stock_notify.py` 等 7 个既有用例发现。
+- [测试] 新增 `tests/test_pipeline_progress_i18n.py`（13 例：四语覆盖、缺 stage/缺参数不抛异常、`股票{code}` 占位符归一、仅传 `code` 的两个调用点、未挂载 `config` 的回归）。`tests/test_run_flow.py` 增加三例覆盖面板标题占位符，既有用例未改动。
+
 - [修复] Run Flow 面板里的中文标签现在跟随用户的界面语言开关（VI/EN），此前只跟随服务端固定文案。中文并不来自 `apps/dsa-web/src/components/run-flow`（该目录仅有 2 处中文，且都是事件过滤用的正则），而是来自后端 payload：上一轮 i18n 迁移只改完泳道和大部分节点名，`_DATA_TYPE_LABELS` 与多数 `title`/`message` 仍是中文。
 - [改进] 前端改为按后端已经下发的**稳定标识**翻译，无需改动 API 契约：泳道用 `lane.id`、数据源节点用 `node.metadata.data_type`、上下文块用 `metadata.block_key`、事件标题用 `event.type`、连线用 `edge.kind`。沿用 `components/run-flow/utils.ts` 既有的 `STATUS_LABEL_KEYS`/`EDGE_KIND_LABEL_KEYS` 写法，新增约 34 个 `runFlow.*` 键（`en` 与 `vi` 同步）。
 - [修复] 历史记录若缺少 `metadata.data_type`（旧数据），标签回退到后端原始 `label`，不会出现空白；对应测试用例保留。

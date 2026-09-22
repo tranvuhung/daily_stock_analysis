@@ -46,6 +46,8 @@ from src.analyzer import (
 from src.notification import NotificationService, NotificationChannel
 from src.schemas.decision_action import normalize_decision_action
 from src.report_language import (
+    get_localized_stock_name,
+    get_pipeline_progress_text,
     get_placeholder_text,
     get_unknown_text,
     infer_decision_type_from_advice,
@@ -359,6 +361,35 @@ class StockAnalysisPipeline:
             )
             self.social_sentiment_service = None
 
+    def _progress_text(self, stage: str, *, code: Any = "", name: Any = None, **params: Any) -> str:
+        """Dựng thông báo tiến độ theo ngôn ngữ báo cáo của lượt chạy.
+
+        Build the progress message in the run's report language.
+
+        Các chuỗi này đi thẳng ra UI Run Flow qua ``task.message`` (xem
+        ``src/services/run_flow.py``), nên không được để nguyên tiếng Trung.
+        ``name`` có thể đang là chuỗi giữ chỗ ``股票{code}`` do ``_resolve_stock_name``
+        sinh ra, nên phải đưa qua ``get_localized_stock_name`` trước khi hiển thị.
+        ``name`` may still be the ``股票{code}`` placeholder, so it is localized first.
+        """
+        # Dựng thông báo tiến độ là việc "best-effort" giống ``_emit_progress``: nó chạy
+        # TRƯỚC lớp try/except của hàm đó, nên phải tự chịu được trường hợp pipeline chưa
+        # gắn ``config`` (đường khởi tạo một phần / test dùng ``__new__``). Một dòng tiến độ
+        # không bao giờ được làm hỏng lượt phân tích.
+        # Building the message runs before ``_emit_progress``'s guard, so it must tolerate a
+        # pipeline without ``config``. A progress line must never break the analysis run.
+        config = getattr(self, "config", None)
+        language = normalize_report_language(getattr(config, "report_language", "zh"))
+        if name:
+            # ``get_localized_stock_name`` coi tên trùng mã là giữ chỗ, nên chỉ gọi khi thực
+            # sự có tên; nếu không sẽ biến "HPG" thành "Cổ phiếu chưa xác định" và mất mã.
+            # It treats a name equal to the code as a placeholder, so only call it when a real
+            # name was supplied -- otherwise the ticker itself would be replaced.
+            display = get_localized_stock_name(name, code, language)
+        else:
+            display = str(code or "")
+        return get_pipeline_progress_text(stage, language, name=display, **params)
+
     def _emit_progress(self, progress: int, message: str) -> None:
         """Best-effort bridge from pipeline stages to task SSE progress."""
         callback = getattr(self, "progress_callback", None)
@@ -568,7 +599,7 @@ class StockAnalysisPipeline:
                 target_date=daily_market_target_date,
             )
 
-            self._emit_progress(18, f"{code}：正在获取行情与筹码数据")
+            self._emit_progress(18, self._progress_text("fetch_market", code=code))
             # Lấy tên cổ phiếu (đi đường nhẹ trước; nếu realtime_quote có name thì ghi đè sau)
             # Mục tiêu là chỉ số thì dùng tên hiển thị trong registry (matched_index.display_name),
             # tránh đưa raw alias / canonical code / mã máy 6 chữ số vào truy vấn tìm kiếm
@@ -644,7 +675,7 @@ class StockAnalysisPipeline:
                     use_agent = True
                     logger.info(f"{stock_name}({code}) Auto-enabled agent mode due to configured skills: {configured_skills}")
 
-            self._emit_progress(32, f"{stock_name}：正在聚合基本面与趋势数据")
+            self._emit_progress(32, self._progress_text("aggregate", code=code, name=stock_name))
 
             # Bước 2.5: tổng hợp năng lực dữ liệu cơ bản (điểm vào thống nhất, hạ cấp khi lỗi)
             # - Thất bại thì trả partial/failed, không ảnh hưởng luồng kỹ thuật/tin tức sẵn có
@@ -736,7 +767,7 @@ class StockAnalysisPipeline:
 
             if use_agent:
                 logger.info(f"{stock_name}({code}) 启用 Agent 模式进行分析")
-                self._emit_progress(58, f"{stock_name}：正在切换 Agent 分析链路")
+                self._emit_progress(58, self._progress_text("agent_switch", code=code, name=stock_name))
                 return self._analyze_with_agent(
                     code,
                     report_type,
@@ -762,7 +793,7 @@ class StockAnalysisPipeline:
                 market=market or "cn",
             )
             news_result_count: Optional[int] = None
-            self._emit_progress(46, f"{stock_name}：正在检索新闻与舆情")
+            self._emit_progress(46, self._progress_text("news", code=code, name=stock_name))
             if self.search_service is not None and self.search_service.is_available:
                 logger.info(f"{stock_name}({code}) 开始多维度情报搜索...")
 
@@ -840,7 +871,7 @@ class StockAnalysisPipeline:
                 )
 
             # Bước 5: lấy ngữ cảnh phân tích (dữ liệu phân tích kỹ thuật)
-            self._emit_progress(58, f"{stock_name}：正在整理分析上下文")
+            self._emit_progress(58, self._progress_text("context", code=code, name=stock_name))
             context = self._get_analysis_context_with_market_fallback(
                 code, analysis_target=analysis_target
             )
@@ -916,10 +947,12 @@ class StockAnalysisPipeline:
                 llm_progress_state["last_progress"] = dynamic_progress
                 self._emit_progress(
                     dynamic_progress,
-                    f"{stock_name}：LLM 正在生成分析结果（已接收 {chars_received} 字符）",
+                    self._progress_text(
+                        "llm_streaming", code=code, name=stock_name, chars=chars_received
+                    ),
                 )
 
-            self._emit_progress(64, f"{stock_name}：正在请求 LLM 生成报告")
+            self._emit_progress(64, self._progress_text("llm_request", code=code, name=stock_name))
             llm_started_at = time.monotonic()
             try:
                 record_llm_run_started(
@@ -977,7 +1010,7 @@ class StockAnalysisPipeline:
 
             # Bước 7.5: đưa thông tin giá tại thời điểm phân tích vào result
             if result:
-                self._emit_progress(94, f"{stock_name}：正在校验并整理分析结果")
+                self._emit_progress(94, self._progress_text("validate", code=code, name=stock_name))
                 result.query_id = query_id
                 realtime_data = enhanced_context.get('realtime', {})
                 result.current_price = realtime_data.get('price')
@@ -1031,7 +1064,7 @@ class StockAnalysisPipeline:
             # Bước 8: lưu lịch sử phân tích
             if result and result.success:
                 try:
-                    self._emit_progress(97, f"{stock_name}：正在保存分析报告")
+                    self._emit_progress(97, self._progress_text("save_report", code=code, name=stock_name))
                     context_snapshot = self._build_context_snapshot(
                         enhanced_context=enhanced_context,
                         news_content=news_context,
@@ -3487,7 +3520,7 @@ class StockAnalysisPipeline:
                 trigger_source=getattr(self, "query_source", None),
             )
         try:
-            self._emit_progress(12, f"{code}：正在准备分析任务")
+            self._emit_progress(12, self._progress_text("prepare", code=code))
             # Bước 1: lấy và lưu dữ liệu
             success, error = self.fetch_and_save_stock_data(
                 code, current_time=current_time, analysis_target=analysis_target
@@ -3503,7 +3536,7 @@ class StockAnalysisPipeline:
                 fetched = getattr(self, "_fetched_codes_this_run", None)
                 if fetched is not None:
                     fetched.add(code)
-                self._emit_progress(16, f"{code}：行情数据准备完成")
+                self._emit_progress(16, self._progress_text("market_ready", code=code))
             
             # Bước 2: AI phân tích
             if skip_analysis:

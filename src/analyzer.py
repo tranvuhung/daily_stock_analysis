@@ -94,6 +94,8 @@ from src.report_language import (
     infer_decision_type_from_advice,
     is_chip_placeholder_value,
     localize_chip_health,
+    get_localized_stock_name,
+    get_pipeline_progress_text,
     localize_confidence_level,
     localize_operation_advice,
     localize_trend_prediction,
@@ -3782,6 +3784,22 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
             except Exception as exc:
                 logger.debug("[analyzer] progress callback skipped: %s", exc)
 
+        def _progress_text(stage: str, subject: Any = None, **params: Any) -> str:
+            """Thông báo tiến độ theo ngôn ngữ báo cáo.
+
+            Các chuỗi này đi chung ``progress_callback`` với pipeline
+            (``src/core/pipeline.py:932``) nên cũng lọt thẳng ra panel Run Flow qua
+            ``task.message`` — không được để nguyên tiếng Trung.
+            These share the pipeline's progress callback and reach the Run Flow panel.
+            """
+            # ``get_localized_stock_name`` coi tên trùng mã là giữ chỗ, nên chỉ gọi khi
+            # thực sự có tên cổ phiếu; truyền mã trần sẽ biến "FPT" thành "Cổ phiếu chưa
+            # xác định". Cùng cái bẫy đã gặp ở ``pipeline._progress_text``.
+            # Only localize when a real name was supplied; passing the bare code would
+            # replace the ticker with the generic placeholder.
+            display = get_localized_stock_name(subject, code, report_language) if subject else str(code or "")
+            return get_pipeline_progress_text(stage, report_language, name=display, **params)
+
         code = context.get('code', 'Unknown')
         config = self._get_runtime_config()
         report_language = normalize_report_language(getattr(config, "report_language", "zh"))
@@ -3792,7 +3810,7 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
         request_delay = config.gemini_request_delay
         if request_delay > 0:
             logger.debug(f"[LLM] Waiting {request_delay:.1f}s before the request...")
-            _emit_progress(65, f"{code}：LLM 请求前等待 {request_delay:.1f} 秒")
+            _emit_progress(65, _progress_text("llm_wait", seconds=f"{request_delay:.1f}"))
             time.sleep(request_delay)
         
         # Ưu tiên tên cổ phiếu từ context (do main.py truyền vào).
@@ -3944,7 +3962,7 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
             }
 
             logger.info(f"[LLM call] calling {model_name}...")
-            _emit_progress(68, f"{name}：LLM 已接收请求，等待响应")
+            _emit_progress(68, _progress_text("llm_accepted", name))
 
             # Gọi qua litellm (có retry khi thiếu trường bắt buộc).
             current_prompt = prompt
@@ -3992,7 +4010,7 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
                     )
                 # Keep parser/retry progress monotonic so task progress/message never "goes backward".
                 parse_progress = min(99, 93 + retry_count * 2)
-                _emit_progress(parse_progress, f"{name}：LLM 返回完成，正在解析 JSON")
+                _emit_progress(parse_progress, _progress_text("llm_parsing", name))
 
                 # Parse phản hồi. / Parse the response.
                 result = self._parse_response(response_text, code, name)
@@ -4029,7 +4047,7 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
                     retry_progress = min(99, 92 + retry_count * 2)
                     _emit_progress(
                         retry_progress,
-                        f"{name}：报告字段不完整，正在补全重试（{retry_count}/{max_retries}）",
+                        _progress_text("llm_retry", name, attempt=retry_count, total=max_retries),
                     )
                 else:
                     self._apply_placeholder_fill(result, missing_fields)

@@ -1299,6 +1299,46 @@ class RunFlowTestCase(unittest.TestCase):
         self.assertIn("<redacted>", payload)
         self.assertIn("<redacted-path>", payload)
 
+    def test_placeholder_stock_name_is_localized_for_the_panel_title(self):
+        """``股票{code}`` không được lên tiêu đề panel Run Flow.
+
+        ``src/core/pipeline.py`` ghi tên giữ chỗ ``股票{code}`` vào ``analysis_history.name``
+        khi không tra được tên; chuỗi đó đi thẳng ra ``RunFlowSummaryBar.tsx``. Đường chạy
+        trực tiếp đã chuẩn hoá ở ``analysis_service.py``, đường lịch sử thì trước đây chưa.
+        """
+
+        snapshot = build_history_run_flow_snapshot(
+            _history_record(
+                context_snapshot=None,
+                raw_result={"success": True, "report_language": "vi"},
+                code="HPG",
+                name="股票HPG",
+            )
+        )
+        self.assertEqual(snapshot.stock_name, "Cổ phiếu chưa xác định")
+
+    def test_placeholder_stock_name_follows_the_report_language(self):
+        snapshot = build_history_run_flow_snapshot(
+            _history_record(
+                context_snapshot=None,
+                raw_result={"success": True, "report_language": "en"},
+                code="HPG",
+                name="股票HPG",
+            )
+        )
+        self.assertEqual(snapshot.stock_name, "Unnamed Stock")
+
+    def test_real_stock_name_is_left_untouched(self):
+        snapshot = build_history_run_flow_snapshot(
+            _history_record(
+                context_snapshot=None,
+                raw_result={"success": True, "report_language": "vi"},
+                code="HPG",
+                name="Hòa Phát",
+            )
+        )
+        self.assertEqual(snapshot.stock_name, "Hòa Phát")
+
 
 if __name__ == "__main__":
     unittest.main()
