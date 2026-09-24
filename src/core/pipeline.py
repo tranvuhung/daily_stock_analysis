@@ -135,6 +135,28 @@ INDEX_SKIP_MODULES = frozenset({
     "corporate_events",
 })
 
+# Chỉ A-share có nguồn phân bố chip (AkshareFetcher ``stock_cyq_em`` /
+# TushareFetcher ``cyq_chips``); các thị trường khác luôn trả None.
+# Only A-share has chip-distribution providers.
+_CHIP_SUPPORTED_MARKETS = frozenset({"cn"})
+
+
+def _analysis_metadata(
+    *, query_id: str, trigger_source: Any, market: str, is_index: bool
+) -> Dict[str, Any]:
+    """Metadata của ContextPack; đánh dấu ``chip_not_supported`` khi chip vốn không có.
+
+    Nếu không đánh dấu, builder sẽ báo ``chip_distribution_missing`` (thiếu, cần kiểm
+    tra nguồn) cho cả trường hợp thị trường/chỉ số không hề có dữ liệu chip.
+    """
+    metadata: Dict[str, Any] = {"query_id": query_id, "trigger_source": trigger_source}
+    if (
+        (is_index and "chip_distribution" in INDEX_SKIP_MODULES)
+        or market not in _CHIP_SUPPORTED_MARKETS
+    ):
+        metadata["chip_not_supported"] = True
+    return metadata
+
 
 def _share_image_payload(result: Any) -> Optional[Dict[str, Any]]:
     """Return structured poster data when the result exposes the real contract."""
@@ -933,6 +955,7 @@ class StockAnalysisPipeline:
                     news_result_count=news_result_count,
                     query_id=query_id,
                     portfolio_context=portfolio_context,
+                    is_index=is_index,
                 ),
                 report_language=report_language,
                 code=code,
@@ -1719,6 +1742,7 @@ class StockAnalysisPipeline:
                     query_id=query_id,
                     base_context=analysis_context,
                     portfolio_context=portfolio_context,
+                    is_index=is_index,
                 ),
                 report_language=report_language,
                 code=code,
@@ -3257,6 +3281,7 @@ class StockAnalysisPipeline:
         news_result_count: Optional[int],
         query_id: str,
         portfolio_context: Optional[Dict[str, Any]] = None,
+        is_index: bool = False,
     ) -> PipelineAnalysisArtifacts:
         return PipelineAnalysisArtifacts(
             code=code,
@@ -3271,10 +3296,12 @@ class StockAnalysisPipeline:
             fundamental_context=fundamental_context,
             news_context=news_context,
             news_result_count=news_result_count,
-            metadata={
-                "query_id": query_id,
-                "trigger_source": self.query_source,
-            },
+            metadata=_analysis_metadata(
+                query_id=query_id,
+                trigger_source=self.query_source,
+                market=market,
+                is_index=is_index,
+            ),
             portfolio_context=dict(portfolio_context) if isinstance(portfolio_context, dict) else None,
         )
 
@@ -3290,6 +3317,7 @@ class StockAnalysisPipeline:
         query_id: str,
         base_context: Optional[Dict[str, Any]] = None,
         portfolio_context: Optional[Dict[str, Any]] = None,
+        is_index: bool = False,
     ) -> PipelineAnalysisArtifacts:
         context_candidate = base_context
         if not isinstance(context_candidate, dict):
@@ -3321,10 +3349,12 @@ class StockAnalysisPipeline:
             fundamental_context=fundamental_context,
             news_context=initial_context.get("news_context"),
             news_result_count=None,
-            metadata={
-                "query_id": query_id,
-                "trigger_source": self.query_source,
-            },
+            metadata=_analysis_metadata(
+                query_id=query_id,
+                trigger_source=self.query_source,
+                market=market,
+                is_index=is_index,
+            ),
             portfolio_context=dict(portfolio_context) if isinstance(portfolio_context, dict) else None,
         )
 

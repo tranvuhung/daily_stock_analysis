@@ -237,6 +237,52 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             {"query_id": "q-legacy", "trigger_source": "api"},
         )
 
+    def test_artifacts_mark_chip_not_supported_outside_a_share_and_for_index(self):
+        # Chip chỉ có cho A-share: VN/US/chỉ số phải ra chip_not_supported, không phải
+        # chip_distribution_missing. Chip is A-share only.
+        from src.schemas.analysis_context_pack import ContextFieldStatus
+        from src.services.analysis_context_builder import AnalysisContextBuilder
+
+        pipeline = _make_pipeline(agent_mode=False, save_context_snapshot=True)
+        pipeline.query_source = "api"
+        common = dict(
+            phase=None,
+            context={"code": "X", "today": {}, "yesterday": {}},
+            enhanced_context={},
+            realtime_quote=None,
+            trend_result=None,
+            chip_data=None,
+            fundamental_context=None,
+            news_context=None,
+            news_result_count=None,
+            query_id="q-chip",
+        )
+        cases = [
+            ("HPG", "vn", False, "chip_not_supported", ContextFieldStatus.NOT_SUPPORTED),
+            ("AAPL", "us", False, "chip_not_supported", ContextFieldStatus.NOT_SUPPORTED),
+            ("sh000001", "cn", True, "chip_not_supported", ContextFieldStatus.NOT_SUPPORTED),
+            ("600519", "cn", False, "chip_distribution_missing", ContextFieldStatus.MISSING),
+        ]
+        for code, market, is_index, reason, status in cases:
+            with self.subTest(code=code):
+                artifacts = pipeline._build_legacy_analysis_artifacts(
+                    code=code, stock_name=code, market=market, is_index=is_index, **common
+                )
+                chip = AnalysisContextBuilder.build(artifacts).blocks["chip"]
+                self.assertEqual(chip.status, status)
+                self.assertEqual(chip.items["chip_distribution"].missing_reason, reason)
+
+        agent_artifacts = pipeline._build_agent_analysis_artifacts(
+            code="HPG",
+            stock_name="HPG",
+            market="vn",
+            phase=None,
+            initial_context={},
+            fundamental_context=None,
+            query_id="q-chip-agent",
+        )
+        self.assertTrue(agent_artifacts.metadata.get("chip_not_supported"))
+
     def test_context_snapshot_strips_runtime_portfolio_context(self):
         pipeline = _make_pipeline(agent_mode=False, save_context_snapshot=True)
 
