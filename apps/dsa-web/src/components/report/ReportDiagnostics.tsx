@@ -96,6 +96,160 @@ const TEXT = {
   },
 } as const;
 
+// Bản dịch theo id ổn định từ backend (component.key, messageCode, analysis_input_status).
+// Localized text keyed by stable backend ids; unknown ids fall back to the server text.
+const COMPONENT_LABELS: Record<ReportLanguage, Record<string, string>> = {
+  vi: {
+    realtime_quote: 'Giá thời gian thực',
+    daily_data: 'Dữ liệu ngày',
+    news: 'Tìm kiếm tin tức',
+    llm: 'LLM',
+    notification: 'Thông báo',
+    history: 'Lưu lịch sử',
+  },
+  en: {
+    realtime_quote: 'Realtime quote',
+    daily_data: 'Daily data',
+    news: 'News search',
+    llm: 'LLM',
+    notification: 'Notification',
+    history: 'History save',
+  },
+};
+
+const MESSAGE_TEMPLATES: Record<ReportLanguage, Record<string, string>> = {
+  vi: {
+    provider_ok: '{label}: {provider} thành công',
+    provider_ok_after_fallback: '{label}: {provider} thành công sau khi các nguồn trước đó lỗi',
+    provider_failed: '{label} thất bại: {error}',
+    provider_input_degraded: '{label}: {provider} thành công, nhưng dữ liệu {input}',
+    not_recorded: '{label}: chưa ghi nhận thông tin chẩn đoán',
+    news_results: 'Tìm kiếm tin tức trả về {count} kết quả',
+    news_results_input_degraded: 'Tìm kiếm tin tức trả về {count} kết quả, nhưng tin tức {input}; tin liên quan trên trang báo cáo có thể đến từ lần tìm kiếm sau hoặc lịch sử đã lưu',
+    news_empty: 'Tìm kiếm tin tức không có kết quả',
+    news_input_only: 'Tin tức {input}; tin liên quan trên trang báo cáo có thể đến từ lần tìm kiếm sau hoặc lịch sử đã lưu',
+    news_no_raw_evidence: 'Tìm kiếm tin tức không ghi nhận bằng chứng gốc; có thể chưa chạy hoặc chưa bật',
+    llm_ok: 'LLM {model} thành công',
+    llm_ok_with_fallback: 'LLM {model} thành công, nhưng có lỗi hoặc đổi model trong quá trình chạy',
+    llm_ok_no_model: 'LLM thành công, chưa ghi nhận model',
+    llm_failed: 'LLM thất bại: {error}',
+    notification_not_recorded: 'Chưa ghi nhận kết quả thông báo',
+    notification_partial: 'Một số kênh thông báo lỗi, các kênh còn lại đã gửi',
+    notification_ok: 'Đã gửi thông báo',
+    notification_skipped: 'Thông báo chưa cấu hình hoặc bị bỏ qua ở lượt này',
+    notification_failed: 'Gửi thông báo thất bại: {error}',
+    history_saved: 'Đã lưu lịch sử báo cáo',
+    history_failed: 'Lưu lịch sử báo cáo thất bại: {error}',
+  },
+  en: {
+    provider_ok: '{label}: {provider} succeeded',
+    provider_ok_after_fallback: '{label}: {provider} succeeded after earlier sources failed',
+    provider_failed: '{label} failed: {error}',
+    provider_input_degraded: '{label}: {provider} succeeded, but the data {input}',
+    not_recorded: '{label}: no diagnostics recorded',
+    news_results: 'News search returned {count} results',
+    news_results_input_degraded: 'News search returned {count} results, but the news {input}; related news on the report page may come from a later search or saved history',
+    news_empty: 'News search returned no results',
+    news_input_only: 'The news {input}; related news on the report page may come from a later search or saved history',
+    news_no_raw_evidence: 'News search recorded no raw evidence; it may not have run or may be disabled',
+    llm_ok: 'LLM {model} succeeded',
+    llm_ok_with_fallback: 'LLM {model} succeeded, with failures or model switches along the way',
+    llm_ok_no_model: 'LLM succeeded; model not recorded',
+    llm_failed: 'LLM failed: {error}',
+    notification_not_recorded: 'Notification result not recorded',
+    notification_partial: 'Some notification channels failed; the others were sent',
+    notification_ok: 'Notification sent',
+    notification_skipped: 'Notification not configured or skipped for this run',
+    notification_failed: 'Notification failed: {error}',
+    history_saved: 'Report history saved',
+    history_failed: 'Saving report history failed: {error}',
+  },
+};
+
+const INPUT_STATUS_TEXT: Record<ReportLanguage, Record<string, string>> = {
+  vi: {
+    missing: 'chưa được đưa vào đầu vào phân tích của lượt này',
+    partial: 'chỉ có một phần trong đầu vào phân tích của lượt này',
+    fallback: 'dùng dữ liệu dự phòng trong đầu vào phân tích của lượt này',
+    stale: 'dùng dữ liệu cũ trong đầu vào phân tích của lượt này',
+    estimated: 'dùng dữ liệu ước tính trong đầu vào phân tích của lượt này',
+    fetch_failed: 'bị đánh dấu lấy dữ liệu thất bại trong đầu vào phân tích',
+    not_supported: 'bị đánh dấu không hỗ trợ trong đầu vào phân tích',
+  },
+  en: {
+    missing: "did not reach this run's analysis input",
+    partial: "was only partially available to this run's analysis input",
+    fallback: "used fallback data in this run's analysis input",
+    stale: "used stale data in this run's analysis input",
+    estimated: "used estimated data in this run's analysis input",
+    fetch_failed: 'was marked as fetch failed in the analysis input',
+    not_supported: 'was marked as not supported in the analysis input',
+  },
+};
+
+const UNKNOWN_REASON: Record<ReportLanguage, string> = {
+  vi: 'Báo cáo cũ hoặc chưa đủ bằng chứng chẩn đoán; không xác định được trạng thái của lượt chạy này',
+  en: 'Old report or insufficient diagnostic evidence; the status of this run cannot be determined',
+};
+
+const detailText = (details: Record<string, unknown> | undefined, key: string): string | undefined => {
+  const value = details?.[key];
+  if (value === undefined || value === null || value === '') return undefined;
+  return String(value);
+};
+
+const getComponentLabel = (component: RunDiagnosticComponent, language: ReportLanguage): string => (
+  COMPONENT_LABELS[language][component.key] || component.label
+);
+
+/**
+ * Trả về message đã bản địa hóa; không có messageCode (bản ghi cũ) thì dùng text server.
+ * Returns the localized message; falls back to the server text when there is no messageCode.
+ */
+const localizeComponentMessage = (component: RunDiagnosticComponent, language: ReportLanguage): string => {
+  const template = component.messageCode ? MESSAGE_TEMPLATES[language][component.messageCode] : undefined;
+  if (!template) {
+    return component.message;
+  }
+  const details = component.details;
+  const inputStatus = detailText(details, 'analysisInputStatus');
+  const params = {
+    label: getComponentLabel(component, language),
+    provider: detailText(details, 'provider') ?? 'unknown',
+    count: detailText(details, 'recordCount') ?? '0',
+    model: detailText(details, 'model') ?? 'unknown',
+    error: detailText(details, 'error') ?? (language === 'vi' ? 'lỗi không xác định' : 'unknown error'),
+    input: inputStatus ? INPUT_STATUS_TEXT[language][inputStatus] ?? inputStatus : '',
+  };
+  // Mã cần {input} mà không có trạng thái đầu vào thì dùng text server cho an toàn.
+  // Codes that need {input} fall back to the server text when the input status is missing.
+  if (template.includes('{input}') && !params.input) {
+    return component.message;
+  }
+  return formatUiText(template, params);
+};
+
+/**
+ * Suy ra lý do tổng quát theo đúng thứ tự backend: failed đầu tiên, rồi degraded đầu tiên.
+ * Derives the headline reason in the backend's order: first failed, then first degraded component.
+ */
+const localizeReason = (
+  summary: RunDiagnosticSummary,
+  components: RunDiagnosticComponent[],
+  language: ReportLanguage,
+  overallLabel: string,
+): string => {
+  if (summary.status === 'unknown') {
+    return UNKNOWN_REASON[language];
+  }
+  const primary = components.find((component) => component.status === 'failed')
+    || components.find((component) => component.status === 'degraded');
+  if (primary) {
+    return primary.messageCode ? localizeComponentMessage(primary, language) : summary.reason;
+  }
+  return summary.status === 'normal' ? overallLabel : summary.reason;
+};
+
 const OVERALL_STATUS_STYLE: Record<RunDiagnosticStatus, { variant: BadgeVariant; tone: StatusTone }> = {
   normal: { variant: 'success', tone: 'success' },
   degraded: { variant: 'warning', tone: 'warning' },
@@ -224,6 +378,9 @@ export const ReportDiagnostics: React.FC<ReportDiagnosticsProps> = ({
   const statusStyle = OVERALL_STATUS_STYLE[visibleSummary.status] || OVERALL_STATUS_STYLE.unknown;
   const statusLabel = text.overall[visibleSummary.status] || visibleSummary.statusLabel;
   const components = getOrderedComponents(visibleSummary.components);
+  const reasonText = loadedSummary
+    ? localizeReason(loadedSummary, components, reportLanguage, statusLabel)
+    : visibleSummary.reason;
   const traceId = compactId(visibleSummary.traceId);
   const taskId = compactId(visibleSummary.taskId);
   const queryId = compactId(visibleSummary.queryId);
@@ -306,7 +463,7 @@ export const ReportDiagnostics: React.FC<ReportDiagnosticsProps> = ({
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0 space-y-2">
               <p className="text-sm leading-6 text-foreground">
-                {visibleSummary.reason}
+                {reasonText}
               </p>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-text">
                 {traceId ? (
@@ -368,10 +525,10 @@ export const ReportDiagnostics: React.FC<ReportDiagnosticsProps> = ({
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-foreground">
-                          {component.label}
+                          {getComponentLabel(component, reportLanguage)}
                         </p>
                         <p className="mt-1 text-xs leading-5 text-secondary-text">
-                          {component.message}
+                          {localizeComponentMessage(component, reportLanguage)}
                         </p>
                       </div>
                       <Badge variant={componentStyle.variant} className="shrink-0 gap-1.5 shadow-none">

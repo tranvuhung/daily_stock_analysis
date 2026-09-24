@@ -392,6 +392,8 @@ export interface RunDiagnosticComponent {
   label: string;
   status: RunDiagnosticComponentStatus;
   message: string;
+  /** Mã ổn định để bản địa hóa message / Stable code for localizing the message */
+  messageCode?: string;
   details?: Record<string, unknown>;
 }
 

@@ -19,14 +19,15 @@ const diagnosticSummary: RunDiagnosticSummary = {
   triggerSource: 'web',
   status: 'degraded',
   statusLabel: 'Suy giảm một phần',
-  reason: '实时行情 baostock 成功，前置数据源失败后已继续',
+  reason: 'Realtime quote baostock succeeded after earlier sources failed',
   copyText: 'trace_id: trace-1234567890abcdef\ndata_status: degraded',
   components: {
     realtimeQuote: {
       key: 'realtime_quote',
-      label: '实时行情',
+      label: 'Realtime quote',
       status: 'degraded',
-      message: '实时行情 baostock 成功，前置数据源失败后已继续',
+      message: 'Realtime quote baostock succeeded after earlier sources failed',
+      messageCode: 'provider_ok_after_fallback',
       details: {
         provider: 'baostock',
         attempts: 2,
@@ -34,9 +35,10 @@ const diagnosticSummary: RunDiagnosticSummary = {
     },
     notification: {
       key: 'notification',
-      label: 'Notify',
+      label: 'Notification',
       status: 'not_configured',
-      message: '通知未配置或本次跳过',
+      message: 'Notification not configured or skipped for this run',
+      messageCode: 'notification_skipped',
     },
   },
 };
@@ -86,6 +88,56 @@ describe('ReportDiagnostics', () => {
     expect(screen.getByText('Run Status')).toBeInTheDocument();
     expect(screen.getByText('Degraded')).toBeInTheDocument();
     expect(screen.getByText('Fetch / LLM / save / notification path')).toBeInTheDocument();
+  });
+
+  it('localizes component labels, messages and the reason from stable codes', () => {
+    render(<ReportDiagnostics summary={diagnosticSummary} language="vi" />);
+
+    expect(screen.getByText('Giá thời gian thực')).toBeInTheDocument();
+    expect(screen.getAllByText('Giá thời gian thực: baostock thành công sau khi các nguồn trước đó lỗi')).toHaveLength(2);
+    expect(screen.getByText('Thông báo chưa cấu hình hoặc bị bỏ qua ở lượt này')).toBeInTheDocument();
+    expect(screen.queryByText(/[\u4e00-\u9fff]/)).not.toBeInTheDocument();
+  });
+
+  it('localizes parameterized messages and input status', () => {
+    const summary: RunDiagnosticSummary = {
+      ...diagnosticSummary,
+      status: 'degraded',
+      components: {
+        news: {
+          key: 'news',
+          label: 'News search',
+          status: 'degraded',
+          message: 'server text',
+          messageCode: 'news_results_input_degraded',
+          details: { recordCount: 10, analysisInputStatus: 'missing' },
+        },
+      },
+    };
+    render(<ReportDiagnostics summary={summary} language="vi" />);
+
+    expect(screen.getAllByText(/Tìm kiếm tin tức trả về 10 kết quả, nhưng tin tức chưa được đưa vào đầu vào phân tích/)).toHaveLength(2);
+  });
+
+  it('falls back to server text for legacy components without a message code', () => {
+    const summary: RunDiagnosticSummary = {
+      ...diagnosticSummary,
+      status: 'normal',
+      reason: 'Normal',
+      components: {
+        history: {
+          key: 'history',
+          label: 'History save',
+          status: 'ok',
+          message: 'legacy server message',
+        },
+      },
+    };
+    render(<ReportDiagnostics summary={summary} language="vi" />);
+
+    expect(screen.getByText('Lưu lịch sử')).toBeInTheDocument();
+    expect(screen.getByText('legacy server message')).toBeInTheDocument();
+    expect(screen.getAllByText('Bình thường').length).toBeGreaterThan(0);
   });
 
   it('opens historical run flow from the diagnostics body', async () => {

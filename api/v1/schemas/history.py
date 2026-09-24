@@ -425,6 +425,10 @@ class RunDiagnosticComponent(BaseModel):
     label: str = Field(..., description="Component display name")
     status: str = Field(..., description="Component status: ok/degraded/failed/unknown/not_configured/skipped")
     message: str = Field(..., description="Human-readable summary")
+    message_code: Optional[str] = Field(
+        None,
+        description="Stable message code for client-side localization; parameters come from details",
+    )
     details: Optional[Dict[str, Any]] = Field(None, description="Collapsible diagnostic details")
 
 

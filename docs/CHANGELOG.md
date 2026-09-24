@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] Panel “Chẩn đoán lượt chạy” (Run diagnostics) trên Web UI không còn hiện tiếng Trung (`正常`, `…成功`, `未记录诊断信息`, `新闻检索返回 N 条结果`…). Backend `src/services/run_diagnostics.py` chuyển toàn bộ message/`status_label`/`reason` sang tiếng Anh và thêm trường tùy chọn `message_code` cho mỗi component (bổ sung, không phá contract). Web bản địa hóa nhãn, message và lý do tổng quát theo vi/en từ `component.key` + `message_code` + `details`. Bản ghi không có `message_code` thì hiện text từ server.
 - [新功能] `scripts/run-app.sh` 新增 `start`：在本机跑**真实服务**。直接读仓库 `.env`（真实 `data/stock_analysis.db`、`MARKET_REVIEW_ENABLED`、`WEBUI_AUTO_BUILD` 等一律不覆盖），执行 `main.py --serve --schedule`，即 FastAPI + Web UI + 进程内 runtime scheduler + bot client。等价于 `docker/docker-compose.yml` 的 `analyzer` + `server` 两个容器合并为单进程——`main.py:1636-1650` 明确让 scheduler 跑在 API 进程内，"keeps Web settings, status, and run-now actions attached to the real scheduler"。
 - [改进] 原有 `serve` / `dry-run` / `analyze` / `smoke` **行为完全不变**，仍是临时 `.env` + 临时 DB 的隔离验证环境，review 流程不受影响。两种模式的 PID 文件、日志、端口相互独立（真实服务用 `WEBUI_PORT`，默认 8000；验证环境固定 8765）。
 - [新功能] `status` 子命令：显示当前跑的是哪种模式、PID、端口与 `/api/v1/health` 结果。`stop` 现在同时停止两种模式。
