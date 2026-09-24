@@ -181,6 +181,12 @@ def is_market_open(market: str, check_date: date) -> bool:
         return True
     ex = MARKET_EXCHANGE.get(market)
     if not ex:
+        # Thị trường đã đăng ký nhưng exchange-calendars không có lịch (hiện là
+        # vn): ít nhất loại thứ 7/CN, để lịch chạy tự động không điểm lại thị
+        # trường vào cuối tuần. Ngày lễ (Tết...) vẫn fail-open vì không có nguồn lịch.
+        # Known market without an xcals calendar: close on weekends only.
+        if market in ALL_MARKETS:
+            return check_date.weekday() < 5
         return True
     try:
         cal = xcals.get_calendar(ex)
@@ -632,13 +638,13 @@ def compute_effective_region(
     Compute effective market review region given config and open markets.
 
     Args:
-        config_region: From MARKET_REVIEW_REGION ('cn' | 'hk' | 'us' | 'jp' | 'kr' | 'both' or comma subset)
+        config_region: From MARKET_REVIEW_REGION ('cn' | 'hk' | 'us' | 'jp' | 'kr' | 'vn' | 'both' or comma subset)
         open_markets: Markets open today
 
     Returns:
         None: caller uses config default (check disabled)
         '': all relevant markets closed, skip market review
-        'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'both': effective subset for today
+        'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'vn' | 'both': effective subset for today
     """
     # 与 ``MARKET_REVIEW_REGION`` 的解析口径保持一致：只认当前启用且支持
     # 大盘复盘的市场。此前这里硬编码了一份市场列表，与
@@ -647,7 +653,7 @@ def compute_effective_region(
 
     markets = enabled_market_review_regions()
     if not markets:
-        # 没有任何可复盘市场（例如只启用越南）：跳过复盘而不是回退到 cn。
+        # 没有任何可复盘市场（例如只启用台湾）：跳过复盘而不是回退到 cn。
         return ""
 
     default_region = markets[0]

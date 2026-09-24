@@ -12,7 +12,9 @@ describe('MarketReviewRegionSelector', () => {
 
   it('serializes canonical UI selections at the HTTP boundary', () => {
     expect(serializeMarketReviewRegions(['kr', 'jp'])).toBe('jp,kr');
-    expect(serializeMarketReviewRegions(['cn', 'hk', 'us', 'jp', 'kr'])).toBe('both');
+    expect(serializeMarketReviewRegions(['cn', 'hk', 'us', 'jp', 'kr', 'vn'])).toBe('both');
+    expect(serializeMarketReviewRegions(['cn', 'hk', 'us', 'jp', 'kr'])).toBe('cn,hk,us,jp,kr');
+    expect(serializeMarketReviewRegions(['vn'])).toBe('vn');
   });
 
   it('keeps the runtime-resolved server default opaque and emits a canonical override', () => {
@@ -49,7 +51,7 @@ describe('MarketReviewRegionSelector', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Select market review regions' }));
     fireEvent.click(screen.getByRole('button', { name: 'All markets' }));
-    expect(onChange).toHaveBeenLastCalledWith(['cn', 'hk', 'us', 'jp', 'kr']);
+    expect(onChange).toHaveBeenLastCalledWith(['cn', 'hk', 'us', 'jp', 'kr', 'vn']);
 
     fireEvent.click(screen.getByRole('button', { name: /Server default/ }));
     expect(onChange).toHaveBeenLastCalledWith(undefined);

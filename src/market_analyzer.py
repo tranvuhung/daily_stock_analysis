@@ -144,14 +144,14 @@ class MarketAnalyzer:
         Args:
             search_service: 搜索服务实例
             analyzer: AI分析器实例（用于调用LLM）
-            region: 市场区域 cn=A股 hk=港股 us=美股 jp=日本 kr=韩国
+            region: 市场区域 cn=A股 hk=港股 us=美股 jp=日本 kr=韩国 vn=越南
             config: 本次复盘使用的配置；未传时读取全局配置
         """
         self.config = config or get_config()
         self.search_service = search_service
         self.analyzer = analyzer
         self.data_manager = DataFetcherManager()
-        self.region = region if region in ("cn", "us", "hk", "jp", "kr") else "cn"
+        self.region = region if region in ("cn", "us", "hk", "jp", "kr", "vn") else "cn"
         self.profile: MarketProfile = get_profile(self.region)
         self.strategy = get_market_strategy_blueprint(self.region)
 
@@ -307,6 +307,8 @@ class MarketAnalyzer:
             return "Japan market" if review_language in ("en", "vi") else "日本市场"
         if self.region == "kr":
             return "Korea market" if review_language in ("en", "vi") else "韩国市场"
+        if self.region == "vn":
+            return "Vietnam market" if review_language in ("en", "vi") else "越南市场"
         if review_language in ("en", "vi"):
             return "A-share market"
         return "A股市场"
@@ -321,6 +323,9 @@ class MarketAnalyzer:
             return "JPY bn" if self._get_review_language() in ("en", "vi") else "十亿日元"
         if self.region == "kr":
             return "KRW bn" if self._get_review_language() in ("en", "vi") else "十亿韩元"
+        if self.region == "vn":
+            # Giá trị giao dịch Việt Nam quen tính theo tỷ đồng
+            return "VND bn" if self._get_review_language() in ("en", "vi") else "十亿越南盾"
         return "CNY 100m" if self._get_review_language() in ("en", "vi") else "亿"
 
     def _format_turnover_value(self, amount_raw: float) -> str:
@@ -329,6 +334,9 @@ class MarketAnalyzer:
             return "N/A"
         if self.region in ("us", "hk", "jp", "kr"):
             return f"{amount_raw / 1e9:.2f}"
+        if self.region == "vn":
+            # VND -> tỷ đồng, số nguyên có phân tách hàng nghìn (ví dụ 21,345)
+            return f"{amount_raw / 1e9:,.0f}"
         if amount_raw > 1e6:
             return f"{amount_raw / 1e8:.0f}"
         return f"{amount_raw:.0f}"
@@ -348,6 +356,7 @@ class MarketAnalyzer:
                 "hk": "HK Market Recap",
                 "jp": "Japan Market Recap",
                 "kr": "Korea Market Recap",
+                "vn": "Vietnam Market Recap",
             }
             market_name = market_names.get(self.region, "A-share Market Recap")
             return f"## {date} {market_name}"
@@ -363,6 +372,11 @@ class MarketAnalyzer:
                 return "Analyze the key moves in the Nikkei 225, TOPIX, and other major Japanese indices."
             if self.region == "kr":
                 return "Analyze the key moves in the KOSPI, KOSDAQ, and other major Korean indices."
+            if self.region == "vn":
+                return (
+                    "Analyze the key moves in the VN-Index, VN30, HNX-Index, UPCoM-Index, "
+                    "and how aligned the three exchanges are."
+                )
             return "Analyze the price action in the SSE, SZSE, ChiNext, and other major indices."
         return self.profile.prompt_index_hint
 
@@ -515,6 +529,12 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
 - **Technology Cycle**: Track semiconductor, AI hardware, and global technology read-through for market risk appetite.
 - **Theme Signals**: Focus on battery, auto, internet-platform, and KOSDAQ growth-stock rotation.
 """
+        if self.region == "vn" and review_language in ("en", "vi"):
+            return """### 6. Strategy Framework
+- **Trend Regime**: Classify Vietnam equities as advancing, range-bound, or defensive based on VN-Index/VN30 alignment.
+- **Liquidity & Breadth**: Track turnover versus recent sessions and advance/decline plus ceiling/floor structure.
+- **Theme Signals**: Focus on banks, securities, real estate rotation and macro catalysts such as market upgrade or public investment.
+"""
         if self.region == "us" and review_language == "zh":
             return """### 六、策略框架
 - **趋势结构**：判断市场在进攻、震荡与防守中的状态是否一致。
@@ -624,7 +644,10 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         try:
             logger.info("[大盘] %s action=get_market_stats status=start", self._log_context())
 
-            stats = self.data_manager.get_market_stats(purpose=f"market_review:{self.region}")
+            stats = self.data_manager.get_market_stats(
+                purpose=f"market_review:{self.region}",
+                region=self.region,
+            )
 
             if stats:
                 overview.up_count = stats.get('up_count', 0)
@@ -636,7 +659,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
 
                 logger.info(
                     "[大盘] %s action=get_market_stats status=success up=%s down=%s flat=%s "
-                    "limit_up=%s limit_down=%s amount=%.0f亿",
+                    "limit_up=%s limit_down=%s amount=%.0f(%s)",
                     self._log_context(),
                     overview.up_count,
                     overview.down_count,
@@ -644,6 +667,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
                     overview.limit_up_count,
                     overview.limit_down_count,
                     overview.total_amount,
+                    self._get_turnover_unit_label(),
                 )
             else:
                 logger.warning("[大盘] %s action=get_market_stats status=empty", self._log_context())
@@ -743,6 +767,9 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             "hk": "港股市场" if review_language == "zh" else "HK market",
             "jp": "日本股市" if review_language == "zh" else "Japan stock market",
             "kr": "韩国股市" if review_language == "zh" else "Korea stock market",
+            # Dùng mã chỉ số để SearchService nhận diện ngữ cảnh Việt Nam
+            # (_is_vn_symbol) và ưu tiên nguồn tin tài chính tiếng Việt.
+            "vn": "VNINDEX",
         }
         
         try:
@@ -1654,7 +1681,18 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         review_language = self._get_review_language()
         # Korean reuses the English structural template but the model is told to
         # write the entire shell, headings, guidance and conclusion in Korean.
-        shell_language_label = "Korean (한국어)" if self._get_output_language() == "ko" else "English"
+        # Tiếng Việt cũng dùng khung tiếng Anh nhưng yêu cầu model viết toàn bộ
+        # nội dung bằng tiếng Việt có dấu, giống cách xử lý tiếng Hàn.
+        output_language = self._get_output_language()
+        if output_language == "ko":
+            shell_language_label = "Korean (한국어)"
+        elif output_language == "vi":
+            shell_language_label = (
+                "Vietnamese (Tiếng Việt) with correct diacritics and standard Vietnamese "
+                "securities terminology"
+            )
+        else:
+            shell_language_label = "English"
 
         # 指数行情信息（简洁格式，不用emoji）
         indices_text = ""
@@ -1714,7 +1752,7 @@ Concept lagging: {bottom_concepts_text if bottom_concepts_text else "N/A"}"""
                 stats_block = f"""## 市场概况
 - 上涨: {overview.up_count} 家 | 下跌: {overview.down_count} 家 | 平盘: {overview.flat_count} 家
 - 涨停: {overview.limit_up_count} 家 | 跌停: {overview.limit_down_count} 家
-- 两市成交额: {overview.total_amount:.0f} 亿元"""
+- {"两市成交额" if self.region == "cn" else "成交额"}: {overview.total_amount:.0f} {"亿元" if self.region == "cn" else self._get_turnover_unit_label()}"""
 
             if self.profile.has_sector_rankings:
                 sector_block = f"""## 板块表现
@@ -1771,7 +1809,7 @@ Concept lagging: {bottom_concepts_text if bottom_concepts_text else "N/A"}"""
         output_template_sections = self._build_output_template_sections(review_language)
         zh_market_scope_name = self._get_market_scope_name("zh")
         zh_report_title = f"{overview.date} 大盘复盘"
-        if self.region in ("jp", "kr"):
+        if self.region in ("jp", "kr", "vn"):
             zh_report_title = f"{overview.date} {zh_market_scope_name}大盘复盘"
         workflow_hint = (
             "报告要像交易员盘后工作台：先给结论，再按数据表、主线、催化、计划展开"
@@ -1952,6 +1990,7 @@ Output the report content directly, no extra commentary.
                 "hk": "HK Market Recap",
                 "jp": "Japan Market Recap",
                 "kr": "Korea Market Recap",
+                "vn": "Vietnam Market Recap",
             }
             market_name = market_names.get(self.region, "A-share Market Recap")
             report = f"""## {overview.date} {market_name}
@@ -1973,7 +2012,7 @@ Market conditions can change quickly. The data above is for reference only and d
 """
             return report
 
-        market_labels = {"cn": "A股", "us": "美股", "hk": "港股", "jp": "日股", "kr": "韩股"}
+        market_labels = {"cn": "A股", "us": "美股", "hk": "港股", "jp": "日股", "kr": "韩股", "vn": "越南股市"}
         market_label = market_labels.get(self.region, "A股")
         dashboard_block = (
             self._build_stats_block(overview)

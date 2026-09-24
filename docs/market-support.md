@@ -29,7 +29,7 @@
   - KOSPI：`^KS11`（<https://finance.yahoo.com/quote/%5EKS11/>）
   - KOSDAQ：`^KQ11`（<https://finance.yahoo.com/quote/%5EKQ11/>）
   - 依赖版本：`requirements.txt` 中 `yfinance>=0.2.0`，回归覆盖路径见 `tests/test_yfinance_jp_kr_indices.py` 与 `tests/test_yfinance_hk_indices.py`。
-- 兼容性与回退：`MARKET_REVIEW_REGION` 会保留合法逗号子集（如 `cn,us`）并保持 `both` 全量行为，非法值或空值回退到 `cn`，不会清空或迁移已保存配置。
+- 兼容性与回退：`MARKET_REVIEW_REGION` 会保留合法逗号子集（如 `cn,us`）并保持 `both` 全量行为，非法值或空值回退到第一个已启用的复盘市场（Không hợp lệ/để trống thì lùi về thị trường đầu tiên đang bật; chỉ bật vn thì là `vn`），不会清空或迁移已保存配置。
 - 运行时边界：JP/KR 指数按 market_review 的 fail-open 约定逐项抓取；单项失败不会阻断其余指数与其他市场；当两个市场均无可用主指数行情时返回本地可见 `None/空`，主流程继续可按其余市场输出或直接降级。
 - 兼容性验证依据：行情/基本面上下文在 `data_provider/base.py` 与 `realtime_types.py` 中按现有 `getattr`/可选字段约定向下游透传，不强制读写新增字段；无配置迁移脚本，未观察到 provider/model/base URL fallback 路径变更。
 - 回退方式：若新增元数据字段在某端产生兼容问题，可先忽略这些字段并按既有市场判定+行情展示链路运行；必要时回滚本次提交或通过移除 `jp/kr` `MarketSymbol` 及路由扩展恢复旧行为。
@@ -124,13 +124,35 @@ PY
 
 - **单位不一致是本次接入最大的风险点**：VCI 日线与 SSI 快照用「盾」（21300），而 SSI 图表接口与 `vnstock` 用「千盾」（21.3）。两个后者在归一化时统一乘 1000。口径错了不会抛异常，只会让均线、止损价静默偏离 1000 倍，因此 `tests/test_vn_source_drift.py` 专门断言了跨源收盘价一致性。
 - **Yahoo 只能当第三兜底**：实测 HOSE 覆盖 20/20，HNX 与 UPCOM 各 0/20，且没有可用的指数历史（`^VNINDEX.VN` 请求一年只返回 1 根 K 线）。更关键的是它与 VCI 的**复权基准不一致**——MBB 实测显示除权日之前的历史整体相差固定系数 1.043938，而近期完全一致。因此 Yahoo 为越南标的取回的日线只服务当次分析，不写入 `stock_daily`，避免同一支股票的历史混用两套复权口径。
-- **没有交易日历**：`exchange-calendars` 的 102 个日历里没有 HOSE/HNX/UPCOM，`is_market_open('vn')` 走既有 fail-open 分支（任何日期都视为交易日）。影响是春节等长假会照常发起请求，不影响正确性。`market_phase` 对越南返回 `unknown`。
-- **没有大盘复盘**：`market_profile.py` / `market_strategy.py` / `market_context.py` 的 prompt 是按市场手写的，越南尚未实现。`MarketSpec.supports_market_review=False`，`MARKET_REVIEW_REGION` 在只启用越南时解析为空并跳过复盘，而不是回退到 `cn`。
+- **没有交易日历**：`exchange-calendars` 的 102 个日历里没有 HOSE/HNX/UPCOM。`is_market_open('vn')` 现在只排除周六/周日（Không có lịch sàn: chỉ loại thứ 7/CN），春节等长假仍视为交易日（fail-open）。`market_phase` 对越南返回 `unknown`。
+- **大盘复盘**：已支持，见下方「Điểm lại thị trường Việt Nam」。
 - **没有基本面 / 资金流 / 板块**：这些能力当前只有 A 股实现，越南按 `not_supported` 降级。
 - **选股引擎不支持**：`src/services/screening/pipeline.py` 仍限定 `cn`/`us`。
 - **报告语言**：已切换为**仅越南语**。`REPORT_LANGUAGE` 只接受 `vi`，请求 schema 收敛为 `Literal["vi"]`；`zh`/`en`/`ko` 保留在渲染层以便历史记录按原语言显示。Web UI 语言与报告语言仍是两套独立契约。
 - **权证 / 期货 / 债券不纳入**：VCI 代码表里的 8-9 位代码（`CFPT2314`、`VN30F2512`）当前不参与分析。
 - **同时启用 `vn` 和 `us` 时裸代码有歧义**：`HPG`/`FPT`/`VNM` 同时满足越南代码形状和美股 ticker 正则 `^[A-Z]{1,5}$`。此时按既有美股语义处理（保证回滚行为不变），越南标的需写成 `HPG.VN` 或 `vnHPG`。市场判定发生在 `normalize_stock_code` 之前，因此这两种显式写法不会被归一化抹掉。
+
+### Điểm lại thị trường Việt Nam (`MARKET_REVIEW_REGION=vn`)
+
+`vn` là region điểm lại thị trường thứ sáu, xếp sau `cn,hk,us,jp,kr` trong báo cáo đa thị trường và khi mở rộng `both`. Khi chỉ bật Việt Nam (mặc định `SUPPORTED_MARKETS=vn`) và không đặt `MARKET_REVIEW_REGION`, region mặc định là `vn`. Trước đây trường hợp này bị bỏ qua, và Web UI báo `The market review did not return a persistable report`.
+
+| Thành phần | Nguồn | Ghi chú |
+| --- | --- | --- |
+| Chỉ số chính | `VciFetcher.get_main_indices(region="vn")` | VN-Index, VN30, HNX-Index, UPCoM-Index, dựng từ nến ngày mới nhất. Một chỉ số lỗi thì chỉ bỏ qua chỉ số đó. |
+| Độ rộng thị trường | `SsiFetcher.get_region_market_stats("vn")` | Tính từ snapshot ba sàn: số mã tăng/giảm/đứng giá, trần/sàn (so giá khớp với giá trần/sàn), giá trị giao dịch (tỷ đồng). |
+| Tin tức | `SearchService` | Truy vấn tiếng Việt theo `VN_PROFILE.news_queries`, ngữ cảnh `VNINDEX`. |
+| Ngôn ngữ | Prompt | Khi `REPORT_LANGUAGE=vi`, model được yêu cầu viết toàn bộ bằng tiếng Việt; tiêu đề bao ngoài cũng là tiếng Việt. |
+
+Định tuyến: `DataFetcherManager.get_market_stats(region="vn")` chỉ hỏi các fetcher có cài `get_region_market_stats`. Fetcher A-share bỏ qua tham số region và luôn trả dữ liệu A-share, nên không bao giờ được gọi cho `vn`. Region `cn` giữ nguyên thứ tự TickFlow → các fetcher như trước.
+
+Giới hạn:
+
+- Chỉ tính cổ phiếu/ETF mã 3 ký tự đã có giá khớp; loại chứng quyền, phái sinh, trái phiếu và mã chưa giao dịch.
+- Giá trị giao dịch là giá trị **khớp lệnh** (`nmTotalTradedValue`), không gồm giao dịch thỏa thuận, nên thấp hơn tổng giá trị mà các chỉ số công bố.
+- Chưa có xếp hạng ngành, dòng tiền khối ngoại, hay Market Light/cảnh báo cho `vn`. Prompt khai báo rõ giới hạn dữ liệu để model không tự bịa.
+- Nếu `SUPPORTED_MARKETS` không có thị trường nào hỗ trợ điểm lại (ví dụ chỉ `tw`), `POST /api/v1/analysis/market-review` trả về 400 `market_review_unsupported` thay vì nhận task rồi thất bại.
+
+Rollback: đặt lại `supports_market_review=False` cho `vn` trong `src/core/markets.py`. Không có migration dữ liệu.
 
 ### 回滚方式
 
@@ -163,7 +185,7 @@ PY
 不承诺项：
 
 - 不承诺实时行情；Yahoo Finance 数据可能延迟或字段缺失。
-- 不承诺完整基本面、行业/板块、市场宽度、涨跌家数或台股大盘复盘；`MARKET_REVIEW_REGION` 仍只接受 `cn/hk/us/jp/kr/both` 或这些市场的逗号子集。
+- 不承诺完整基本面、行业/板块、市场宽度、涨跌家数或台股大盘复盘；`MARKET_REVIEW_REGION` 仍只接受 `cn/hk/us/jp/kr/vn/both` 或这些市场的逗号子集。
 - 台股股票索引/种子和 Web 自动补全仍未完整接入；告警 MarketRegion 与后端 Market Light 告警仍为 `cn/hk/us`，未含 `tw`。
 - 不补齐 Portfolio 的 TWD 汇率、成本、市值完整口径；台股 Portfolio 当前属于 partial valuation 市场。
 

@@ -33,7 +33,7 @@ import pandas as pd
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from .base import BaseFetcher, DataFetchError, STANDARD_COLUMNS
+from .base import BaseFetcher, DataFetchError, STANDARD_COLUMNS, _VN_STOCK_CODE_RE
 from .realtime_types import RealtimeSource, UnifiedRealtimeQuote
 
 logger = logging.getLogger(__name__)
@@ -267,6 +267,68 @@ class SsiFetcher(BaseFetcher):
         setattr(quote, "vn_floor", _to_float(record.get("floor")))
         setattr(quote, "vn_exchange", str(record.get("exchange") or "").lower())
         return quote
+
+    # ------------------------------------------------------------------
+    # Độ rộng thị trường cho điểm lại thị trường
+    # ------------------------------------------------------------------
+    def get_region_market_stats(self, region: str) -> Optional[Dict[str, Any]]:
+        """Thống kê tăng/giảm toàn thị trường Việt Nam từ snapshot ba sàn.
+
+        Chỉ tính cổ phiếu/ETF mã 3 ký tự đã có giá khớp (bỏ chứng quyền, trái
+        phiếu và mã chưa giao dịch). Trần/sàn xác định bằng cách so giá khớp với
+        giá trần/sàn của phiên. ``total_amount`` có đơn vị **tỷ đồng**, vì
+        ``MarketOverview.total_amount`` là giá trị đã ở đơn vị hiển thị của thị
+        trường (A-share là 亿, Việt Nam là tỷ đồng / "VND bn"). Đây là giá trị
+        **khớp lệnh** (``nmTotalTradedValue``), không gồm giao dịch thỏa thuận,
+        nên thấp hơn tổng giá trị giao dịch mà các chỉ số công bố.
+
+        Computes Vietnam market breadth from the three-exchange snapshot. Only
+        3-character stock/ETF codes with a matched price are counted.
+        """
+
+        if region != "vn":
+            return None
+        try:
+            snapshot = self._load_snapshot()
+        except Exception as exc:
+            logger.warning("[%s] Lấy snapshot cho thống kê thị trường thất bại: %s", self.name, exc)
+            return None
+
+        up = down = flat = limit_up = limit_down = 0
+        total_amount = 0.0
+        for symbol, record in snapshot.items():
+            if not _VN_STOCK_CODE_RE.match(symbol):
+                continue
+            price = _to_float(record.get("matchedPrice"))
+            if not price:
+                continue
+            change = _to_float(record.get("priceChange"))
+            if change is None:
+                change = _to_float(record.get("priceChangePercent")) or 0.0
+            if change > 0:
+                up += 1
+            elif change < 0:
+                down += 1
+            else:
+                flat += 1
+            ceiling = _to_float(record.get("ceiling"))
+            floor = _to_float(record.get("floor"))
+            if ceiling and price >= ceiling:
+                limit_up += 1
+            elif floor and price <= floor:
+                limit_down += 1
+            total_amount += _to_float(record.get("nmTotalTradedValue")) or 0.0
+
+        if up + down + flat == 0:
+            return None
+        return {
+            "up_count": up,
+            "down_count": down,
+            "flat_count": flat,
+            "limit_up_count": limit_up,
+            "limit_down_count": limit_down,
+            "total_amount": round(total_amount / 1e9, 2),
+        }
 
     def get_stock_name(self, stock_code: str) -> Optional[str]:
         symbol = self.to_provider_symbol(stock_code)

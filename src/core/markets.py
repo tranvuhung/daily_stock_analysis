@@ -82,8 +82,11 @@ ALL_MARKETS: Dict[str, MarketSpec] = {
         # 中没有任何越南条目），交易日判断沿用 fail-open 分支。
         xcals_code=None,
         detect_order=10,
-        # 越南的大盘复盘 profile/prompt 尚未实现，复盘入口按不支持处理。
-        supports_market_review=False,
+        # Việt Nam có profile/prompt điểm lại thị trường riêng (chỉ số từ VCI,
+        # độ rộng thị trường từ snapshot SSI). Xếp sau cn/hk/us/jp/kr để giữ
+        # nguyên thứ tự lịch sử của báo cáo đa thị trường và giá trị mặc định
+        # khi bật cùng lúc nhiều thị trường.
+        review_order=5,
     ),
     "cn": MarketSpec(
         code="cn",
@@ -287,7 +290,7 @@ def enabled_market_timezones() -> Dict[str, str]:
 def market_review_regions() -> Tuple[str, ...]:
     """支持大盘复盘的启用市场，按 ``detect_order`` 排序。
 
-    复盘的 prompt/profile 是按市场手写的，没有 profile 的市场（越南、台湾）
+    复盘的 prompt/profile 是按市场手写的，没有 profile 的市场（台湾）
     即使启用也不能进复盘链路，否则会生成没有依据的复盘文本。
     """
 

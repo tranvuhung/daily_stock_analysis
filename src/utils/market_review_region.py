@@ -14,7 +14,7 @@ from typing import Optional, Tuple
 
 from src.core.markets import ALL_MARKETS, market_review_regions
 
-# 全量已知复盘区域（不受 SUPPORTED_MARKETS 影响），按历史顺序 cn,hk,us,jp,kr
+# 全量已知复盘区域（不受 SUPPORTED_MARKETS 影响），按历史顺序 cn,hk,us,jp,kr,vn
 MARKET_REVIEW_REGION_ORDER: Tuple[str, ...] = tuple(
     spec.code
     for spec in sorted(
@@ -30,7 +30,7 @@ MARKET_REVIEW_REGION_VALID_INPUTS = (*MARKET_REVIEW_REGION_ORDER, "both")
 def enabled_market_review_regions() -> Tuple[str, ...]:
     """当前启用且支持复盘的区域，按历史顺序排列。
 
-    可能为空元组：例如只启用越南时，越南还没有复盘 profile/prompt，
+    可能为空元组：例如只启用台湾时，台湾还没有复盘 profile/prompt，
     这时调用方应当跳过复盘，而不是回退到 ``cn``（那会用不存在的 A 股
     数据源去跑复盘）。
     """

@@ -658,6 +658,7 @@ def _handle_sync_analysis(
     status_code=202,
     responses={
         202: {"description": "Market review task accepted", "model": MarketReviewAccepted},
+        400: {"description": "No enabled market supports market review", "model": ErrorResponse},
         409: {"description": "Market review already running", "model": ErrorResponse},
         500: {"description": "Submission failed", "model": ErrorResponse},
     },
@@ -672,9 +673,18 @@ def trigger_market_review(
     request = request or MarketReviewRequest()
 
     runtime_config = _with_request_report_language(config, request.report_language)
-    effective_region = request.region or (
-        normalize_market_review_region_lenient(runtime_config.market_review_region) or "cn"
+    # Không còn fallback cứng về "cn": khi không truyền region thì dùng region
+    # đầu tiên đang bật. Nếu SUPPORTED_MARKETS không có thị trường nào hỗ trợ
+    # điểm lại, từ chối ngay (400) thay vì nhận task rồi thất bại mơ hồ.
+    effective_region = request.region or normalize_market_review_region_lenient(
+        runtime_config.market_review_region
     )
+    if not effective_region:
+        raise api_error(
+            400,
+            "market_review_unsupported",
+            "No market enabled by SUPPORTED_MARKETS supports market review.",
+        )
 
     lock_token = _try_acquire_market_review_lock(runtime_config)
     if lock_token is None:

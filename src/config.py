@@ -2202,7 +2202,9 @@ class Config:
             daily_market_context_enabled=os.getenv('DAILY_MARKET_CONTEXT_ENABLED', 'true').lower() == 'true',
             supported_markets=",".join(enabled_markets()),
             market_review_region=cls._parse_market_review_region(
-                os.getenv('MARKET_REVIEW_REGION', 'cn')
+                # Không đặt -> để trống, parser lấy region đầu tiên đang bật
+                # (ví dụ chỉ bật vn thì là vn) thay vì ép 'cn' rồi cảnh báo sai.
+                os.getenv('MARKET_REVIEW_REGION', '')
             ),
             market_review_color_scheme=cls._parse_market_review_color_scheme(
                 os.getenv('MARKET_REVIEW_COLOR_SCHEME', 'green_up')
@@ -2946,7 +2948,7 @@ class Config:
         enabled = enabled_market_review_regions()
         if not enabled:
             # 当前 SUPPORTED_MARKETS 下没有任何支持大盘复盘的市场（例如只启用
-            # 越南）。回退成空串而不是 'cn'：'cn' 会让复盘链路去调用已停用市场
+            # 台湾）。回退成空串而不是 'cn'：'cn' 会让复盘链路去调用已停用市场
             # 的数据源，产生没有数据支撑的复盘报告。
             logger.info(
                 "MARKET_REVIEW_REGION=%r 被忽略：当前 SUPPORTED_MARKETS 下没有"

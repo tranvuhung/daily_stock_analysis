@@ -165,7 +165,7 @@ def test_request_models_reject_legacy_report_languages() -> None:
         (" jp , kr ", "jp,kr"),
         ("kr,jp", "jp,kr"),
         ("cn,cn,us", "cn,us"),
-        ("both", "cn,hk,us,jp,kr"),
+        ("both", "cn,hk,us,jp,kr,vn"),
     ],
 )
 def test_market_review_request_normalizes_strict_region_input(

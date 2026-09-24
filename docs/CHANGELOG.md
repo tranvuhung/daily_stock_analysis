@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] Bấm "Điểm lại thị trường" trên Web UI báo `The market review did not return a persistable report`. Nguyên nhân: mặc định `SUPPORTED_MARKETS=vn` nhưng Việt Nam chưa hỗ trợ điểm lại (`supports_market_review=False`). Endpoint vẫn nhận task 202 với fallback cứng `region=cn`, sau đó `run_market_review` bỏ qua và trả `None`. Nay endpoint lấy region đầu tiên đang bật, và trả 400 `market_review_unsupported` khi không có thị trường nào hỗ trợ, thay vì nhận task rồi thất bại mơ hồ.
+- [新功能] Điểm lại thị trường Việt Nam (`MARKET_REVIEW_REGION=vn`):
+  - Chỉ số VN-Index/VN30/HNX-Index/UPCoM-Index lấy từ VCI (`VciFetcher.get_main_indices`).
+  - Độ rộng thị trường (tăng/giảm/đứng, trần/sàn, giá trị khớp lệnh tính bằng tỷ đồng) tính từ snapshot SSI (`SsiFetcher.get_region_market_stats`).
+  - Tin tức tiếng Việt; có `VN_PROFILE` / `VN_BLUEPRINT` riêng.
+  - `vn` xếp sau `cn,hk,us,jp,kr` khi mở rộng `both`.
+  - Chưa có xếp hạng ngành, dòng tiền khối ngoại, hay Market Light cho `vn`.
+- [改进] `DataFetcherManager.get_market_stats` nhận thêm `region` (mặc định `cn`, hành vi cũ giữ nguyên). Region khác `cn` chỉ đi qua `BaseFetcher.get_region_market_stats`, để fetcher A-share (vốn bỏ qua region) không bị dùng nhầm cho thị trường khác.
+- [改进] Khi `REPORT_LANGUAGE=vi`, prompt điểm lại thị trường yêu cầu model viết toàn bộ bằng tiếng Việt (trước đây là tiếng Anh). Tiêu đề bao ngoài của báo cáo và thông báo cũng chuyển sang tiếng Việt ("Điểm lại thị trường"). Áp dụng cho mọi region.
+- [改进] Không đặt `MARKET_REVIEW_REGION` thì mặc định là thị trường đầu tiên đang bật, thay vì ép `cn` rồi cảnh báo "giá trị không hợp lệ".
+- [改进] `is_market_open('vn')` loại thứ 7/CN (Việt Nam không có lịch trong exchange-calendars). Ngày lễ vẫn fail-open. Việc này cũng làm lịch chạy tự động bỏ qua mã VN vào cuối tuần khi `TRADING_DAY_CHECK_ENABLED=true`.
+- [测试] Thêm `tests/test_vn_market_review.py` (20 ca): chỉ số VCI đủ 12 key và bỏ qua chỉ số lỗi, đếm độ rộng/trần/sàn từ SSI, định tuyến không gọi fetcher A-share cho `vn`, analyzer không bị ép về `cn`, prompt tiếng Việt, deployment chỉ bật VN sinh được báo cáo, endpoint mặc định `vn` và trả 400 khi không có thị trường hỗ trợ, lịch cuối tuần. Cập nhật các test đang hardcode danh sách region.
 - [修复] Panel “Chẩn đoán lượt chạy” (Run diagnostics) trên Web UI không còn hiện tiếng Trung (`正常`, `…成功`, `未记录诊断信息`, `新闻检索返回 N 条结果`…). Backend `src/services/run_diagnostics.py` chuyển toàn bộ message/`status_label`/`reason` sang tiếng Anh và thêm trường tùy chọn `message_code` cho mỗi component (bổ sung, không phá contract). Web bản địa hóa nhãn, message và lý do tổng quát theo vi/en từ `component.key` + `message_code` + `details`. Bản ghi không có `message_code` thì hiện text từ server.
 - [修复] 报告输入诊断中的筹码分布：非 A 股市场（越南、美股等）与指数目标原本一律显示 `chip_distribution_missing`（“未纳入，请检查数据源”），现改为 `chip_not_supported`（“当前市场或标的不支持”）。原因是 pipeline 从未设置 ContextPack 的 `chip_not_supported` 元数据；A 股取不到筹码时仍显示 `chip_distribution_missing`。
 - [新功能] `scripts/run-app.sh` 新增 `start`：在本机跑**真实服务**。直接读仓库 `.env`（真实 `data/stock_analysis.db`、`MARKET_REVIEW_ENABLED`、`WEBUI_AUTO_BUILD` 等一律不覆盖），执行 `main.py --serve --schedule`，即 FastAPI + Web UI + 进程内 runtime scheduler + bot client。等价于 `docker/docker-compose.yml` 的 `analyzer` + `server` 两个容器合并为单进程——`main.py:1636-1650` 明确让 scheduler 跑在 API 进程内，"keeps Web settings, status, and run-now actions attached to the real scheduler"。

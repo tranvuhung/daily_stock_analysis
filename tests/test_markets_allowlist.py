@@ -99,17 +99,28 @@ class MarketReviewRegionTestCase(unittest.TestCase):
     def test_review_regions_keep_legacy_order(self):
         with supported_markets("all"):
             self.assertEqual(
-                mrr.enabled_market_review_regions(), ("cn", "hk", "us", "jp", "kr")
+                mrr.enabled_market_review_regions(), ("cn", "hk", "us", "jp", "kr", "vn")
             )
-            self.assertEqual(mrr.MARKET_REVIEW_REGION_ALL, "cn,hk,us,jp,kr")
+            self.assertEqual(mrr.MARKET_REVIEW_REGION_ALL, "cn,hk,us,jp,kr,vn")
 
-    def test_vietnam_only_has_no_review_region(self):
-        # 越南还没有复盘 profile/prompt，不能让它默认回退到 cn：那会用已停用的
-        # A 股数据源生成一份没有数据支撑的复盘。
+    def test_vietnam_only_reviews_vietnam(self):
+        # Chỉ bật Việt Nam: điểm lại thị trường chạy cho vn, mặc định cũng là vn;
+        # vẫn không được lùi về cn vì nguồn dữ liệu A-share đã tắt.
         with supported_markets("vn"):
+            self.assertEqual(mrr.enabled_market_review_regions(), ("vn",))
+            self.assertTrue(mrr.market_review_supported())
+            self.assertEqual(mrr.normalize_market_review_region_lenient(None), "vn")
+            self.assertEqual(mrr.normalize_market_review_region_lenient("both"), "vn")
+            self.assertIsNone(mrr.normalize_market_review_region_lenient("cn"))
+            self.assertEqual(mrr.normalize_market_review_region_strict("VN"), "vn")
+            with self.assertRaises(ValueError):
+                mrr.normalize_market_review_region_strict("cn")
+
+    def test_market_without_review_profile_has_no_review_region(self):
+        # Đài Loan chưa có profile/prompt điểm lại: không được lùi về cn.
+        with supported_markets("tw"):
             self.assertEqual(mrr.enabled_market_review_regions(), ())
             self.assertFalse(mrr.market_review_supported())
-            self.assertIsNone(mrr.normalize_market_review_region_lenient("cn"))
             self.assertIsNone(mrr.normalize_market_review_region_lenient(None))
             with self.assertRaises(ValueError):
                 mrr.normalize_market_review_region_strict("cn")

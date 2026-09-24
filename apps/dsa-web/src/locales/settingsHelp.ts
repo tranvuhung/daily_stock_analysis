@@ -1245,9 +1245,9 @@ const settingsHelpViVN: SettingsHelpMap = {
   'settings.system.market_review': {
     title: 'Điểm lại thị trường',
     summary: 'Quy định tính năng điểm lại thị trường: bật/tắt, nhập tập thị trường và bảng màu.',
-    usage: 'MARKET_REVIEW_ENABLED bật/tắt việc điểm lại thị trường; DAILY_MARKET_CONTEXT_ENABLED mặc định bật và quy định việc chèn tóm tắt thị trường hằng ngày vào prompt phân tích cổ phiếu cùng các guardrail thận trọng; MARKET_REVIEW_REGION nhận tập khu vực phân tách bằng dấu phẩy (ví dụ cn,us,jp hoặc cn,us,jp,kr), giá trị `both` giữ toàn bộ thị trường được hỗ trợ; giá trị rỗng hoặc không hợp lệ sẽ lùi về `cn`; MARKET_REVIEW_COLOR_SCHEME chọn bảng màu.',
+    usage: 'MARKET_REVIEW_ENABLED bật/tắt việc điểm lại thị trường; DAILY_MARKET_CONTEXT_ENABLED mặc định bật và quy định việc chèn tóm tắt thị trường hằng ngày vào prompt phân tích cổ phiếu cùng các guardrail thận trọng; MARKET_REVIEW_REGION nhận tập khu vực phân tách bằng dấu phẩy (ví dụ cn,us,jp hoặc cn,us,jp,kr), giá trị `both` giữ toàn bộ thị trường đang bật (theo SUPPORTED_MARKETS) có hỗ trợ điểm lại; giá trị rỗng hoặc không hợp lệ sẽ lùi về thị trường đầu tiên đang bật (mặc định là `vn`); MARKET_REVIEW_COLOR_SCHEME chọn bảng màu.',
     valueNotes: [
-      'cn là cổ phiếu A, hk là Hồng Kông, us là cổ phiếu Mỹ, jp là Nhật Bản, kr là Hàn Quốc, còn both bao gồm tất cả (cn,hk,us,jp,kr).',
+      'cn là cổ phiếu A, hk là Hồng Kông, us là cổ phiếu Mỹ, jp là Nhật Bản, kr là Hàn Quốc, vn là Việt Nam, còn both bao gồm tất cả thị trường đang bật (tối đa cn,hk,us,jp,kr,vn).',
       'MARKET_REVIEW_REGION là trường nhập tự do; bạn có thể nhập một tập phân tách bằng dấu phẩy như cn,us hoặc cn,us,jp,kr.',
       'DAILY_MARKET_CONTEXT_ENABLED mặc định bật; đặt false để vẫn chạy báo cáo điểm lại thị trường nhưng không chèn tóm tắt vào phân tích cổ phiếu và không làm dịu khuyến nghị mua/mua thêm.',
       'Bảng màu ảnh hưởng tới cách hiển thị biến động chỉ số: green_up = xanh khi tăng/đỏ khi giảm; red_up = đỏ khi tăng/xanh khi giảm.',
@@ -2487,9 +2487,9 @@ const settingsHelpEnUS: SettingsHelpMap = {
   'settings.system.market_review': {
     title: 'Market Review',
     summary: 'Controls the market review feature: on/off, market subset input, and color scheme.',
-    usage: 'MARKET_REVIEW_ENABLED toggles market review; DAILY_MARKET_CONTEXT_ENABLED is on by default and controls whether the daily market summary is injected into stock-analysis prompts and conservative guardrails; MARKET_REVIEW_REGION accepts a comma-separated region subset (for example cn,us,jp or cn,us,jp,kr), and `both` keeps all supported markets; invalid or empty values fall back to `cn`; MARKET_REVIEW_COLOR_SCHEME selects colors.',
+    usage: 'MARKET_REVIEW_ENABLED toggles market review; DAILY_MARKET_CONTEXT_ENABLED is on by default and controls whether the daily market summary is injected into stock-analysis prompts and conservative guardrails; MARKET_REVIEW_REGION accepts a comma-separated region subset (for example cn,us,jp or cn,us,jp,kr), and `both` keeps every enabled market (per SUPPORTED_MARKETS) that supports review; invalid or empty values fall back to the first enabled market (`vn` by default); MARKET_REVIEW_COLOR_SCHEME selects colors.',
     valueNotes: [
-      'cn covers A-shares, hk covers Hong Kong, us covers US stocks, jp covers Japan, kr covers Korea, and both covers all (cn,hk,us,jp,kr).',
+      'cn covers A-shares, hk covers Hong Kong, us covers US stocks, jp covers Japan, kr covers Korea, vn covers Vietnam, and both covers every enabled market (up to cn,hk,us,jp,kr,vn).',
       'MARKET_REVIEW_REGION is free-text input; you can enter a comma-separated subset like cn,us or cn,us,jp,kr.',
       'DAILY_MARKET_CONTEXT_ENABLED is enabled by default; set it to false to keep market review reports running without injecting the summary into stock analysis or softening buy/add advice.',
       'Color scheme affects how index changes are displayed: green_up = green for gains/red for losses; red_up = red for gains/green for losses.',

@@ -579,6 +579,18 @@ class BaseFetcher(ABC):
         """
         return None
 
+    def get_region_market_stats(self, region: str) -> Optional[Dict[str, Any]]:
+        """Thống kê tăng/giảm cho thị trường ngoài A-share (ví dụ ``vn``).
+
+        Tách riêng khỏi ``get_market_stats`` vì các fetcher A-share bỏ qua region
+        và luôn trả dữ liệu A-share; gọi chúng cho ``vn`` sẽ trộn nhầm thị trường.
+        Cùng cấu trúc dict với ``get_market_stats``; mặc định không hỗ trợ.
+
+        Kept separate from ``get_market_stats`` because A-share fetchers ignore
+        the region and would return A-share breadth for another market.
+        """
+        return None
+
     def get_sector_rankings(self, n: int = 5) -> Optional[Tuple[List[Dict], List[Dict]]]:
         """
         Lấy bảng xếp hạng tăng/giảm theo nhóm ngành
@@ -3655,9 +3667,15 @@ class DataFetcherManager:
                 continue
         return []
 
-    def get_market_stats(self, *, purpose: str = "unspecified") -> Dict[str, Any]:
+    def get_market_stats(self, *, purpose: str = "unspecified", region: str = "cn") -> Dict[str, Any]:
         """Lấy thống kê tăng/giảm của thị trường (tự động chuyển nguồn)"""
-        logger.info("[MarketStats] component=market_stats action=start purpose=%s", purpose)
+        logger.info(
+            "[MarketStats] component=market_stats action=start purpose=%s region=%s",
+            purpose,
+            region,
+        )
+        if region != "cn":
+            return self._get_region_market_stats(region, purpose=purpose)
         tickflow_fetcher = self._get_tickflow_fetcher()
         if tickflow_fetcher is not None:
             started_at = time.monotonic()
@@ -3723,6 +3741,41 @@ class DataFetcherManager:
                 )
                 continue
         logger.warning("[MarketStats] component=market_stats action=complete status=empty purpose=%s", purpose)
+        return {}
+
+    def _get_region_market_stats(self, region: str, *, purpose: str) -> Dict[str, Any]:
+        """Thống kê tăng/giảm cho thị trường ngoài A-share; chỉ hỏi các fetcher
+        tự khai báo hỗ trợ region đó qua ``get_region_market_stats``."""
+        for fetcher in self._fetchers:
+            started_at = time.monotonic()
+            try:
+                data = fetcher.get_region_market_stats(region)
+            except Exception as e:
+                logger.warning(
+                    "[MarketStats] component=market_stats action=provider_failed "
+                    "purpose=%s region=%s provider=%s elapsed=%.2fs error=%s",
+                    purpose,
+                    region,
+                    fetcher.name,
+                    time.monotonic() - started_at,
+                    e,
+                )
+                continue
+            if data:
+                logger.info(
+                    "[MarketStats] component=market_stats action=provider_success "
+                    "purpose=%s region=%s provider=%s elapsed=%.2fs",
+                    purpose,
+                    region,
+                    fetcher.name,
+                    time.monotonic() - started_at,
+                )
+                return data
+        logger.warning(
+            "[MarketStats] component=market_stats action=complete status=empty purpose=%s region=%s",
+            purpose,
+            region,
+        )
         return {}
 
     def _run_with_timeout(

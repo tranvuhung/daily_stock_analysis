@@ -76,6 +76,28 @@ _last_request_at = 0.0
 _request_lock = RLock()
 
 
+# Các chỉ số chính dùng cho điểm lại thị trường Việt Nam: (mã VCI, tên hiển thị).
+# Main indices used by the Vietnam market review: (VCI symbol, display name).
+_VN_MAIN_INDICES = (
+    ("VNINDEX", "VN-Index"),
+    ("VN30", "VN30"),
+    ("HNXIndex", "HNX-Index"),
+    ("HNXUpcomIndex", "UPCoM-Index"),
+)
+
+
+def _finite_or_none(value: Any) -> Optional[float]:
+    """Ép về float hữu hạn; NaN/None/không hợp lệ trả về None."""
+
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number or number in (float("inf"), float("-inf")):
+        return None
+    return number
+
+
 def _parse_env_float(name: str, default: float) -> float:
     raw = os.getenv(name)
     if raw is None or not str(raw).strip():
@@ -406,6 +428,63 @@ class VciFetcher(BaseFetcher):
         except Exception:  # pragma: no cover - lỗi ngày tháng không nên chặn luồng giá
             pass
         return quote
+
+    # ------------------------------------------------------------------
+    # Chỉ số chính cho điểm lại thị trường
+    # ------------------------------------------------------------------
+    def get_main_indices(self, region: str = "cn") -> Optional[List[Dict[str, Any]]]:
+        """Trả về các chỉ số chính của Việt Nam cho luồng điểm lại thị trường.
+
+        Chỉ phục vụ ``region="vn"``; region khác trả ``None`` để
+        ``DataFetcherManager`` chuyển sang nguồn kế tiếp. Mỗi chỉ số được dựng
+        từ nến ngày mới nhất (giống ``get_realtime_quote``). Một chỉ số lỗi chỉ
+        bị bỏ qua, không làm hỏng cả danh sách.
+
+        Only serves ``region="vn"``. Each index is built from its latest daily
+        bar; a failing index is skipped instead of failing the whole list.
+        """
+
+        if region != "vn":
+            return None
+
+        results: List[Dict[str, Any]] = []
+        for code, name in _VN_MAIN_INDICES:
+            try:
+                df = self.get_daily_data(code, days=5)
+            except Exception as exc:
+                logger.warning("[%s] %s lấy dữ liệu chỉ số thất bại: %s", self.name, code, exc)
+                continue
+            if df is None or df.empty:
+                continue
+
+            last = df.iloc[-1]
+            close = _finite_or_none(last.get("close"))
+            if close is None:
+                continue
+            prev_close = _finite_or_none(df["close"].iloc[-2]) if len(df) > 1 else None
+            high = _finite_or_none(last.get("high")) or close
+            low = _finite_or_none(last.get("low")) or close
+            change = round(close - prev_close, 2) if prev_close else 0.0
+            change_pct = round(change / prev_close * 100, 2) if prev_close else 0.0
+            amplitude = round((high - low) / prev_close * 100, 2) if prev_close else 0.0
+            results.append(
+                {
+                    "code": code,
+                    "name": name,
+                    "current": close,
+                    "change": change,
+                    "change_pct": change_pct,
+                    "open": _finite_or_none(last.get("open")) or close,
+                    "high": high,
+                    "low": low,
+                    "prev_close": prev_close or 0.0,
+                    "volume": _finite_or_none(last.get("volume")) or 0.0,
+                    # Đơn vị VND (đã quy đổi trong _normalize_data)
+                    "amount": _finite_or_none(last.get("amount")) or 0.0,
+                    "amplitude": amplitude,
+                }
+            )
+        return results or None
 
     def close(self) -> None:
         try:

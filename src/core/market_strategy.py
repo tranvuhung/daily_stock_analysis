@@ -47,7 +47,12 @@ class MarketStrategyBlueprint:
     def to_markdown_block(self) -> str:
         """Render blueprint as markdown section for template fallback report."""
         dims = "\n".join([f"- **{dim.name}**: {dim.objective}" for dim in self.dimensions])
-        section_title = "### VI. Strategy Framework" if self.region == "us" else "### 六、策略框架"
+        if self.region == "us":
+            section_title = "### VI. Strategy Framework"
+        elif self.region == "vn":
+            section_title = "### VI. Khung chiến lược"
+        else:
+            section_title = "### 六、策略框架"
         return f"{section_title}\n{dims}\n"
 
 
@@ -229,6 +234,52 @@ KR_BLUEPRINT = MarketStrategyBlueprint(
     ],
 )
 
+VN_BLUEPRINT = MarketStrategyBlueprint(
+    region="vn",
+    title="Chiến lược điểm lại thị trường Việt Nam ba bước",
+    positioning="Tập trung vào xu hướng VN-Index/VN30, thanh khoản, độ rộng thị trường và dòng tiền để lập kế hoạch cho phiên kế tiếp.",
+    principles=[
+        "Xem hướng đi của VN-Index và VN30 trước, sau đó đối chiếu HNX-Index, UPCoM-Index để đánh giá mức độ đồng thuận.",
+        "Thanh khoản và độ rộng (số mã tăng/giảm, trần/sàn) quyết định chất lượng của nhịp tăng hoặc giảm.",
+        "Chỉ dựa trên dữ liệu chỉ số, độ rộng, tin tức có sẵn; không tự bịa số liệu ngành hay dòng tiền khối ngoại.",
+    ],
+    dimensions=[
+        StrategyDimension(
+            name="Cấu trúc xu hướng",
+            objective="Xác định thị trường đang ở pha tăng, tích lũy hay phòng thủ.",
+            checkpoints=[
+                "VN-Index và VN30 có cùng hướng không",
+                "Chỉ số có vượt hoặc thủng vùng hỗ trợ/kháng cự quan trọng",
+                "Nhóm vốn hóa lớn có dẫn dắt hay kìm hãm chỉ số",
+            ],
+        ),
+        StrategyDimension(
+            name="Thanh khoản và độ rộng",
+            objective="Đánh giá dòng tiền có xác nhận diễn biến giá hay không.",
+            checkpoints=[
+                "Giá trị giao dịch so với các phiên gần đây",
+                "Tương quan số mã tăng/giảm và số mã trần/sàn",
+                "Tin tức về khối ngoại, tự doanh, chính sách tiền tệ",
+            ],
+        ),
+        StrategyDimension(
+            name="Chủ đề dẫn dắt",
+            objective="Nhận diện nhóm cổ phiếu có tính bền vững và nhóm cần tránh.",
+            checkpoints=[
+                "Ngân hàng/chứng khoán/bất động sản có luân chuyển dòng tiền",
+                "Nhóm được hỗ trợ bởi tin vĩ mô, nâng hạng thị trường, đầu tư công",
+                "Tin tức có hỗ trợ diễn biến giá hay không",
+            ],
+        ),
+    ],
+    action_framework=[
+        "Tấn công: VN-Index/VN30 cùng tăng + thanh khoản cải thiện + độ rộng tích cực.",
+        "Cân bằng: chỉ số phân hóa hoặc thanh khoản thấp, kiểm soát tỷ trọng và chờ xác nhận.",
+        "Phòng thủ: chỉ số suy yếu + nhiều mã giảm sàn hoặc thanh khoản tăng khi giảm, ưu tiên quản trị rủi ro.",
+    ],
+)
+
+
 def get_market_strategy_blueprint(region: str) -> MarketStrategyBlueprint:
     """Return strategy blueprint by market region."""
     if region == "us":
@@ -239,4 +290,6 @@ def get_market_strategy_blueprint(region: str) -> MarketStrategyBlueprint:
         return JP_BLUEPRINT
     if region == "kr":
         return KR_BLUEPRINT
+    if region == "vn":
+        return VN_BLUEPRINT
     return CN_BLUEPRINT

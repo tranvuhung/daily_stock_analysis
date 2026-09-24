@@ -127,12 +127,14 @@ class MarketReviewRequest(BaseModel):
         min_length=1,
         max_length=64,
         description=(
-            "Market coverage for this market review. Valid tokens are cn, hk, us, jp, kr and both. "
+            "Market coverage for this market review. Valid tokens are cn, hk, us, jp, kr, vn and both, "
+            "limited to the markets enabled by SUPPORTED_MARKETS. "
             "both must be used alone; the other tokens can be combined with commas. Input is "
             "case-insensitive, surrounding whitespace is trimmed, and values are deduplicated and sorted "
-            "as cn,hk,us,jp,kr. An empty value, an empty token, an unknown token, both mixed with other "
-            "tokens, or more than 64 characters returns 4xx for the whole request without partial "
-            "execution. When omitted, the runtime global MARKET_REVIEW_REGION is used."
+            "as cn,hk,us,jp,kr,vn. An empty value, an empty token, an unknown or disabled token, both "
+            "mixed with other tokens, or more than 64 characters returns 4xx for the whole request "
+            "without partial execution. When omitted, the runtime global MARKET_REVIEW_REGION is used, "
+            "falling back to the first enabled review market."
         ),
         json_schema_extra={
             "example": "cn,us",

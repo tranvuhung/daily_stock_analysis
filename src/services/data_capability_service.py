@@ -155,6 +155,8 @@ _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
             "kline.daily": ("vn",),
             # VNINDEX / VN30 / HNXIndex / HNX30 / HNXUpcomIndex 走同一个日线接口
             "index.daily": ("vn",),
+            # Chỉ số chính cho điểm lại thị trường Việt Nam (get_main_indices)
+            "market.overview": ("vn",),
         },
         builtin=True,
     ),
@@ -166,6 +168,8 @@ _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
             # 全市场快照（HOSE/HNX/UPCOM 各一次请求）
             "quote.realtime": ("vn",),
             "kline.daily": ("vn",),
+            # Độ rộng thị trường (tăng/giảm/trần/sàn) tính từ snapshot
+            "market.overview": ("vn",),
         },
         builtin=True,
     ),

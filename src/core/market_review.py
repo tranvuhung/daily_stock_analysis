@@ -48,6 +48,7 @@ _MARKET_REVIEW_MARKETS = (
     ('us', 'us_title', '美股'),
     ('jp', 'jp_title', '日股'),
     ('kr', 'kr_title', '韩股'),
+    ('vn', 'vn_title', '越南'),
 )
 _MARKET_REVIEW_REGION_ORDER = MARKET_REVIEW_REGION_ORDER
 
@@ -115,7 +116,21 @@ def _collect_market_light_snapshot(
 
 def _get_market_review_text(language: str) -> dict[str, str]:
     normalized = normalize_report_language(language)
-    if normalized in ("en", "vi"):
+    if normalized == "vi":
+        # Báo cáo tiếng Việt: tiêu đề bao ngoài cũng dùng tiếng Việt để khớp
+        # nội dung do LLM viết bằng tiếng Việt.
+        return {
+            "root_title": "# 🎯 Điểm lại thị trường",
+            "push_title": "🎯 Điểm lại thị trường",
+            "cn_title": "# Điểm lại thị trường A-share (Trung Quốc)",
+            "us_title": "# Điểm lại thị trường Mỹ",
+            "hk_title": "# Điểm lại thị trường Hồng Kông",
+            "jp_title": "# Điểm lại thị trường Nhật Bản",
+            "kr_title": "# Điểm lại thị trường Hàn Quốc",
+            "vn_title": "# Điểm lại thị trường Việt Nam",
+            "separator": "> Tiếp theo là điểm lại thị trường kế tiếp",
+        }
+    if normalized == "en":
         return {
             "root_title": "# 🎯 Market Review",
             "push_title": "🎯 Market Review",
@@ -124,6 +139,7 @@ def _get_market_review_text(language: str) -> dict[str, str]:
             "hk_title": "# HK Market Recap",
             "jp_title": "# Japan Market Recap",
             "kr_title": "# Korea Market Recap",
+            "vn_title": "# Vietnam Market Recap",
             "separator": "> Next market recap follows",
         }
     if normalized == "ko":
@@ -135,6 +151,7 @@ def _get_market_review_text(language: str) -> dict[str, str]:
             "hk_title": "# 홍콩 시황 리뷰",
             "jp_title": "# 일본 시황 리뷰",
             "kr_title": "# 한국 시황 리뷰",
+            "vn_title": "# 베트남 시황 리뷰",
             "separator": "> 다음 시장 시황 리뷰",
         }
     return {
@@ -145,6 +162,7 @@ def _get_market_review_text(language: str) -> dict[str, str]:
         "hk_title": "# 港股大盘复盘",
         "jp_title": "# 日股大盘复盘",
         "kr_title": "# 韩股大盘复盘",
+        "vn_title": "# 越南股市大盘复盘",
         "separator": "> 以下为下一市场大盘复盘",
     }
 
@@ -169,7 +187,7 @@ def _resolve_market_review_regions(raw_region: Optional[str]) -> list[str]:
     """Normalize MARKET_REVIEW_REGION into an ordered region list.
 
     当 ``SUPPORTED_MARKETS`` 下没有任何支持复盘的市场时返回空列表，调用方据此
-    跳过复盘。此前这里无条件回退到 ``cn``，在只启用越南的部署里会去调用已经
+    跳过复盘。此前这里无条件回退到 ``cn``，在只启用越南（当时尚无复盘 profile）的部署里会去调用已经
     停用的 A 股数据源，生成一份没有数据支撑的复盘报告。
     """
 
@@ -226,7 +244,7 @@ def run_market_review(
     )
     run_markets = _resolve_market_review_regions(raw_region)
     if not run_markets:
-        # 当前 SUPPORTED_MARKETS 下没有任何支持大盘复盘的市场（例如只启用越南，
+        # 当前 SUPPORTED_MARKETS 下没有任何支持大盘复盘的市场（例如只启用台湾，
         # 其复盘 profile/prompt 尚未实现）。跳过而不是回退到 A 股。
         logger.info(
             "[MarketReview] component=market_review action=skip "
