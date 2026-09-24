@@ -119,6 +119,27 @@ describe('ReportDiagnostics', () => {
     expect(screen.getAllByText(/Tìm kiếm tin tức trả về 10 kết quả, nhưng tin tức chưa được đưa vào đầu vào phân tích/)).toHaveLength(2);
   });
 
+  it('localizes a known provider error type instead of the stored server error', () => {
+    const summary: RunDiagnosticSummary = {
+      ...diagnosticSummary,
+      status: 'failed',
+      components: {
+        daily_data: {
+          key: 'daily_data',
+          label: 'Daily data',
+          status: 'failed',
+          message: 'Daily data failed: 过滤后无有效新闻',
+          messageCode: 'provider_failed',
+          details: { provider: 'Tavily', errorType: 'NoUsableNews', error: '过滤后无有效新闻' },
+        },
+      },
+    };
+    render(<ReportDiagnostics summary={summary} language="vi" />);
+
+    // Khối JSON thô để sao chép cố ý giữ nguyên dữ liệu server, nên chỉ kiểm tra text hiển thị.
+    expect(screen.getAllByText('Dữ liệu ngày thất bại: không còn tin hợp lệ sau khi lọc').length).toBeGreaterThan(0);
+  });
+
   it('falls back to server text for legacy components without a message code', () => {
     const summary: RunDiagnosticSummary = {
       ...diagnosticSummary,

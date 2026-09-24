@@ -394,5 +394,95 @@ export const isRunFlowFallbackEvent = (event: RunFlowEvent): boolean => {
   return false;
 };
 
+// Lý do lỗi theo ``error_type`` ổn định của backend; code lạ thì dùng text server.
+// Localized failure reasons keyed by the backend's stable ``error_type``.
+const ERROR_REASON_KEYS: Record<string, UiTextKey> = {
+  NoUsableNews: 'runFlow.errorReason.noUsableNews',
+};
+
+/**
+ * Lý do lỗi đã bản địa hoá: ưu tiên ``error_type`` đã biết, sau đó text server
+ * (``error_message``), cuối cùng là "lỗi không xác định".
+ */
+export const getRunFlowErrorReason = (
+  errorType: string | null | undefined,
+  fallback: string | null | undefined,
+  t: RunFlowT,
+): string => {
+  const key = errorType ? ERROR_REASON_KEYS[errorType] : undefined;
+  if (key) return t(key);
+  return (fallback || '').trim() || t('runFlow.errorReason.unknown');
+};
+
+const runFlowMetadataNumber = (
+  metadata: Record<string, unknown> | null | undefined,
+  ...keys: string[]
+): number | null => {
+  if (!metadata) return null;
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  }
+  return null;
+};
+
+const providerRunMessage = (
+  metadata: Record<string, unknown> | null | undefined,
+  success: boolean,
+  t: RunFlowT,
+  recordCount?: number | null,
+): string | null => {
+  const dataType = runFlowMetadataString(metadata, 'dataType', 'data_type');
+  const provider = runFlowMetadataString(metadata, 'provider');
+  if (!dataType || !provider) return null;
+  const label = getRunFlowDataTypeLabel(dataType, t, dataType);
+  if (success) {
+    const count = recordCount ?? runFlowMetadataNumber(metadata, 'recordCount', 'record_count');
+    return count === null || count === undefined
+      ? t('runFlow.eventMessage.providerRun.succeeded', { label, provider })
+      : t('runFlow.eventMessage.providerRun.succeededWithCount', { label, provider, count });
+  }
+  const reason = getRunFlowErrorReason(
+    runFlowMetadataString(metadata, 'errorType', 'error_type'),
+    runFlowMetadataString(metadata, 'errorMessage', 'error_message'),
+    t,
+  );
+  return t('runFlow.eventMessage.providerRun.failed', { label, provider, reason });
+};
+
+/**
+ * Message của event đã bản địa hoá. Hiện chỉ ``provider_run`` được dựng lại từ
+ * metadata (provider, data_type, record_count, error_type, error_message); event
+ * khác, hoặc payload cũ thiếu metadata, giữ nguyên ``event.message`` của server.
+ * Localized event message; only provider_run is rebuilt from metadata, the rest
+ * keep the server text.
+ */
+export const getRunFlowEventMessage = (event: RunFlowEvent, t: RunFlowT): string | null => {
+  if (event.type === 'provider_run') {
+    const localized = providerRunMessage(event.metadata, event.severity === 'success', t);
+    if (localized) return localized;
+  }
+  return event.message ?? null;
+};
+
+/**
+ * Message của node nguồn dữ liệu đã bản địa hoá (cùng quy tắc với event). Node block
+ * đầu vào (``block_key``) hoặc node đang chạy giữ nguyên text server.
+ */
+export const getRunFlowNodeMessage = (node: RunFlowNode, t: RunFlowT): string | null => {
+  const isProviderAttempt = node.kind === 'data_source'
+    && !runFlowMetadataString(node.metadata, 'blockKey', 'block_key');
+  if (isProviderAttempt) {
+    if (node.status === 'success' || node.status === 'fallback') {
+      const localized = providerRunMessage(node.metadata, true, t, node.recordCount);
+      if (localized) return localized;
+    } else if (node.status === 'failed' || node.status === 'timeout') {
+      const localized = providerRunMessage(node.metadata, false, t);
+      if (localized) return localized;
+    }
+  }
+  return node.message ?? null;
+};
+
 export const isRunFlowCancelEvent = (event: RunFlowEvent): boolean =>
   event.type === 'task_cancelled' || event.type === 'task_cancel_requested';

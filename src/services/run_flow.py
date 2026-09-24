@@ -13,6 +13,7 @@ from api.v1.schemas.run_flow import RunFlowSnapshot
 from src.analysis_context_pack_overview import extract_analysis_context_pack_overview
 from src.report_language import get_localized_stock_name
 from src.services.run_diagnostics import (
+    diagnostic_error_reason,
     safe_diagnostic_key,
     sanitize_diagnostic_metadata,
     sanitize_diagnostic_text,
@@ -414,6 +415,10 @@ def _append_provider_runs(
         timestamp = _datetime_to_iso(run.get("created_at"))
         started_at = _started_at_from_end_and_duration(timestamp, duration_ms)
         message = _provider_run_message(label, provider, run, success=success)
+        # Lý do lỗi đã quy đổi theo error_type (bản ghi cũ có thể lưu tiếng Trung)
+        error_reason = None if success else diagnostic_error_reason(
+            run.get("error_type"), run.get("error_message_sanitized")
+        )
         block_key = _DATA_TYPE_TO_BLOCK_KEY.get(data_type, data_type)
 
         _put_node(
@@ -439,7 +444,7 @@ def _append_provider_runs(
                 "cache_hit": run.get("cache_hit"),
                 "stale_seconds": run.get("stale_seconds"),
                 "error_type": run.get("error_type"),
-                "error_message": run.get("error_message_sanitized"),
+                "error_message": error_reason,
             },
         )
 
@@ -479,6 +484,7 @@ def _append_provider_runs(
                 "fallback_from": run.get("fallback_from"),
                 "fallback_to": run.get("fallback_to"),
                 "error_type": run.get("error_type"),
+                "error_message": error_reason,
             },
         )
         previous_node_by_type[data_type] = (node_id, run)
@@ -1178,7 +1184,11 @@ def _provider_run_message(label: str, provider: str, run: Dict[str, Any], *, suc
         record_count = _safe_int(run.get("record_count"))
         suffix = f", returned {record_count} record(s)" if record_count is not None else ""
         return f"{label} {provider} succeeded{suffix}"
-    error = _safe_text(run.get("error_message_sanitized") or run.get("error_type"), max_length=160)
+    error = _safe_text(
+        diagnostic_error_reason(run.get("error_type"), run.get("error_message_sanitized"))
+        or run.get("error_type"),
+        max_length=160,
+    )
     return f"{label} {provider} failed: {error or 'unknown error'}"
 
 

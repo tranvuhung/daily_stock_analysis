@@ -103,6 +103,25 @@ def sanitize_diagnostic_text(value: Any, *, max_length: int = 300) -> Optional[s
     return text
 
 
+# Lý do chuẩn (tiếng Anh) cho các ``error_type`` ổn định. Bản ghi cũ trong DB có thể
+# lưu ``error_message`` bằng tiếng Trung (ví dụ "过滤后无有效新闻"); khi đọc, code đã
+# biết được quy về câu này để message không lộ tiếng Trung. Web bản địa hóa lại
+# theo ``runFlow.errorReason.<error_type>``.
+# Canonical English reasons for stable error_type codes; applied at read time so
+# legacy records that stored Chinese text render cleanly.
+_KNOWN_ERROR_REASONS = {
+    "NoUsableNews": "No usable news after filtering",
+}
+
+
+def diagnostic_error_reason(error_type: Any, error_message: Any) -> Optional[str]:
+    """Return the display reason for a failed run: canonical text for known codes."""
+    key = str(error_type or "").strip()
+    if key in _KNOWN_ERROR_REASONS:
+        return _KNOWN_ERROR_REASONS[key]
+    return sanitize_diagnostic_text(error_message)
+
+
 def safe_diagnostic_key(value: Any) -> str:
     """Normalize a diagnostic object key after applying text redaction."""
     text = sanitize_diagnostic_text(value, max_length=80) or ""
@@ -665,10 +684,13 @@ def _provider_flow_event(
     status = _flow_status_for_success(run.success, fallback=fallback)
     node_id = f"provider_{data_type}_{provider_key}_{index}"
     started_at = _started_at_from_end_and_duration(run.created_at, run.latency_ms)
+    error_reason = None if run.success else diagnostic_error_reason(
+        run.error_type, run.error_message_sanitized
+    )
     message = (
         f"{label} {run.provider} succeeded"
         if run.success
-        else f"{label} {run.provider} failed: {run.error_message_sanitized or run.error_type or 'unknown error'}"
+        else f"{label} {run.provider} failed: {error_reason or run.error_type or 'unknown error'}"
     )
     return {
         "timestamp": run.created_at,
@@ -688,6 +710,7 @@ def _provider_flow_event(
                 "fallback_from": run.fallback_from,
                 "fallback_to": run.fallback_to,
                 "error_type": run.error_type,
+                "error_message": error_reason,
                 "node": {
                     "id": node_id,
                     "lane": "data_source",
@@ -1222,7 +1245,7 @@ def _provider_component(
         )
 
     message = (
-        last_run.get("error_message_sanitized")
+        diagnostic_error_reason(last_run.get("error_type"), last_run.get("error_message_sanitized"))
         or last_run.get("error_type")
         or "all data source attempts failed"
     )

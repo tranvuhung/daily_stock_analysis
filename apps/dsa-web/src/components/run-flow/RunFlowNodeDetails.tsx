@@ -11,6 +11,7 @@ import {
   getRunFlowDataTypeLabel,
   getRunFlowNodeKindLabel,
   getRunFlowNodeLabel,
+  getRunFlowNodeMessage,
   getRunFlowStatusLabel,
   RUN_FLOW_STATUS_STYLE,
   runFlowMetadataString,
@@ -207,14 +208,16 @@ export const RunFlowNodeDetails: React.FC<RunFlowNodeDetailsProps> = ({
     addTimeRows();
   }
 
+  const nodeMessage = getRunFlowNodeMessage(node, t);
+
   return (
     <aside className="home-subpanel p-4" data-testid="run-flow-node-details">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="label-uppercase">{t('runFlow.nodeDetails.title')}</p>
           <h3 className="mt-1 truncate text-base font-semibold text-foreground">{getRunFlowNodeLabel(node, t)}</h3>
-          {node.message ? (
-            <p className="mt-2 text-sm leading-6 text-secondary-text">{node.message}</p>
+          {nodeMessage ? (
+            <p className="mt-2 text-sm leading-6 text-secondary-text">{nodeMessage}</p>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">

@@ -187,6 +187,18 @@ const INPUT_STATUS_TEXT: Record<ReportLanguage, Record<string, string>> = {
   },
 };
 
+// Lý do lỗi theo ``error_type`` ổn định của backend (cùng bộ mã với Run Flow,
+// ``runFlow.errorReason.*``); code lạ thì dùng ``details.error`` của server.
+// Failure reasons keyed by the backend's stable error_type; unknown codes use the server text.
+const ERROR_REASON_TEXT: Record<ReportLanguage, Record<string, string>> = {
+  vi: {
+    NoUsableNews: 'không còn tin hợp lệ sau khi lọc',
+  },
+  en: {
+    NoUsableNews: 'no usable news after filtering',
+  },
+};
+
 const UNKNOWN_REASON: Record<ReportLanguage, string> = {
   vi: 'Báo cáo cũ hoặc chưa đủ bằng chứng chẩn đoán; không xác định được trạng thái của lượt chạy này',
   en: 'Old report or insufficient diagnostic evidence; the status of this run cannot be determined',
@@ -218,7 +230,9 @@ const localizeComponentMessage = (component: RunDiagnosticComponent, language: R
     provider: detailText(details, 'provider') ?? 'unknown',
     count: detailText(details, 'recordCount') ?? '0',
     model: detailText(details, 'model') ?? 'unknown',
-    error: detailText(details, 'error') ?? (language === 'vi' ? 'lỗi không xác định' : 'unknown error'),
+    error: ERROR_REASON_TEXT[language][detailText(details, 'errorType') ?? '']
+      ?? detailText(details, 'error')
+      ?? (language === 'vi' ? 'lỗi không xác định' : 'unknown error'),
     input: inputStatus ? INPUT_STATUS_TEXT[language][inputStatus] ?? inputStatus : '',
   };
   // Mã cần {input} mà không có trạng thái đầu vào thì dùng text server cho an toàn.

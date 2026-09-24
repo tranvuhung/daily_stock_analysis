@@ -5,9 +5,11 @@ import {
   getRunFlowContextBlockLabel,
   getRunFlowDataTypeLabel,
   getRunFlowEdgeLabel,
+  getRunFlowEventMessage,
   getRunFlowEventTitle,
   getRunFlowLaneLabel,
   getRunFlowNodeLabel,
+  getRunFlowNodeMessage,
   isRunFlowCancelEvent,
   isRunFlowFallbackEvent,
 } from '../utils';
@@ -161,5 +163,54 @@ describe('run-flow event filters', () => {
     expect(isRunFlowCancelEvent(event({ type: 'task_cancelled' }))).toBe(true);
     expect(isRunFlowCancelEvent(event({ type: 'task_cancel_requested' }))).toBe(true);
     expect(isRunFlowCancelEvent(event({ type: 'task_completed' }))).toBe(false);
+  });
+});
+
+describe('run-flow provider_run messages', () => {
+  const failed = (metadata: Record<string, unknown>) => event({
+    severity: 'danger',
+    message: 'News Tavily failed: 过滤后无有效新闻',
+    metadata: { provider: 'Tavily', dataType: 'news_search', ...metadata },
+  });
+
+  it('localizes a known error type instead of the stored legacy text', () => {
+    const legacy = failed({ errorType: 'NoUsableNews', errorMessage: 'No usable news after filtering' });
+    expect(getRunFlowEventMessage(legacy, vi)).toBe('Tin tức Tavily thất bại: không còn tin hợp lệ sau khi lọc');
+    expect(getRunFlowEventMessage(legacy, en)).toBe('News Tavily failed: no usable news after filtering');
+  });
+
+  it('also reads snake_case metadata from older payloads', () => {
+    const legacy = failed({ error_type: 'NoUsableNews' });
+    expect(getRunFlowEventMessage(legacy, vi)).toBe('Tin tức Tavily thất bại: không còn tin hợp lệ sau khi lọc');
+  });
+
+  it('keeps the server reason for an unknown error type', () => {
+    const timeout = failed({ errorType: 'TimeoutError', errorMessage: 'Request timed out' });
+    expect(getRunFlowEventMessage(timeout, vi)).toBe('Tin tức Tavily thất bại: Request timed out');
+  });
+
+  it('localizes success with the record count', () => {
+    const ok = event({ metadata: { provider: 'SearXNG', dataType: 'news_search', recordCount: 3 } });
+    expect(getRunFlowEventMessage(ok, vi)).toBe('Tin tức SearXNG thành công, trả về 3 bản ghi');
+    expect(getRunFlowEventMessage(ok, en)).toBe('News SearXNG succeeded, returned 3 record(s)');
+  });
+
+  it('falls back to the server message without provider metadata or for other events', () => {
+    expect(getRunFlowEventMessage(event({ message: 'server text', metadata: {} }), vi)).toBe('server text');
+    expect(getRunFlowEventMessage(event({ type: 'llm_run', message: 'LLM x failed' }), vi)).toBe('LLM x failed');
+  });
+
+  it('localizes failed provider nodes but keeps block and running nodes as server text', () => {
+    const node = providerNode({
+      status: 'failed',
+      provider: 'Tavily',
+      message: 'News Tavily failed: 过滤后无有效新闻',
+      metadata: { provider: 'Tavily', dataType: 'news_search', errorType: 'NoUsableNews' },
+    });
+    expect(getRunFlowNodeMessage(node, vi)).toBe('Tin tức Tavily thất bại: không còn tin hợp lệ sau khi lọc');
+    expect(getRunFlowNodeMessage(providerNode({ status: 'running', message: 'Calling' }), vi)).toBe('Calling');
+    expect(
+      getRunFlowNodeMessage(providerNode({ message: 'block text', metadata: { blockKey: 'news' } }), vi),
+    ).toBe('block text');
   });
 });

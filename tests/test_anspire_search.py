@@ -288,7 +288,7 @@ class TestAnspireSearchProvider(unittest.TestCase):
             [1.0, 2.0],
         )
         # 错误消息检查
-        self.assertTrue("超时" in response.error_message or "Timeout" in response.error_message)
+        self.assertIn("timed out", response.error_message)
     
     @patch('src.search_service.requests')
     def test_search_network_error(self, mock_requests):
@@ -315,7 +315,7 @@ class TestAnspireSearchProvider(unittest.TestCase):
             [float(item.args[0]) for item in mock_sleep.call_args_list],
             [1.0, 2.0],
         )
-        self.assertTrue("网络" in response.error_message or "Connection" in response.error_message)
+        self.assertIn("Network request failed", response.error_message)
     
     @patch('src.search_service.requests')
     def test_search_empty_results(self, mock_requests):

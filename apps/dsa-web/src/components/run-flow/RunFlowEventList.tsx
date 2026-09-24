@@ -9,6 +9,7 @@ import {
   compactText,
   formatDateTime,
   formatMetadataValue,
+  getRunFlowEventMessage,
   getRunFlowEventTitle,
   getRunFlowSeverityLabel,
   isRunFlowCancelEvent,
@@ -107,6 +108,7 @@ export const RunFlowEventList: React.FC<RunFlowEventListProps> = ({
         {visibleEvents.length > 0 ? visibleEvents.map((event) => {
           const style = RUN_FLOW_SEVERITY_STYLE[event.severity] || RUN_FLOW_SEVERITY_STYLE.info;
           const selected = Boolean(event.nodeId && event.nodeId === selectedNodeId);
+          const eventMessage = getRunFlowEventMessage(event, t);
           const metadata = Object.entries(event.metadata || {})
             .filter(([, value]) => value !== null && value !== undefined && value !== '')
             .slice(0, 3);
@@ -127,8 +129,8 @@ export const RunFlowEventList: React.FC<RunFlowEventListProps> = ({
                 <span className="font-mono text-[11px] text-muted-text">{compactText(event.type, 28)}</span>
               </div>
               <p className="mt-2 text-sm font-medium text-foreground">{getRunFlowEventTitle(event, t)}</p>
-              {event.message ? (
-                <p className="mt-1 text-xs leading-5 text-secondary-text">{event.message}</p>
+              {eventMessage ? (
+                <p className="mt-1 text-xs leading-5 text-secondary-text">{eventMessage}</p>
               ) : null}
               {metadata.length > 0 ? (
                 <div className="mt-2 flex flex-wrap gap-1.5">

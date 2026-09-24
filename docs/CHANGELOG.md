@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] Panel Run Flow còn hiện tiếng Trung, ví dụ `News Tavily failed: 过滤后无有效新闻`. Nguyên nhân: `src/search_service.py` ghi lỗi chẩn đoán bằng chuỗi tiếng Trung cứng, và backend nhúng nguyên văn vào message tiếng Anh. Cách sửa:
+  - Dịch toàn bộ chuỗi lỗi (`error_message`/`error_msg`/exception) trong `search_service.py` sang tiếng Anh.
+  - `run_diagnostics.diagnostic_error_reason()` quy `error_type` đã biết (`NoUsableNews`) về câu tiếng Anh chuẩn ngay khi đọc, nên bản ghi cũ trong DB cũng không còn lộ tiếng Trung. Áp dụng cho REST, SSE và panel Chẩn đoán.
+  - Metadata của event `provider_run` có thêm `error_message` (chỉ bổ sung, không phá contract).
+  - Web dựng lại message `provider_run` và message của node nguồn dữ liệu theo ngôn ngữ UI, từ `provider`/`data_type`/`record_count`/`error_type`. Ví dụ "Tin tức Tavily thất bại: không còn tin hợp lệ sau khi lọc". Mã lỗi lạ thì dùng lý do từ server.
+  - Panel Chẩn đoán điền `{error}` theo `error_type`.
+- [测试] Thêm `tests/test_run_flow_error_reason.py`: bản ghi cũ tiếng Trung qua REST/SSE/panel Chẩn đoán, và quét chuỗi lỗi trong `search_service.py`. Thêm vitest cho `getRunFlowEventMessage` / `getRunFlowNodeMessage` và `ReportDiagnostics`. Cập nhật 6 test đang khóa chuỗi lỗi tiếng Trung cũ.
 - [修复] Bấm "Điểm lại thị trường" trên Web UI báo `The market review did not return a persistable report`. Nguyên nhân: mặc định `SUPPORTED_MARKETS=vn` nhưng Việt Nam chưa hỗ trợ điểm lại (`supports_market_review=False`). Endpoint vẫn nhận task 202 với fallback cứng `region=cn`, sau đó `run_market_review` bỏ qua và trả `None`. Nay endpoint lấy region đầu tiên đang bật, và trả 400 `market_review_unsupported` khi không có thị trường nào hỗ trợ, thay vì nhận task rồi thất bại mơ hồ.
 - [新功能] Điểm lại thị trường Việt Nam (`MARKET_REVIEW_REGION=vn`):
   - Chỉ số VN-Index/VN30/HNX-Index/UPCoM-Index lấy từ VCI (`VciFetcher.get_main_indices`).
