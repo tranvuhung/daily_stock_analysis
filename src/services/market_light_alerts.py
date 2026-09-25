@@ -8,10 +8,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+from src.core.markets import market_label
 from src.core.trading_calendar import get_open_markets_today
 from src.schemas.market_light import MarketLightSnapshot
 from src.services.market_light_service import (
     build_current_snapshot,
+    is_market_alert_region_enabled,
     load_previous_snapshot,
     normalize_market_alert_region,
 )
@@ -20,13 +22,6 @@ from src.services.portfolio_alerts import RuntimeAlertPayload
 
 MARKET_ALERT_TYPES = frozenset({"market_light_status", "market_light_score_drop"})
 MARKET_STATUS_VALUES = frozenset({"red", "yellow"})
-MARKET_REGION_LABELS = {
-    "cn": "A股大盘",
-    "hk": "港股大盘",
-    "us": "美股大盘",
-    "jp": "日股大盘",
-    "kr": "韩股大盘",
-}
 MARKET_LIGHT_DATA_SOURCE = "market_light"
 
 
@@ -85,12 +80,17 @@ def make_market_light_payload(
         from src.config import get_config
 
         config = get_config()
+    # Thị trường chưa bật trong SUPPORTED_MARKETS thì bỏ qua với lý do rõ ràng,
+    # không để rơi vào nhánh "không phải ngày giao dịch".
+    # A market not enabled in SUPPORTED_MARKETS is skipped with an explicit reason
+    # instead of being reported as "not a trading day".
+    market_enabled = is_market_alert_region_enabled(region)
     trading_day_check_enabled = bool(getattr(config, "trading_day_check_enabled", True))
     market_is_open = True
-    if trading_day_check_enabled:
+    if market_enabled and trading_day_check_enabled:
         market_is_open = region in get_open_markets_today()
 
-    display_target = MARKET_REGION_LABELS.get(region, region)
+    display_target = market_label(region, str(getattr(config, "report_language", "vi") or "vi"))
     rule = MarketLightAlert(
         target_scope=data["target_scope"],
         target=region,
@@ -100,6 +100,7 @@ def make_market_light_payload(
             "persisted_rule_id": data["id"],
             "effective_target": region,
             "display_target": display_target,
+            "market_enabled": market_enabled,
             "trading_day_check_enabled": trading_day_check_enabled,
             "market_is_open": market_is_open,
         },
@@ -119,6 +120,17 @@ def evaluate_market_light_alert(
     current_snapshot: Optional[Dict[str, Any]] = None,
     cache: Optional[Dict[Any, Any]] = None,
 ) -> Dict[str, Any]:
+    if not rule.metadata.get("market_enabled", True):
+        return _market_result(
+            rule,
+            triggered=False,
+            observed_value=None,
+            threshold=_threshold(rule),
+            message=f"{rule.target} market is not enabled in SUPPORTED_MARKETS",
+            record_status="skipped",
+            diagnostics={"region": rule.target, "market_enabled": False},
+        )
+
     if rule.metadata.get("trading_day_check_enabled") and not rule.metadata.get("market_is_open", True):
         return _market_result(
             rule,

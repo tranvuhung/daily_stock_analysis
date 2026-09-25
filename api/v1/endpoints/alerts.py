@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from api.v1.schemas.alerts import (
     AlertDeleteResponse,
+    AlertMarketRegionsResponse,
     AlertNotificationListResponse,
     AlertRuleCreateRequest,
     AlertRuleItem,
@@ -25,6 +26,7 @@ from src.services.alert_service import (
     AlertServiceError,
     UnsupportedAlertTypeError,
 )
+from src.services.market_light_service import enabled_market_alert_regions
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,20 @@ def _internal_error(message: str, exc: Exception) -> HTTPException:
         status_code=500,
         detail={"error": "internal_error", "message": f"{message}: {str(exc)}"},
     )
+
+
+@router.get(
+    "/market-regions",
+    response_model=AlertMarketRegionsResponse,
+    responses={500: {"model": ErrorResponse}},
+    summary="List market regions enabled for market alerts",
+)
+def list_market_regions() -> AlertMarketRegionsResponse:
+    try:
+        regions = list(enabled_market_alert_regions())
+        return AlertMarketRegionsResponse(regions=regions, default=regions[0] if regions else None)
+    except Exception as exc:
+        raise _internal_error("List market alert regions failed", exc)
 
 
 @router.post(
@@ -161,7 +177,7 @@ def delete_rule(rule_id: int) -> AlertDeleteResponse:
 @router.post(
     "/rules/{rule_id}/enable",
     response_model=AlertRuleItem,
-    responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     summary="Enable alert rule",
 )
 def enable_rule(rule_id: int) -> AlertRuleItem:
@@ -170,6 +186,8 @@ def enable_rule(rule_id: int) -> AlertRuleItem:
         return AlertRuleItem(**service.enable_rule(rule_id, True))
     except AlertNotFoundError as exc:
         raise _not_found(exc)
+    except AlertServiceError as exc:
+        raise _bad_request(exc, error=exc.error_code)
     except Exception as exc:
         raise _internal_error("Enable alert rule failed", exc)
 

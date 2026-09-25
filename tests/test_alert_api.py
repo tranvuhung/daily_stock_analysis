@@ -557,7 +557,82 @@ class AlertApiTestCase(unittest.TestCase):
                 )
                 self.assertEqual(unsupported_market.status_code, 400, unsupported_market.text)
                 self.assertEqual(unsupported_market.json()["error"], "validation_error")
-                self.assertIn("cn, hk, us", unsupported_market.json()["message"])
+                self.assertIn("vn, cn, hk, us", unsupported_market.json()["message"])
+
+    def test_market_regions_endpoint_follows_supported_markets(self) -> None:
+        with patch.dict(os.environ, {"SUPPORTED_MARKETS": "vn"}):
+            resp = self.client.get("/api/v1/alerts/market-regions")
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertEqual(resp.json(), {"regions": ["vn"], "default": "vn"})
+
+        with patch.dict(os.environ, {"SUPPORTED_MARKETS": "us,vn,hk"}):
+            resp = self.client.get("/api/v1/alerts/market-regions")
+        self.assertEqual(resp.json(), {"regions": ["vn", "hk", "us"], "default": "vn"})
+
+        with patch.dict(os.environ, {"SUPPORTED_MARKETS": "jp"}):
+            resp = self.client.get("/api/v1/alerts/market-regions")
+        self.assertEqual(resp.json(), {"regions": [], "default": None})
+
+    def test_market_rule_requires_enabled_market_to_be_enabled(self) -> None:
+        with patch.dict(os.environ, {"SUPPORTED_MARKETS": "vn"}):
+            vn_rule = self.client.post(
+                "/api/v1/alerts/rules",
+                json={
+                    "target_scope": "market",
+                    "target": "vn",
+                    "alert_type": "market_light_status",
+                    "parameters": {"statuses": ["red"]},
+                },
+            )
+            self.assertEqual(vn_rule.status_code, 200, vn_rule.text)
+            self.assertEqual(vn_rule.json()["target"], "vn")
+
+            disabled_market = self.client.post(
+                "/api/v1/alerts/rules",
+                json={
+                    "target_scope": "market",
+                    "target": "cn",
+                    "alert_type": "market_light_status",
+                    "parameters": {"statuses": ["red"]},
+                },
+            )
+            self.assertEqual(disabled_market.status_code, 400, disabled_market.text)
+            self.assertEqual(disabled_market.json()["error"], "validation_error")
+            self.assertIn("SUPPORTED_MARKETS", disabled_market.json()["message"])
+
+        # Rule cn được tạo khi cn còn bật; sau khi tắt cn vẫn disable/xoá được nhưng không bật lại được.
+        cn_rule = self._create_rule({
+            "target_scope": "market",
+            "target": "cn",
+            "alert_type": "market_light_status",
+            "parameters": {"statuses": ["red"]},
+        })
+        with patch.dict(os.environ, {"SUPPORTED_MARKETS": "vn"}):
+            listed = self.client.get("/api/v1/alerts/rules", params={"target_scope": "market"})
+            self.assertIn(cn_rule["id"], [item["id"] for item in listed.json()["items"]])
+
+            disabled = self.client.post(f"/api/v1/alerts/rules/{cn_rule['id']}/disable")
+            self.assertEqual(disabled.status_code, 200, disabled.text)
+            self.assertFalse(disabled.json()["enabled"])
+
+            renamed = self.client.patch(f"/api/v1/alerts/rules/{cn_rule['id']}", json={"name": "cn off"})
+            self.assertEqual(renamed.status_code, 200, renamed.text)
+
+            enabled = self.client.post(f"/api/v1/alerts/rules/{cn_rule['id']}/enable")
+            self.assertEqual(enabled.status_code, 400, enabled.text)
+            self.assertIn("not enabled", enabled.json()["message"])
+
+            patched_enable = self.client.patch(f"/api/v1/alerts/rules/{cn_rule['id']}", json={"enabled": True})
+            self.assertEqual(patched_enable.status_code, 400, patched_enable.text)
+
+            retarget = self.client.patch(
+                f"/api/v1/alerts/rules/{cn_rule['id']}", json={"target": "vn", "enabled": True}
+            )
+            self.assertEqual(retarget.status_code, 200, retarget.text)
+            self.assertEqual(retarget.json()["target"], "vn")
+
+            deleted = self.client.delete(f"/api/v1/alerts/rules/{vn_rule.json()['id']}")
+            self.assertEqual(deleted.status_code, 200, deleted.text)
 
     def test_dry_run_market_light_rule_uses_snapshot_and_does_not_write_history(self) -> None:
         rule = self._create_rule({
@@ -601,7 +676,7 @@ class AlertApiTestCase(unittest.TestCase):
         self.assertEqual(payload["evaluated_count"], 1)
         self.assertEqual(payload["triggered_count"], 1)
         self.assertEqual(payload["target_results"][0]["target"], "cn")
-        self.assertEqual(payload["target_results"][0]["display_target"], "A股大盘")
+        self.assertEqual(payload["target_results"][0]["display_target"], "Trung Quốc (A)")
         self.assertEqual(payload["target_results"][0]["observed_value"], 35.0)
         build_snapshot.assert_called_once_with("cn")
 

@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] Tin nhắn cảnh báo (Alert Center) bị lẫn tiếng Trung, ví dụ `阶段：unknown | 市场：vn | 触发来源：alert | 摘要来源：最近分析快照`, `数据质量`, `限制`. Nguyên nhân: `AlertWorker` không truyền `REPORT_LANGUAGE` vào `format_public_phase_pack_excerpt` / `format_decision_signal_excerpt`, nên hai hàm này rơi về mặc định `zh`. Ngoài ra, nhánh `vi` vẫn in `数据质量`/`限制` vì điều kiện chỉ xét `en`. Cách sửa:
+  - Worker truyền `REPORT_LANGUAGE`.
+  - Trích đoạn phase/pack có nhãn tiếng Việt (`giai đoạn`, `thị trường`, `nguồn kích hoạt`, `nguồn tóm tắt`, `chất lượng dữ liệu`, `hạn chế`) và tiếng Anh. Dòng trạng thái thị trường có nhãn giai đoạn/thị trường tiếng Việt.
+  - Tiêu đề tin nhắn thành `Cảnh báo sự kiện | <mã>` (vi) hoặc `Event Alert | <mã>` (en).
+  - Nhãn đối tượng `自选股`/`持仓`/`全部账户`/`账户`/`展开目标超限` chuyển sang vi/en qua module mới `src/services/alert_labels.py`.
+  - `REPORT_LANGUAGE=zh` vẫn giữ nhãn tiếng Trung. Báo cáo phân tích dùng chung trích đoạn này nên khi `vi` cũng chuyển sang nhãn tiếng Việt.
+- [测试] Thêm `tests/test_alert_labels.py` và test trích đoạn phase/pack cho `vi`/`en` trong `tests/test_market_phase_summary.py` (tái hiện tin cảnh báo NLG, khẳng định không còn ký tự tiếng Trung). Cập nhật test worker đang mong nhãn `AI 决策信号`.
+- [文档] Thêm `docs/alerts-user-guide.md`: hướng dẫn dùng trang Cảnh báo trên Web (bật tính năng, phạm vi và loại quy tắc, kiểm thử, thời gian chờ, đọc lịch sử, xử lý sự cố). Thêm link ở `docs/INDEX.md`/`INDEX_EN.md`, cập nhật mô tả region và mốc đóng nến trong `docs/full-guide.md`.
+- [新功能] Cảnh báo thị trường (Alert Center, `target_scope=market`) hỗ trợ Việt Nam và mặc định là `vn`:
+  - Region dùng được = `vn/cn/hk/us` ∩ `SUPPORTED_MARKETS`. `cn/hk/us` chỉ dùng được khi bật trong Cài đặt. Không có key cấu hình mới.
+  - Thêm endpoint `GET /api/v1/alerts/market-regions`. Form trên Web chỉ hiện các region đang bật và chọn sẵn Việt Nam.
+  - Snapshot Market Light cho `vn` được lưu khi điểm lại thị trường VN. Báo cáo điểm lại VN có thêm khối Market Signal.
+- [修复] Khi `SUPPORTED_MARKETS=vn` (mặc định), rule cảnh báo thị trường `cn/hk/us` luôn bị bỏ qua với lý do sai là "not a trading day". Nay các rule đó bị bỏ qua với lý do `market is not enabled in SUPPORTED_MARKETS`. Tạo rule hoặc bật lại rule có region chưa bật sẽ trả 400. Tắt và xoá vẫn được phép.
+- [修复] Cảnh báo chỉ báo kỹ thuật xác định nến ngày đã đóng hay chưa theo giờ địa phương của thị trường của mã (VN mốc 15:00), không còn theo mốc 16:00 giờ server. Trước đây, với server chạy UTC, nến VN hôm nay bị bỏ tới 23:00 giờ VN.
+- [测试] Thêm test cho: region `vn`, lọc region theo `SUPPORTED_MARKETS`, create/update/enable trả 400 khi region chưa bật, rule cũ vẫn tắt/xoá được, endpoint `market-regions`, mốc đóng nến giờ VN, form Web mặc định `vn`. Cập nhật các test đang khoá message `cn, hk, us` và thay test jp/kr lỗi thời.
+
 - [修复] Panel Run Flow còn hiện tiếng Trung, ví dụ `News Tavily failed: 过滤后无有效新闻`. Nguyên nhân: `src/search_service.py` ghi lỗi chẩn đoán bằng chuỗi tiếng Trung cứng, và backend nhúng nguyên văn vào message tiếng Anh. Cách sửa:
   - Dịch toàn bộ chuỗi lỗi (`error_message`/`error_msg`/exception) trong `search_service.py` sang tiếng Anh.
   - `run_diagnostics.diagnostic_error_reason()` quy `error_type` đã biết (`NoUsableNews`) về câu tiếng Anh chuẩn ngay khi đọc, nên bản ghi cũ trong DB cũng không còn lộ tiếng Trung. Áp dụng cho REST, SSE và panel Chẩn đoán.
@@ -22,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   - Độ rộng thị trường (tăng/giảm/đứng, trần/sàn, giá trị khớp lệnh tính bằng tỷ đồng) tính từ snapshot SSI (`SsiFetcher.get_region_market_stats`).
   - Tin tức tiếng Việt; có `VN_PROFILE` / `VN_BLUEPRINT` riêng.
   - `vn` xếp sau `cn,hk,us,jp,kr` khi mở rộng `both`.
-  - Chưa có xếp hạng ngành, dòng tiền khối ngoại, hay Market Light cho `vn`.
+  - Chưa có xếp hạng ngành, dòng tiền khối ngoại cho `vn` (Market Light cho `vn`: xem mục bên trên).
 - [改进] `DataFetcherManager.get_market_stats` nhận thêm `region` (mặc định `cn`, hành vi cũ giữ nguyên). Region khác `cn` chỉ đi qua `BaseFetcher.get_region_market_stats`, để fetcher A-share (vốn bỏ qua region) không bị dùng nhầm cho thị trường khác.
 - [改进] Khi `REPORT_LANGUAGE=vi`, prompt điểm lại thị trường yêu cầu model viết toàn bộ bằng tiếng Việt (trước đây là tiếng Anh). Tiêu đề bao ngoài của báo cáo và thông báo cũng chuyển sang tiếng Việt ("Điểm lại thị trường"). Áp dụng cho mọi region.
 - [改进] Không đặt `MARKET_REVIEW_REGION` thì mặc định là thị trường đầu tiên đang bật, thay vì ép `cn` rồi cảnh báo "giá trị không hợp lệ".

@@ -149,7 +149,8 @@ Giới hạn:
 
 - Chỉ tính cổ phiếu/ETF mã 3 ký tự đã có giá khớp; loại chứng quyền, phái sinh, trái phiếu và mã chưa giao dịch.
 - Giá trị giao dịch là giá trị **khớp lệnh** (`nmTotalTradedValue`), không gồm giao dịch thỏa thuận, nên thấp hơn tổng giá trị mà các chỉ số công bố.
-- Chưa có xếp hạng ngành, dòng tiền khối ngoại, hay Market Light/cảnh báo cho `vn`. Prompt khai báo rõ giới hạn dữ liệu để model không tự bịa.
+- Chưa có xếp hạng ngành hay dòng tiền khối ngoại cho `vn`. Prompt khai báo rõ giới hạn dữ liệu để model không tự bịa.
+- Market Light và cảnh báo thị trường (`target_scope=market`, `target=vn`) đã hỗ trợ `vn`, và `vn` là region mặc định. `cn/hk/us` chỉ dùng được khi bật trong `SUPPORTED_MARKETS`. Xem [alerts.md](alerts.md) mục P7.
 - Nếu `SUPPORTED_MARKETS` không có thị trường nào hỗ trợ điểm lại (ví dụ chỉ `tw`), `POST /api/v1/analysis/market-review` trả về 400 `market_review_unsupported` thay vì nhận task rồi thất bại.
 
 Rollback: đặt lại `supports_market_review=False` cho `vn` trong `src/core/markets.py`. Không có migration dữ liệu.
@@ -186,7 +187,7 @@ Rollback: đặt lại `supports_market_review=False` cho `vn` trong `src/core/m
 
 - 不承诺实时行情；Yahoo Finance 数据可能延迟或字段缺失。
 - 不承诺完整基本面、行业/板块、市场宽度、涨跌家数或台股大盘复盘；`MARKET_REVIEW_REGION` 仍只接受 `cn/hk/us/jp/kr/vn/both` 或这些市场的逗号子集。
-- 台股股票索引/种子和 Web 自动补全仍未完整接入；告警 MarketRegion 与后端 Market Light 告警仍为 `cn/hk/us`，未含 `tw`。
+- 台股股票索引/种子和 Web 自动补全仍未完整接入；告警 MarketRegion 与后端 Market Light 告警为 `vn/cn/hk/us`（受 `SUPPORTED_MARKETS` 约束），未含 `tw`。
 - 不补齐 Portfolio 的 TWD 汇率、成本、市值完整口径；台股 Portfolio 当前属于 partial valuation 市场。
 
 回滚方式：移除 `tw` 市场识别、交易日历注册、YFinance 路由扩展、三大法人资料层/报告消费、TWD 标注、服务层/API 市场枚举及前端市场类型放行，并删除本文档中的能力声明。
@@ -196,7 +197,7 @@ Rollback: đặt lại `supports_market_review=False` cho `vn` trong `src/core/m
 Portfolio 允许 JP/KR 账户、交易和持仓快照进入现有链路，但会将账户/持仓快照标记为 `data_quality=partial`，并通过 `limitations` 明确 `realtime_quote_best_effort`、`fx_and_cost_basis_partial`、`sector_and_risk_metrics_limited`；不承诺 JPY/KRW 汇率、成本、市值、行业集中度或组合风险指标完整口径。
 
 - JP/KR 账户、交易、现金流水和公司行动 API 保持可创建/查询；当前不新增 JPY/KRW 汇率源、税费模型、交易单位/最小变动价位校验或行业映射。
-- Market Light 快照和 Market Light 告警仍只支持 `cn` / `hk` / `us`。
+- Market Light 快照和 Market Light 告警只支持 `vn` / `cn` / `hk` / `us`（且需在 `SUPPORTED_MARKETS` 中启用），不含 `jp` / `kr`。
 - Web 告警市场下拉不展示 `jp` / `kr`；后端 `normalize_market_region()` 对 `jp` / `kr` 返回显式 unsupported 错误。
 - Web 设置页中 `MARKET_REVIEW_REGION` 从固定枚举下拉收敛为自由文本输入，用于保存 `cn,us,jp`、`cn,hk,us` 等逗号分隔子集；该 UI 变化只影响大盘复盘配置，不影响 Market Light 告警市场枚举。
 - `MARKET_REVIEW_REGION` 既有 `cn`、`hk`、`us` 可原样保留；若用户希望维持 JP/KR 扩展前 `both` 对应的三市场复盘边界，应改为 `cn,hk,us`；只有希望纳入五市场复盘时才继续使用 `both` 或显式配置 `cn,hk,us,jp,kr`。

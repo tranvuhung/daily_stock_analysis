@@ -5,10 +5,11 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 from sqlalchemy import desc
 
+from src.core.markets import enabled_markets
 from src.core.market_review import MARKET_REVIEW_HISTORY_CODE, MARKET_REVIEW_REPORT_TYPE
 from src.market_analyzer import MarketAnalyzer
 from src.schemas.market_light import MarketLightSnapshot
@@ -17,22 +18,71 @@ from src.storage import AnalysisHistory, DatabaseManager
 
 logger = logging.getLogger(__name__)
 
-MARKET_LIGHT_REGIONS = frozenset({"cn", "hk", "us", "jp", "kr"})
-MARKET_LIGHT_ALERT_REGIONS = frozenset({"cn", "hk", "us"})
+MARKET_LIGHT_REGIONS = frozenset({"vn", "cn", "hk", "us", "jp", "kr"})
+MARKET_LIGHT_ALERT_REGIONS = frozenset({"vn", "cn", "hk", "us"})
 MARKET_LIGHT_HISTORY_BATCH_SIZE = 100
+
+
+# Thứ tự hiển thị region: vn đứng đầu (mặc định), sau đó giữ thứ tự lịch sử cn/hk/us/jp/kr.
+# Display order for regions: vn first (the default), then the historical cn/hk/us/jp/kr order.
+MARKET_LIGHT_REGION_ORDER: Tuple[str, ...] = ("vn", "cn", "hk", "us", "jp", "kr")
+
+
+def _ordered_regions(regions: Iterable[str]) -> Tuple[str, ...]:
+    wanted = set(regions)
+    return tuple(code for code in MARKET_LIGHT_REGION_ORDER if code in wanted)
 
 
 def normalize_market_region(region: str) -> str:
     value = str(region or "").strip().lower()
     if value not in MARKET_LIGHT_REGIONS:
-        raise ValueError(f"market target must be one of cn, hk, us, jp, kr: {region}")
+        allowed = ", ".join(_ordered_regions(MARKET_LIGHT_REGIONS))
+        raise ValueError(f"market target must be one of {allowed}: {region}")
     return value
 
 
 def normalize_market_alert_region(region: str) -> str:
+    """Chuẩn hoá region cho cảnh báo thị trường (chỉ kiểm tra tập hỗ trợ).
+
+    Normalize a market alert region against the supported set only; whether the
+    market is enabled is checked separately by ``ensure_market_alert_region_enabled``
+    so persisted rules for a disabled market can still be read, disabled or deleted.
+    """
+
     value = str(region or "").strip().lower()
     if value not in MARKET_LIGHT_ALERT_REGIONS:
-        raise ValueError(f"market alert target must be one of cn, hk, us: {region}")
+        allowed = ", ".join(_ordered_regions(MARKET_LIGHT_ALERT_REGIONS))
+        raise ValueError(f"market alert target must be one of {allowed}: {region}")
+    return value
+
+
+def enabled_market_alert_regions() -> Tuple[str, ...]:
+    """Region dùng được cho cảnh báo thị trường = tập hỗ trợ ∩ SUPPORTED_MARKETS.
+
+    Regions usable by market alerts: the supported set intersected with the
+    markets enabled via ``SUPPORTED_MARKETS``, ordered vn first.
+    """
+
+    return _ordered_regions(set(enabled_markets()) & MARKET_LIGHT_ALERT_REGIONS)
+
+
+def is_market_alert_region_enabled(region: str) -> bool:
+    return str(region or "").strip().lower() in enabled_market_alert_regions()
+
+
+def ensure_market_alert_region_enabled(region: str) -> str:
+    """Chuẩn hoá region và yêu cầu thị trường đang được bật trong SUPPORTED_MARKETS.
+
+    Normalize the region and require its market to be enabled in ``SUPPORTED_MARKETS``.
+    """
+
+    value = normalize_market_alert_region(region)
+    if value not in enabled_market_alert_regions():
+        enabled = ", ".join(enabled_market_alert_regions()) or "none"
+        raise ValueError(
+            f"market alert target {value} is not enabled; enabled markets: {enabled}. "
+            f"Enable it via SUPPORTED_MARKETS in Settings"
+        )
     return value
 
 

@@ -22,6 +22,15 @@ describe('alertsApi', () => {
     deleteRequest.mockReset();
   });
 
+  it('lists market regions enabled for market alerts', async () => {
+    get.mockResolvedValueOnce({ data: { regions: ['vn', 'us'], default: 'vn' } });
+
+    const result = await alertsApi.listMarketRegions();
+
+    expect(get).toHaveBeenCalledWith('/api/v1/alerts/market-regions');
+    expect(result).toEqual({ regions: ['vn', 'us'], default: 'vn' });
+  });
+
   it('lists rules with snake_case query params and camelCase response fields', async () => {
     get.mockResolvedValueOnce({
       data: {

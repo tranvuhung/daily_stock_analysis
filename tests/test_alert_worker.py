@@ -191,6 +191,33 @@ class AlertIndicatorHelperTestCase(unittest.TestCase):
         self.assertEqual(partial.status, "triggered")
         self.assertEqual(partial.data_timestamp, pd.Timestamp("2026-05-18").to_pydatetime())
 
+    def test_indicator_partial_bar_cutoff_uses_vn_market_close_time(self) -> None:
+        from zoneinfo import ZoneInfo
+
+        params = normalize_indicator_parameters("ma_price_cross", {"window": 2, "direction": "above"})
+        frame = pd.DataFrame({
+            "date": [date(2026, 5, 16), date(2026, 5, 17), date(2026, 5, 18), date(2026, 5, 19)],
+            "close": [10, 9, 12, 8],
+        })
+        vn_tz = ZoneInfo("Asia/Ho_Chi_Minh")
+
+        # Trước 15:00 giờ VN: nến hôm nay chưa đóng nên bị bỏ.
+        with patch.dict(os.environ, {"SUPPORTED_MARKETS": "vn"}), patch(
+            "src.core.trading_calendar.get_market_now",
+            return_value=pd.Timestamp("2026-05-19 14:30:00").to_pydatetime().replace(tzinfo=vn_tz),
+        ) as market_now:
+            before_close = evaluate_indicator_alert("ma_price_cross", "HPG", params, frame)
+        market_now.assert_called_once_with("vn")
+        self.assertEqual(before_close.data_timestamp, pd.Timestamp("2026-05-18").to_pydatetime())
+
+        # Sau 15:00 giờ VN (dù server có thể đang ở UTC): giữ nến hôm nay.
+        with patch.dict(os.environ, {"SUPPORTED_MARKETS": "vn"}), patch(
+            "src.core.trading_calendar.get_market_now",
+            return_value=pd.Timestamp("2026-05-19 15:10:00").to_pydatetime().replace(tzinfo=vn_tz),
+        ):
+            after_close = evaluate_indicator_alert("ma_price_cross", "HPG", params, frame)
+        self.assertEqual(after_close.data_timestamp, pd.Timestamp("2026-05-19").to_pydatetime())
+
     def test_indicator_drops_unparseable_last_bar_before_cutoff(self) -> None:
         result = evaluate_indicator_alert(
             "ma_price_cross",
@@ -355,7 +382,12 @@ class AlertWorkerTestCase(unittest.TestCase):
         self.assertEqual(summary["id"], all_signals[0]["id"])
         self.assertEqual(summary["action"], "sell")
         alert_text = notifier.send_with_results.call_args.args[0]
-        self.assertIn("AI 决策信号", alert_text)
+        # Nhãn theo REPORT_LANGUAGE (mặc định vi); nội dung tín hiệu giữ nguyên văn gốc.
+        self.assertIn("Cảnh báo sự kiện | 600519", alert_text)
+        self.assertIn("Tín hiệu quyết định AI", alert_text)
+        self.assertIn("- giai đoạn: ", alert_text)
+        self.assertNotIn("阶段", alert_text)
+        self.assertNotIn("AI 决策信号", alert_text)
         self.assertIn("跌破关键支撑", alert_text)
         self.assertIn("观察能否收回均线", alert_text)
 

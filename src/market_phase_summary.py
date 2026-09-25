@@ -48,6 +48,46 @@ _PUBLIC_SOURCE_LABELS_EN = {
     "evaluator_snapshot": "evaluator snapshot",
     "legacy_text": "legacy text",
 }
+_PUBLIC_SOURCE_LABELS_VI = {
+    "alert_trigger_market_context": "ngữ cảnh lúc kích hoạt cảnh báo",
+    "analysis_history_snapshot": "snapshot phân tích gần nhất",
+    "evaluator_snapshot": "snapshot của bộ đánh giá",
+    "legacy_text": "văn bản cũ",
+}
+# Nhãn dòng trích đoạn phase/pack theo ngôn ngữ báo cáo.
+# Excerpt line labels per report language.
+_EXCERPT_LABELS = {
+    "vi": {
+        "phase": "giai đoạn",
+        "market": "thị trường",
+        "trigger": "nguồn kích hoạt",
+        "source": "nguồn tóm tắt",
+        "partial_bar": "cảnh báo nến chưa đóng: dữ liệu trong phiên có thể chưa đầy đủ",
+        "data_quality": "chất lượng dữ liệu",
+        "limitation": "hạn chế",
+        "sep": ": ",
+    },
+    "en": {
+        "phase": "phase",
+        "market": "market",
+        "trigger": "trigger",
+        "source": "source",
+        "partial_bar": "partial-bar warning: intraday data may be incomplete",
+        "data_quality": "data quality",
+        "limitation": "limitation",
+        "sep": ": ",
+    },
+    "zh": {
+        "phase": "阶段",
+        "market": "市场",
+        "trigger": "触发来源",
+        "source": "摘要来源",
+        "partial_bar": "盘中数据提示：当前 K 线可能未完结",
+        "data_quality": "数据质量",
+        "limitation": "限制",
+        "sep": "：",
+    },
+}
 _MARKET_STATUS_PREFIX = {
     "vi": "Trạng thái thị trường",
     "zh": "市场状态",
@@ -60,10 +100,27 @@ _MARKET_LABELS_ZH = {
     "tw": "台股",
 }
 _MARKET_LABELS_EN = {
+    "vn": "Vietnam",
     "cn": "A-shares",
     "hk": "Hong Kong",
     "us": "US",
     "tw": "Taiwan",
+}
+_MARKET_LABELS_VI = {
+    "vn": "Việt Nam",
+    "cn": "Cổ phiếu A",
+    "hk": "Hồng Kông",
+    "us": "Mỹ",
+    "tw": "Đài Loan",
+}
+_PHASE_LABELS_VI = {
+    "premarket": "Trước phiên",
+    "intraday": "Trong phiên",
+    "lunch_break": "Nghỉ trưa",
+    "closing_auction": "Sắp đóng cửa",
+    "postmarket": "Sau phiên",
+    "non_trading": "Ngày nghỉ",
+    "unknown": "Chưa rõ giai đoạn",
 }
 _PHASE_LABELS_ZH = {
     "premarket": "盘前",
@@ -203,42 +260,35 @@ def format_public_phase_pack_excerpt(
         lang = "zh"
     source_label = _source_label(source, lang)
 
+    labels = _EXCERPT_LABELS[lang]
+    sep = labels["sep"]
+
     lines: List[str] = []
     if phase_summary:
         phase = _safe_text(phase_summary.get("phase")) or "unknown"
         market = _safe_text(phase_summary.get("market"))
         trigger_source = _safe_text(phase_summary.get("trigger_source"))
-        if lang in ("en", "vi"):
-            parts = [f"phase: {phase}"]
-            if market:
-                parts.append(f"market: {market}")
-            if trigger_source:
-                parts.append(f"trigger: {trigger_source}")
-            if source_label:
-                parts.append(f"source: {source_label}")
-            lines.append("- " + " | ".join(parts))
-            if phase_summary.get("is_partial_bar") is True:
-                lines.append("- partial-bar warning: intraday data may be incomplete")
-        else:
-            parts = [f"阶段：{phase}"]
-            if market:
-                parts.append(f"市场：{market}")
-            if trigger_source:
-                parts.append(f"触发来源：{trigger_source}")
-            if source_label:
-                parts.append(f"摘要来源：{source_label}")
-            lines.append("- " + " | ".join(parts))
-            if phase_summary.get("is_partial_bar") is True:
-                lines.append("- 盘中数据提示：当前 K 线可能未完结")
+        parts = [f"{labels['phase']}{sep}{phase}"]
+        if market:
+            parts.append(f"{labels['market']}{sep}{market}")
+        if trigger_source:
+            parts.append(f"{labels['trigger']}{sep}{trigger_source}")
+        if source_label:
+            parts.append(f"{labels['source']}{sep}{source_label}")
+        lines.append("- " + " | ".join(parts))
+        if phase_summary.get("is_partial_bar") is True:
+            lines.append(f"- {labels['partial_bar']}")
 
     quality = overview.get("data_quality") if isinstance(overview, Mapping) else None
     if isinstance(quality, Mapping):
         level = _safe_text(quality.get("level"))
         if level:
-            lines.append(f"- {'data quality' if lang == 'en' else '数据质量'}: {level}")
+            # Giữ dấu ": " ASCII như trước cho mọi ngôn ngữ (test/consumer cũ dựa vào định dạng này).
+            # Keep the ASCII ": " separator for every language, as before.
+            lines.append(f"- {labels['data_quality']}: {level}")
         limitations = _list_strings(quality.get("limitations"), limit=2)
         for item in limitations:
-            lines.append(f"- {'limitation' if lang == 'en' else '限制'}: {item}")
+            lines.append(f"- {labels['limitation']}: {item}")
 
     return "\n".join(lines)
 
@@ -266,8 +316,8 @@ def format_public_market_status_line(
         lang = "en"
     else:
         lang = "zh"
-    phase_labels = _PHASE_LABELS_EN if lang in ("en", "vi") else _PHASE_LABELS_ZH
-    market_labels = _MARKET_LABELS_EN if lang in ("en", "vi") else _MARKET_LABELS_ZH
+    phase_labels = {"vi": _PHASE_LABELS_VI, "en": _PHASE_LABELS_EN}.get(lang, _PHASE_LABELS_ZH)
+    market_labels = {"vi": _MARKET_LABELS_VI, "en": _MARKET_LABELS_EN}.get(lang, _MARKET_LABELS_ZH)
     phase_label = phase_labels.get(phase, phase)
     market = _safe_text(phase_summary.get("market"))
     market_key = market.lower()
@@ -301,7 +351,7 @@ def _source_label(value: Any, lang: str) -> Optional[str]:
     source = _safe_text(value)
     if not source:
         return None
-    labels = _PUBLIC_SOURCE_LABELS_EN if lang in ("en", "vi") else _PUBLIC_SOURCE_LABELS_ZH
+    labels = {"vi": _PUBLIC_SOURCE_LABELS_VI, "en": _PUBLIC_SOURCE_LABELS_EN}.get(lang, _PUBLIC_SOURCE_LABELS_ZH)
     return labels.get(source, source)
 
 

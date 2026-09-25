@@ -19,6 +19,11 @@ TECHNICAL_ALERT_TYPES = frozenset({
     "cci_threshold",
 })
 
+# Giờ coi nến ngày đã đóng, theo giờ địa phương của thị trường. VN đóng ATC 14:45.
+# Local time after which today's daily bar is treated as closed; VN closes at 14:45 (ATC).
+DEFAULT_DAILY_BAR_CLOSE_TIME = time(16, 0)
+MARKET_DAILY_BAR_CLOSE_TIMES = {"vn": time(15, 0)}
+
 ABOVE_BELOW_DIRECTIONS = frozenset({"above", "below"})
 CROSS_DIRECTIONS = frozenset({"bullish_cross", "bearish_cross"})
 MAX_REQUESTED_DAYS = 365
@@ -128,7 +133,7 @@ def evaluate_indicator_alert(
         columns = ("high", "low", "close")
 
     try:
-        normalized = normalize_ohlcv(df, required_columns=columns, now=now)
+        normalized = normalize_ohlcv(df, required_columns=columns, now=now, stock_code=stock_code)
     except ValueError as exc:
         return IndicatorEvaluation(
             status="degraded",
@@ -180,6 +185,7 @@ def normalize_ohlcv(
     *,
     required_columns: tuple[str, ...],
     now: Optional[datetime] = None,
+    stock_code: Optional[str] = None,
 ) -> pd.DataFrame:
     if df is None or getattr(df, "empty", True):
         return pd.DataFrame()
@@ -203,7 +209,7 @@ def normalize_ohlcv(
     output = output.dropna(subset=list(required_columns)).copy()
     if output.empty:
         return output
-    output = _drop_partial_today(output, now=now)
+    output = _drop_partial_today(output, now=now, stock_code=stock_code)
     if output.empty:
         return output.reset_index(drop=True)
     output = output.sort_values(by="date", kind="stable", na_position="first").reset_index(drop=True)
@@ -485,9 +491,14 @@ def _date_series(df: pd.DataFrame) -> pd.Series:
     return pd.Series([pd.NaT] * len(df), index=df.index)
 
 
-def _drop_partial_today(df: pd.DataFrame, *, now: Optional[datetime] = None) -> pd.DataFrame:
-    current = now or datetime.now()
-    if current.time() >= time(16, 0):
+def _drop_partial_today(
+    df: pd.DataFrame,
+    *,
+    now: Optional[datetime] = None,
+    stock_code: Optional[str] = None,
+) -> pd.DataFrame:
+    current, close_time = _market_now_and_close_time(stock_code, now)
+    if current.time() >= close_time:
         return df
     try:
         parsed = pd.to_datetime(df["date"].iloc[-1], errors="coerce")
@@ -499,6 +510,32 @@ def _drop_partial_today(df: pd.DataFrame, *, now: Optional[datetime] = None) -> 
     if last_date == current.date():
         return df.iloc[:-1].copy()
     return df
+
+
+def _market_now_and_close_time(
+    stock_code: Optional[str],
+    now: Optional[datetime],
+) -> tuple[datetime, time]:
+    """Giờ hiện tại theo thị trường của mã và giờ đóng nến ngày tương ứng.
+
+    Return the current time in the symbol's market timezone and that market's
+    daily-bar close time. Unknown markets keep the legacy server-local 16:00 rule.
+    """
+
+    market: Optional[str] = None
+    if stock_code:
+        try:
+            from src.core.trading_calendar import get_market_for_stock
+
+            market = get_market_for_stock(stock_code)
+        except Exception:
+            market = None
+    close_time = MARKET_DAILY_BAR_CLOSE_TIMES.get(market or "", DEFAULT_DAILY_BAR_CLOSE_TIME)
+    if now is not None or not market:
+        return now or datetime.now(), close_time
+    from src.core.trading_calendar import get_market_now
+
+    return get_market_now(market), close_time
 
 
 def _latest_timestamp(df: pd.DataFrame) -> Optional[datetime]:

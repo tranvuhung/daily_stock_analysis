@@ -55,7 +55,11 @@ from src.services.market_light_alerts import (
     make_market_light_payload,
     normalize_market_alert_parameters,
 )
-from src.services.market_light_service import normalize_market_alert_region
+from src.services.alert_labels import alert_label
+from src.services.market_light_service import (
+    ensure_market_alert_region_enabled,
+    normalize_market_alert_region,
+)
 from src.services.decision_signal_summary import summarize_decision_signal
 from src.analysis_context_pack_overview import (
     ANALYSIS_CONTEXT_PACK_OVERVIEW_KEY,
@@ -137,6 +141,12 @@ class AlertService:
         return self.repo.delete_rule(rule_id)
 
     def enable_rule(self, rule_id: int, enabled: bool) -> Dict[str, Any]:
+        if enabled:
+            row = self.repo.get_rule(rule_id)
+            if row is None:
+                raise AlertNotFoundError(f"Alert rule not found: {rule_id}")
+            if row.target_scope == "market":
+                self._ensure_market_region_enabled(row.target)
         updated = self.repo.update_rule(rule_id, {"enabled": enabled})
         if updated is None:
             raise AlertNotFoundError(f"Alert rule not found: {rule_id}")
@@ -894,6 +904,10 @@ class AlertService:
             except ValueError as exc:
                 raise AlertServiceError(str(exc)) from exc
 
+        enabled = bool(payload.get("enabled", True))
+        if target_scope == "market" and enabled:
+            self._ensure_market_region_enabled(target)
+
         name = str(payload.get("name") or "").strip()
         if not name:
             name = self._default_rule_name(target=target, alert_type=alert_type, parameters=parameters)
@@ -905,7 +919,7 @@ class AlertService:
             "alert_type": alert_type,
             "parameters": self._dump_json(parameters),
             "severity": severity,
-            "enabled": bool(payload.get("enabled", True)),
+            "enabled": enabled,
             "source": str(source or "api")[:16],
             "cooldown_policy": self._dump_json_or_none(payload.get("cooldown_policy")),
             "notification_policy": self._dump_json_or_none(payload.get("notification_policy")),
@@ -946,6 +960,17 @@ class AlertService:
             if target_scope in {"portfolio_holdings", "portfolio_account"}:
                 ensure_active_portfolio_account(normalized)
             return normalized
+        except ValueError as exc:
+            raise AlertServiceError(str(exc)) from exc
+
+    @staticmethod
+    def _ensure_market_region_enabled(target: str) -> None:
+        # Rule thị trường chỉ được bật khi thị trường đó nằm trong SUPPORTED_MARKETS;
+        # tắt hoặc xoá rule cũ vẫn luôn được phép.
+        # A market rule can only be enabled while its market is in SUPPORTED_MARKETS;
+        # disabling or deleting an existing rule is always allowed.
+        try:
+            ensure_market_alert_region_enabled(target)
         except ValueError as exc:
             raise AlertServiceError(str(exc)) from exc
 
@@ -1068,7 +1093,7 @@ class AlertService:
                             rule_id=int(data["id"] or 0),
                             alert_type=data["alert_type"],
                             effective_target=f"{data['target_scope']}:{data['target']}:overflow",
-                            display_target="展开目标超限",
+                            display_target=alert_label("overflow"),
                             message=f"Skipped {overflow_count} targets over soft cap",
                             record_status="degraded",
                         )

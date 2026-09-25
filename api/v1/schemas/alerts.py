@@ -145,3 +145,13 @@ class AlertNotificationListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class AlertMarketRegionsResponse(BaseModel):
+    """Region dùng được cho cảnh báo thị trường (theo SUPPORTED_MARKETS).
+
+    Market regions usable by market alerts, derived from ``SUPPORTED_MARKETS``.
+    """
+
+    regions: List[str] = Field(default_factory=list)
+    default: Optional[str] = None

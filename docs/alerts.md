@@ -338,7 +338,7 @@ P6 不做：
 - `AlertTriggerItem` 保留 `diagnostics` 字符串，并新增派生字段 `market_phase_summary`、`analysis_context_pack_overview`、`analysis_visibility_source`。
 - 真实 `status=triggered` 的 worker 记录会在 JSON diagnostics 中合并 sibling key `analysis_visibility`，包含 `market_phase_summary`、`analysis_context_pack_overview`、`source`。旧纯文本 diagnostics 保留原文，API 派生字段返回 `null`，source 返回 `legacy_text`。
 - `analysis_visibility_source` 取值为 `alert_trigger_market_context`、`analysis_history_snapshot`、`evaluator_snapshot`、`legacy_text` 或 `null`。
-- symbol 目标使用 `get_market_for_stock(normalize_stock_code(effective_target))` 构造触发时 phase；`target_scope=market` 直接用 `normalize_market_region(target)`，不会把 `cn|hk|us|jp|kr` 当作股票代码推断；账户级无法唯一定位市场时允许 summary 落为 `unknown`。
+- symbol 目标使用 `get_market_for_stock(normalize_stock_code(effective_target))` 构造触发时 phase；`target_scope=market` 直接用 `normalize_market_region(target)`，不会把 `vn|cn|hk|us|jp|kr` 当作股票代码推断；账户级无法唯一定位市场时允许 summary 落为 `unknown`。
 - `analysis_context_pack_overview` 只来自 evaluator 已带 overview 或最近 30 天内的历史 snapshot。最近历史查询复用历史服务的代码变体候选，并以 best-effort + 批内短缓存方式执行；缺失或解析失败返回 `null`，不伪造 pack。
 - 告警通知只输出公开摘要：阶段标签、trigger source、partial-bar warning、数据质量等级和前两条 limitations。通知不得输出 raw context pack、Prompt、新闻正文、完整 diagnostics JSON、webhook URL、token 或持仓敏感细节。
 - Web 告警历史展示 phase badge、数据质量等级和 limitations 空态；旧触发记录缺少公开摘要时不影响列表读取。
@@ -358,10 +358,21 @@ P7 在现有 Alert API、Web 告警中心和 `src/services/alert_worker.py` 中�
 
 | `target_scope` | `target` | 允许的 `alert_type` | 参数 | 触发语义 |
 | --- | --- | --- | --- | --- |
-| `market` | `cn` / `hk` / `us` / `jp` / `kr` | `market_light_status` | `statuses=["red","yellow"]`，只允许 `red/yellow`，默认 `["red","yellow"]` | 当前 `MarketLightSnapshot.status` 命中列表时触发 |
-| `market` | `cn` / `hk` / `us` / `jp` / `kr` | `market_light_score_drop` | `min_drop > 0` | `prev.score - current.score >= min_drop`，且 `prev.trade_date < current.trade_date` |
+| `market` | `vn` / `cn` / `hk` / `us` | `market_light_status` | `statuses=["red","yellow"]`，只允许 `red/yellow`，默认 `["red","yellow"]` | 当前 `MarketLightSnapshot.status` 命中列表时触发 |
+| `market` | `vn` / `cn` / `hk` / `us` | `market_light_score_drop` | `min_drop > 0` | `prev.score - current.score >= min_drop`，且 `prev.trade_date < current.trade_date` |
 
-scope/type 校验是双向约束：`target_scope=market` 只能使用两类 Market Light 规则；`market_light_*` 规则也只能使用 `target_scope=market`。`target` 会 `strip().lower()` 后严格限定为 `cn|hk|us|jp|kr`，非法 target 返回 HTTP 400 + `validation_error`。
+scope/type 校验是双向约束：`target_scope=market` 只能使用两类 Market Light 规则；`market_light_*` 规则也只能使用 `target_scope=market`。`target` 会 `strip().lower()` 后严格限定为 `vn|cn|hk|us`，非法 target 返回 HTTP 400 + `validation_error`。
+
+### Thị trường Việt Nam và cơ chế bật theo `SUPPORTED_MARKETS`
+
+- `vn` được hỗ trợ cho cả hai loại rule Market Light. Snapshot VN dựng từ chỉ số VCI (VN-Index/VN30/HNX/UPCoM) và độ rộng/trần/sàn từ snapshot SSI. Mỗi lượt điểm lại thị trường VN sẽ lưu `context_snapshot.market_light_snapshots["vn"]`, nên `market_light_score_drop` cho `vn` chỉ có baseline sau ít nhất một lượt điểm lại VN.
+- Region dùng được = tập hỗ trợ (`vn/cn/hk/us`) ∩ `SUPPORTED_MARKETS`, xếp theo thứ tự `vn, cn, hk, us`. Mặc định `SUPPORTED_MARKETS=vn` nên chỉ có Việt Nam. Muốn dùng `cn/hk/us` thì bật trong Cài đặt → `SUPPORTED_MARKETS` (ví dụ `vn,us`). Không có key cấu hình mới.
+- `GET /api/v1/alerts/market-regions` trả `{"regions": [...], "default": "vn" | null}`. Web dùng endpoint này để lọc dropdown region và chọn sẵn `default`. Không có region nào thì Web hiện gợi ý và chặn tạo rule market. Nếu endpoint lỗi, Web hiện đủ bốn region và để server kiểm tra lại.
+- Tạo rule, `PATCH` hoặc `POST /rules/{id}/enable` sẽ trả HTTP 400 `validation_error` nếu rule market ở trạng thái bật mà region chưa có trong `SUPPORTED_MARKETS`. Tắt, xoá, đổi tên, hoặc đổi sang region đang bật thì luôn được phép. Rule cũ vẫn hiện trong danh sách.
+- Worker và dry-run gặp rule market có region chưa bật sẽ trả `skipped` với lý do `market is not enabled in SUPPORTED_MARKETS`. Không kiểm tra lịch giao dịch, không lấy snapshot. Trước đây trường hợp này bị báo nhầm là "not a trading day".
+- Tên hiển thị region trong thông báo và kết quả dry-run lấy từ `market_label()` (`src/core/markets.py`) theo `REPORT_LANGUAGE` (vi/en). Ví dụ `Việt Nam`, `Trung Quốc (A)`.
+- Rule chỉ báo kỹ thuật (MA/RSI/MACD/KDJ/CCI) xác định nến ngày hôm nay đã đóng hay chưa theo giờ địa phương của thị trường của mã (`get_market_for_stock` + `get_market_now`). VN dùng mốc 15:00, các thị trường khác giữ 16:00. Mã không xác định được thị trường thì giữ hành vi cũ (16:00 giờ server).
+- Rollback: revert thay đổi này. Rule `vn` đã tạo sẽ bị bỏ qua ("Skip invalid persisted alert rule") và có thể xoá qua API. Snapshot `vn` trong lịch sử điểm lại không ảnh hưởng code cũ.
 
 ### `MarketLightSnapshot` 契约
 

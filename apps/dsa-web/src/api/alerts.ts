@@ -2,6 +2,7 @@ import apiClient from './index';
 import { toCamelCase } from './utils';
 import type {
   AlertDeleteResponse,
+  AlertMarketRegionsResponse,
   AlertNotificationListQuery,
   AlertNotificationListResponse,
   AlertRuleCreateRequest,
@@ -82,6 +83,13 @@ function toNotificationListParams(query: AlertNotificationListQuery = {}): Recor
 }
 
 export const alertsApi = {
+  // Region được bật cho cảnh báo thị trường (theo SUPPORTED_MARKETS), vn đứng đầu.
+  // Market regions enabled for market alerts (driven by SUPPORTED_MARKETS), vn first.
+  async listMarketRegions(): Promise<AlertMarketRegionsResponse> {
+    const response = await apiClient.get<Record<string, unknown>>('/api/v1/alerts/market-regions');
+    return toCamelCase<AlertMarketRegionsResponse>(response.data);
+  },
+
   async listRules(query: AlertRuleListQuery = {}): Promise<AlertRuleListResponse> {
     const response = await apiClient.get<Record<string, unknown>>('/api/v1/alerts/rules', {
       params: toRuleListParams(query),

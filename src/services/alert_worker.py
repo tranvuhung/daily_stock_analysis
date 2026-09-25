@@ -38,6 +38,7 @@ from src.services.decision_signal_summary import (
     summarize_decision_signal,
 )
 from src.services.history_service import HistoryService
+from src.services.alert_labels import alert_label, alert_language
 from src.services.market_light_service import normalize_market_alert_region
 
 logger = logging.getLogger(__name__)
@@ -128,6 +129,9 @@ class AlertWorker:
         except Exception as exc:
             logger.warning("[AlertWorker] Failed to load runtime config: %s", exc)
             return stats
+        # Giữ config của lượt chạy để chọn ngôn ngữ thông báo (REPORT_LANGUAGE).
+        # Keep this run's config so notifications follow REPORT_LANGUAGE.
+        self._runtime_config = config
 
         if not getattr(config, "agent_event_monitor_enabled", False):
             logger.debug("[AlertWorker] Event monitor disabled; skipping")
@@ -638,8 +642,15 @@ class AlertWorker:
         from src.notification import NotificationBuilder, NotificationService
 
         notification_service = self.notifier or NotificationService()
-        title = f"Event Alert | {self._display_target(runtime_rule)}"
-        content = result.get("reason") or result.get("message") or runtime_rule.rule.description or "Alert triggered"
+        config = getattr(self, "_runtime_config", None)
+        report_language = str(getattr(config, "report_language", "") or "") or alert_language(config)
+        title = f"{alert_label('title', config=config)} | {self._display_target(runtime_rule)}"
+        content = (
+            result.get("reason")
+            or result.get("message")
+            or runtime_rule.rule.description
+            or alert_label("default_content", config=config)
+        )
         diagnostics = self._diagnostics_payload(result.get("diagnostics"))
         visibility = diagnostics.get("analysis_visibility") if isinstance(diagnostics.get("analysis_visibility"), dict) else None
         if visibility is None:
@@ -648,10 +659,14 @@ class AlertWorker:
             visibility.get("market_phase_summary"),
             visibility.get("analysis_context_pack_overview"),
             source=visibility.get("source"),
+            report_language=report_language,
         )
         if excerpt:
             content = f"{content}\n\n{excerpt}"
-        signal_excerpt = format_decision_signal_excerpt(diagnostics.get("decision_signal_summary"))
+        signal_excerpt = format_decision_signal_excerpt(
+            diagnostics.get("decision_signal_summary"),
+            report_language=report_language,
+        )
         if signal_excerpt:
             content = f"{content}\n\n{signal_excerpt}"
         alert_text = NotificationBuilder.build_simple_alert(title=title, content=content, alert_type="warning")

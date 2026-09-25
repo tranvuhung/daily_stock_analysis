@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import { alertsApi } from '../../api/alerts';
 import { portfolioApi } from '../../api/portfolio';
 import type {
   AlertRuleCreateRequest,
@@ -33,6 +34,8 @@ import { Button, Card, Checkbox, Input, Select } from '../common';
 
 
 const MAX_REQUESTED_DAYS = 365;
+// Thị trường mặc định khi chưa có phản hồi từ server. Default market before the server responds.
+const FALLBACK_MARKET_REGION: MarketRegion = 'vn';
 
 interface AlertRuleFormProps {
   onSubmit: (payload: AlertRuleCreateRequest) => Promise<boolean | void> | boolean | void;
@@ -60,7 +63,11 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
   const [targetScope, setTargetScope] = useState<AlertTargetScope>('single_symbol');
   const [target, setTarget] = useState('');
   const [portfolioTarget, setPortfolioTarget] = useState('all');
-  const [marketRegion, setMarketRegion] = useState<MarketRegion>('cn');
+  const [marketRegion, setMarketRegion] = useState<MarketRegion>(FALLBACK_MARKET_REGION);
+  // null = chưa tải được danh sách từ server → hiện toàn bộ lựa chọn, server vẫn kiểm tra lại.
+  // null = regions not loaded from the server → show all options; the server still validates.
+  const [enabledMarketRegions, setEnabledMarketRegions] = useState<MarketRegion[] | null>(null);
+  const [defaultMarketRegion, setDefaultMarketRegion] = useState<MarketRegion>(FALLBACK_MARKET_REGION);
   const [accounts, setAccounts] = useState<PortfolioAccountItem[]>([]);
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const [alertType, setAlertType] = useState<AlertType>('price_cross');
@@ -104,6 +111,34 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
       cancelled = true;
     };
   }, [targetScope, text.accountLoadFailed]);
+
+  useEffect(() => {
+    if (targetScope !== 'market') return undefined;
+    let cancelled = false;
+    void alertsApi.listMarketRegions()
+      .then((response) => {
+        if (cancelled) return;
+        const regions = response.regions ?? [];
+        const nextDefault = response.default ?? regions[0] ?? FALLBACK_MARKET_REGION;
+        setEnabledMarketRegions(regions);
+        setDefaultMarketRegion(nextDefault);
+        setMarketRegion((current) => (regions.includes(current) ? current : nextDefault));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setEnabledMarketRegions(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [targetScope]);
+
+  const marketRegionOptions = useMemo(() => {
+    const options = ALERT_MARKET_REGION_OPTIONS[language];
+    if (enabledMarketRegions == null) return options;
+    return options.filter((option) => enabledMarketRegions.includes(option.value));
+  }, [enabledMarketRegions, language]);
+  const noMarketRegionEnabled = enabledMarketRegions != null && enabledMarketRegions.length === 0;
 
   const alertTypeOptions = useMemo(() => optionsForScope(targetScope, language), [language, targetScope]);
   const portfolioTargetOptions = useMemo(() => [
@@ -292,7 +327,7 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
     setTargetScope(nextScope);
     setAlertType(nextType);
     setPortfolioTarget('all');
-    setMarketRegion('cn');
+    setMarketRegion(defaultMarketRegion);
     resetParameters(nextType);
     setFormError(null);
   };
@@ -310,6 +345,10 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
     } else if (targetScope === 'watchlist') {
       resolvedTarget = 'default';
     } else if (targetScope === 'market') {
+      if (noMarketRegionEnabled) {
+        setFormError(text.noMarketRegionEnabled);
+        return;
+      }
       resolvedTarget = marketRegion;
     } else {
       resolvedTarget = portfolioTarget;
@@ -332,7 +371,7 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
     setName('');
     setTarget('');
     setPortfolioTarget('all');
-    setMarketRegion('cn');
+    setMarketRegion(defaultMarketRegion);
     setPrice('');
     setChangePct('');
     setMultiplier('');
@@ -374,13 +413,16 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
     }
     if (targetScope === 'market') {
       return (
-        <Select
-          label={text.marketRegion}
-          value={marketRegion}
-          options={ALERT_MARKET_REGION_OPTIONS[language]}
-          disabled={isSubmitting}
-          onChange={(value) => setMarketRegion(value as MarketRegion)}
-        />
+        <div className="space-y-2">
+          <Select
+            label={text.marketRegion}
+            value={noMarketRegionEnabled ? '' : marketRegion}
+            options={marketRegionOptions}
+            disabled={isSubmitting || noMarketRegionEnabled}
+            onChange={(value) => setMarketRegion(value as MarketRegion)}
+          />
+          {noMarketRegionEnabled ? <p role="alert" className="text-xs text-warning">{text.noMarketRegionEnabled}</p> : null}
+        </div>
       );
     }
     return (

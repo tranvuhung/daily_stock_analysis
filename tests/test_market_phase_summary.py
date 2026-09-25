@@ -231,3 +231,47 @@ def test_format_public_market_status_line_returns_empty_without_valid_phase() ->
         )
         == ""
     )
+
+
+def _alert_excerpt_inputs() -> tuple[dict, dict]:
+    # Tái hiện tin cảnh báo NLG thực tế: phase unknown, thị trường vn, nguồn "analysis_history_snapshot".
+    return (
+        {"phase": "unknown", "market": "vn", "trigger_source": "alert"},
+        {"data_quality": {"level": "usable", "limitations": ["quote: fallback", "technical: partial"]}},
+    )
+
+
+def test_format_public_phase_pack_excerpt_vietnamese_has_no_chinese() -> None:
+    phase, pack = _alert_excerpt_inputs()
+    excerpt = format_public_phase_pack_excerpt(
+        phase, pack, source="analysis_history_snapshot", report_language="vi"
+    )
+
+    assert excerpt == (
+        "- giai đoạn: unknown | thị trường: vn | nguồn kích hoạt: alert"
+        " | nguồn tóm tắt: snapshot phân tích gần nhất\n"
+        "- chất lượng dữ liệu: usable\n"
+        "- hạn chế: quote: fallback\n"
+        "- hạn chế: technical: partial"
+    )
+    assert not any("一" <= ch <= "鿿" for ch in excerpt)
+
+
+def test_format_public_phase_pack_excerpt_english_labels() -> None:
+    phase, pack = _alert_excerpt_inputs()
+    excerpt = format_public_phase_pack_excerpt(
+        {**phase, "is_partial_bar": True}, pack, source="analysis_history_snapshot", report_language="en"
+    )
+
+    assert "- phase: unknown | market: vn | trigger: alert | source: recent analysis snapshot" in excerpt
+    assert "- partial-bar warning: intraday data may be incomplete" in excerpt
+    assert "- data quality: usable" in excerpt
+    assert "- limitation: quote: fallback" in excerpt
+    assert not any("一" <= ch <= "鿿" for ch in excerpt)
+
+
+def test_format_public_market_status_line_vietnamese() -> None:
+    assert (
+        format_public_market_status_line({"market": "vn", "phase": "intraday"}, report_language="vi")
+        == "Trạng thái thị trường: Việt Nam · Trong phiên"
+    )

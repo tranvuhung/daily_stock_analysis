@@ -4,13 +4,20 @@ import { UiLanguageProvider } from '../../../contexts/UiLanguageContext';
 import { UI_LANGUAGE_STORAGE_KEY } from '../../../utils/uiLanguage';
 import { AlertRuleForm } from '../AlertRuleForm';
 
-const { getAccounts } = vi.hoisted(() => ({
+const { getAccounts, listMarketRegions } = vi.hoisted(() => ({
   getAccounts: vi.fn(),
+  listMarketRegions: vi.fn(),
 }));
 
 vi.mock('../../../api/portfolio', () => ({
   portfolioApi: {
     getAccounts,
+  },
+}));
+
+vi.mock('../../../api/alerts', () => ({
+  alertsApi: {
+    listMarketRegions,
   },
 }));
 
@@ -23,6 +30,8 @@ describe('AlertRuleForm', () => {
     getAccounts.mockReset();
     window.localStorage.clear();
     getAccounts.mockResolvedValue({ accounts: [{ id: 9, name: 'Main', market: 'us', baseCurrency: 'USD', isActive: true }] });
+    listMarketRegions.mockReset();
+    listMarketRegions.mockResolvedValue({ regions: ['vn', 'cn', 'hk', 'us'], default: 'vn' });
   });
 
   function renderEnglishForm() {
@@ -234,22 +243,54 @@ describe('AlertRuleForm', () => {
     expect(screen.queryByText('Portfolio drawdown')).not.toBeInTheDocument();
   });
 
-  it('shows JP/KR options for market region in Chinese UI mode', () => {
+  it('defaults market region to Vietnam and only lists regions enabled on the server', async () => {
+    listMarketRegions.mockResolvedValue({ regions: ['vn', 'us'], default: 'vn' });
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
     fireEvent.change(screen.getByLabelText('Target scope'), { target: { value: 'market' } });
 
-    expect(screen.getByRole('option', { name: 'A-shares (cn)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Hong Kong (hk)' })).toBeInTheDocument();
+    await waitFor(() => expect(listMarketRegions).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole('option', { name: 'A-shares (cn)' })).not.toBeInTheDocument());
+    expect(screen.getByRole('option', { name: 'Vietnam (vn)' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'US (us)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: '日股（jp）' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: '韩股（kr）' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Hong Kong (hk)' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Market region')).toHaveValue('vn');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ targetScope: 'market', target: 'vn' }));
+    });
+  });
+
+  it('blocks market rules when no alert market is enabled', async () => {
+    listMarketRegions.mockResolvedValue({ regions: [], default: null });
+    render(<AlertRuleForm onSubmit={onSubmit} />);
+
+    fireEvent.change(screen.getByLabelText('Target scope'), { target: { value: 'market' } });
+
+    expect(await screen.findByText(/No market with alert support is enabled/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('falls back to all market regions when the region list fails to load', async () => {
+    listMarketRegions.mockRejectedValue(new Error('offline'));
+    render(<AlertRuleForm onSubmit={onSubmit} />);
+
+    fireEvent.change(screen.getByLabelText('Target scope'), { target: { value: 'market' } });
+
+    await waitFor(() => expect(listMarketRegions).toHaveBeenCalled());
+    expect(screen.getByRole('option', { name: 'Vietnam (vn)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'A-shares (cn)' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Market region')).toHaveValue('vn');
   });
 
   it('submits a market light status rule payload', async () => {
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
     fireEvent.change(screen.getByLabelText('Target scope'), { target: { value: 'market' } });
+    await waitFor(() => expect(listMarketRegions).toHaveBeenCalled());
+    expect(screen.getByRole('option', { name: 'Vietnam (vn)' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'A-shares (cn)' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Hong Kong (hk)' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'US (us)' })).toBeInTheDocument();
