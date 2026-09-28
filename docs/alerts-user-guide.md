@@ -92,6 +92,12 @@ Lưu ý cho phạm vi **Thị trường**:
 - Muốn cảnh báo cho Trung Quốc (A), Hồng Kông hoặc Mỹ, hãy thêm `cn` / `hk` / `us` vào `SUPPORTED_MARKETS`, ví dụ `vn,us`.
 - Nếu không có thị trường nào hỗ trợ được bật, form hiện thông báo *"Chưa bật thị trường nào hỗ trợ cảnh báo…"* và không cho tạo quy tắc.
 
+Ô **Mã** của phạm vi Một mã có **gợi ý tự động**:
+
+- Gõ mã (`HPG`), tên có dấu (`Hòa Phát`) hoặc tên không dấu (`hoaphat`), rồi dùng phím ↑/↓ và Enter, hoặc bấm chuột, để chọn.
+- Chọn một gợi ý sẽ điền mã vào ô. Nhấn Enter khi không chọn gợi ý nào sẽ tạo quy tắc như bình thường.
+- Nếu không tải được danh sách mã, ô này trở thành ô nhập tay bình thường.
+
 Lưu ý về mã VN: khi bật đồng thời `vn` và `us`, mã 3 ký tự như `HPG` có thể bị hiểu là mã Mỹ. Khi đó hãy nhập `HPG.VN`.
 
 ### 4.3 Loại quy tắc và tham số

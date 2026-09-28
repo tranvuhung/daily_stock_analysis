@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [改进] Ô **Mã** trong form "Tạo quy tắc cảnh báo" (phạm vi Một mã) có gợi ý tự động theo mã, tên có dấu và tên không dấu. Dùng lại `StockAutocomplete` và `stocks.index.json` đã có (gồm mã VN). Nếu không tải được index thì trở về ô nhập thường. Thêm test `AlertRuleFormAutocomplete.test.tsx`.
 - [修复] Tin nhắn cảnh báo (Alert Center) bị lẫn tiếng Trung, ví dụ `阶段：unknown | 市场：vn | 触发来源：alert | 摘要来源：最近分析快照`, `数据质量`, `限制`. Nguyên nhân: `AlertWorker` không truyền `REPORT_LANGUAGE` vào `format_public_phase_pack_excerpt` / `format_decision_signal_excerpt`, nên hai hàm này rơi về mặc định `zh`. Ngoài ra, nhánh `vi` vẫn in `数据质量`/`限制` vì điều kiện chỉ xét `en`. Cách sửa:
   - Worker truyền `REPORT_LANGUAGE`.
   - Trích đoạn phase/pack có nhãn tiếng Việt (`giai đoạn`, `thị trường`, `nguồn kích hoạt`, `nguồn tóm tắt`, `chất lượng dữ liệu`, `hạn chế`) và tiếng Anh. Dòng trạng thái thị trường có nhãn giai đoạn/thị trường tiếng Việt.

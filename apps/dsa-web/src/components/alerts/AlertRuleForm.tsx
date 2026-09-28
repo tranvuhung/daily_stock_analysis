@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { alertsApi } from '../../api/alerts';
 import { portfolioApi } from '../../api/portfolio';
 import type {
@@ -31,6 +31,7 @@ import {
 } from '../../locales/featureText';
 import { validateStockCode } from '../../utils/validation';
 import { Button, Card, Checkbox, Input, Select } from '../common';
+import { StockAutocomplete } from '../StockAutocomplete';
 
 
 const MAX_REQUESTED_DAYS = 365;
@@ -92,6 +93,7 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
   const [marketLightStatuses, setMarketLightStatuses] = useState<MarketLightStatus[]>(['red', 'yellow']);
   const [minDrop, setMinDrop] = useState('10');
   const [formError, setFormError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (!isPortfolioScope(targetScope)) return undefined;
@@ -392,13 +394,22 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
   const renderTargetControl = () => {
     if (targetScope === 'single_symbol') {
       return (
-        <Input
-          label={text.targetCode}
-          value={target}
-          onChange={(event) => setTarget(event.target.value)}
-          placeholder="600519 / AAPL / hk00700"
-          disabled={isSubmitting}
-        />
+        <div className="flex flex-col">
+          <span className="mb-2 text-sm font-medium text-foreground">{text.targetCode}</span>
+          {/* Gợi ý mã theo mã / tên / tên không dấu từ stocks.index.json; chọn gợi ý sẽ điền mã hiển thị.
+              Code suggestions by code / name / unaccented name; picking one fills the display code. */}
+          <StockAutocomplete
+            value={target}
+            onChange={setTarget}
+            onSubmit={(_code, _name, source) => {
+              // Enter không chọn gợi ý thì gửi form như ô nhập thường. Enter without a suggestion submits the form.
+              if (source !== 'autocomplete') formRef.current?.requestSubmit();
+            }}
+            placeholder={text.targetCodePlaceholder}
+            ariaLabel={text.targetCode}
+            disabled={isSubmitting}
+          />
+        </div>
       );
     }
     if (targetScope === 'watchlist') {
@@ -441,7 +452,7 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
 
   return (
     <Card title={text.cardTitle} subtitle={text.cardSubtitle} variant="bordered" padding="md">
-      <form className="space-y-4" noValidate onSubmit={(event) => void handleSubmit(event)}>
+      <form ref={formRef} className="space-y-4" noValidate onSubmit={(event) => void handleSubmit(event)}>
         <div className="grid gap-4 md:grid-cols-2">
           <Input
             label={text.ruleName}
