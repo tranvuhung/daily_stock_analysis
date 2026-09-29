@@ -7,7 +7,7 @@
 当前运行时告警由 `src/services/alert_worker.py` 中的后台 worker 统一调度，底层规则评估复用 `src/services/alert_service.py` 与 `src/agent/events.py` 中的 EventMonitor 规则模型。
 
 - 配置入口：`AGENT_EVENT_MONITOR_ENABLED`、`AGENT_EVENT_MONITOR_INTERVAL_MINUTES`、`AGENT_EVENT_ALERT_RULES_JSON`。
-- 运行入口：`main.py` 在 schedule 模式中注册 `agent_event_monitor` 后台任务；后台 worker 每轮读取持久化 active rules，并继续兼容 legacy `AGENT_EVENT_ALERT_RULES_JSON`。
+- 运行入口：`main.py` 在 schedule 模式中注册 `agent_event_monitor` 后台任务（Web/API 进程中由 runtime scheduler 注册；未开启 `SCHEDULE_ENABLED` 时也以“仅后台任务”模式运行）；后台 worker 每轮读取持久化 active rules，并继续兼容 legacy `AGENT_EVENT_ALERT_RULES_JSON`。
 - 通知投递：触发后复用 `NotificationService.send(..., route_type="alert")`，继续遵守通知网关的 alert 路由配置。
 - Web/System 配置校验：`src/services/system_config_service.py` 会对 `AGENT_EVENT_ALERT_RULES_JSON` 做 JSON 与规则语义校验。
 
@@ -405,7 +405,7 @@ scope/type 校验是双向约束：`target_scope=market` 只能使用两类 Mark
 
 ## Cảnh báo realtime theo tick (feed MQTT TVSI)
 
-Mục này mô tả engine cảnh báo realtime dùng feed giá push của TVSI. Engine chạy song song với worker định kỳ (P2) và không thay đổi contract của các rule hiện có.
+Mục này mô tả engine cảnh báo realtime dùng feed giá push của TVSI. Engine chạy song song với worker định kỳ (P2) và không thay đổi contract của các rule hiện có. Sơ đồ tổng thể toàn bộ Alert Center nằm ở [alerts-mechanism.md](alerts-mechanism.md).
 
 ### Bật và cấu hình
 
@@ -480,11 +480,11 @@ Worker định kỳ cũng hỗ trợ `cross`. Giá lần trước được lưu 
 
 ## P8 用户配置与部署边界
 
-P8 不新增规则类型、API、表结构或 worker 行为；它把 P0-P7 已合并能力整理成面向用户和部署者的配置说明。告警 worker 只在 schedule 模式注册，核心开关仍是 `AGENT_EVENT_MONITOR_ENABLED`，轮询间隔仍是 `AGENT_EVENT_MONITOR_INTERVAL_MINUTES`。通知渠道继续走 alert 路由，详见 [通知配置](notifications.md) 中的 `NOTIFICATION_ALERT_CHANNELS` 与 `route_type=alert`。
+P8 不新增规则类型、API、表结构或 worker 行为；它把 P0-P7 已合并能力整理成面向用户和部署者的配置说明。告警 worker 在 schedule 模式注册；Web/API 进程（`--serve`）即使未开启 `SCHEDULE_ENABLED`，runtime scheduler 也会以“仅后台任务”模式运行 worker（不注册每日分析）。核心开关仍是 `AGENT_EVENT_MONITOR_ENABLED`，轮询间隔仍是 `AGENT_EVENT_MONITOR_INTERVAL_MINUTES`。通知渠道继续走 alert 路由，详见 [通知配置](notifications.md) 中的 `NOTIFICATION_ALERT_CHANNELS` 与 `route_type=alert`。
 
 ### 本地配置
 
-本地运行 `python main.py --schedule`、`python main.py --serve --schedule` 或等价内置调度模式时，设置 `AGENT_EVENT_MONITOR_ENABLED=true` 后会启动后台告警 worker；`AGENT_EVENT_MONITOR_INTERVAL_MINUTES` 控制轮询间隔。
+本地运行 `python main.py --schedule`、`python main.py --serve --schedule`、`python main.py --serve`（无需开启 `SCHEDULE_ENABLED`）或等价内置调度模式时，设置 `AGENT_EVENT_MONITOR_ENABLED=true` 后会启动后台告警 worker（在 Web 设置中修改该开关后需重启服务才生效）；`AGENT_EVENT_MONITOR_INTERVAL_MINUTES` 控制轮询间隔。
 
 规则来源有两类：
 

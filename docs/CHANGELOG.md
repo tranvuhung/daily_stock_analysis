@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] Dropdown loại quy tắc, phạm vi và mức độ trong form/bộ lọc Cảnh báo hiện nhãn tiếng Anh ở giao diện tiếng Việt (`featureText.ts` dùng nhầm `ALERT_TYPE_LABELS.en` cho cả `vi`). Nay mỗi ngôn ngữ dùng nhãn của chính nó.
+- [新功能] Trang Cảnh báo có nút **Sửa**: nạp quy tắc vào form, lưu bằng `PATCH /api/v1/alerts/rules/{id}` (`alertsApi.updateRule`). Khi ngưỡng, loại hoặc đối tượng thay đổi, backend xoá cooldown của quy tắc (`AlertRepository.clear_cooldowns`); đổi tên / mức độ / bật tắt thì giữ cooldown.
+- [修复] Chạy `python main.py --serve` khi `SCHEDULE_ENABLED` tắt thì worker cảnh báo định kỳ không chạy, dù `AGENT_EVENT_MONITOR_ENABLED=true`. `RuntimeSchedulerService` nay chạy chế độ chỉ background task (không đăng ký phân tích hằng ngày; `status().enabled` vẫn phản ánh lịch phân tích).
+- [文档] Thêm `docs/alerts-mechanism.md`: kiến trúc và luồng hoạt động của Alert Center (rule, worker, realtime, thông báo, API, Web, cấu hình, điểm hở); liên kết từ `INDEX.md`, `INDEX_EN.md`, `alerts.md`, `alerts-user-guide.md`.
 - [新功能] Cảnh báo realtime theo tick cho mã Việt Nam qua feed MQTT của TVSI (mặc định tắt, bật bằng `REALTIME_FEED_ENABLED` + `TVSI_MQTT_*`):
   - `TvsiMqttFeed` kết nối MQTT thuần trên TLS cổng 443, tự reconnect, và chỉ subscribe `topic/<MÃ>` của các mã có rule (chặn wildcard).
   - `RealtimeAlertEngine` đánh giá rule giá ngay khi nhận tick, chỉ trong phiên khớp lệnh VN.

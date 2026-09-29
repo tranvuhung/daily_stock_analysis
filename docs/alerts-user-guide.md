@@ -1,6 +1,6 @@
 # Hướng dẫn sử dụng Cảnh báo (Alerts) trên Web
 
-Tài liệu này dành cho **người dùng Web UI**. Nó hướng dẫn bật tính năng cảnh báo, tạo và quản lý quy tắc, và cách đọc lịch sử kích hoạt. Hợp đồng API, schema, worker và rollback nằm ở tài liệu kỹ thuật [alerts.md](alerts.md).
+Tài liệu này dành cho **người dùng Web UI**. Nó hướng dẫn bật tính năng cảnh báo, tạo và quản lý quy tắc, và cách đọc lịch sử kích hoạt. Hợp đồng API, schema, worker và rollback nằm ở tài liệu kỹ thuật [alerts.md](alerts.md). Kiến trúc và luồng tổng thể xem [alerts-mechanism.md](alerts-mechanism.md).
 
 ## 1. Cảnh báo hoạt động thế nào
 
@@ -44,7 +44,7 @@ Vào **Cài đặt** và kiểm tra các mục sau:
 
 | Nhóm cài đặt | Khoá | Giá trị cần đặt | Ý nghĩa |
 | --- | --- | --- | --- |
-| Hệ thống | `SCHEDULE_ENABLED` (Schedule Enabled) | Bật | Tiến trình nền chỉ chạy khi chế độ lập lịch đang bật. Nếu chạy bằng dòng lệnh thì dùng `python main.py --schedule`. |
+| Hệ thống | `SCHEDULE_ENABLED` (Schedule Enabled) | Tuỳ chọn | Chỉ cần cho **phân tích hằng ngày**. Chạy Web (`python main.py --serve`) thì tiến trình cảnh báo vẫn chạy khi lịch tắt. Chạy dòng lệnh không có Web thì dùng `python main.py --schedule`. |
 | Agent | `AGENT_EVENT_MONITOR_ENABLED` (Event Monitor) | Bật | Công tắc chính của cảnh báo. Mặc định **tắt**. |
 | Agent | `AGENT_EVENT_MONITOR_INTERVAL_MINUTES` | Ví dụ `5` | Chu kỳ kiểm tra, tính bằng phút. Tối thiểu 1. |
 | Thông báo | Các kênh (Telegram, Email, Discord, Slack, Webhook…) | Cấu hình ít nhất một kênh | Nơi nhận cảnh báo. |
@@ -53,7 +53,7 @@ Vào **Cài đặt** và kiểm tra các mục sau:
 | Hệ thống | `TRADING_DAY_CHECK_ENABLED` | Bật (khuyến nghị) | Bỏ qua cảnh báo thị trường vào ngày nghỉ (với VN là thứ 7 và CN). |
 | Nguồn dữ liệu | `REALTIME_FEED_ENABLED` + `TVSI_MQTT_*` | Tuỳ chọn | Bật giá realtime qua MQTT của TVSI. Xem mục 10. |
 
-> Nếu chưa bật `AGENT_EVENT_MONITOR_ENABLED` hoặc chế độ lập lịch, bạn vẫn tạo được quy tắc và bấm **Kiểm thử** được. Nhưng sẽ **không có cảnh báo tự động** nào được gửi.
+> Nếu chưa bật `AGENT_EVENT_MONITOR_ENABLED`, bạn vẫn tạo được quy tắc và bấm **Kiểm thử** được. Nhưng sẽ **không có cảnh báo tự động** nào được gửi. Đổi công tắc này trong Cài đặt cần **khởi động lại dịch vụ**.
 
 ## 3. Bố cục trang Cảnh báo
 
@@ -179,7 +179,10 @@ Trong bảng **Quy tắc cảnh báo**:
   Với phạm vi nhiều mã (danh mục theo dõi, đang nắm giữ), kết quả liệt kê tối đa 20 mã.
 - **Tắt / Bật**: tạm dừng hoặc chạy lại quy tắc.
 - **Xoá**: có hộp thoại xác nhận. Lịch sử kích hoạt cũ vẫn được giữ.
-- **Sửa quy tắc**: Web **chưa có** màn sửa. Muốn đổi tham số thì xoá quy tắc và tạo lại.
+- **Sửa**: nạp quy tắc vào form bên trái (tiêu đề đổi thành *Sửa quy tắc cảnh báo*). Chỉnh rồi bấm **Lưu thay đổi**, hoặc **Huỷ sửa** để quay về form tạo mới.
+  - Đổi **ngưỡng, loại quy tắc hoặc đối tượng** sẽ xoá thời gian chờ hiện tại, nên quy tắc mới có thể báo ngay.
+  - Chỉ đổi tên, mức độ hoặc bật/tắt thì giữ nguyên thời gian chờ.
+  - Lịch sử kích hoạt cũ vẫn giữ và vẫn gắn với quy tắc.
 
 Quy tắc **Thị trường** cho một thị trường đã bị tắt trong `SUPPORTED_MARKETS` vẫn hiện trong danh sách:
 
@@ -226,7 +229,7 @@ Mỗi dòng là một lần gửi tới một kênh. Các "kênh" đặc biệt:
 
 | Hiện tượng | Nguyên nhân thường gặp | Cách xử lý |
 | --- | --- | --- |
-| Kiểm thử báo `triggered` nhưng không nhận được tin | Chưa bật `AGENT_EVENT_MONITOR_ENABLED`, hoặc chưa bật chế độ lập lịch | Bật cả hai (mục 2) và chờ một chu kỳ. |
+| Kiểm thử báo `triggered` nhưng không nhận được tin | Chưa bật `AGENT_EVENT_MONITOR_ENABLED`, hoặc bật rồi nhưng chưa khởi động lại dịch vụ | Bật (mục 2), khởi động lại và chờ một chu kỳ. |
 | Không nhận tin dù lịch sử có `Triggered` | Kênh thông báo lỗi, bị chặn chống nhiễu, hoặc đang trong thời gian chờ | Xem bảng Notification attempts. Kiểm tra `NOTIFICATION_ALERT_CHANNELS` và các kênh. |
 | Dropdown Thị trường chỉ có Việt Nam | `SUPPORTED_MARKETS=vn` (mặc định) | Thêm thị trường cần dùng, ví dụ `vn,us`. |
 | Quy tắc thị trường luôn `Skipped` | Ngày nghỉ, thị trường chưa bật, hoặc chưa có phiên trước (với "điểm giảm") | Đọc cột Reason. Chạy **Điểm lại thị trường** ít nhất một lần. |
@@ -242,7 +245,7 @@ Mỗi dòng là một lần gửi tới một kênh. Các "kênh" đặc biệt:
 - Ngày lễ VN chưa được loại trừ khỏi phiên giao dịch.
 - Chưa có cảnh báo theo tin tức hoặc tâm lý thị trường.
 - Mức cắt lỗ và chốt lời do AI đề xuất trong báo cáo **không** tự động thành quy tắc. Bạn cần tạo quy tắc thủ công.
-- Web chưa có màn sửa quy tắc, và chưa có ô chỉnh thời gian chờ hay chính sách thông báo.
+- Web chưa có ô chỉnh thời gian chờ hay chính sách thông báo.
 - Một số nhãn trên trang (lịch sử kích hoạt, notification attempts) vẫn hiển thị tiếng Anh.
 
 ## 10. Cảnh báo realtime theo giá MQTT (mã Việt Nam)

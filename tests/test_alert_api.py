@@ -178,6 +178,44 @@ class AlertApiTestCase(unittest.TestCase):
         self.assertEqual(detail_resp.status_code, 200, detail_resp.text)
         self.assertFalse(detail_resp.json()["cooldown_active"])
 
+    def test_rule_update_resets_cooldown_only_when_condition_changes(self) -> None:
+        created = self._create_rule()
+        repo = AlertRepository(self.db)
+
+        def _cool_down() -> None:
+            now_dt = datetime.now()
+            repo.upsert_cooldown(
+                rule_id=created["id"],
+                rule_key=None,
+                target="600519",
+                severity="warning",
+                last_triggered_at=now_dt,
+                cooldown_until=now_dt + timedelta(hours=24),
+            )
+
+        _cool_down()
+        # Đổi tên / bật tắt: giữ cooldown. Cosmetic edits keep the cooldown.
+        renamed = self.client.patch(f"/api/v1/alerts/rules/{created['id']}", json={"name": "renamed", "enabled": True})
+        self.assertEqual(renamed.status_code, 200, renamed.text)
+        self.assertTrue(renamed.json()["cooldown_active"])
+
+        # Gửi lại đúng tham số cũ (form gửi đủ trường) cũng không xoá cooldown.
+        same = self.client.patch(
+            f"/api/v1/alerts/rules/{created['id']}",
+            json={"parameters": created["parameters"], "target": created["target"], "alert_type": created["alert_type"]},
+        )
+        self.assertEqual(same.status_code, 200, same.text)
+        self.assertTrue(same.json()["cooldown_active"])
+
+        # Đổi ngưỡng: xoá cooldown để rule mới báo được ngay. A new threshold clears it.
+        changed = self.client.patch(
+            f"/api/v1/alerts/rules/{created['id']}",
+            json={"parameters": {**created["parameters"], "price": 1900}},
+        )
+        self.assertEqual(changed.status_code, 200, changed.text)
+        self.assertFalse(changed.json()["cooldown_active"])
+        self.assertIsNone(repo.get_active_cooldown(rule_id=created["id"], target="600519", severity="warning"))
+
     def test_rule_update_rejects_empty_payload(self) -> None:
         rule = self._create_rule()
 

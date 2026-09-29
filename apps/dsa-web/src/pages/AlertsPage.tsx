@@ -23,6 +23,9 @@ import type {
 } from '../types/alerts';
 import { formatDateTime } from '../utils/format';
 import { useAlertStore } from '../stores/alertStore';
+import { useUiLanguage } from '../contexts/UiLanguageContext';
+import { formatUiText } from '../i18n/uiText';
+import { ALERT_FORM_TEXT } from '../locales/featureText';
 
 const PAGE_SIZE = 20;
 
@@ -121,6 +124,9 @@ const AlertsPage: React.FC = () => {
   const [notificationsError, setNotificationsError] = useState<ParsedApiError | null>(null);
 
   const [createLoading, setCreateLoading] = useState(false);
+  const [editingRule, setEditingRule] = useState<AlertRuleItem | null>(null);
+  const { language } = useUiLanguage();
+  const formText = ALERT_FORM_TEXT[language];
   const [createError, setCreateError] = useState<ParsedApiError | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
   const [busyRule, setBusyRule] = useState<AlertRuleBusyState | null>(null);
@@ -235,6 +241,14 @@ const AlertsPage: React.FC = () => {
     setCreateError(null);
     setCreateSuccess(null);
     try {
+      if (editingRule) {
+        // Sửa rule: PATCH rồi thoát chế độ sửa, giữ trang hiện tại. Update, then leave edit mode.
+        const updated = await alertsApi.updateRule(editingRule.id, payload);
+        setCreateSuccess(formatUiText(formText.updated, { name: updated.name }));
+        setEditingRule(null);
+        await loadRules();
+        return true;
+      }
       const created = await alertsApi.createRule(payload);
       setCreateSuccess(`Alert rule "${created.name}" created`);
       await loadRules(1);
@@ -267,6 +281,7 @@ const AlertsPage: React.FC = () => {
     setBusyRule({ id: rule.id, action: 'delete' });
     try {
       await alertsApi.deleteRule(rule.id);
+      if (editingRule?.id === rule.id) setEditingRule(null);
       await loadRules();
     } catch (error) {
       setRulesError(getParsedApiError(error));
@@ -312,7 +327,15 @@ const AlertsPage: React.FC = () => {
       {rulesError ? <ApiErrorAlert error={rulesError} onDismiss={() => setRulesError(null)} /> : null}
 
       <div className="grid items-stretch gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-        <AlertRuleForm onSubmit={handleCreateRule} isSubmitting={createLoading} />
+        <AlertRuleForm
+          onSubmit={handleCreateRule}
+          isSubmitting={createLoading}
+          editingRule={editingRule}
+          onCancelEdit={() => {
+            setEditingRule(null);
+            setCreateError(null);
+          }}
+        />
         <div className="flex h-full min-h-0 flex-col gap-4">
           <AlertRuleList
             className="flex h-full min-h-0 flex-col"
@@ -335,6 +358,12 @@ const AlertsPage: React.FC = () => {
             onToggleEnabled={(rule) => void handleToggleEnabled(rule)}
             onDelete={(rule) => void handleDeleteRule(rule)}
             onTest={(rule) => void handleTestRule(rule)}
+            onEdit={(rule) => {
+              setEditingRule(rule);
+              setCreateError(null);
+              setCreateSuccess(null);
+            }}
+            editingRuleId={editingRule?.id ?? null}
             busyRule={busyRule}
           />
           {testResult ? (

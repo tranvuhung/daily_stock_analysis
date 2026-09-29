@@ -121,6 +121,16 @@ export const alertsApi = {
     return toCamelCase<AlertRuleItem>(response.data);
   },
 
+  // Sửa rule: gửi đầy đủ các trường của form (parameters được thay nguyên khối).
+  // Update a rule; the form sends every field and parameters are replaced as a whole.
+  async updateRule(ruleId: number, payload: AlertRuleCreateRequest): Promise<AlertRuleItem> {
+    const response = await apiClient.patch<Record<string, unknown>>(
+      `/api/v1/alerts/rules/${ruleId}`,
+      toSnakeRulePayload(payload),
+    );
+    return toCamelCase<AlertRuleItem>(response.data);
+  },
+
   async deleteRule(ruleId: number): Promise<AlertDeleteResponse> {
     const response = await apiClient.delete<Record<string, unknown>>(`/api/v1/alerts/rules/${ruleId}`);
     return toCamelCase<AlertDeleteResponse>(response.data);

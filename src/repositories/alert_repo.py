@@ -244,6 +244,13 @@ class AlertRepository:
             session.refresh(row)
             return row
 
+    def clear_cooldowns(self, *, rule_id: int) -> int:
+        """Xoá mọi cooldown của rule (dùng khi điều kiện rule thay đổi)."""
+        with self.db.get_session() as session:
+            result = session.execute(delete(AlertCooldownRecord).where(AlertCooldownRecord.rule_id == rule_id))
+            session.commit()
+            return int(result.rowcount or 0)
+
     def get_rule_cooldown_summary(
         self,
         *,

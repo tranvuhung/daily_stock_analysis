@@ -4,6 +4,7 @@ import { alertsApi } from '../../api/alerts';
 import { portfolioApi } from '../../api/portfolio';
 import type {
   AlertRuleCreateRequest,
+  AlertRuleItem,
   AlertSeverity,
   AlertTargetScope,
   AlertType,
@@ -46,7 +47,14 @@ const FALLBACK_MARKET_REGION: MarketRegion = 'vn';
 interface AlertRuleFormProps {
   onSubmit: (payload: AlertRuleCreateRequest) => Promise<boolean | void> | boolean | void;
   isSubmitting?: boolean;
+  /** Rule đang sửa; `null` là chế độ tạo mới. Rule being edited; `null` means create mode. */
+  editingRule?: AlertRuleItem | null;
+  onCancelEdit?: () => void;
 }
+
+const numberText = (value: number | undefined | null, fallback = ''): string => (
+  value === undefined || value === null ? fallback : String(value)
+);
 
 function isPortfolioScope(scope: AlertTargetScope): boolean {
   return scope === 'portfolio_holdings' || scope === 'portfolio_account';
@@ -62,7 +70,12 @@ function optionsForScope(scope: AlertTargetScope, language: UiLanguage) {
   return scope === 'portfolio_account' ? ALERT_PORTFOLIO_TYPE_OPTIONS[language] : ALERT_SYMBOL_TYPE_OPTIONS[language];
 }
 
-export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmitting = false }) => {
+export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({
+  onSubmit,
+  isSubmitting = false,
+  editingRule = null,
+  onCancelEdit,
+}) => {
   const { language } = useUiLanguage();
   const text = ALERT_FORM_TEXT[language];
   const realtimeText = ALERT_REALTIME_TEXT[language];
@@ -103,6 +116,7 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
   const [minDrop, setMinDrop] = useState('10');
   const [formError, setFormError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const isEditing = editingRule != null;
 
   useEffect(() => {
     if (!isPortfolioScope(targetScope)) return undefined;
@@ -347,6 +361,107 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
     return {};
   };
 
+  // Đưa các trường về mặc định (giữ phạm vi / loại hiện tại). Reset fields, keeping scope and type.
+  const resetFields = (keepType: AlertType) => {
+    setName('');
+    setTarget('');
+    setPortfolioTarget('all');
+    setMarketRegion(defaultMarketRegion);
+    setPrice('');
+    setChangePct('');
+    setMultiplier('');
+    setWindow('20');
+    setPeriod('12');
+    setThreshold('');
+    setFastPeriod('12');
+    setSlowPeriod('26');
+    setSignalPeriod('9');
+    setKPeriod('3');
+    setDPeriod('3');
+    setMarketLightStatuses(['red', 'yellow']);
+    setMinDrop('10');
+    resetParameters(keepType);
+    setEnabled(true);
+  };
+
+  // Nạp rule vào form khi bắt đầu sửa; thoát chế độ sửa thì về form tạo mới.
+  // Load the rule into the form when editing starts; leaving edit mode restores the create form.
+  const editingRuleId = editingRule?.id ?? null;
+  useEffect(() => {
+    setFormError(null);
+    if (editingRule == null) {
+      setTargetScope('single_symbol');
+      setAlertType('price_cross');
+      setSeverity('warning');
+      resetFields('price_cross');
+      return;
+    }
+    const rule = editingRule;
+    const params = rule.parameters ?? {};
+    resetParameters(rule.alertType);
+    setName(rule.name ?? '');
+    setTargetScope(rule.targetScope);
+    setAlertType(rule.alertType);
+    setSeverity(rule.severity);
+    setEnabled(rule.enabled);
+    setTarget(rule.targetScope === 'single_symbol' ? rule.target : '');
+    setPortfolioTarget(isPortfolioScope(rule.targetScope) ? rule.target : 'all');
+    if (rule.targetScope === 'market') setMarketRegion(rule.target as MarketRegion);
+    switch (rule.alertType) {
+      case 'price_cross':
+        setPriceDirection(params.direction === 'below' ? 'below' : 'above');
+        setPrice(numberText(params.price));
+        setTriggerMode(params.triggerMode === 'cross' ? 'cross' : 'level');
+        break;
+      case 'price_limit_touch':
+        setLimitSide(params.side ?? 'both');
+        setNearPct(numberText(params.nearPct, '0'));
+        break;
+      case 'price_change_percent':
+        setChangeDirection(params.direction === 'down' ? 'down' : 'up');
+        setChangePct(numberText(params.changePct));
+        break;
+      case 'volume_spike':
+        setMultiplier(numberText(params.multiplier));
+        break;
+      case 'ma_price_cross':
+        setThresholdDirection(params.direction === 'below' ? 'below' : 'above');
+        setWindow(numberText(params.window, '20'));
+        break;
+      case 'rsi_threshold':
+      case 'cci_threshold':
+        setThresholdDirection(params.direction === 'below' ? 'below' : 'above');
+        setPeriod(numberText(params.period, rule.alertType === 'rsi_threshold' ? '12' : '14'));
+        setThreshold(numberText(params.threshold));
+        break;
+      case 'macd_cross':
+        setCrossDirection(params.direction === 'bearish_cross' ? 'bearish_cross' : 'bullish_cross');
+        setFastPeriod(numberText(params.fastPeriod, '12'));
+        setSlowPeriod(numberText(params.slowPeriod, '26'));
+        setSignalPeriod(numberText(params.signalPeriod, '9'));
+        break;
+      case 'kdj_cross':
+        setCrossDirection(params.direction === 'bearish_cross' ? 'bearish_cross' : 'bullish_cross');
+        setPeriod(numberText(params.period, '9'));
+        setKPeriod(numberText(params.kPeriod, '3'));
+        setDPeriod(numberText(params.dPeriod, '3'));
+        break;
+      case 'portfolio_stop_loss':
+        setStopLossMode(params.mode === 'breach' ? 'breach' : 'near');
+        break;
+      case 'market_light_status':
+        setMarketLightStatuses(params.statuses?.length ? params.statuses : ['red', 'yellow']);
+        break;
+      case 'market_light_score_drop':
+        setMinDrop(numberText(params.minDrop, '10'));
+        break;
+      default:
+        break;
+    }
+    // Chỉ chạy khi đổi rule đang sửa (theo id). Only rerun when the edited rule changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingRuleId]);
+
   const handleScopeChange = (value: string) => {
     const nextScope = value as AlertTargetScope;
     const nextType = defaultAlertTypeForScope(nextScope);
@@ -394,25 +509,9 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
       enabled,
     });
     if (submitted === false) return;
-    setName('');
-    setTarget('');
-    setPortfolioTarget('all');
-    setMarketRegion(defaultMarketRegion);
-    setPrice('');
-    setChangePct('');
-    setMultiplier('');
-    setWindow('20');
-    setPeriod('12');
-    setThreshold('');
-    setFastPeriod('12');
-    setSlowPeriod('26');
-    setSignalPeriod('9');
-    setKPeriod('3');
-    setDPeriod('3');
-    setMarketLightStatuses(['red', 'yellow']);
-    setMinDrop('10');
-    resetParameters(alertType);
-    setEnabled(true);
+    // Chế độ sửa: trang tự thoát sửa (editingRule → null) và effect sẽ reset form.
+    if (isEditing) return;
+    resetFields(alertType);
   };
 
   const renderTargetControl = () => {
@@ -475,7 +574,12 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
   };
 
   return (
-    <Card title={text.cardTitle} subtitle={text.cardSubtitle} variant="bordered" padding="md">
+    <Card
+      title={isEditing ? text.editCardTitle : text.cardTitle}
+      subtitle={isEditing ? formatUiText(text.editCardSubtitle, { name: editingRule?.name ?? '' }) : text.cardSubtitle}
+      variant="bordered"
+      padding="md"
+    >
       <form ref={formRef} className="space-y-4" noValidate onSubmit={(event) => void handleSubmit(event)}>
         <div className="grid gap-4 md:grid-cols-2">
           <Input
@@ -808,15 +912,27 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Checkbox
-            label={text.enableAfterCreate}
+            label={isEditing ? text.enabledField : text.enableAfterCreate}
             checked={enabled}
             onChange={(event) => setEnabled(event.target.checked)}
             disabled={isSubmitting}
           />
-          <Button type="submit" isLoading={isSubmitting} loadingText={text.creating}>
-            {text.create}
-          </Button>
+          <div className="flex gap-2">
+            {isEditing ? (
+              <Button type="button" variant="outline" onClick={() => onCancelEdit?.()} disabled={isSubmitting}>
+                {text.cancelEdit}
+              </Button>
+            ) : null}
+            <Button
+              type="submit"
+              isLoading={isSubmitting}
+              loadingText={isEditing ? text.saving : text.creating}
+            >
+              {isEditing ? text.save : text.create}
+            </Button>
+          </div>
         </div>
+        {isEditing ? <p className="text-xs text-muted-text">{text.editNote}</p> : null}
         {formError ? <p role="alert" className="text-sm text-danger">{formError}</p> : null}
       </form>
     </Card>

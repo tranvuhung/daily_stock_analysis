@@ -153,9 +153,19 @@ class AlertService:
         merged = self._serialize_rule_base(row)
         merged.update(payload)
         fields = self._normalize_rule_payload(merged, source=merged.get("source") or "api")
+        # Điều kiện đã đổi (ngưỡng, loại, đối tượng) thì cooldown cũ không còn ý nghĩa: xoá để rule
+        # mới có thể báo ngay. Chỉ đổi tên / mức độ / bật tắt thì giữ cooldown.
+        # A changed condition resets the rule's cooldown; cosmetic edits keep it.
+        condition_changed = any(
+            fields.get(key) != getattr(row, key)
+            for key in ("target_scope", "target", "alert_type", "parameters")
+            if key in fields
+        )
         updated = self.repo.update_rule(rule_id, fields)
         if updated is None:
             raise AlertNotFoundError(f"Alert rule not found: {rule_id}")
+        if condition_changed:
+            self.repo.clear_cooldowns(rule_id=rule_id)
         _notify_realtime_rules_changed()
         return self._serialize_rule(updated)
 

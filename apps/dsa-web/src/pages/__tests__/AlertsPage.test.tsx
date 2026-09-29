@@ -14,6 +14,7 @@ const {
   listTriggers,
   listNotifications,
   listLiveQuotes,
+  updateRule,
 } = vi.hoisted(() => ({
   listRules: vi.fn(),
   createRule: vi.fn(),
@@ -24,6 +25,7 @@ const {
   listTriggers: vi.fn(),
   listNotifications: vi.fn(),
   listLiveQuotes: vi.fn(),
+  updateRule: vi.fn(),
 }));
 
 vi.mock('../../api/alerts', () => ({
@@ -37,6 +39,7 @@ vi.mock('../../api/alerts', () => ({
     listTriggers,
     listNotifications,
     listLiveQuotes,
+    updateRule,
     listMarketRegions: vi.fn().mockResolvedValue({ regions: ['vn'], default: 'vn' }),
   },
 }));
@@ -311,5 +314,43 @@ describe('AlertsPage', () => {
     expect(listNotifications).toHaveBeenCalledTimes(2);
     expect(screen.getByTestId('live-price-1')).toHaveTextContent('1.805');
     await waitFor(() => expect(useAlertStore.getState().unreadCount).toBe(0));
+  });
+});
+
+describe('AlertsPage edit rule', () => {
+  it('loads a rule into the form, PATCHes the changes and leaves edit mode', async () => {
+    updateRule.mockResolvedValue({ ...rule, parameters: { direction: 'above', price: 1900 } });
+    render(<AlertsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${rule.name}` }));
+    expect(screen.getByText('Edit alert rule')).toBeInTheDocument();
+    const priceInput = screen.getByLabelText('Price threshold') as HTMLInputElement;
+    expect(priceInput.value).toBe('1800');
+    expect((screen.getByLabelText('Rule name') as HTMLInputElement).value).toBe(rule.name);
+
+    fireEvent.change(priceInput, { target: { value: '1900' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(updateRule).toHaveBeenCalledTimes(1));
+    expect(updateRule).toHaveBeenCalledWith(1, expect.objectContaining({
+      targetScope: 'single_symbol',
+      target: '600519',
+      alertType: 'price_cross',
+      parameters: { direction: 'above', price: 1900 },
+      enabled: true,
+    }));
+    expect(createRule).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByText('Create alert rule')).toBeInTheDocument());
+    expect((screen.getByLabelText('Price threshold') as HTMLInputElement).value).toBe('');
+  });
+
+  it('cancels edit mode without saving', async () => {
+    render(<AlertsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${rule.name}` }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel edit' }));
+
+    expect(screen.getByText('Create alert rule')).toBeInTheDocument();
+    expect(updateRule).not.toHaveBeenCalled();
   });
 });

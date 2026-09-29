@@ -274,6 +274,9 @@ class RuntimeSchedulerService:
         self._scheduler: Optional[Scheduler] = None
         self._thread: Optional[threading.Thread] = None
         self._enabled = False
+        # Scheduler chỉ chạy background task (vd. worker cảnh báo) khi lịch phân tích đang tắt.
+        # True when the scheduler runs background tasks only (analysis schedule disabled).
+        self._background_only = False
         self._last_run_at: Optional[str] = None
         self._last_success_at: Optional[str] = None
         self._last_error: Optional[str] = None
@@ -671,10 +674,14 @@ class RuntimeSchedulerService:
                 self.stop()
                 return
             config = self._config_provider()
-            if not self._is_schedule_enabled(config):
+            schedule_enabled = self._is_schedule_enabled(config)
+            background_tasks = self._current_background_tasks(config)
+            # Lịch phân tích tắt nhưng có background task (AGENT_EVENT_MONITOR_ENABLED): vẫn chạy
+            # scheduler cho background task, không đăng ký phân tích hằng ngày.
+            # With the analysis schedule off, still run background tasks such as the alert worker.
+            if not schedule_enabled and not background_tasks:
                 self.stop()
                 return
-            background_tasks = self._current_background_tasks(config)
             self.stop()
             with self._analysis_process_lock:
                 generation = self._analysis_generation
@@ -692,7 +699,9 @@ class RuntimeSchedulerService:
                 schedule_times_provider=self._current_times,
                 register_signals=False,
             )
-            if run_immediately and self._run_immediately_in_background:
+            if not schedule_enabled:
+                pass
+            elif run_immediately and self._run_immediately_in_background:
                 scheduler.set_daily_task(scheduled_analysis, run_immediately=False)
             else:
                 scheduler.set_daily_task(
@@ -706,7 +715,7 @@ class RuntimeSchedulerService:
                     run_immediately=entry.get("run_immediately", False),
                     name=entry.get("name"),
                 )
-            if run_immediately and self._run_immediately_in_background:
+            if schedule_enabled and run_immediately and self._run_immediately_in_background:
                 self._run_in_background_thread(scheduled_analysis)
             thread = threading.Thread(
                 target=scheduler.run,
@@ -715,8 +724,14 @@ class RuntimeSchedulerService:
             )
             self._scheduler = scheduler
             self._thread = thread
-            self._enabled = True
+            self._enabled = schedule_enabled
+            self._background_only = not schedule_enabled
             thread.start()
+            if not schedule_enabled:
+                logger.info(
+                    "Runtime scheduler: analysis schedule disabled; running background tasks only (%s)",
+                    ", ".join(str(entry.get("name")) for entry in background_tasks),
+                )
 
     def stop(self) -> None:
         with self._lock:
@@ -731,6 +746,7 @@ class RuntimeSchedulerService:
             self._scheduler = None
             self._thread = None
             self._enabled = False
+            self._background_only = False
 
     def reconcile_from_config(
         self,
@@ -743,11 +759,8 @@ class RuntimeSchedulerService:
         if not self._owns_schedule:
             self.stop()
             return
-        config = self._config_provider()
-        if self._is_schedule_enabled(config):
-            self.start(run_immediately=run_immediately)
-        else:
-            self.stop()
+        # start() tự quyết: lịch phân tích + background task, chỉ background task, hoặc dừng.
+        self.start(run_immediately=run_immediately)
 
     def run_now(self) -> Dict[str, Any]:
         if not self._start_analysis_watchdog():
@@ -764,7 +777,7 @@ class RuntimeSchedulerService:
             scheduler = self._scheduler
             thread = self._thread
             if (
-                not self._enabled
+                not (self._enabled or self._background_only)
                 or scheduler is None
                 or thread is None
                 or not thread.is_alive()

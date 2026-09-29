@@ -642,6 +642,48 @@ class RuntimeSchedulerServiceTestCase(unittest.TestCase):
 
         self.assertEqual(calls, ["run"])
 
+    def test_alert_worker_runs_without_analysis_schedule(self) -> None:
+        """--serve không bật lịch phân tích: worker cảnh báo vẫn chạy như background task."""
+        fake_schedule = _FakeScheduleModule()
+        config = SimpleNamespace(schedule_enabled=False, schedule_time="18:00", schedule_times=["18:00"])
+        task = MagicMock()
+        tasks = [{"task": task, "interval_seconds": 120, "run_immediately": False, "name": "agent_event_monitor"}]
+        service = RuntimeSchedulerService(
+            config_provider=lambda: config,
+            owns_schedule=True,
+            background_tasks_provider=lambda _config: list(tasks),
+        )
+
+        with patch.dict(sys.modules, {"schedule": fake_schedule}), patch(
+            "src.services.runtime_scheduler.threading.Thread",
+            _NoopThread,
+        ):
+            service.reconcile_from_config(run_immediately=True)
+
+            self.assertIsNotNone(service._scheduler)
+            self.assertEqual(fake_schedule.get_jobs(), [])  # không đăng ký phân tích hằng ngày
+            self.assertEqual(
+                [entry["name"] for entry in service._scheduler._background_tasks],
+                ["agent_event_monitor"],
+            )
+            self.assertFalse(service.status()["enabled"])
+            service._thread.is_alive = lambda: True
+            self.assertTrue(service.is_background_task_active("agent_event_monitor"))
+
+            # Tắt Event Monitor → không còn background task → dừng hẳn.
+            tasks.clear()
+            service.reconcile_from_config()
+            self.assertIsNone(service._scheduler)
+            self.assertFalse(service.is_background_task_active("agent_event_monitor"))
+
+            # Bật lại lịch phân tích → có cả job hằng ngày và background task.
+            tasks.append({"task": task, "interval_seconds": 120, "run_immediately": False, "name": "agent_event_monitor"})
+            config.schedule_enabled = True
+            service.reconcile_from_config()
+            self.assertEqual([job.at_time for job in fake_schedule.get_jobs()], ["18:00"])
+            self.assertTrue(service.status()["enabled"])
+        task.assert_not_called()
+
     def test_background_task_active_requires_live_registered_scheduler(self) -> None:
         service = RuntimeSchedulerService()
         service._enabled = True

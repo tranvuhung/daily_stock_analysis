@@ -146,6 +146,8 @@ interface AlertRuleListProps {
   onToggleEnabled: (rule: AlertRuleItem) => void;
   onDelete: (rule: AlertRuleItem) => void;
   onTest: (rule: AlertRuleItem) => void;
+  onEdit?: (rule: AlertRuleItem) => void;
+  editingRuleId?: number | null;
   busyRule?: AlertRuleBusyState | null;
 }
 
@@ -164,6 +166,8 @@ export const AlertRuleList: React.FC<AlertRuleListProps> = ({
   onToggleEnabled,
   onDelete,
   onTest,
+  onEdit,
+  editingRuleId = null,
   busyRule = null,
 }) => {
   const { language } = useUiLanguage();
@@ -274,6 +278,17 @@ export const AlertRuleList: React.FC<AlertRuleListProps> = ({
                   <td className="px-3 py-3 text-xs text-secondary-text">{formatDateTime(rule.updatedAt ?? rule.createdAt)}</td>
                   <td className="px-3 py-3">
                     <div className="flex justify-end gap-2">
+                      {onEdit ? (
+                        <Button
+                          size="xsm"
+                          variant={editingRuleId === rule.id ? 'primary' : 'outline'}
+                          onClick={() => onEdit(rule)}
+                          aria-label={formatUiText(text.editAria, { name: rule.name })}
+                          disabled={isRuleBusy(rule)}
+                        >
+                          {text.edit}
+                        </Button>
+                      ) : null}
                       <Button
                         size="xsm"
                         variant="outline"
