@@ -13,6 +13,8 @@
 
 **结论：推荐使用 Docker Compose，迁移最快最方便！**
 
+> 在个人 Windows 电脑上以原生 Python 运行并通过局域网 IP 访问：见 [windows-lan-deploy.md](windows-lan-deploy.md)（越南语）。
+
 ---
 
 ## 🐳 方案一：Docker Compose 部署（推荐）

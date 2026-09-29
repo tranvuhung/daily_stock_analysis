@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [新功能] Chạy dịch vụ trên máy Windows qua mạng LAN: `scripts/package-windows.sh` build Web UI trên Mac và đóng gói mã nguồn + `static/` (tuỳ chọn kèm snapshot DB), `scripts/run-server.ps1` lo `setup` / `firewall` / `start` / `stop` / `status` / `logs` / `install-task` trên Windows (một tiến trình `main.py --serve-only --schedule`: FastAPI + Web UI + lịch + cảnh báo realtime). Hướng dẫn ở `docs/windows-lan-deploy.md`.
 - [修复] Bấm **Sửa** quy tắc cảnh báo làm khung gợi ý mã tự bật lên và che các ô bên dưới. `StockAutocomplete` nay chỉ tìm gợi ý khi ô đang được focus (người dùng đang gõ); giá trị được đặt bằng code không mở danh sách gợi ý.
 - [修复] Dropdown loại quy tắc, phạm vi và mức độ trong form/bộ lọc Cảnh báo hiện nhãn tiếng Anh ở giao diện tiếng Việt (`featureText.ts` dùng nhầm `ALERT_TYPE_LABELS.en` cho cả `vi`). Nay mỗi ngôn ngữ dùng nhãn của chính nó.
 - [新功能] Trang Cảnh báo có nút **Sửa**: nạp quy tắc vào form, lưu bằng `PATCH /api/v1/alerts/rules/{id}` (`alertsApi.updateRule`). Khi ngưỡng, loại hoặc đối tượng thay đổi, backend xoá cooldown của quy tắc (`AlertRepository.clear_cooldowns`); đổi tên / mức độ / bật tắt thì giữ cooldown.

@@ -13,6 +13,8 @@ This document explains how to deploy the AI Stock Analysis System to a server.
 
 **Conclusion: Docker Compose is recommended for the fastest and most convenient migration!**
 
+> To run natively with Python on a personal Windows PC and reach it over the LAN IP, see [windows-lan-deploy.md](windows-lan-deploy.md) (Vietnamese-only).
+
 ---
 
 ## Option 1: Docker Compose Deployment (Recommended)

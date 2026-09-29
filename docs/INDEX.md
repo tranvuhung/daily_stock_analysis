@@ -64,6 +64,7 @@
 | [云端 WebUI 部署](deploy-webui-cloud.md) | 云服务器访问 WebUI 的部署说明 |
 | [Zeabur 部署](docker/zeabur-deployment.md) | Zeabur 平台部署说明 |
 | [桌面端打包说明](desktop-package.md) | Electron 桌面端和 Web 构建产物打包说明 |
+| [Chạy trên Windows qua LAN](windows-lan-deploy.md) | Build trên Mac, chạy FastAPI + Web UI + lịch + cảnh báo realtime trên máy Windows, truy cập qua IP mạng LAN (tiếng Việt) |
 
 ## 参考与开发
 
