@@ -43,6 +43,8 @@ describe('AlertRuleForm symbol autocomplete', () => {
 
     const input = screen.getByLabelText('Symbol');
     expect(input).toHaveAttribute('role', 'combobox');
+    // Gợi ý chỉ mở khi người dùng đang gõ trong ô (ô phải được focus).
+    input.focus();
     fireEvent.change(input, { target: { value: 'hoaphat' } });
 
     const option = await screen.findByText('Tập đoàn Hòa Phát');
@@ -59,5 +61,26 @@ describe('AlertRuleForm symbol autocomplete', () => {
         alertType: 'price_cross',
       }));
     });
+  });
+
+  it('does not open suggestions when the symbol is set programmatically (edit mode)', async () => {
+    const rule = {
+      id: 7,
+      name: 'HPG price',
+      targetScope: 'single_symbol' as const,
+      target: 'HPG',
+      alertType: 'price_cross' as const,
+      parameters: { direction: 'above' as const, price: 30000 },
+      severity: 'warning' as const,
+      enabled: true,
+      source: 'api',
+    };
+    render(<AlertRuleForm onSubmit={onSubmit} editingRule={rule} />);
+
+    await waitFor(() => expect(screen.getByLabelText('Symbol')).toHaveValue('HPG'));
+    // Chờ quá thời gian debounce của tìm kiếm gợi ý. Wait past the search debounce.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(screen.queryByText('Tập đoàn Hòa Phát')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Symbol')).toHaveAttribute('aria-expanded', 'false');
   });
 });

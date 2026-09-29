@@ -155,9 +155,16 @@ function StockAutocompleteInner({
   // Sync external value with internal query (only when value truly changes)
   useEffect(() => {
     if (prevValueRef.current !== value) {
-      setQuery(value);
       prevValueRef.current = value;
+      // Only search while the user is typing in this input. Values set programmatically
+      // (e.g. loading a rule into an edit form) must not pop the suggestion list open.
+      if (typeof document !== 'undefined' && document.activeElement !== inputRef.current) {
+        closeSuggestions();
+        return;
+      }
+      setQuery(value);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, setQuery]);
 
   // Calculate suggestion box position (using fixed positioning)
