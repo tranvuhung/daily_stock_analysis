@@ -4,8 +4,10 @@ import { NavLink } from 'react-router-dom';
 import { SCREENING_CONFIG_CHANGED_EVENT, SYSTEM_CONFIG_CHANGED_EVENT, screeningApi } from '../../api/screening';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAgentChatStore } from '../../stores/agentChatStore';
+import { useAlertStore } from '../../stores/alertStore';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
-import type { UiTextKey } from '../../i18n/uiText';
+import { formatUiText, type UiTextKey } from '../../i18n/uiText';
+import { ALERT_REALTIME_TEXT } from '../../locales/featureText';
 import { cn } from '../../utils/cn';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { StatusDot } from '../common/StatusDot';
@@ -24,7 +26,7 @@ type NavItem = {
   to: string;
   icon: React.ComponentType<{ className?: string }>;
   exact?: boolean;
-  badge?: 'completion';
+  badge?: 'completion' | 'alerts';
 };
 
 const NAV_ITEMS: NavItem[] = [
@@ -34,15 +36,16 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'portfolio', labelKey: 'layout.nav.portfolio', to: '/portfolio', icon: BriefcaseBusiness },
   { key: 'decision-signals', labelKey: 'layout.nav.decisionSignals', to: '/decision-signals', icon: Activity },
   { key: 'backtest', labelKey: 'layout.nav.backtest', to: '/backtest', icon: BarChart3 },
-  { key: 'alerts', labelKey: 'layout.nav.alerts', to: '/alerts', icon: Bell },
+  { key: 'alerts', labelKey: 'layout.nav.alerts', to: '/alerts', icon: Bell, badge: 'alerts' },
   { key: 'usage', labelKey: 'layout.nav.usage', to: '/usage', icon: Gauge },
   { key: 'settings', labelKey: 'layout.nav.settings', to: '/settings', icon: Settings2 },
 ];
 
 export const SidebarNav: React.FC<SidebarNavProps> = ({ collapsed = false, onNavigate, variant = 'default' }) => {
   const { authEnabled, logout } = useAuth();
-  const { t } = useUiLanguage();
+  const { t, language } = useUiLanguage();
   const completionBadge = useAgentChatStore((state) => state.completionBadge);
+  const alertUnread = useAlertStore((state) => state.unreadCount);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showScreeningNav, setShowScreeningNav] = useState(false);
 
@@ -144,6 +147,18 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ collapsed = false, onNav
                     )}
                     aria-label={t('layout.newChatMessage')}
                   />
+                ) : null}
+                {badge === 'alerts' && alertUnread > 0 ? (
+                  <span
+                    data-testid="alerts-unread-badge"
+                    aria-label={formatUiText(ALERT_REALTIME_TEXT[language].unreadBadge, { count: alertUnread })}
+                    className={cn(
+                      'absolute right-2 min-w-[1.25rem] rounded-full bg-[hsl(var(--color-danger-alert-text))] px-1.5 text-center text-[10px] font-semibold leading-5 text-white',
+                      collapsed ? 'top-1' : ''
+                    )}
+                  >
+                    {alertUnread > 99 ? '99+' : alertUnread}
+                  </span>
                 ) : null}
               </>
             )}

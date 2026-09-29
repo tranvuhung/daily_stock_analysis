@@ -22,6 +22,7 @@ import type {
   AlertType,
 } from '../types/alerts';
 import { formatDateTime } from '../utils/format';
+import { useAlertStore } from '../stores/alertStore';
 
 const PAGE_SIZE = 20;
 
@@ -199,6 +200,35 @@ const AlertsPage: React.FC = () => {
     void loadTriggers();
     void loadNotifications();
   }, [loadNotifications, loadTriggers, rulesLoaded]);
+
+  // Cảnh báo realtime: xoá badge khi đang ở trang này, tải lại lịch sử khi có alert_triggered,
+  // và tải giá live ban đầu cho các mã có rule. Realtime alerts wiring for this page.
+  const triggerVersion = useAlertStore((state) => state.triggerVersion);
+  const clearUnread = useAlertStore((state) => state.clearUnread);
+  const setPrices = useAlertStore((state) => state.setPrices);
+  const setFeedStatus = useAlertStore((state) => state.setFeedStatus);
+  useEffect(() => {
+    clearUnread();
+  }, [clearUnread, triggerVersion]);
+  useEffect(() => {
+    if (!rulesLoaded || triggerVersion === 0) return;
+    void loadTriggers();
+    void loadNotifications();
+  }, [loadNotifications, loadTriggers, rulesLoaded, triggerVersion]);
+  useEffect(() => {
+    if (!rulesLoaded) return;
+    let cancelled = false;
+    void alertsApi.listLiveQuotes()
+      .then((response) => {
+        if (cancelled) return;
+        setPrices(response.quotes ?? []);
+        setFeedStatus(response.feed ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [rules, rulesLoaded, setFeedStatus, setPrices]);
 
   const handleCreateRule = async (payload: AlertRuleCreateRequest) => {
     setCreateLoading(true);

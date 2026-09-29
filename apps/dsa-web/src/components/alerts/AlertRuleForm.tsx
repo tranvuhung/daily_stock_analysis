@@ -9,6 +9,8 @@ import type {
   AlertType,
   MarketLightStatus,
   MarketRegion,
+  PriceLimitSide,
+  PriceTriggerMode,
   PortfolioStopLossMode,
 } from '../../types/alerts';
 import type { PortfolioAccountItem } from '../../types/portfolio';
@@ -20,6 +22,9 @@ import {
   ALERT_FORM_TEXT,
   ALERT_MARKET_LIGHT_STATUS_OPTIONS,
   ALERT_MARKET_REGION_OPTIONS,
+  ALERT_PRICE_LIMIT_SIDE_OPTIONS,
+  ALERT_REALTIME_TEXT,
+  ALERT_TRIGGER_MODE_OPTIONS,
   ALERT_MARKET_TYPE_OPTIONS,
   ALERT_PORTFOLIO_TYPE_OPTIONS,
   ALERT_PRICE_DIRECTION_OPTIONS,
@@ -60,6 +65,7 @@ function optionsForScope(scope: AlertTargetScope, language: UiLanguage) {
 export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmitting = false }) => {
   const { language } = useUiLanguage();
   const text = ALERT_FORM_TEXT[language];
+  const realtimeText = ALERT_REALTIME_TEXT[language];
   const [name, setName] = useState('');
   const [targetScope, setTargetScope] = useState<AlertTargetScope>('single_symbol');
   const [target, setTarget] = useState('');
@@ -75,6 +81,9 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
   const [severity, setSeverity] = useState<AlertSeverity>('warning');
   const [enabled, setEnabled] = useState(true);
   const [priceDirection, setPriceDirection] = useState<'above' | 'below'>('above');
+  const [triggerMode, setTriggerMode] = useState<PriceTriggerMode>('level');
+  const [limitSide, setLimitSide] = useState<PriceLimitSide>('both');
+  const [nearPct, setNearPct] = useState('0');
   const [changeDirection, setChangeDirection] = useState<'up' | 'down'>('up');
   const [thresholdDirection, setThresholdDirection] = useState<'above' | 'below'>('above');
   const [crossDirection, setCrossDirection] = useState<'bullish_cross' | 'bearish_cross'>('bullish_cross');
@@ -154,7 +163,11 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
   const resetParameters = (nextType: AlertType) => {
     if (nextType === 'price_cross') {
       setPriceDirection('above');
+      setTriggerMode('level');
       setPrice('');
+    } else if (nextType === 'price_limit_touch') {
+      setLimitSide('both');
+      setNearPct('0');
     } else if (nextType === 'price_change_percent') {
       setChangeDirection('up');
       setChangePct('');
@@ -251,7 +264,18 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
     if (alertType === 'price_cross') {
       const parsedPrice = parsePositiveNumber(price, text.priceThreshold);
       if (parsedPrice == null) return null;
-      return { direction: priceDirection, price: parsedPrice };
+      // Chỉ gửi trigger_mode khi khác mặc định "level". Only send trigger_mode when not the default.
+      return triggerMode === 'cross'
+        ? { direction: priceDirection, price: parsedPrice, triggerMode }
+        : { direction: priceDirection, price: parsedPrice };
+    }
+    if (alertType === 'price_limit_touch') {
+      const parsedNear = Number(nearPct === '' ? '0' : nearPct);
+      if (!Number.isFinite(parsedNear) || parsedNear < 0 || parsedNear > 20) {
+        setFormError(realtimeText.nearPctRange);
+        return null;
+      }
+      return { side: limitSide, nearPct: parsedNear };
     }
     if (alertType === 'price_change_percent') {
       const parsedChangePct = parsePositiveNumber(changePct, text.changePctThreshold);
@@ -505,6 +529,37 @@ export const AlertRuleForm: React.FC<AlertRuleFormProps> = ({ onSubmit, isSubmit
               step="0.0001"
               value={price}
               onChange={(event) => setPrice(event.target.value)}
+              disabled={isSubmitting}
+            />
+            <div className="md:col-span-2">
+              <Select
+                label={realtimeText.triggerMode}
+                value={triggerMode}
+                options={ALERT_TRIGGER_MODE_OPTIONS[language]}
+                disabled={isSubmitting}
+                onChange={(value) => setTriggerMode(value as PriceTriggerMode)}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {alertType === 'price_limit_touch' ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            <Select
+              label={realtimeText.limitSide}
+              value={limitSide}
+              options={ALERT_PRICE_LIMIT_SIDE_OPTIONS[language]}
+              disabled={isSubmitting}
+              onChange={(value) => setLimitSide(value as PriceLimitSide)}
+            />
+            <Input
+              label={realtimeText.nearPct}
+              type="number"
+              min="0"
+              max="20"
+              step="0.1"
+              value={nearPct}
+              onChange={(event) => setNearPct(event.target.value)}
               disabled={isSubmitting}
             />
           </div>

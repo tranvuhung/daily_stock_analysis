@@ -2,6 +2,7 @@ import apiClient from './index';
 import { toCamelCase } from './utils';
 import type {
   AlertDeleteResponse,
+  AlertLiveQuotesResponse,
   AlertMarketRegionsResponse,
   AlertNotificationListQuery,
   AlertNotificationListResponse,
@@ -45,6 +46,9 @@ function toSnakeRulePayload(payload: AlertRuleCreateRequest): Record<string, unk
       mode: payload.parameters.mode,
       statuses: payload.parameters.statuses,
       min_drop: payload.parameters.minDrop,
+      trigger_mode: payload.parameters.triggerMode,
+      side: payload.parameters.side,
+      near_pct: payload.parameters.nearPct,
     });
   }
   return request;
@@ -83,6 +87,18 @@ function toNotificationListParams(query: AlertNotificationListQuery = {}): Recor
 }
 
 export const alertsApi = {
+  // Giá live của các mã có rule + trạng thái feed realtime. Live quotes for rule targets + feed status.
+  async listLiveQuotes(): Promise<AlertLiveQuotesResponse> {
+    const response = await apiClient.get<Record<string, unknown>>('/api/v1/alerts/live-quotes');
+    return toCamelCase<AlertLiveQuotesResponse>(response.data);
+  },
+
+  // URL SSE cảnh báo realtime (alert_triggered / price_update / feed_status).
+  getStreamUrl(): string {
+    const baseUrl = apiClient.defaults.baseURL || '';
+    return `${baseUrl}/api/v1/alerts/stream`;
+  },
+
   // Region được bật cho cảnh báo thị trường (theo SUPPORTED_MARKETS), vn đứng đầu.
   // Market regions enabled for market alerts (driven by SUPPORTED_MARKETS), vn first.
   async listMarketRegions(): Promise<AlertMarketRegionsResponse> {

@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [新功能] Cảnh báo realtime theo tick cho mã Việt Nam qua feed MQTT của TVSI (mặc định tắt, bật bằng `REALTIME_FEED_ENABLED` + `TVSI_MQTT_*`):
+  - `TvsiMqttFeed` kết nối MQTT thuần trên TLS cổng 443, tự reconnect, và chỉ subscribe `topic/<MÃ>` của các mã có rule (chặn wildcard).
+  - `RealtimeAlertEngine` đánh giá rule giá ngay khi nhận tick, chỉ trong phiên khớp lệnh VN.
+  - Kết quả kích hoạt dùng chung `AlertWorker.process_result`: ghi lịch sử, cooldown, gửi qua các kênh trong Cài đặt.
+  - Khi feed mất kết nối, worker định kỳ tự đánh giá lại bằng SSI. Tick còn mới cũng được dùng làm giá realtime VN chung (`source=tvsi_mqtt`).
+- [新功能] `price_cross` có thêm `trigger_mode=cross` (chỉ báo khi giá vừa cắt qua ngưỡng; mặc định `level` như cũ). Thêm loại rule `price_limit_touch` (chạm hoặc gần giá trần/sàn, tham số `side`, `near_pct`).
+- [新功能] Web nhận cảnh báo realtime qua SSE mới `GET /api/v1/alerts/stream`: toast toàn cục, badge số cảnh báo mới trên menu Cảnh báo, cột Giá live và dòng trạng thái feed trên trang Cảnh báo (`GET /api/v1/alerts/live-quotes`), tự tải lại lịch sử khi có cảnh báo.
+- [修复] Engine realtime ghi một trigger và một dòng `__cooldown__` cho mỗi tick khi rule đang cooldown (một buổi sáng NLG sinh 218 trigger dù chỉ gửi 1 tin). Nay tick trong cooldown chỉ được đánh giá, không ghi lịch sử; gửi lỗi mọi kênh thì 60 giây sau mới thử lại.
+- [修复] Worker định kỳ đánh giá rule giá mã VN cả ngoài giờ giao dịch bằng snapshot cũ, sinh trigger lặp mỗi chu kỳ (144 dòng/ngày/rule). Nay chỉ đánh giá trong phiên khớp lệnh VN (+2 phút nhận giá ATC).
+- [修复] Tóm tắt phiên (`market_phase_summary`) của mã VN luôn là `unknown` kèm `unknown_market` vì VN không có lịch exchange-calendars. Nay suy ra pha từ giờ giao dịch cố định (premarket / intraday / lunch_break / closing_auction / postmarket / non_trading); phân tích mã VN trong phiên cũng nhận đúng cờ `is_partial_bar`.
+- [修复] `data_timestamp` của trigger từ quote có `provider_timestamp` được ghi theo giờ địa phương, không còn bỏ trống.
+- [chore] Thêm phụ thuộc `paho-mqtt>=2.0` và script thăm dò `scripts/probe_tvsi_mqtt.py` (mặc định chỉ subscribe topic giá).
+- [测试] Thêm `tests/test_realtime_alerts.py` (parser TVSI với payload thật, feed MQTT giả, rule cross/trần-sàn, engine theo tick, fallback khi mất kết nối, event bus, live-quotes, ưu tiên tick trong `get_realtime_quote`), và các vitest cho `useAlertStream`, toast, badge, cột Giá live, form.
+- [文档] `docs/alerts.md` thêm mục cảnh báo realtime; `docs/alerts-user-guide.md` thêm mục 10 và cập nhật các loại rule.
 - [改进] Ô **Mã** trong form "Tạo quy tắc cảnh báo" (phạm vi Một mã) có gợi ý tự động theo mã, tên có dấu và tên không dấu. Dùng lại `StockAutocomplete` và `stocks.index.json` đã có (gồm mã VN). Nếu không tải được index thì trở về ô nhập thường. Thêm test `AlertRuleFormAutocomplete.test.tsx`.
 - [修复] Tin nhắn cảnh báo (Alert Center) bị lẫn tiếng Trung, ví dụ `阶段：unknown | 市场：vn | 触发来源：alert | 摘要来源：最近分析快照`, `数据质量`, `限制`. Nguyên nhân: `AlertWorker` không truyền `REPORT_LANGUAGE` vào `format_public_phase_pack_excerpt` / `format_decision_signal_excerpt`, nên hai hàm này rơi về mặc định `zh`. Ngoài ra, nhánh `vi` vẫn in `数据质量`/`限制` vì điều kiện chỉ xét `en`. Cách sửa:
   - Worker truyền `REPORT_LANGUAGE`.

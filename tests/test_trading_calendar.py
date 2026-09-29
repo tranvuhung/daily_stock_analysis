@@ -965,5 +965,47 @@ class ComputeEffectiveRegionTestCase(unittest.TestCase):
         self.assertEqual(result, "cn")
 
 
+
+class VietnamStaticSessionPhaseTestCase(unittest.TestCase):
+    """VN không có lịch exchange-calendars: pha phiên suy ra từ giờ giao dịch cố định."""
+
+    TZ = ZoneInfo("Asia/Ho_Chi_Minh")
+
+    def _ctx(self, day: int, hour: int, minute: int) -> dict:
+        return trading_calendar.build_market_phase_context(
+            market="vn", current_time=datetime(2026, 9, day, hour, minute, tzinfo=self.TZ)
+        ).to_dict()
+
+    def test_phases_follow_vn_trading_hours(self):
+        cases = [
+            (29, 8, 30, "premarket", False),
+            (29, 9, 31, "intraday", True),
+            (29, 12, 0, "lunch_break", False),
+            (29, 14, 35, "closing_auction", True),
+            (29, 15, 0, "postmarket", False),
+            (27, 10, 0, "non_trading", False),  # Chủ nhật
+        ]
+        for day, hour, minute, phase, is_open in cases:
+            with self.subTest(time=f"{day} {hour}:{minute:02d}"):
+                payload = self._ctx(day, hour, minute)
+                self.assertEqual(payload["phase"], phase)
+                self.assertEqual(payload["is_market_open_now"], is_open)
+                self.assertNotIn("unknown_market", payload["warnings"])
+
+    def test_minutes_to_open_and_close(self):
+        self.assertEqual(self._ctx(29, 8, 30)["minutes_to_open"], 30)
+        self.assertEqual(self._ctx(29, 14, 35)["minutes_to_close"], 10)
+
+    def test_does_not_need_exchange_calendars(self):
+        with patch.object(trading_calendar, "_XCALS_AVAILABLE", False):
+            self.assertEqual(self._ctx(29, 10, 0)["phase"], "intraday")
+
+    def test_matching_session_grace_covers_atc_match_tick(self):
+        at = datetime(2026, 9, 29, 14, 46, tzinfo=self.TZ)
+        self.assertFalse(trading_calendar.is_vn_matching_session(at))
+        self.assertTrue(trading_calendar.is_vn_matching_session(at, grace_minutes=2))
+        self.assertFalse(trading_calendar.is_vn_matching_session(datetime(2026, 9, 29, 14, 47, tzinfo=self.TZ), grace_minutes=2))
+
+
 if __name__ == "__main__":
     unittest.main()

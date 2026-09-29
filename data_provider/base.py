@@ -2820,6 +2820,19 @@ class DataFetcherManager:
         #   nghĩa hạ cấp realtime của các thị trường khác).
         # ----------------------------------------------------------
         if market == "vn":
+            # Feed push MQTT (TVSI) đang kết nối và có tick còn mới thì dùng trước SSI.
+            # A fresh tick from the connected push feed wins over the SSI snapshot.
+            from data_provider.realtime_feed import get_fresh_tick, tick_to_quote, vn_bare_symbol
+
+            tick = get_fresh_tick(
+                vn_bare_symbol(stock_code),
+                float(getattr(config, "realtime_feed_stale_seconds", 30) or 30),
+            )
+            if tick is not None:
+                return self._enrich_realtime_quote(
+                    tick_to_quote(tick),
+                    realtime_cache_ttl=getattr(config, "realtime_cache_ttl", None),
+                )
             for source_name in self._vn_realtime_source_order():
                 quote = self._try_fetcher_quote(stock_code, source_name)
                 if quote is not None:

@@ -9,6 +9,8 @@ import { cn } from '../../utils/cn';
 import { ThemeToggle } from '../theme/ThemeToggle';
 import { UiLanguageToggle } from '../i18n/UiLanguageToggle';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
+import { AlertToasts } from '../alerts/AlertToasts';
+import { useAlertStream } from '../../hooks/useAlertStream';
 
 type ShellProps = {
   children?: React.ReactNode;
@@ -18,6 +20,8 @@ export const Shell: React.FC<ShellProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const collapsed = false;
   const { t } = useUiLanguage();
+  // Một kết nối SSE cảnh báo cho toàn app: toast, badge, giá live. One alert SSE stream for the app.
+  useAlertStream();
 
   useEffect(() => {
     if (!mobileOpen) {
@@ -83,6 +87,7 @@ export const Shell: React.FC<ShellProps> = ({ children }) => {
       >
         <SidebarNav onNavigate={() => setMobileOpen(false)} />
       </Drawer>
+      <AlertToasts />
     </div>
   );
 };

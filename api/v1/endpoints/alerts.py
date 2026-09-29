@@ -3,13 +3,18 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
-from typing import Optional
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from api.v1.schemas.alerts import (
     AlertDeleteResponse,
+    AlertLiveQuotesResponse,
     AlertMarketRegionsResponse,
     AlertNotificationListResponse,
     AlertRuleCreateRequest,
@@ -53,6 +58,121 @@ def _internal_error(message: str, exc: Exception) -> HTTPException:
         status_code=500,
         detail={"error": "internal_error", "message": f"{message}: {str(exc)}"},
     )
+
+
+LIVE_QUOTE_FALLBACK_LIMIT = 30
+SSE_HEARTBEAT_SECONDS = 30
+
+
+def _format_sse_event(event_type: str, data: Dict[str, Any]) -> str:
+    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
+
+
+@router.get(
+    "/stream",
+    responses={200: {"description": "SSE event stream", "content": {"text/event-stream": {}}}},
+    summary="Realtime alert and live price SSE stream",
+)
+async def alert_stream():
+    """SSE: ``connected``, ``alert_triggered``, ``price_update``, ``feed_status``, ``heartbeat``."""
+
+    from data_provider.realtime_feed import feed_status
+    from src.services.event_bus import alert_event_bus
+
+    async def event_generator():
+        queue = alert_event_bus.subscribe()
+        try:
+            yield _format_sse_event("connected", {"message": "Connected to alert stream"})
+            yield _format_sse_event("feed_status", _current_feed_status(feed_status))
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=SSE_HEARTBEAT_SECONDS)
+                    yield _format_sse_event(event["type"], event["data"])
+                except asyncio.TimeoutError:
+                    yield _format_sse_event("heartbeat", {"timestamp": datetime.now().isoformat()})
+        except asyncio.CancelledError:
+            logger.debug("Alert SSE client disconnected")
+            raise
+        finally:
+            alert_event_bus.unsubscribe(queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
+def _current_feed_status(feed_status_fn) -> Dict[str, Any]:
+    from src.services.realtime_alert_engine import get_active_realtime_engine
+
+    engine = get_active_realtime_engine()
+    return engine.status() if engine is not None else feed_status_fn()
+
+
+@router.get(
+    "/live-quotes",
+    response_model=AlertLiveQuotesResponse,
+    responses={500: {"model": ErrorResponse}},
+    summary="Live quotes for symbols that have alert rules",
+)
+def list_live_quotes() -> AlertLiveQuotesResponse:
+    """Giá hiện tại của các mã có rule một mã đang bật, kèm trạng thái feed realtime.
+
+    Ưu tiên tick từ feed push; mã chưa có tick thì lấy giá realtime thường (SSI…), tối đa
+    ``LIVE_QUOTE_FALLBACK_LIMIT`` mã.
+    """
+
+    from data_provider.realtime_feed import feed_status, get_active_feed, vn_bare_symbol
+
+    try:
+        service = AlertService()
+        rows = service.repo.list_enabled_rules(limit=1000)
+        symbols: List[str] = []
+        for row in rows:
+            if row.target_scope == "single_symbol" and row.target and row.target not in symbols:
+                symbols.append(row.target)
+        feed = get_active_feed()
+        quotes: Dict[str, Dict[str, Any]] = {}
+        missing: List[str] = []
+        for code in symbols:
+            tick = feed.store.get(vn_bare_symbol(code)) if feed is not None else None
+            if tick is not None:
+                quotes[code] = tick.to_public_dict()
+            else:
+                missing.append(code)
+        if missing:
+            from data_provider.base import DataFetcherManager
+
+            manager = DataFetcherManager()
+            for code in missing[:LIVE_QUOTE_FALLBACK_LIMIT]:
+                try:
+                    quote = manager.get_realtime_quote(code, log_final_failure=False)
+                except Exception:
+                    quote = None
+                if quote is None or not getattr(quote, "price", None):
+                    continue
+                quotes[code] = {
+                    "symbol": code,
+                    "price": getattr(quote, "price", None),
+                    "change": getattr(quote, "change_amount", None),
+                    "change_pct": getattr(quote, "change_pct", None),
+                    "ref": getattr(quote, "pre_close", None),
+                    "ceiling": getattr(quote, "vn_ceiling", None),
+                    "floor": getattr(quote, "vn_floor", None),
+                    "high": getattr(quote, "high", None),
+                    "low": getattr(quote, "low", None),
+                    "volume": getattr(quote, "volume", None),
+                    "market_status": None,
+                    "ts": getattr(quote, "provider_timestamp", None),
+                    "source": getattr(getattr(quote, "source", None), "value", None) or "realtime_quote",
+                }
+        return AlertLiveQuotesResponse(
+            feed=_current_feed_status(feed_status),
+            quotes=[{"target": code, **quote} for code, quote in quotes.items()],
+        )
+    except Exception as exc:
+        raise _internal_error("List live quotes failed", exc)
 
 
 @router.get(

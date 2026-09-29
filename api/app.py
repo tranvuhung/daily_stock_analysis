@@ -294,9 +294,18 @@ async def app_lifespan(app: FastAPI):
     from src.services.name_to_code_resolver import warmup_akshare_cache
 
     warmup_akshare_cache()
+    # Feed giá realtime + engine cảnh báo realtime (tuỳ chọn, mặc định tắt).
+    # Optional realtime price feed and alert engine (disabled by default).
+    if not runtime_suppress_start:
+        from src.services.realtime_alert_runtime import start_realtime_alerts
+
+        start_realtime_alerts()
     try:
         yield
     finally:
+        from src.services.realtime_alert_runtime import stop_realtime_alerts
+
+        stop_realtime_alerts()
         refresh_task = getattr(app.state, "stock_index_refresh_task", None)
         if refresh_task is not None and not refresh_task.done():
             refresh_task.cancel()

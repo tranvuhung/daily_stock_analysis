@@ -18,7 +18,7 @@ Bắt đầu "thời gian chờ" (cooldown) 24 giờ để không báo lặp
 
 Lưu ý:
 
-- Cảnh báo là **kiểm tra theo chu kỳ**, không phải realtime từng tick.
+- Mặc định cảnh báo là **kiểm tra theo chu kỳ**. Khi bật **giá realtime MQTT** (mục 10), cảnh báo giá của mã VN được đánh giá **ngay khi có tick mới**.
 - Việc đánh giá **hoàn toàn theo quy tắc** và **không gọi LLM**.
 - Tin nhắn cảnh báo có thể kèm tóm tắt khuyến nghị AI gần nhất của mã, lấy từ lần phân tích trước đó.
 
@@ -29,7 +29,7 @@ Ví dụ một tin cảnh báo khi `REPORT_LANGUAGE=vi`:
 
 NLG change down 0.50%: current = -1.54%
 
-- giai đoạn: unknown | thị trường: vn | nguồn kích hoạt: alert | nguồn tóm tắt: snapshot phân tích gần nhất
+- giai đoạn: intraday | thị trường: vn | nguồn kích hoạt: alert | nguồn tóm tắt: snapshot phân tích gần nhất
 - chất lượng dữ liệu: usable
 - hạn chế: quote: fallback
 - hạn chế: technical: partial
@@ -51,6 +51,7 @@ Vào **Cài đặt** và kiểm tra các mục sau:
 | Thông báo | `NOTIFICATION_ALERT_CHANNELS` | Để trống, hoặc ví dụ `telegram,email` | Chỉ gửi cảnh báo tới các kênh này. Để trống thì gửi tới mọi kênh đã cấu hình. |
 | Nguồn dữ liệu | `SUPPORTED_MARKETS` (Enabled Markets) | Mặc định `vn`; ví dụ `vn,us` | Các thị trường được dùng. Cảnh báo phạm vi **Thị trường** chỉ chọn được các thị trường có trong danh sách này. |
 | Hệ thống | `TRADING_DAY_CHECK_ENABLED` | Bật (khuyến nghị) | Bỏ qua cảnh báo thị trường vào ngày nghỉ (với VN là thứ 7 và CN). |
+| Nguồn dữ liệu | `REALTIME_FEED_ENABLED` + `TVSI_MQTT_*` | Tuỳ chọn | Bật giá realtime qua MQTT của TVSI. Xem mục 10. |
 
 > Nếu chưa bật `AGENT_EVENT_MONITOR_ENABLED` hoặc chế độ lập lịch, bạn vẫn tạo được quy tắc và bấm **Kiểm thử** được. Nhưng sẽ **không có cảnh báo tự động** nào được gửi.
 
@@ -106,11 +107,12 @@ Lưu ý về mã VN: khi bật đồng thời `vn` và `us`, mã 3 ký tự như
 
 | Loại quy tắc | Tham số | Khi nào kích hoạt |
 | --- | --- | --- |
-| Giá cắt ngưỡng | Hướng `above`/`below`, Ngưỡng giá (> 0) | Giá hiện tại **≥** ngưỡng (above), hoặc **≤** ngưỡng (below). |
+| Giá cắt ngưỡng | Hướng `above`/`below`, Ngưỡng giá (> 0), **Chế độ kích hoạt** | **Theo mức** (mặc định): giá hiện tại **≥** ngưỡng (above) hoặc **≤** ngưỡng (below). **Cắt qua**: chỉ báo khi giá **vừa cắt** qua ngưỡng so với lần quan sát trước. |
 | Biến động giá | Hướng `up`/`down`, Ngưỡng biến động % (> 0) | % thay đổi trong ngày ≥ X (up), hoặc ≤ −X (down). |
+| Chạm trần/sàn | Loại giới hạn `Trần hoặc sàn` / `Giá trần` / `Giá sàn`, Khoảng cách % (0–20, mặc định 0) | Giá chạm trần/sàn, hoặc cách trần/sàn trong khoảng % đã đặt. Chỉ áp dụng cho mã VN. |
 | Khối lượng đột biến | Hệ số khối lượng (> 0), ví dụ `2` | Khối lượng phiên gần nhất > trung bình 20 phiên × hệ số. |
 
-> "Giá cắt ngưỡng" và "Biến động giá" so theo **mức**. Nghĩa là quy tắc sẽ thoả điều kiện ở mọi lần kiểm tra khi giá còn nằm bên kia ngưỡng. Thời gian chờ 24 giờ (mục 6) giúp bạn không bị báo liên tục.
+> Ở chế độ **Theo mức**, "Giá cắt ngưỡng" và "Biến động giá" thoả điều kiện ở mọi lần kiểm tra khi giá còn nằm bên kia ngưỡng. Thời gian chờ 24 giờ (mục 6) giúp bạn không bị báo liên tục. Muốn chỉ nhận báo đúng lúc giá cắt qua, hãy chọn chế độ **Cắt qua**. Lần quan sát đầu tiên sau khi tạo quy tắc (hoặc sau khi khởi động lại dịch vụ) chỉ ghi mốc giá, chưa báo.
 
 **Nhóm chỉ báo kỹ thuật.** Tính trên nến ngày. Quy tắc chỉ kích hoạt **tại thời điểm cắt**: phiên trước chưa vượt, phiên này vượt.
 
@@ -155,6 +157,8 @@ Với Việt Nam, chỉ số lấy từ VCI (VN-Index, VN30, HNX, UPCoM), độ 
 | Mục tiêu | Cách đặt |
 | --- | --- |
 | Báo khi HPG vượt 30.000 | Một mã `HPG` → Giá cắt ngưỡng → `above`, `30000` |
+| Chỉ báo đúng lúc HPG vừa cắt lên 30.000 | Một mã `HPG` → Giá cắt ngưỡng → `above`, `30000`, chế độ **Cắt qua** |
+| Báo khi SHS chạm trần hoặc cách trần 1% | Một mã `SHS` → Chạm trần/sàn → `Giá trần`, khoảng cách `1` |
 | Báo khi FPT giảm quá 5% trong ngày | Một mã `FPT` → Biến động giá → `down`, `5` |
 | Báo khi VNM có khối lượng gấp 3 lần trung bình | Một mã `VNM` → Khối lượng đột biến → `3` |
 | Báo khi mã nào trong danh mục theo dõi có RSI(14) cắt xuống 30 | Danh mục theo dõi → Ngưỡng RSI → `below`, chu kỳ `14`, ngưỡng `30` |
@@ -216,7 +220,7 @@ Mỗi dòng là một lần gửi tới một kênh. Các "kênh" đặc biệt:
 | No channel available | Chưa cấu hình kênh thông báo nào phù hợp. |
 | Cooldown read failed | Không đọc được trạng thái chờ; hệ thống dùng cơ chế dự phòng trong bộ nhớ. |
 
-> Danh sách lịch sử và notification chỉ tải **20 dòng mới nhất** khi mở trang. Muốn xem dữ liệu mới thì tải lại trang.
+> Danh sách lịch sử và notification tải **20 dòng mới nhất**. Khi Web nhận cảnh báo realtime (mục 10), hai bảng này tự tải lại; ngoài ra muốn xem dữ liệu mới thì tải lại trang.
 
 ## 8. Xử lý sự cố
 
@@ -228,12 +232,57 @@ Mỗi dòng là một lần gửi tới một kênh. Các "kênh" đặc biệt:
 | Quy tắc thị trường luôn `Skipped` | Ngày nghỉ, thị trường chưa bật, hoặc chưa có phiên trước (với "điểm giảm") | Đọc cột Reason. Chạy **Điểm lại thị trường** ít nhất một lần. |
 | Quy tắc chỉ báo luôn `Degraded` | Không đủ nến ngày cho chu kỳ đã chọn, hoặc nguồn dữ liệu lỗi | Giảm chu kỳ, hoặc kiểm tra nguồn dữ liệu trong Cài đặt → Nguồn dữ liệu. |
 | Nhập mã VN bị báo sai định dạng hoặc hiểu nhầm là mã Mỹ | Đang bật cả `vn` và `us` | Nhập dạng `HPG.VN`. |
-| Bị báo lặp mỗi ngày | "Giá cắt ngưỡng" so theo mức, và thời gian chờ chỉ là 24 giờ | Tắt quy tắc sau khi đã xử lý, hoặc đổi sang loại có kiểm tra điểm cắt (MA/RSI…). |
+| Bị báo lặp mỗi ngày | "Giá cắt ngưỡng" so theo mức, và thời gian chờ chỉ là 24 giờ | Chọn chế độ **Cắt qua**, hoặc tắt quy tắc sau khi đã xử lý. |
+| Dòng trạng thái ghi "Giá realtime: mất kết nối" | Không kết nối được broker TVSI (sai host/mật khẩu, ngoài mạng nội bộ TVSI/VPN) | Kiểm tra `TVSI_MQTT_*`. Trong lúc đó cảnh báo vẫn chạy theo chu kỳ bằng giá SSI. |
+| Cột Giá live trống | Chưa bật giá realtime và nguồn SSI không trả giá, hoặc quy tắc không phải phạm vi Một mã | Bật mục 10, hoặc kiểm tra nguồn dữ liệu. |
 
 ## 9. Giới hạn hiện tại
 
-- Chỉ dùng dữ liệu ngày và giá snapshot theo chu kỳ. Không có dữ liệu phút và không có realtime.
+- Giá realtime theo tick chỉ có cho **mã VN** qua MQTT TVSI. Các thị trường khác vẫn dùng giá snapshot theo chu kỳ. Chỉ báo kỹ thuật vẫn tính trên nến ngày (không có nến phút).
+- Ngày lễ VN chưa được loại trừ khỏi phiên giao dịch.
 - Chưa có cảnh báo theo tin tức hoặc tâm lý thị trường.
 - Mức cắt lỗ và chốt lời do AI đề xuất trong báo cáo **không** tự động thành quy tắc. Bạn cần tạo quy tắc thủ công.
 - Web chưa có màn sửa quy tắc, và chưa có ô chỉnh thời gian chờ hay chính sách thông báo.
 - Một số nhãn trên trang (lịch sử kích hoạt, notification attempts) vẫn hiển thị tiếng Anh.
+
+## 10. Cảnh báo realtime theo giá MQTT (mã Việt Nam)
+
+Khi bật, hệ thống nhận giá khớp lệnh từng tick từ broker MQTT của TVSI. Cảnh báo giá (Giá cắt ngưỡng, Biến động giá, Chạm trần/sàn) của mã VN được đánh giá **ngay khi giá thay đổi**, không cần chờ chu kỳ 5 phút.
+
+### 10.1 Bật tính năng
+
+Trong **Cài đặt → Nguồn dữ liệu**, hoặc trong `.env`:
+
+| Khoá | Giá trị |
+| --- | --- |
+| `REALTIME_FEED_ENABLED` | `true` |
+| `TVSI_MQTT_HOST` | `realtime-mobile.tvsi.com.vn` |
+| `TVSI_MQTT_PORT` / `TVSI_MQTT_TLS` / `TVSI_MQTT_TRANSPORT` | `443` / `true` / `tcp` (mặc định) |
+| `TVSI_MQTT_USERNAME` / `TVSI_MQTT_PASSWORD` | Thông tin đăng nhập TVSI cấp |
+
+- Cần bật cả `AGENT_EVENT_MONITOR_ENABLED`.
+- Sau khi đổi các khoá này, **khởi động lại dịch vụ**.
+- Broker TVSI nằm trong mạng nội bộ, nên máy chạy dịch vụ phải truy cập được host này (mạng TVSI hoặc VPN).
+- Không đưa mật khẩu vào issue, nhật ký hay ảnh chụp màn hình.
+
+### 10.2 Trên trang Cảnh báo
+
+- **Dòng trạng thái** phía trên danh sách quy tắc:
+  - *Giá realtime: đang kết nối (MQTT)*: kèm "ngoài phiên" nếu đang ngoài giờ giao dịch.
+  - *mất kết nối, dùng giá SSI theo chu kỳ*.
+  - *chưa bật*.
+- Cột **Giá live** (quy tắc phạm vi Một mã): giá hiện tại, % thay đổi trong ngày, và khoảng cách từ giá tới ngưỡng của "Giá cắt ngưỡng". Cột cập nhật liên tục, tối đa 1 lần/giây mỗi mã.
+- Khi một cảnh báo kích hoạt:
+  - Góc dưới bên phải hiện **toast**, ở mọi trang.
+  - Menu **Cảnh báo** có **badge** số cảnh báo mới; mở trang Cảnh báo thì badge được xoá.
+  - Bảng lịch sử tự tải lại.
+- Cảnh báo **vẫn được gửi qua các kênh đã cấu hình** (Telegram, Email…) như bình thường, và vẫn áp dụng thời gian chờ 24 giờ.
+
+### 10.3 Lưu ý
+
+- Chỉ đánh giá trong **phiên khớp lệnh**: 9:00–11:30 và 13:00–14:45, thứ 2–6 (thêm 2 phút sau 14:45 để nhận giá khớp ATC). Giá ngoài phiên vẫn hiện ở cột Giá live nhưng không kích hoạt cảnh báo. Quy tắc này áp dụng cho cả chế độ kiểm tra định kỳ.
+- Khi quy tắc đang trong thời gian chờ (cooldown), các tick tiếp theo không ghi thêm vào lịch sử kích hoạt.
+- Chỉ subscribe các mã **đang có quy tắc giá được bật**. Quy tắc mới tạo được áp dụng ngay.
+- Nếu mất kết nối, hệ thống tự kết nối lại. Trong thời gian đó, cảnh báo giá chạy theo chu kỳ bằng giá SSI như trước.
+- Nguồn dữ liệu của lần kích hoạt realtime trong lịch sử là `tvsi_mqtt`.
+

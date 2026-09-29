@@ -74,16 +74,35 @@ from src.storage import (
     DatabaseManager,
 )
 from src.utils.sanitize import sanitize_diagnostic_text
+from src.services.price_alert_rules import (
+    PRICE_LIMIT_ALERT_TYPE,
+    PriceLimitAlert,
+    crossed,
+    normalize_price_limit_parameters,
+    normalize_trigger_mode,
+    price_limit_hit,
+)
 
 
 LEGACY_RUNTIME_ALERT_TYPES = frozenset({"price_cross", "price_change_percent", "volume_spike"})
-SYMBOL_ALERT_TYPES = LEGACY_RUNTIME_ALERT_TYPES | TECHNICAL_ALERT_TYPES
+SYMBOL_ALERT_TYPES = LEGACY_RUNTIME_ALERT_TYPES | TECHNICAL_ALERT_TYPES | frozenset({PRICE_LIMIT_ALERT_TYPE})
 SUPPORTED_ALERT_TYPES = SYMBOL_ALERT_TYPES | PORTFOLIO_ALERT_TYPES | MARKET_ALERT_TYPES
 SUPPORTED_TARGET_SCOPES = frozenset({"single_symbol", "watchlist", "portfolio_holdings", "portfolio_account", "market"})
 SUPPORTED_SEVERITIES = frozenset({"info", "warning", "critical"})
 NULLABLE_RULE_UPDATE_FIELDS = frozenset({"cooldown_policy", "notification_policy"})
 
 logger = logging.getLogger(__name__)
+
+
+def _notify_realtime_rules_changed() -> None:
+    """Báo engine realtime nạp lại rule ngay; không có engine thì bỏ qua."""
+
+    try:
+        from src.services.realtime_alert_engine import request_realtime_rules_reload
+
+        request_realtime_rules_reload()
+    except Exception as exc:  # không để việc báo engine làm hỏng CRUD
+        logger.debug("[AlertService] realtime reload request failed: %s", exc)
 
 
 class AlertServiceError(ValueError):
@@ -113,7 +132,9 @@ class AlertService:
 
     def create_rule(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         fields = self._normalize_rule_payload(payload)
-        return self._serialize_rule(self.repo.create_rule(fields))
+        created = self._serialize_rule(self.repo.create_rule(fields))
+        _notify_realtime_rules_changed()
+        return created
 
     def get_rule(self, rule_id: int) -> Dict[str, Any]:
         row = self.repo.get_rule(rule_id)
@@ -135,10 +156,13 @@ class AlertService:
         updated = self.repo.update_rule(rule_id, fields)
         if updated is None:
             raise AlertNotFoundError(f"Alert rule not found: {rule_id}")
+        _notify_realtime_rules_changed()
         return self._serialize_rule(updated)
 
     def delete_rule(self, rule_id: int) -> bool:
-        return self.repo.delete_rule(rule_id)
+        deleted = self.repo.delete_rule(rule_id)
+        _notify_realtime_rules_changed()
+        return deleted
 
     def enable_rule(self, rule_id: int, enabled: bool) -> Dict[str, Any]:
         if enabled:
@@ -150,6 +174,7 @@ class AlertService:
         updated = self.repo.update_rule(rule_id, {"enabled": enabled})
         if updated is None:
             raise AlertNotFoundError(f"Alert rule not found: {rule_id}")
+        _notify_realtime_rules_changed()
         return self._serialize_rule(updated)
 
     def list_rules(
@@ -223,6 +248,8 @@ class AlertService:
             return await self._evaluate_price(rule, monitor)
         if isinstance(rule, PriceChangeAlert):
             return await self._evaluate_price_change(rule, monitor)
+        if isinstance(rule, PriceLimitAlert):
+            return await self._evaluate_price_limit(rule, monitor)
         if isinstance(rule, VolumeAlert):
             return await self._evaluate_volume(rule)
         if isinstance(rule, TechnicalIndicatorAlert):
@@ -319,7 +346,21 @@ class AlertService:
         return response
 
     async def _evaluate_price(self, rule: PriceAlert, monitor: EventMonitor) -> Dict[str, Any]:
-        threshold = float(rule.price)
+        return await self._evaluate_on_realtime_quote(rule, monitor, threshold=float(rule.price))
+
+    async def _evaluate_price_change(self, rule: PriceChangeAlert, monitor: EventMonitor) -> Dict[str, Any]:
+        return await self._evaluate_on_realtime_quote(rule, monitor, threshold=abs(float(rule.change_pct)))
+
+    async def _evaluate_price_limit(self, rule: PriceLimitAlert, monitor: EventMonitor) -> Dict[str, Any]:
+        return await self._evaluate_on_realtime_quote(rule, monitor, threshold=None)
+
+    async def _evaluate_on_realtime_quote(
+        self,
+        rule,
+        monitor: EventMonitor,
+        *,
+        threshold: Optional[float],
+    ) -> Dict[str, Any]:
         try:
             quote = await monitor._get_realtime_quote(rule.stock_code)
         except Exception as exc:
@@ -329,6 +370,25 @@ class AlertService:
                 threshold=threshold,
                 data_source="realtime_quote",
             )
+        return self.evaluate_price_quote(rule, quote)
+
+    def evaluate_price_quote(self, rule, quote: Any, *, data_source: str = "realtime_quote") -> Dict[str, Any]:
+        """Đánh giá rule giá trên một quote (engine định kỳ) hoặc một tick (engine realtime).
+
+        Evaluate a price rule against one quote. ``price_cross`` in ``cross`` mode keeps
+        the previously observed price per rule/target in memory.
+        """
+        if isinstance(rule, PriceChangeAlert):
+            return self._evaluate_price_change_quote(rule, quote, data_source=data_source)
+        if isinstance(rule, PriceLimitAlert):
+            return self._evaluate_price_limit_quote(rule, quote, data_source=data_source)
+        return self._evaluate_price_cross_quote(rule, quote, data_source=data_source)
+
+    def _price_memory_key(self, rule) -> str:
+        return f"{self._runtime_rule_id(rule)}:{rule.stock_code}:{getattr(rule, 'direction', '')}:{getattr(rule, 'price', '')}"
+
+    def _evaluate_price_cross_quote(self, rule: PriceAlert, quote: Any, *, data_source: str) -> Dict[str, Any]:
+        threshold = float(rule.price)
         if quote is None:
             return self._not_triggered(
                 rule,
@@ -336,7 +396,7 @@ class AlertService:
                 "No realtime quote available",
                 record_status="skipped",
                 threshold=threshold,
-                data_source="realtime_quote",
+                data_source=data_source,
             )
 
         try:
@@ -346,7 +406,7 @@ class AlertService:
                 rule,
                 exc,
                 threshold=threshold,
-                data_source="realtime_quote",
+                data_source=data_source,
                 data_timestamp=self._extract_quote_datetime(quote),
             )
         if current_price <= 0:
@@ -356,7 +416,35 @@ class AlertService:
                 "No valid realtime price available",
                 record_status="skipped",
                 threshold=threshold,
-                data_source="realtime_quote",
+                data_source=data_source,
+                data_timestamp=self._extract_quote_datetime(quote),
+            )
+
+        if str(getattr(rule, "trigger_mode", "level") or "level") == "cross":
+            memory = self._last_observed_prices()
+            key = self._price_memory_key(rule)
+            previous = memory.get(key)
+            memory[key] = current_price
+            if crossed(rule.direction, rule.price, previous, current_price):
+                return self._triggered(
+                    rule,
+                    current_price,
+                    f"{rule.stock_code} price crossed {rule.direction} {rule.price}: {previous} -> {current_price}",
+                    threshold=threshold,
+                    data_source=data_source,
+                    data_timestamp=self._extract_quote_datetime(quote),
+                )
+            message = (
+                f"{rule.stock_code} price {current_price}: baseline recorded, waiting for a cross {rule.direction} {rule.price}"
+                if previous is None
+                else f"{rule.stock_code} price {previous} -> {current_price} did not cross {rule.direction} {rule.price}"
+            )
+            return self._not_triggered(
+                rule,
+                current_price,
+                message,
+                threshold=threshold,
+                data_source=data_source,
                 data_timestamp=self._extract_quote_datetime(quote),
             )
 
@@ -370,7 +458,7 @@ class AlertService:
                 current_price,
                 f"{rule.stock_code} price {rule.direction} {rule.price}: current = {current_price}",
                 threshold=threshold,
-                data_source="realtime_quote",
+                data_source=data_source,
                 data_timestamp=self._extract_quote_datetime(quote),
             )
         return self._not_triggered(
@@ -378,21 +466,12 @@ class AlertService:
             current_price,
             f"{rule.stock_code} price {current_price} did not cross {rule.direction} {rule.price}",
             threshold=threshold,
-            data_source="realtime_quote",
+            data_source=data_source,
             data_timestamp=self._extract_quote_datetime(quote),
         )
 
-    async def _evaluate_price_change(self, rule: PriceChangeAlert, monitor: EventMonitor) -> Dict[str, Any]:
+    def _evaluate_price_change_quote(self, rule: PriceChangeAlert, quote: Any, *, data_source: str) -> Dict[str, Any]:
         threshold = abs(float(rule.change_pct))
-        try:
-            quote = await monitor._get_realtime_quote(rule.stock_code)
-        except Exception as exc:
-            return self._evaluation_error(
-                rule,
-                exc,
-                threshold=threshold,
-                data_source="realtime_quote",
-            )
         if quote is None:
             return self._not_triggered(
                 rule,
@@ -400,7 +479,7 @@ class AlertService:
                 "No realtime quote available",
                 record_status="skipped",
                 threshold=threshold,
-                data_source="realtime_quote",
+                data_source=data_source,
             )
 
         current_change_pct = _read_quote_float(
@@ -417,7 +496,7 @@ class AlertService:
                 "No valid realtime change percent available",
                 record_status="skipped",
                 threshold=threshold,
-                data_source="realtime_quote",
+                data_source=data_source,
                 data_timestamp=self._extract_quote_datetime(quote),
             )
 
@@ -432,7 +511,7 @@ class AlertService:
                 current_change_pct,
                 f"{rule.stock_code} change {direction} {threshold:.2f}%: current = {current_change_pct:+.2f}%",
                 threshold=threshold,
-                data_source="realtime_quote",
+                data_source=data_source,
                 data_timestamp=self._extract_quote_datetime(quote),
             )
         return self._not_triggered(
@@ -440,9 +519,63 @@ class AlertService:
             current_change_pct,
             f"{rule.stock_code} change {current_change_pct:+.2f}% did not cross {direction} {threshold:.2f}%",
             threshold=threshold,
-            data_source="realtime_quote",
+            data_source=data_source,
             data_timestamp=self._extract_quote_datetime(quote),
         )
+
+    def _evaluate_price_limit_quote(self, rule: PriceLimitAlert, quote: Any, *, data_source: str) -> Dict[str, Any]:
+        if quote is None:
+            return self._not_triggered(
+                rule, None, "No realtime quote available", record_status="skipped", data_source=data_source
+            )
+        price = _read_quote_float(quote, "price")
+        ceiling = _read_quote_float(quote, "vn_ceiling", "ceiling")
+        floor = _read_quote_float(quote, "vn_floor", "floor")
+        data_timestamp = self._extract_quote_datetime(quote)
+        if price is None or price <= 0:
+            return self._not_triggered(
+                rule,
+                None,
+                "No valid realtime price available",
+                record_status="skipped",
+                data_source=data_source,
+                data_timestamp=data_timestamp,
+            )
+        if ceiling is None and floor is None:
+            return self._not_triggered(
+                rule,
+                price,
+                "No ceiling/floor price available for this symbol",
+                record_status="skipped",
+                data_source=data_source,
+                data_timestamp=data_timestamp,
+            )
+        hit_side, limit_price = price_limit_hit(rule.side, rule.near_pct, price, ceiling, floor)
+        if hit_side:
+            near_text = f" (within {rule.near_pct:g}%)" if rule.near_pct else ""
+            return self._triggered(
+                rule,
+                price,
+                f"{rule.stock_code} price {price} touched {hit_side} {limit_price}{near_text}",
+                threshold=limit_price,
+                data_source=data_source,
+                data_timestamp=data_timestamp,
+            )
+        return self._not_triggered(
+            rule,
+            price,
+            f"{rule.stock_code} price {price} is away from ceiling {ceiling} / floor {floor}",
+            data_source=data_source,
+            data_timestamp=data_timestamp,
+        )
+
+    def _last_observed_prices(self) -> Dict[str, float]:
+        # Bộ nhớ giá lần trước cho chế độ "cross" (trong process). In-process memory for "cross" mode.
+        memory = getattr(self, "_observed_price_memory", None)
+        if memory is None:
+            memory = {}
+            self._observed_price_memory = memory
+        return memory
 
     async def _evaluate_volume(self, rule: VolumeAlert) -> Dict[str, Any]:
         def _fetch_daily_data():
@@ -703,6 +836,8 @@ class AlertService:
             return float(rule.price)
         if isinstance(rule, PriceChangeAlert):
             return abs(float(rule.change_pct))
+        if isinstance(rule, PriceLimitAlert):
+            return None
         if isinstance(rule, TechnicalIndicatorAlert):
             return threshold_for_indicator(rule.alert_type, rule.indicator_params)
         if isinstance(rule, PortfolioRiskAlert):
@@ -715,7 +850,7 @@ class AlertService:
 
     @staticmethod
     def _data_source_for_rule(rule) -> Optional[str]:
-        if isinstance(rule, (PriceAlert, PriceChangeAlert)):
+        if isinstance(rule, (PriceAlert, PriceChangeAlert, PriceLimitAlert)):
             return "realtime_quote"
         if isinstance(rule, VolumeAlert):
             return "daily_data"
@@ -729,6 +864,17 @@ class AlertService:
 
     @classmethod
     def _extract_quote_datetime(cls, quote: Any) -> Optional[datetime]:
+        # provider_timestamp (ISO, thường là UTC sau khi enrich) → giờ địa phương không kèm tz,
+        # cùng quy ước với các data_timestamp khác. Convert to naive local time.
+        provider_raw = cls._read_quote_field(quote, "provider_timestamp")
+        if isinstance(provider_raw, str) and provider_raw.strip():
+            try:
+                provider_dt = datetime.fromisoformat(provider_raw.strip().replace("Z", "+00:00"))
+                if provider_dt.tzinfo is not None:
+                    provider_dt = provider_dt.astimezone().replace(tzinfo=None)
+                return provider_dt
+            except ValueError:
+                pass
         for field_name in (
             "data_timestamp",
             "timestamp",
@@ -982,7 +1128,21 @@ class AlertService:
             direction = str(parameters.get("direction") or "above").strip().lower()
             if direction not in {"above", "below"}:
                 raise AlertServiceError(f"invalid direction: {direction}")
-            return {"direction": direction, "price": self._positive_float(parameters.get("price"), "price")}
+            normalized = {"direction": direction, "price": self._positive_float(parameters.get("price"), "price")}
+            try:
+                trigger_mode = normalize_trigger_mode(parameters.get("trigger_mode"))
+            except ValueError as exc:
+                raise AlertServiceError(str(exc)) from exc
+            # Chỉ lưu khi khác mặc định để khoá ngữ nghĩa (semantic key) của rule cũ không đổi.
+            if trigger_mode != "level":
+                normalized["trigger_mode"] = trigger_mode
+            return normalized
+
+        if alert_type == PRICE_LIMIT_ALERT_TYPE:
+            try:
+                return normalize_price_limit_parameters(parameters)
+            except ValueError as exc:
+                raise AlertServiceError(str(exc)) from exc
 
         if alert_type == "price_change_percent":
             direction = str(parameters.get("direction") or "up").strip().lower()
@@ -1143,6 +1303,14 @@ class AlertService:
                 stock_code=data["target"],
                 direction=str(parameters["direction"]),
                 price=float(parameters["price"]),
+                trigger_mode=str(parameters.get("trigger_mode") or "level"),
+                metadata=metadata,
+            )
+        if data["alert_type"] == PRICE_LIMIT_ALERT_TYPE:
+            return PriceLimitAlert(
+                stock_code=data["target"],
+                side=str(parameters.get("side") or "both"),
+                near_pct=float(parameters.get("near_pct") or 0),
                 metadata=metadata,
             )
         if data["alert_type"] == "price_change_percent":

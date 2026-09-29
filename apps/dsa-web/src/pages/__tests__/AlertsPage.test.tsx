@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AlertsPage from '../AlertsPage';
+import { useAlertStore } from '../../stores/alertStore';
+import { act } from 'react';
 
 const {
   listRules,
@@ -11,6 +13,7 @@ const {
   testRule,
   listTriggers,
   listNotifications,
+  listLiveQuotes,
 } = vi.hoisted(() => ({
   listRules: vi.fn(),
   createRule: vi.fn(),
@@ -20,6 +23,7 @@ const {
   testRule: vi.fn(),
   listTriggers: vi.fn(),
   listNotifications: vi.fn(),
+  listLiveQuotes: vi.fn(),
 }));
 
 vi.mock('../../api/alerts', () => ({
@@ -32,6 +36,8 @@ vi.mock('../../api/alerts', () => ({
     testRule,
     listTriggers,
     listNotifications,
+    listLiveQuotes,
+    listMarketRegions: vi.fn().mockResolvedValue({ regions: ['vn'], default: 'vn' }),
   },
 }));
 
@@ -94,6 +100,11 @@ beforeEach(() => {
     pageSize: 20,
   });
   listNotifications.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
+  listLiveQuotes.mockResolvedValue({
+    feed: { enabled: true, connected: true, inSession: true },
+    quotes: [{ target: '600519', symbol: '600519', price: 1750, changePct: 1.25, source: 'tvsi_mqtt' }],
+  });
+  useAlertStore.setState({ unreadCount: 0, toasts: [], livePrices: {}, feedStatus: null, triggerVersion: 0 });
   testRule.mockResolvedValue({
     ruleId: 1,
     status: 'triggered',
@@ -270,5 +281,35 @@ describe('AlertsPage', () => {
 
     expect(await screen.findByText('tải thất bại')).toBeInTheDocument();
     expect(screen.getByText('告警 API 不可用')).toBeInTheDocument();
+  });
+
+  it('shows live prices, feed status and reloads history on realtime alerts', async () => {
+    useAlertStore.setState({ unreadCount: 3 });
+    render(<AlertsPage />);
+
+    const cell = await screen.findByTestId('live-price-1');
+    expect(cell).toHaveTextContent('1.750');
+    expect(cell).toHaveTextContent('+1.25%');
+    expect(cell).toHaveTextContent('+2.86%');
+    expect(screen.getByTestId('alert-feed-status')).toHaveTextContent('connected');
+    await waitFor(() => expect(useAlertStore.getState().unreadCount).toBe(0));
+    await waitFor(() => expect(listTriggers).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      useAlertStore.getState().pushAlert({
+        ruleId: 1,
+        target: '600519',
+        alertType: 'price_cross',
+        severity: 'warning',
+        reason: '600519 price crossed above 1800',
+        triggeredAt: '2026-09-28T10:00:00',
+      });
+      useAlertStore.getState().upsertPrice({ symbol: '600519', price: 1805, changePct: 4.1 });
+    });
+
+    await waitFor(() => expect(listTriggers).toHaveBeenCalledTimes(2));
+    expect(listNotifications).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('live-price-1')).toHaveTextContent('1.805');
+    await waitFor(() => expect(useAlertStore.getState().unreadCount).toBe(0));
   });
 });

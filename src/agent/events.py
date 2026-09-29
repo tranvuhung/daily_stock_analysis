@@ -125,6 +125,8 @@ class PriceAlert(AlertRule):
     alert_type: AlertType = AlertType.PRICE_CROSS
     direction: str = "above"  # "above" or "below"
     price: float = 0.0
+    # "level": giá đang ở bên kia ngưỡng là kích hoạt (hành vi cũ); "cross": chỉ khi vừa cắt qua.
+    trigger_mode: str = "level"
 
     def __post_init__(self):
         if not self.description:

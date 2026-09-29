@@ -1242,6 +1242,18 @@ class Config:
     # 熔断器冷却时间（秒）
     circuit_breaker_cooldown: int = 300
 
+    # Feed giá realtime dạng push (MQTT TVSI) cho cảnh báo realtime; mặc định tắt.
+    # Push realtime price feed (TVSI MQTT) for realtime alerts; disabled by default.
+    realtime_feed_enabled: bool = False
+    realtime_feed_stale_seconds: int = 30
+    tvsi_mqtt_host: str = ""
+    tvsi_mqtt_port: int = 443
+    tvsi_mqtt_tls: bool = True
+    tvsi_mqtt_transport: str = "tcp"
+    tvsi_mqtt_username: str = ""
+    tvsi_mqtt_password: str = ""
+    tvsi_mqtt_topic_template: str = "topic/{symbol}"
+
     # === 基本面聚合开关与降级保护 ===
     # 全局总开关；关闭时返回 not_supported 并保持主流程无变化
     enable_fundamental_pipeline: bool = True
@@ -2252,6 +2264,17 @@ class Config:
             realtime_source_priority=cls._resolve_realtime_source_priority(),
             realtime_cache_ttl=parse_env_int(os.getenv('REALTIME_CACHE_TTL'), 600, field_name='REALTIME_CACHE_TTL', minimum=0),
             circuit_breaker_cooldown=parse_env_int(os.getenv('CIRCUIT_BREAKER_COOLDOWN'), 300, field_name='CIRCUIT_BREAKER_COOLDOWN', minimum=0),
+            realtime_feed_enabled=os.getenv('REALTIME_FEED_ENABLED', 'false').lower() == 'true',
+            realtime_feed_stale_seconds=parse_env_int(
+                os.getenv('REALTIME_FEED_STALE_SECONDS'), 30, field_name='REALTIME_FEED_STALE_SECONDS', minimum=1
+            ),
+            tvsi_mqtt_host=(os.getenv('TVSI_MQTT_HOST') or '').strip(),
+            tvsi_mqtt_port=parse_env_int(os.getenv('TVSI_MQTT_PORT'), 443, field_name='TVSI_MQTT_PORT', minimum=1),
+            tvsi_mqtt_tls=os.getenv('TVSI_MQTT_TLS', 'true').lower() == 'true',
+            tvsi_mqtt_transport=(os.getenv('TVSI_MQTT_TRANSPORT') or 'tcp').strip().lower(),
+            tvsi_mqtt_username=os.getenv('TVSI_MQTT_USERNAME') or '',
+            tvsi_mqtt_password=os.getenv('TVSI_MQTT_PASSWORD') or '',
+            tvsi_mqtt_topic_template=(os.getenv('TVSI_MQTT_TOPIC_TEMPLATE') or 'topic/{symbol}').strip(),
             enable_fundamental_pipeline=os.getenv('ENABLE_FUNDAMENTAL_PIPELINE', 'true').lower() == 'true',
             fundamental_stage_timeout_seconds=parse_env_float(
                 os.getenv('FUNDAMENTAL_STAGE_TIMEOUT_SECONDS'),

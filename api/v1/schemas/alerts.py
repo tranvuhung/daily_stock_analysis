@@ -155,3 +155,11 @@ class AlertMarketRegionsResponse(BaseModel):
 
     regions: List[str] = Field(default_factory=list)
     default: Optional[str] = None
+
+
+class AlertLiveQuotesResponse(BaseModel):
+    """Giá live của các mã có rule và trạng thái feed realtime."""
+
+    feed: Dict[str, Any] = Field(default_factory=dict)
+    # Danh sách (không dùng dict theo mã) để client camelCase không đổi nhầm key như "HPG.VN".
+    quotes: List[Dict[str, Any]] = Field(default_factory=list)

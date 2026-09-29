@@ -4,6 +4,7 @@ import type { DecisionSignalItem } from './decisionSignals';
 export type AlertType =
   | 'price_cross'
   | 'price_change_percent'
+  | 'price_limit_touch'
   | 'volume_spike'
   | 'ma_price_cross'
   | 'rsi_threshold'
@@ -22,6 +23,8 @@ export type AlertDirection = 'above' | 'below' | 'up' | 'down' | 'bullish_cross'
 export type PortfolioStopLossMode = 'near' | 'breach';
 export type MarketRegion = 'vn' | 'cn' | 'hk' | 'us';
 export type MarketLightStatus = 'yellow' | 'red';
+export type PriceTriggerMode = 'level' | 'cross';
+export type PriceLimitSide = 'ceiling' | 'floor' | 'both';
 export type AlertDryRunStatus = 'triggered' | 'not_triggered' | 'evaluation_error';
 export type AlertTriggerStatus = 'triggered' | 'skipped' | 'degraded' | 'failed';
 
@@ -41,6 +44,9 @@ export interface AlertRuleParameters {
   mode?: PortfolioStopLossMode;
   statuses?: MarketLightStatus[];
   minDrop?: number;
+  triggerMode?: PriceTriggerMode;
+  side?: PriceLimitSide;
+  nearPct?: number;
 }
 
 export interface AlertRuleItem {
@@ -182,4 +188,57 @@ export interface AlertNotificationListQuery {
 export interface AlertMarketRegionsResponse {
   regions: MarketRegion[];
   default: MarketRegion | null;
+}
+
+export interface AlertLiveQuote {
+  /** Mục tiêu của rule (ví dụ HPG hoặc HPG.VN); có trong live-quotes, không có trong price_update. */
+  target?: string;
+  symbol: string;
+  price: number | null;
+  change?: number | null;
+  changePct?: number | null;
+  ref?: number | null;
+  ceiling?: number | null;
+  floor?: number | null;
+  high?: number | null;
+  low?: number | null;
+  volume?: number | null;
+  marketStatus?: string | null;
+  ts?: string | null;
+  source?: string | null;
+}
+
+/** Trạng thái feed giá realtime (MQTT TVSI). Realtime feed status. */
+export interface AlertFeedStatus {
+  enabled: boolean;
+  state?: string;
+  connected?: boolean;
+  source?: string;
+  subscribed?: number;
+  rules?: number;
+  symbols?: number;
+  inSession?: boolean;
+  lastMessageAt?: string | null;
+  lastMessageAgeSeconds?: number | null;
+  lastError?: string | null;
+}
+
+export interface AlertLiveQuotesResponse {
+  feed: AlertFeedStatus;
+  quotes: AlertLiveQuote[];
+}
+
+/** Sự kiện ``alert_triggered`` từ SSE. */
+export interface AlertTriggeredEvent {
+  triggerId?: number | null;
+  ruleId: number;
+  target: string;
+  displayTarget?: string | null;
+  alertType: string;
+  severity: AlertSeverity;
+  observedValue?: number | null;
+  threshold?: number | null;
+  reason?: string | null;
+  dataSource?: string | null;
+  triggeredAt: string;
 }

@@ -9,7 +9,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 from src.agent.events import (
@@ -39,7 +39,9 @@ from src.services.decision_signal_summary import (
 )
 from src.services.history_service import HistoryService
 from src.services.alert_labels import alert_label, alert_language
+from src.services.event_bus import publish_event
 from src.services.market_light_service import normalize_market_alert_region
+from src.services.price_alert_rules import is_vn_price_alert_window, is_vn_price_rule
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +149,26 @@ class AlertWorker:
         monitor = EventMonitor()
         daily_cache: Dict[Any, Any] = {}
         self._analysis_visibility_cache = {}
+        from src.services.realtime_alert_engine import get_active_realtime_engine
+
+        realtime_engine = get_active_realtime_engine()
+        vn_price_window: Optional[bool] = None
         for runtime_rule in runtime_rules:
+            # Rule giá mã VN đang được engine realtime xử lý theo tick thì bỏ qua để không đánh giá hai lần.
+            # Skip price rules the realtime engine is handling tick-by-tick.
+            if realtime_engine is not None and realtime_engine.claims(runtime_rule):
+                stats["realtime_claimed"] = stats.get("realtime_claimed", 0) + 1
+                continue
+            # Ngoài phiên khớp lệnh VN giá không đổi: snapshot cũ chỉ sinh trigger lặp mỗi chu kỳ.
+            # Outside VN matching sessions the price is frozen; skip instead of re-triggering.
+            if is_vn_price_rule(runtime_rule.rule):
+                if vn_price_window is None:
+                    vn_price_window = is_vn_price_alert_window(
+                        datetime.fromtimestamp(self.now_provider(), tz=timezone.utc)
+                    )
+                if not vn_price_window:
+                    stats["out_of_session"] = stats.get("out_of_session", 0) + 1
+                    continue
             stats["evaluated"] += 1
             try:
                 result = asyncio.run(self.service._evaluate_rule(runtime_rule.rule, monitor, daily_cache=daily_cache))
@@ -164,45 +185,95 @@ class AlertWorker:
                     "message": self.service._sanitize_text(str(exc) or "Alert evaluation failed"),
                 }
 
-            record_status = result.get("record_status")
-            if record_status == "triggered":
-                self._attach_decision_signal_summary_safely(runtime_rule, result)
-            if record_status in WRITABLE_TRIGGER_STATUSES:
-                trigger_write = self._record_trigger_safely(runtime_rule, result, record_status)
-                trigger_id = trigger_write.trigger_id
-                if trigger_write.created:
-                    stats["recorded"] += 1
-                if record_status in stats and record_status != "triggered":
-                    stats[record_status] += 1
-            else:
-                trigger_id = None
-
-            if record_status == "triggered":
-                stats["triggered"] += 1
-                if runtime_rule.source == "db":
-                    cooldown_decision = self._check_db_cooldown(runtime_rule, trigger_id)
-                    if cooldown_decision.suppressed:
-                        stats["cooldown_suppressed"] += 1
-                        stats["notification_attempts"] += 1
-                        continue
-                    dispatch = self._send_notification_safely(runtime_rule, result)
-                    stats["notification_attempts"] += self._record_notification_attempts_safely(trigger_id, dispatch)
-                    if self._dispatch_has_real_channel_success(dispatch):
-                        self._upsert_db_cooldown_safely(runtime_rule, result)
-                        if cooldown_decision.fallback_key:
-                            self._mark_notified(
-                                cooldown_decision.fallback_key,
-                                ttl_seconds=cooldown_decision.fallback_ttl_seconds,
-                            )
-                        stats["notified"] += 1
-                elif self._should_notify(runtime_rule.key):
-                    dispatch = self._send_notification_safely(runtime_rule, result)
-                    stats["notification_attempts"] += self._record_notification_attempts_safely(trigger_id, dispatch)
-                    if bool(dispatch.success):
-                        self._mark_notified(runtime_rule.key)
-                        stats["notified"] += 1
+            self.process_result(runtime_rule, result, stats)
 
         return stats
+
+    def process_result(
+        self,
+        runtime_rule: RuntimeAlertRule,
+        result: Dict[str, Any],
+        stats: Optional[Dict[str, int]] = None,
+    ) -> None:
+        """Ghi trigger, kiểm tra cooldown, gửi thông báo và phát sự kiện cho một kết quả đánh giá.
+
+        Record the trigger, apply cooldown, dispatch notifications and publish the
+        ``alert_triggered`` event for one evaluation result. Shared by the periodic
+        cycle and the realtime tick engine.
+        """
+        if stats is None:
+            stats = {}
+        for key in ("recorded", "triggered", "notified", "skipped", "degraded", "failed",
+                    "notification_attempts", "cooldown_suppressed"):
+            stats.setdefault(key, 0)
+        record_status = result.get("record_status")
+        if record_status == "triggered":
+            self._attach_decision_signal_summary_safely(runtime_rule, result)
+        if record_status in WRITABLE_TRIGGER_STATUSES:
+            trigger_write = self._record_trigger_safely(runtime_rule, result, record_status)
+            trigger_id = trigger_write.trigger_id
+            if trigger_write.created:
+                stats["recorded"] += 1
+            if record_status in stats and record_status != "triggered":
+                stats[record_status] += 1
+        else:
+            trigger_id = None
+
+        if record_status == "triggered":
+            stats["triggered"] += 1
+            if runtime_rule.source == "db":
+                cooldown_decision = self._check_db_cooldown(runtime_rule, trigger_id)
+                if cooldown_decision.suppressed:
+                    stats["cooldown_suppressed"] += 1
+                    stats["notification_attempts"] += 1
+                    return
+                self._publish_alert_event_safely(runtime_rule, result, trigger_id)
+                dispatch = self._send_notification_safely(runtime_rule, result)
+                stats["notification_attempts"] += self._record_notification_attempts_safely(trigger_id, dispatch)
+                if self._dispatch_has_real_channel_success(dispatch):
+                    self._upsert_db_cooldown_safely(runtime_rule, result)
+                    if cooldown_decision.fallback_key:
+                        self._mark_notified(
+                            cooldown_decision.fallback_key,
+                            ttl_seconds=cooldown_decision.fallback_ttl_seconds,
+                        )
+                    stats["notified"] += 1
+            elif self._should_notify(runtime_rule.key):
+                self._publish_alert_event_safely(runtime_rule, result, trigger_id)
+                dispatch = self._send_notification_safely(runtime_rule, result)
+                stats["notification_attempts"] += self._record_notification_attempts_safely(trigger_id, dispatch)
+                if bool(dispatch.success):
+                    self._mark_notified(runtime_rule.key)
+                    stats["notified"] += 1
+
+    def _publish_alert_event_safely(
+        self,
+        runtime_rule: RuntimeAlertRule,
+        result: Dict[str, Any],
+        trigger_id: Optional[int],
+    ) -> None:
+        """Đẩy sự kiện ``alert_triggered`` lên Web (SSE); lỗi không ảnh hưởng thông báo."""
+
+        try:
+            rule = runtime_rule.rule
+            publish_event(
+                "alert_triggered",
+                {
+                    "trigger_id": trigger_id,
+                    "rule_id": self.service._runtime_rule_id(rule),
+                    "target": self._effective_target(runtime_rule),
+                    "display_target": self._display_target(runtime_rule),
+                    "alert_type": self._public_alert_type(getattr(rule, "alert_type", None)),
+                    "severity": runtime_rule.severity,
+                    "observed_value": result.get("observed_value"),
+                    "threshold": result.get("threshold"),
+                    "reason": result.get("reason") or result.get("message"),
+                    "data_source": result.get("data_source"),
+                    "triggered_at": datetime.now().isoformat(timespec="seconds"),
+                },
+            )
+        except Exception as exc:
+            logger.debug("[AlertWorker] publish alert event failed: %s", exc)
 
     def _load_runtime_rules(self, config: Any) -> List[RuntimeAlertRule]:
         runtime_rules: List[RuntimeAlertRule] = []
@@ -840,6 +911,30 @@ class AlertWorker:
             ),
         )
         return DBCooldownDecision(suppressed=True)
+
+    def active_db_cooldown_until(self, runtime_rule: RuntimeAlertRule) -> Optional[datetime]:
+        """Thời điểm hết cooldown DB đang hiệu lực của rule, hoặc ``None``.
+
+        Read-only cooldown lookup used by the realtime engine to skip ticks while a
+        persisted rule is cooling down, so they are not written to trigger history.
+        Lỗi đọc DB trả ``None`` để ``process_result`` tự xử lý như cũ.
+        """
+        if runtime_rule.source != "db" or self._cooldown_seconds(runtime_rule) <= 0:
+            return None
+        rule_id = self.service._runtime_rule_id(runtime_rule.rule)
+        if rule_id <= 0:
+            return None
+        try:
+            cooldown = self.service.repo.get_active_cooldown(
+                rule_id=rule_id,
+                target=self._effective_target(runtime_rule),
+                severity=runtime_rule.severity,
+                now=self._now_datetime(),
+            )
+        except Exception as exc:
+            logger.debug("[AlertWorker] cooldown lookup failed for %s: %s", self._display_target(runtime_rule), exc)
+            return None
+        return getattr(cooldown, "cooldown_until", None) if cooldown is not None else None
 
     def _record_cooldown_read_failure_suppression(self, trigger_id: Optional[int], exc: Exception) -> None:
         from src.notification import ChannelAttemptResult, NotificationDispatchResult

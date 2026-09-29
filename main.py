@@ -1815,6 +1815,11 @@ def main() -> int:
                     "name": "agent_event_monitor",
                 })
 
+                # Cảnh báo realtime theo tick (MQTT TVSI) nếu được bật; idempotent với FastAPI lifespan.
+                from src.services.realtime_alert_runtime import start_realtime_alerts
+
+                start_realtime_alerts(config_provider=_reload_runtime_config)
+
             schedule_kwargs = {
                 "task": scheduled_task,
                 "schedule_time": config.schedule_time,

@@ -338,7 +338,7 @@ P6 不做：
 - `AlertTriggerItem` 保留 `diagnostics` 字符串，并新增派生字段 `market_phase_summary`、`analysis_context_pack_overview`、`analysis_visibility_source`。
 - 真实 `status=triggered` 的 worker 记录会在 JSON diagnostics 中合并 sibling key `analysis_visibility`，包含 `market_phase_summary`、`analysis_context_pack_overview`、`source`。旧纯文本 diagnostics 保留原文，API 派生字段返回 `null`，source 返回 `legacy_text`。
 - `analysis_visibility_source` 取值为 `alert_trigger_market_context`、`analysis_history_snapshot`、`evaluator_snapshot`、`legacy_text` 或 `null`。
-- symbol 目标使用 `get_market_for_stock(normalize_stock_code(effective_target))` 构造触发时 phase；`target_scope=market` 直接用 `normalize_market_region(target)`，不会把 `vn|cn|hk|us|jp|kr` 当作股票代码推断；账户级无法唯一定位市场时允许 summary 落为 `unknown`。
+- symbol 目标使用 `get_market_for_stock(normalize_stock_code(effective_target))` 构造触发时 phase；`target_scope=market` 直接用 `normalize_market_region(target)`，不会把 `vn|cn|hk|us|jp|kr` 当作股票代码推断；账户级无法唯一定位市场时允许 summary 落为 `unknown`。Thị trường VN không có trong exchange-calendars; pha phiên được suy ra từ giờ cố định (ATO 9:00, nghỉ trưa 11:30–13:00, ATC 14:30–14:45, chỉ loại thứ 7/CN, chưa xét ngày lễ), nên tin cảnh báo mã VN hiển thị `intraday` / `lunch_break` / `closing_auction`... thay vì `unknown`.
 - `analysis_context_pack_overview` 只来自 evaluator 已带 overview 或最近 30 天内的历史 snapshot。最近历史查询复用历史服务的代码变体候选，并以 best-effort + 批内短缓存方式执行；缺失或解析失败返回 `null`，不伪造 pack。
 - 告警通知只输出公开摘要：阶段标签、trigger source、partial-bar warning、数据质量等级和前两条 limitations。通知不得输出 raw context pack、Prompt、新闻正文、完整 diagnostics JSON、webhook URL、token 或持仓敏感细节。
 - Web 告警历史展示 phase badge、数据质量等级和 limitations 空态；旧触发记录缺少公开摘要时不影响列表读取。
@@ -402,6 +402,81 @@ scope/type 校验是双向约束：`target_scope=market` 只能使用两类 Mark
 - Web 告警中心新增 `market` scope、region 选择、两类 market rule 参数控件、类型筛选、region 展示和参数展示；API snake_case 映射使用 `statuses` 与 `min_drop`。
 - legacy `AGENT_EVENT_ALERT_RULES_JSON` 不支持 market 规则；P7 不更新 `.env.example`，因为没有新增配置项。
 - P7 不做指数跌幅、板块异动、涨跌停结构恶化、分钟线、多市场时区精确 quote as-of 解析，也不新增 DSL/规则引擎。
+
+## Cảnh báo realtime theo tick (feed MQTT TVSI)
+
+Mục này mô tả engine cảnh báo realtime dùng feed giá push của TVSI. Engine chạy song song với worker định kỳ (P2) và không thay đổi contract của các rule hiện có.
+
+### Bật và cấu hình
+
+| Key | Mặc định | Ý nghĩa |
+| --- | --- | --- |
+| `REALTIME_FEED_ENABLED` | `false` | Bật feed realtime và engine theo tick. Cần cả `AGENT_EVENT_MONITOR_ENABLED=true`. |
+| `REALTIME_FEED_STALE_SECONDS` | `30` | Tick cũ hơn ngưỡng này không được dùng làm giá hiện tại; khi đó dùng SSI. |
+| `TVSI_MQTT_HOST` | trống | Host broker, ví dụ `realtime-mobile.tvsi.com.vn`. Để trống thì không khởi động. |
+| `TVSI_MQTT_PORT` / `TVSI_MQTT_TLS` / `TVSI_MQTT_TRANSPORT` | `443` / `true` / `tcp` | Broker TVSI nhận **MQTT thuần trên TLS cổng 443**. Handshake WebSocket bị server reset. |
+| `TVSI_MQTT_USERNAME` / `TVSI_MQTT_PASSWORD` | trống | Thông tin đăng nhập, chỉ đặt trong `.env` local. Mật khẩu là trường bí mật. |
+| `TVSI_MQTT_TOPIC_TEMPLATE` | `topic/{symbol}` | Topic giá theo mã. Wildcard `#` / `+` bị từ chối. |
+
+- Không có cấu hình thì hành vi giữ nguyên như trước.
+- Đổi các key này cần khởi động lại dịch vụ. Engine khởi động trong FastAPI lifespan và trong `main.py --schedule`, lời gọi idempotent.
+- Chỉ chạy đúng trong một process, giống task stream SSE hiện có.
+
+### Dữ liệu từ broker
+
+- Payload `topic/<MÃ>` là JSON. Giá (`MatchPrice`, `CeilingPrice`, `FloorPrice`, `BasicPrice`…) tính bằng **nghìn đồng** và được nhân 1000 để khớp với SSI.
+- Timestamp tick lấy từ `TradeDate` + `Time` (`HHMMSS`, giờ VN). `SequenceNumber` dùng để bỏ tick đến trễ.
+- `FloorCode`: `10` = HOSE, `02` = HNX, `04` = UPCOM (chưa có mẫu thật cho UPCOM).
+- **Bảo mật:** broker còn phát `order/<id>` và `new-order/<account>` chứa lệnh của khách hàng khác. Feed chỉ subscribe `topic/<MÃ>` của các mã đang có rule, và chặn wildcard trong template. `scripts/probe_tvsi_mqtt.py` cũng mặc định chỉ subscribe topic giá.
+
+### Luồng xử lý
+
+1. `TvsiMqttFeed` (`data_provider/tvsi_mqtt_feed.py`):
+   - Giữ kết nối và tự reconnect (1s → 30s).
+   - Lưu tick mới nhất vào `LatestTickStore`, rồi báo cho listener.
+2. `RealtimeAlertEngine` (`src/services/realtime_alert_engine.py`):
+   - Nạp các rule DB đang bật thuộc loại giá: `price_cross`, `price_change_percent`, `price_limit_touch`. Chỉ lấy mã VN, trên phạm vi một mã, watchlist hoặc holdings.
+   - Nạp lại mỗi 30 giây, và ngay khi có CRUD rule.
+   - Tick được gộp theo mã rồi đánh giá trong bộ nhớ bằng `AlertService.evaluate_price_quote`.
+3. Chỉ đánh giá trong phiên khớp lệnh VN: 9:00–11:30 và 13:00–14:45, thứ 2–6, cộng 2 phút ân hạn cuối mỗi khung để nhận giá khớp ATC công bố ngay sau 14:45 (`is_vn_price_alert_window`). Ngày lễ chưa được loại trừ. Worker định kỳ (kể cả khi không bật feed realtime) cũng bỏ qua rule giá mã VN ngoài khung này (thống kê `out_of_session`), vì snapshot sau giờ không đổi và trước đây sinh trigger lặp mỗi chu kỳ.
+4. Kết quả kích hoạt đi qua `AlertWorker.process_result`, là đường xử lý chung với worker định kỳ:
+   - Ghi `alert_triggers` với `data_source=tvsi_mqtt`.
+   - Kiểm tra cooldown DB (mặc định 24h).
+   - Gửi qua các kênh thông báo trong Cài đặt (`NOTIFICATION_ALERT_CHANNELS`).
+   - Phát sự kiện `alert_triggered`.
+   - Tick không thoả điều kiện thì không ghi lịch sử.
+   - Rule đang trong cooldown DB vẫn được đánh giá (để chế độ `cross` cập nhật giá quan sát), nhưng tick kích hoạt **không** ghi thêm trigger hay dòng `__cooldown__` (thống kê `cooldown_skipped`). Worker định kỳ vẫn ghi mỗi chu kỳ như cũ.
+   - Kích hoạt mà không tạo được cooldown (ví dụ mọi kênh gửi lỗi) thì chờ 60 giây mới thử lại, không thử lại theo từng tick.
+5. **Tránh đánh giá hai lần:**
+   - Khi feed đang kết nối và đã subscribe mã, `AlertWorker.run_once` bỏ qua rule đó (thống kê `realtime_claimed`).
+   - Khi feed mất kết nối, worker định kỳ tự đánh giá lại qua SSI.
+6. **Giá dùng chung:** trong nhánh VN của `DataFetcherManager.get_realtime_quote`, tick còn mới (source `tvsi_mqtt`, có `provider_timestamp`) được dùng trước SSI. Nhờ vậy danh mục và phân tích cũng dùng được giá realtime.
+
+### Rule mở rộng
+
+| Rule | Tham số mới | Ngữ nghĩa |
+| --- | --- | --- |
+| `price_cross` | `trigger_mode`: `level` (mặc định) / `cross` | `level`: giữ hành vi cũ, giá đang ở bên kia ngưỡng là kích hoạt. `cross`: chỉ kích hoạt khi giá lần trước ở một bên ngưỡng và lần này ở bên kia. Lần quan sát đầu tiên chỉ ghi mốc. `trigger_mode` chỉ được lưu khi là `cross`, nên semantic key của rule cũ không đổi. |
+| `price_limit_touch` (mới) | `side`: `ceiling` / `floor` / `both`; `near_pct`: 0–20 | Kích hoạt khi giá ≥ trần × (1 − near_pct%) hoặc ≤ sàn × (1 + near_pct%). Không có dữ liệu trần/sàn thì trả `skipped`. Dùng cho phạm vi một mã, watchlist, holdings. |
+
+Worker định kỳ cũng hỗ trợ `cross`. Giá lần trước được lưu trong bộ nhớ process, nên sẽ mất khi khởi động lại.
+
+### API và Web
+
+- `GET /api/v1/alerts/stream` (SSE): các sự kiện `connected`, `feed_status`, `alert_triggered`, `price_update` (tối đa 1 lần/giây/mã) và `heartbeat` 30 giây.
+- `GET /api/v1/alerts/live-quotes`: `{feed, quotes: [{target, symbol, price, change_pct, ceiling, floor, …}]}`. Mã chưa có tick thì lấy giá realtime thường, tối đa 30 mã.
+- Web mở một kết nối SSE trong `Shell` (`useAlertStream`, tự reconnect với backoff), gồm:
+  - Toast cảnh báo toàn cục.
+  - Badge số cảnh báo chưa đọc trên menu Cảnh báo.
+  - Cột **Giá live** trong danh sách rule: giá, % thay đổi, khoảng cách tới ngưỡng.
+  - Dòng trạng thái feed.
+  - Trang Cảnh báo tự tải lại lịch sử khi có `alert_triggered`.
+
+### Rollback
+
+- Đặt `REALTIME_FEED_ENABLED=false` và khởi động lại là hệ thống quay về hành vi định kỳ.
+- Rule `price_limit_touch` đã tạo sẽ bị engine cũ bỏ qua sau khi revert ("Skip invalid persisted alert rule"), và có thể xoá qua API.
+- `trigger_mode=cross` trong tham số được code cũ bỏ qua; rule khi đó chạy theo `level`.
 
 ## P8 用户配置与部署边界
 

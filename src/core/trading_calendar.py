@@ -70,6 +70,13 @@ _CLOSING_AUCTION_WINDOW_MINUTES = {
     "kr": 10,
     "tw": 5,
 }
+# Thị trường không có trong exchange-calendars nhưng giờ giao dịch cố định (giờ địa phương):
+# (mở cửa, (nghỉ trưa bắt đầu, kết thúc), đóng cửa). VN: ATO 9:00, nghỉ 11:30–13:00, ATC kết thúc 14:45.
+# Chỉ loại thứ 7/CN; ngày lễ chưa có nguồn lịch nên vẫn coi là ngày giao dịch.
+# Fixed regular-session hours for markets without an xcals calendar (weekends only, no holidays).
+_STATIC_SESSION_HOURS = {
+    "vn": ((9, 0), ((11, 30), (13, 0)), (14, 45)),
+}
 _SUPPORTED_ANALYSIS_PHASES = {
     "auto",
     "premarket",
@@ -195,6 +202,30 @@ def is_market_open(market: str, check_date: date) -> bool:
     except Exception as e:
         logger.warning("trading_calendar.is_market_open fail-open: %s", e)
         return True
+
+
+# Phiên khớp lệnh của Việt Nam (giờ VN): ATO 9:00–9:15, liên tục 9:15–11:30 và 13:00–14:30,
+# ATC 14:30–14:45. Cảnh báo realtime chỉ đánh giá trong các khung có giá khớp.
+# Vietnam matching sessions (local time); realtime alerts only evaluate inside them.
+VN_MATCHING_SESSIONS = (((9, 0), (11, 30)), ((13, 0), (14, 45)))
+
+
+def is_vn_matching_session(current_time: Optional[datetime] = None, *, grace_minutes: int = 0) -> bool:
+    """Có đang trong phiên khớp lệnh VN không (thứ 2–6, chưa xét ngày lễ).
+
+    ``grace_minutes`` kéo dài cuối mỗi khung để nhận giá khớp ATO/ATC công bố ngay sau giờ đóng
+    (ví dụ tick khớp ATC lúc 14:45:03). Extends each window's end by a few minutes.
+    """
+
+    now = get_market_now("vn", current_time)
+    if now.weekday() >= 5:
+        return False
+    minutes = now.hour * 60 + now.minute
+    grace = max(0, int(grace_minutes))
+    for (start_h, start_m), (end_h, end_m) in VN_MATCHING_SESSIONS:
+        if start_h * 60 + start_m <= minutes < end_h * 60 + end_m + grace:
+            return True
+    return False
 
 
 def get_market_now(
@@ -374,6 +405,8 @@ def infer_market_phase(
     ``closing_auction`` uses a small per-market near-close heuristic window and
     does not model full exchange auction microstructure.
     """
+    if market in _STATIC_SESSION_HOURS and market not in MARKET_EXCHANGE:
+        return _infer_static_market_phase(market, get_market_now(market, current_time=current_time))
     if market not in MARKET_EXCHANGE or market not in MARKET_TIMEZONE:
         return MarketPhase.UNKNOWN
     if not _XCALS_AVAILABLE:
@@ -411,24 +444,62 @@ def infer_market_phase(
             break_start = _as_market_datetime(cal.session_break_start(session), tz_name)
             break_end = _as_market_datetime(cal.session_break_end(session), tz_name)
 
-        window_minutes = _CLOSING_AUCTION_WINDOW_MINUTES.get(market, 0)
-        closing_window_start = session_close - timedelta(minutes=window_minutes)
-
-        if break_start is not None and break_end is not None:
-            if market_now < break_start:
-                return MarketPhase.INTRADAY
-            if market_now < break_end:
-                return MarketPhase.LUNCH_BREAK
-            if market_now < closing_window_start:
-                return MarketPhase.INTRADAY
-            return MarketPhase.CLOSING_AUCTION
-
-        if market_now < closing_window_start:
-            return MarketPhase.INTRADAY
-        return MarketPhase.CLOSING_AUCTION
+        return _classify_open_session(market, market_now, session_close, break_start, break_end)
     except Exception as e:
         logger.warning("trading_calendar.infer_market_phase fail-closed: %s", e)
         return MarketPhase.UNKNOWN
+
+
+def _classify_open_session(
+    market: str,
+    market_now: datetime,
+    session_close: datetime,
+    break_start: Optional[datetime],
+    break_end: Optional[datetime],
+) -> MarketPhase:
+    """Phân loại thời điểm nằm giữa giờ mở và đóng cửa của một phiên."""
+    window_minutes = _CLOSING_AUCTION_WINDOW_MINUTES.get(market, 0)
+    closing_window_start = session_close - timedelta(minutes=window_minutes)
+
+    if break_start is not None and break_end is not None:
+        if market_now < break_start:
+            return MarketPhase.INTRADAY
+        if market_now < break_end:
+            return MarketPhase.LUNCH_BREAK
+        if market_now < closing_window_start:
+            return MarketPhase.INTRADAY
+        return MarketPhase.CLOSING_AUCTION
+
+    if market_now < closing_window_start:
+        return MarketPhase.INTRADAY
+    return MarketPhase.CLOSING_AUCTION
+
+
+def _static_session_times(
+    market: Optional[str], market_now: datetime
+) -> Optional[Tuple[datetime, datetime, datetime, datetime]]:
+    """(mở, nghỉ trưa bắt đầu, nghỉ trưa kết thúc, đóng) hôm nay cho thị trường giờ cố định."""
+    hours = _STATIC_SESSION_HOURS.get(market or "")
+    if hours is None or market_now.weekday() >= 5:
+        return None
+    (open_h, open_m), ((bs_h, bs_m), (be_h, be_m)), (close_h, close_m) = hours
+
+    def _at(hour: int, minute: int) -> datetime:
+        return market_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+    return _at(open_h, open_m), _at(bs_h, bs_m), _at(be_h, be_m), _at(close_h, close_m)
+
+
+def _infer_static_market_phase(market: str, market_now: datetime) -> MarketPhase:
+    times = _static_session_times(market, market_now)
+    if times is None:
+        return MarketPhase.NON_TRADING
+    session_open, break_start, break_end, session_close = times
+    if market_now < session_open:
+        return MarketPhase.PREMARKET
+    if market_now >= session_close:
+        return MarketPhase.POSTMARKET
+    return _classify_open_session(market, market_now, session_close, break_start, break_end)
 
 
 def _add_warning_code(warnings: List[str], code: str) -> None:
@@ -461,6 +532,9 @@ def _session_open_close_for_today(
 ) -> Tuple[Optional[datetime], Optional[datetime]]:
     ex = MARKET_EXCHANGE.get(market)
     tz_name = MARKET_TIMEZONE.get(market)
+    if not ex and market in _STATIC_SESSION_HOURS:
+        times = _static_session_times(market, market_now)
+        return (times[0], times[3]) if times else (None, None)
     if not ex or not tz_name or not _XCALS_AVAILABLE:
         return None, None
 
@@ -481,12 +555,13 @@ def _phase_minutes(
     market_now: datetime,
     phase: MarketPhase,
 ) -> Tuple[Optional[int], Optional[int], bool]:
+    static_market = market in _STATIC_SESSION_HOURS and market not in MARKET_EXCHANGE
     if (
-        market not in MARKET_EXCHANGE
+        (market not in MARKET_EXCHANGE and not static_market)
         or phase in {MarketPhase.UNKNOWN, MarketPhase.NON_TRADING, MarketPhase.POSTMARKET}
     ):
         return None, None, False
-    if not _XCALS_AVAILABLE:
+    if not _XCALS_AVAILABLE and not static_market:
         return None, None, False
 
     try:
@@ -555,7 +630,11 @@ def build_market_phase_context(
     market_now = get_market_now(market, current_time=current_time)
     warnings: List[str] = []
 
-    if market not in MARKET_EXCHANGE or market not in MARKET_TIMEZONE:
+    static_market = market in _STATIC_SESSION_HOURS and market not in MARKET_EXCHANGE
+    if static_market:
+        # Giờ cố định, không cần exchange-calendars. Fixed hours; no xcals needed.
+        phase = infer_market_phase(market, current_time=current_time) if requested_phase == "auto" else MarketPhase(requested_phase)
+    elif market not in MARKET_EXCHANGE or market not in MARKET_TIMEZONE:
         phase = MarketPhase.UNKNOWN
         _add_warning_code(warnings, "unknown_market")
     else:

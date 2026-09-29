@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { SidebarNav } from '../SidebarNav';
+import { useAlertStore } from '../../../stores/alertStore';
 
 const mockLogout = vi.fn().mockResolvedValue(undefined);
 const mockGetScreeningStatus = vi.fn().mockResolvedValue({ enabled: false, available: false });
@@ -151,5 +152,17 @@ describe('SidebarNav', () => {
     expect(await screen.findByRole('heading', { name: 'Log out' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
     expect(mockLogout).toHaveBeenCalled();
+  });
+
+  it('shows the unread realtime alert badge on the Alerts item', () => {
+    useAlertStore.setState({ unreadCount: 3 });
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <SidebarNav />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId('alerts-unread-badge')).toHaveTextContent('3');
+    useAlertStore.setState({ unreadCount: 0 });
   });
 });
