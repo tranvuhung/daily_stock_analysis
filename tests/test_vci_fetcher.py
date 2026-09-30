@@ -6,6 +6,7 @@ Mock 只打在 HTTP 边界（``requests.Session``），归一化、清洗和指�
 """
 
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -175,6 +176,7 @@ class VciIndexRealtimeTestCase(unittest.TestCase):
         self.fetcher = VciFetcher(min_interval=0.0)
 
     def _index_payload(self):
+        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         return [
             {
                 "symbol": "VNINDEX",
@@ -183,7 +185,11 @@ class VciIndexRealtimeTestCase(unittest.TestCase):
                 "l": [1805.0, 1820.0],
                 "c": [1822.0, 1838.69],
                 "v": [500000000, 520000000],
-                "t": ["1789516800", "1789603200"],
+                # Timestamp tính lùi từ hôm nay để nến luôn nằm trong khoảng ngày được lọc
+                "t": [
+                    str(int((today - timedelta(days=1)).timestamp())),
+                    str(int(today.timestamp())),
+                ],
                 "accumulatedValue": [20000.0, 21000.0],
             }
         ]

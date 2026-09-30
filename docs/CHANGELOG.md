@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] Điểm lại thị trường Việt Nam hiện chỉ số Trung Quốc (上证指数, 沪深300…) trong "Dữ liệu thị trường có cấu trúc" và bảng dưới "Index Commentary" khi Vietcap (VCI) trả 403: `YfinanceFetcher.get_main_indices` rơi xuống danh sách A 股 với region `vn`. Nay Yahoo trả `None` cho region không phải `cn`, và `SsiFetcher.get_main_indices` là nguồn chỉ số VN dự phòng (VN-Index, VN30, HNX-Index, UPCoM-Index); khi mọi nguồn đều lỗi, báo cáo ghi "không có dữ liệu chỉ số" thay vì dùng dữ liệu thị trường khác.
 - [新功能] Chạy dịch vụ trên máy Windows qua mạng LAN: `scripts/package-windows.sh` build Web UI trên Mac và đóng gói mã nguồn + `static/` (tuỳ chọn kèm snapshot DB), `scripts/run-server.ps1` lo `setup` / `firewall` / `start` / `stop` / `status` / `logs` / `install-task` trên Windows (một tiến trình `main.py --serve-only --schedule`: FastAPI + Web UI + lịch + cảnh báo realtime). Hướng dẫn ở `docs/windows-lan-deploy.md`.
 - [修复] Bấm **Sửa** quy tắc cảnh báo làm khung gợi ý mã tự bật lên và che các ô bên dưới. `StockAutocomplete` nay chỉ tìm gợi ý khi ô đang được focus (người dùng đang gõ); giá trị được đặt bằng code không mở danh sách gợi ý.
 - [修复] Dropdown loại quy tắc, phạm vi và mức độ trong form/bộ lọc Cảnh báo hiện nhãn tiếng Anh ở giao diện tiếng Việt (`featureText.ts` dùng nhầm `ALERT_TYPE_LABELS.en` cho cả `vi`). Nay mỗi ngôn ngữ dùng nhãn của chính nó.

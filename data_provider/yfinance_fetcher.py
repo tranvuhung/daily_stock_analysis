@@ -402,6 +402,7 @@ class YfinanceFetcher(BaseFetcher):
         region=us 时委托给 _get_us_main_indices。
         region=hk 时委托给 _get_hk_main_indices。
         region=jp/kr/tw 时分别委托给对应市场指数方法。
+        其他非 cn 区域（如 vn）返回 None，交由下一个数据源处理。
         """
         import yfinance as yf
 
@@ -415,6 +416,11 @@ class YfinanceFetcher(BaseFetcher):
             return self._get_kr_main_indices(yf)
         if region == "tw":
             return self._get_tw_main_indices(yf)
+        if region != "cn":
+            # Vùng chưa hỗ trợ (vd. vn) trả None để DataFetcherManager chuyển nguồn,
+            # tránh rơi xuống danh sách chỉ số A 股 bên dưới.
+            # Unsupported regions (e.g. vn) return None instead of A-share indices.
+            return None
 
         # A 股指数：akshare 代码 -> (yfinance 代码, 显示名称)
         yf_mapping = {

@@ -9,7 +9,7 @@ giới LLM/task queue.
 import os
 import unittest
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -41,6 +41,13 @@ def _response(payload):
     return response
 
 
+def _recent_day_epochs(count):
+    # Timestamp tính lùi từ hôm nay: timestamp cố định sẽ rơi ra ngoài khoảng
+    # ngày mà get_daily_data lọc, khiến test hỏng theo thời gian.
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    return [str(int((today - timedelta(days=count - 1 - i)).timestamp())) for i in range(count)]
+
+
 def _bars(symbol, closes, value=20_000_000.0):
     # Ba nến ngày liên tiếp; accumulatedValue có đơn vị triệu đồng.
     return [
@@ -51,7 +58,7 @@ def _bars(symbol, closes, value=20_000_000.0):
             "l": [c - 10 for c in closes],
             "c": closes,
             "v": [500_000_000, 520_000_000, 540_000_000],
-            "t": ["1789430400", "1789516800", "1789603200"],
+            "t": _recent_day_epochs(3),
             "accumulatedValue": [value, value, value],
         }
     ]
@@ -165,6 +172,144 @@ class SsiRegionMarketStatsTestCase(unittest.TestCase):
     def test_nothing_traded_returns_none(self):
         stats = self._load([dict(_BASE_RECORD, stockSymbol="HPG", matchedPrice=0)])
         self.assertIsNone(stats)
+
+
+def _ssi_index_chart(closes):
+    return {
+        "code": "SUCCESS",
+        "data": {
+            "t": list(range(len(closes))),
+            "o": closes,
+            "h": [c + 5 for c in closes],
+            "l": [c - 5 for c in closes],
+            "c": closes,
+            "v": [1000] * len(closes),
+        },
+    }
+
+
+# Điểm chỉ số theo mã SSI (viết hoa), lấy xấp xỉ từ phản hồi thật ngày 29/09/2026
+_SSI_INDEX_CLOSES = {
+    "VNINDEX": [1780.68, 1777.73],
+    "VN30": [1922.42, 1914.35],
+    "HNXINDEX": [275.0, 274.0],
+    "HNXUPCOMINDEX": [125.22, 125.5],
+}
+
+
+class SsiMainIndicesTestCase(unittest.TestCase):
+    """SSI là nguồn chỉ số VN dự phòng khi VCI lỗi (vd. Vietcap trả 403)."""
+
+    def setUp(self):
+        self.fetcher = SsiFetcher()
+        self.fetcher.min_interval = 0.0
+        self.requested = []
+
+    def _fake_get(self, closes_by_symbol):
+        def fake_get(url, params=None, **_):
+            symbol = params["symbol"]
+            self.requested.append(symbol)
+            if symbol not in closes_by_symbol:
+                return _response({"code": "ERR", "message": "not found"})
+            return _response(_ssi_index_chart(closes_by_symbol[symbol]))
+
+        return fake_get
+
+    def test_non_vn_region_returns_none(self):
+        with patch.object(self.fetcher._session, "get") as get:
+            self.assertIsNone(self.fetcher.get_main_indices(region="cn"))
+        get.assert_not_called()
+
+    def test_returns_vn_indices_in_points_without_price_scaling(self):
+        with patch.object(
+            self.fetcher._session, "get", side_effect=self._fake_get(_SSI_INDEX_CLOSES)
+        ):
+            indices = self.fetcher.get_main_indices(region="vn")
+
+        # Mã SSI phải viết hoa; "HNXIndex" trả chuỗi giá sai
+        self.assertEqual(self.requested, ["VNINDEX", "VN30", "HNXINDEX", "HNXUPCOMINDEX"])
+        # Mã trong payload thống nhất với VciFetcher
+        self.assertEqual(
+            [i["code"] for i in indices], ["VNINDEX", "VN30", "HNXIndex", "HNXUpcomIndex"]
+        )
+        self.assertEqual(
+            [i["name"] for i in indices], ["VN-Index", "VN30", "HNX-Index", "UPCoM-Index"]
+        )
+        vnindex = indices[0]
+        # Điểm chỉ số giữ nguyên, không nhân 1000 như giá cổ phiếu
+        self.assertEqual(vnindex["current"], 1777.73)
+        self.assertEqual(vnindex["prev_close"], 1780.68)
+        self.assertEqual(vnindex["change"], -2.95)
+        self.assertEqual(vnindex["change_pct"], -0.17)
+        for key in ("open", "high", "low", "volume", "amount", "amplitude"):
+            self.assertIn(key, vnindex)
+
+    def test_one_failing_index_is_skipped(self):
+        closes = {k: v for k, v in _SSI_INDEX_CLOSES.items() if k != "VN30"}
+        with patch.object(self.fetcher._session, "get", side_effect=self._fake_get(closes)):
+            indices = self.fetcher.get_main_indices(region="vn")
+
+        self.assertEqual([i["code"] for i in indices], ["VNINDEX", "HNXIndex", "HNXUpcomIndex"])
+
+    def test_all_failing_returns_none(self):
+        with patch.object(self.fetcher._session, "get", side_effect=self._fake_get({})):
+            self.assertIsNone(self.fetcher.get_main_indices(region="vn"))
+
+
+class _FailingVciFetcher(BaseFetcher):
+    name = "VciFetcher"
+    priority = 0
+
+    def _fetch_raw_data(self, *args, **kwargs):  # pragma: no cover - không dùng
+        raise NotImplementedError
+
+    def _normalize_data(self, *args, **kwargs):  # pragma: no cover - không dùng
+        raise NotImplementedError
+
+    def get_main_indices(self, region="cn"):
+        # Giống VCI khi bị Vietcap trả 403 cho mọi chỉ số
+        return None
+
+
+class MainIndicesRoutingTestCase(unittest.TestCase):
+    """VCI lỗi thì phải lấy chỉ số VN từ SSI, không bao giờ lấy chỉ số A 股 từ Yahoo."""
+
+    def setUp(self):
+        from data_provider.yfinance_fetcher import YfinanceFetcher
+
+        self.ssi = SsiFetcher()
+        self.ssi.min_interval = 0.0
+        self.yahoo = YfinanceFetcher()
+
+    def _get(self, manager, ssi_closes):
+        def fake_get(url, params=None, **_):
+            symbol = params["symbol"]
+            if symbol not in ssi_closes:
+                return _response({"code": "ERR", "message": "not found"})
+            return _response(_ssi_index_chart(ssi_closes[symbol]))
+
+        with patch.object(self.ssi._session, "get", side_effect=fake_get), patch(
+            "yfinance.download", side_effect=AssertionError("Yahoo không được gọi cho vn")
+        ), patch("yfinance.Ticker", side_effect=AssertionError("Yahoo không được gọi cho vn")):
+            return manager.get_main_indices(region="vn")
+
+    def test_vci_failure_falls_back_to_ssi_vn_indices(self):
+        manager = DataFetcherManager(fetchers=[_FailingVciFetcher(), self.ssi, self.yahoo])
+
+        indices = self._get(manager, _SSI_INDEX_CLOSES)
+
+        self.assertEqual([i["name"] for i in indices], ["VN-Index", "VN30", "HNX-Index", "UPCoM-Index"])
+
+    def test_no_vn_source_yields_empty_instead_of_a_share_indices(self):
+        manager = DataFetcherManager(fetchers=[_FailingVciFetcher(), self.ssi, self.yahoo])
+
+        self.assertEqual(self._get(manager, {}), [])
+
+    def test_yahoo_returns_none_for_vn(self):
+        with patch("yfinance.download") as download, patch("yfinance.Ticker") as ticker:
+            self.assertIsNone(self.yahoo.get_main_indices(region="vn"))
+        download.assert_not_called()
+        ticker.assert_not_called()
 
 
 class _FakeCnFetcher(BaseFetcher):

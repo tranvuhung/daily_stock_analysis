@@ -67,6 +67,16 @@ _snapshot_lock = RLock()
 _last_request_at = 0.0
 _request_lock = RLock()
 
+# Chỉ số chính cho điểm lại thị trường: (mã hiển thị thống nhất với VCI, mã SSI, tên).
+# Mã SSI phải viết hoa: ``HNXIndex`` trả về chuỗi giá sai, ``HNXINDEX`` mới đúng.
+# Main indices for the market review: (code shared with VCI, SSI symbol, display name).
+_VN_MAIN_INDICES = (
+    ("VNINDEX", "VNINDEX", "VN-Index"),
+    ("VN30", "VN30", "VN30"),
+    ("HNXIndex", "HNXINDEX", "HNX-Index"),
+    ("HNXUpcomIndex", "HNXUPCOMINDEX", "UPCoM-Index"),
+)
+
 
 def _parse_env_float(name: str, default: float) -> float:
     raw = os.getenv(name)
@@ -329,6 +339,69 @@ class SsiFetcher(BaseFetcher):
             "limit_down_count": limit_down,
             "total_amount": round(total_amount / 1e9, 2),
         }
+
+    # ------------------------------------------------------------------
+    # Chỉ số chính cho điểm lại thị trường (dự phòng khi VCI lỗi)
+    # ------------------------------------------------------------------
+    def get_main_indices(self, region: str = "cn") -> Optional[List[Dict[str, Any]]]:
+        """Chỉ số chính của Việt Nam từ endpoint biểu đồ SSI, dự phòng sau VCI.
+
+        Chỉ phục vụ ``region="vn"``. Điểm chỉ số trả về đúng đơn vị điểm nên
+        **không** qua :meth:`_normalize_data` (hàm đó nhân 1000 cho giá cổ phiếu).
+        Một chỉ số lỗi chỉ bị bỏ qua, không làm hỏng cả danh sách.
+
+        Vietnam main indices from the SSI chart endpoint (fallback after VCI).
+        Index points are used as-is, without the stock price ×1000 scaling.
+        """
+
+        if region != "vn":
+            return None
+
+        end = datetime.now()
+        start = end - pd.Timedelta(days=10)
+        start_str, end_str = start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+
+        results: List[Dict[str, Any]] = []
+        for code, symbol, name in _VN_MAIN_INDICES:
+            try:
+                raw = self._fetch_raw_data(symbol, start_str, end_str)
+            except Exception as exc:
+                logger.warning("[%s] %s lấy dữ liệu chỉ số thất bại: %s", self.name, symbol, exc)
+                continue
+            if raw is None or raw.empty:
+                continue
+
+            closes = pd.to_numeric(raw["c"], errors="coerce").dropna()
+            if closes.empty:
+                continue
+            last = raw.iloc[-1]
+            close = _to_float(last.get("c"))
+            if not close:
+                continue
+            prev_close = float(closes.iloc[-2]) if len(closes) > 1 else None
+            high = _to_float(last.get("h")) or close
+            low = _to_float(last.get("l")) or close
+            change = round(close - prev_close, 2) if prev_close else 0.0
+            change_pct = round(change / prev_close * 100, 2) if prev_close else 0.0
+            amplitude = round((high - low) / prev_close * 100, 2) if prev_close else 0.0
+            results.append(
+                {
+                    "code": code,
+                    "name": name,
+                    "current": close,
+                    "change": change,
+                    "change_pct": change_pct,
+                    "open": _to_float(last.get("o")) or close,
+                    "high": high,
+                    "low": low,
+                    "prev_close": prev_close or 0.0,
+                    "volume": _to_float(last.get("v")) or 0.0,
+                    # Endpoint biểu đồ không trả giá trị giao dịch của chỉ số
+                    "amount": 0.0,
+                    "amplitude": amplitude,
+                }
+            )
+        return results or None
 
     def get_stock_name(self, stock_code: str) -> Optional[str]:
         symbol = self.to_provider_symbol(stock_code)
