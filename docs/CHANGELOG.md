@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [改进] Web: tạm ẩn menu Danh mục, Tín hiệu AI, Backtest khỏi sidebar (route `/portfolio`, `/decision-signals`, `/backtest` vẫn giữ nguyên, truy cập trực tiếp URL vẫn được); bật lại bằng cách xoá key khỏi `HIDDEN_NAV_KEYS` trong `SidebarNav.tsx`.
 - [改进] Hỏi đáp chỉ hỗ trợ thị trường Việt Nam (theo `SUPPORTED_MARKETS`, mặc định `vn`): câu hỏi gợi ý, ví dụ và placeholder dùng cổ phiếu Việt Nam thay cho Moutai/CATL/BYD/SMIC/Tencent; prompt chat có mục "Market scope" yêu cầu từ chối mã ngoài phạm vi; `src/market_context.py` nhận diện mã Việt Nam trần (HPG, LAS) là cổ phiếu Việt Nam thay vì cổ phiếu Mỹ và có hướng dẫn thị trường Việt Nam (biên độ HOSE/HNX/UPCoM, T+2.5, room ngoại, chính sách SBV).
 - [改进] Hỏi đáp: mọi câu trả lời thành công luôn kết thúc bằng câu miễn trừ trách nhiệm "Nội dung do AI tạo, chỉ mang tính tham khảo, không phải khuyến nghị đầu tư" (nhãn `not_investment_advice` theo `REPORT_LANGUAGE`), do backend gắn tất định thay vì trông vào model; áp dụng cho single-agent, multi-agent và Codex.
 - [改进] Hỏi đáp: system prompt chat (`src/agent/executor.py`), ngữ cảnh phân tích trước đó và `description`/`instructions` của 15 chiến lược dựng sẵn (`strategies/*.yaml`) chuyển sang tiếng Anh làm chuẩn; tiêu đề kỹ năng trong prompt dùng trường mới tuỳ chọn `display_name_en` (`display_name`/`aliases` giữ nguyên cho Web/Bot/báo cáo). Prompt chat tiếng Việt không còn chữ Hán nên câu trả lời hiếm khi phải dịch lại.

@@ -180,9 +180,9 @@ describe('App routing behavior', () => {
       expect(screen.getByRole('button', { name: 'Back home' })).toBeInTheDocument();
 
       chatPageShouldThrow.value = false;
-      fireEvent.click(screen.getByRole('link', { name: 'Portfolio' }));
+      fireEvent.click(screen.getByRole('link', { name: 'Usage' }));
 
-      expect(await screen.findByTestId('portfolio-page')).toBeInTheDocument();
+      expect(await screen.findByTestId('token-usage-page')).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: 'Page failed to load' })).not.toBeInTheDocument();
     } finally {
       consoleError.mockRestore();

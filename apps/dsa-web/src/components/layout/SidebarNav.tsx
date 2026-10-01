@@ -41,6 +41,10 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'settings', labelKey: 'layout.nav.settings', to: '/settings', icon: Settings2 },
 ];
 
+// Tạm ẩn các menu chưa dùng; xoá key khỏi danh sách để hiện lại (route vẫn giữ nguyên).
+// Temporarily hidden nav items; remove a key to show it again (routes are kept).
+const HIDDEN_NAV_KEYS = new Set(['portfolio', 'decision-signals', 'backtest']);
+
 export const SidebarNav: React.FC<SidebarNavProps> = ({ collapsed = false, onNavigate, variant = 'default' }) => {
   const { authEnabled, logout } = useAuth();
   const { t, language } = useUiLanguage();
@@ -76,7 +80,9 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ collapsed = false, onNav
     };
   }, []);
 
-  const navItems = showScreeningNav ? NAV_ITEMS : NAV_ITEMS.filter((item) => item.key !== 'screening');
+  const navItems = NAV_ITEMS.filter(
+    (item) => !HIDDEN_NAV_KEYS.has(item.key) && (showScreeningNav || item.key !== 'screening'),
+  );
   const isRail = variant === 'rail';
   const itemBaseClass = cn(
     'group relative flex h-[var(--nav-item-height)] w-full items-center overflow-hidden rounded-2xl border border-transparent text-sm leading-none text-secondary-text transition-all',

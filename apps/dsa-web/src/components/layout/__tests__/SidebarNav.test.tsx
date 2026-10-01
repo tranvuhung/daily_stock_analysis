@@ -60,7 +60,7 @@ describe('SidebarNav', () => {
 
     expect(await screen.findByRole('link', { name: 'Screening' })).toHaveAttribute('href', '/screening');
     const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
-    expect(hrefs.slice(0, 5)).toEqual(['/', '/chat', '/screening', '/portfolio', '/decision-signals']);
+    expect(hrefs.slice(0, 5)).toEqual(['/', '/chat', '/screening', '/alerts', '/usage']);
   });
 
   it('refreshes the controlled screening entry after config changes', async () => {
@@ -128,16 +128,17 @@ describe('SidebarNav', () => {
     expect(alertsLink).toHaveClass('font-medium');
   });
 
-  it('renders the AI signals navigation item and marks it active', () => {
+  it('temporarily hides the portfolio, AI signals and backtest navigation items', () => {
     render(
       <MemoryRouter initialEntries={['/decision-signals']}>
         <SidebarNav />
       </MemoryRouter>,
     );
 
-    const signalsLink = screen.getByRole('link', { name: 'AI signals' });
-    expect(signalsLink).toHaveAttribute('href', '/decision-signals');
-    expect(signalsLink).toHaveClass('font-medium');
+    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+    expect(hrefs).not.toContain('/portfolio');
+    expect(hrefs).not.toContain('/decision-signals');
+    expect(hrefs).not.toContain('/backtest');
   });
 
   it('opens the logout confirmation and confirms logout', async () => {
