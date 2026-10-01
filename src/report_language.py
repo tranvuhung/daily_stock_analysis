@@ -8,12 +8,12 @@ from typing import Any, Dict, Optional
 
 from src.schemas.decision_scale import signal_key_for_score
 
-# 渲染层**认识**的语言。历史记录里存着 zh/en/ko，必须继续按原语言渲染，
-# 否则旧报告会被套上越南语外壳。
+# Languages the renderer *understands*. Historical records store zh/en/ko and must keep
+# rendering in their original language, otherwise old reports get a Vietnamese shell.
 SUPPORTED_REPORT_LANGUAGES = ("vi", "zh", "en", "ko")
 
-# 当前部署**允许选择**的语言。报告只产出越南语，因此 REPORT_LANGUAGE 配置和
-# API 请求只接受 vi；上面的 SUPPORTED_REPORT_LANGUAGES 仅用于渲染历史记录。
+# Languages this deployment *allows selecting*. Reports are produced only in Vietnamese, so
+# REPORT_LANGUAGE config and API requests accept only vi; SUPPORTED_REPORT_LANGUAGES above is for rendering history only.
 SELECTABLE_REPORT_LANGUAGES = ("vi",)
 
 DEFAULT_REPORT_LANGUAGE = "vi"
@@ -116,6 +116,14 @@ _TREND_PREDICTION_CANONICAL_MAP = {
     "强烈看多": "strong_bullish",
     "strong bullish": "strong_bullish",
     "very bullish": "strong_bullish",
+    # Nhãn TrendStatus tiếng Anh của src/stock_analyzer.py (chuẩn mới); khoá tiếng Trung
+    # phía dưới giữ lại cho bản ghi cũ trong analysis_history.
+    # English TrendStatus values from src/stock_analyzer.py; Chinese keys stay for old records.
+    "bullish alignment": "bullish",
+    "weak bullish": "bullish",
+    "consolidation": "sideways",
+    "weak bearish": "bearish",
+    "bearish alignment": "bearish",
     "强势多头": "strong_bullish",
     "多头排列": "bullish",
     "空头排列": "bearish",
@@ -343,9 +351,9 @@ _STRATEGY_SKILL_TRANSLATIONS = {
 }
 
 _VOLUME_STATUS_CANONICAL_MAP = {
-    # LLM 会按 prompt schema 里的示例值输出（"放量/缩量/平量"），即使输出语言
-    # 指令要求越南语也常常照抄示例。这里在渲染边界统一归一并翻译，
-    # 不依赖模型是否遵守指令。
+    # The LLM copies example values from the prompt schema (Chinese "expanding / shrinking / flat volume"),
+    # even when the output-language instruction asks for Vietnamese. Normalize and translate them here at
+    # the render boundary instead of relying on the model to follow instructions.
     "放量": "expanding",
     "温和放量": "expanding",
     "明显放量": "expanding",
@@ -364,6 +372,12 @@ _VOLUME_STATUS_CANONICAL_MAP = {
     "low volume": "shrinking",
     "normal": "normal",
     "normal volume": "normal",
+    # Nhãn VolumeStatus tiếng Anh của src/stock_analyzer.py.
+    # English VolumeStatus values from src/stock_analyzer.py.
+    "heavy volume up": "expanding",
+    "heavy volume down": "expanding",
+    "low volume up": "shrinking",
+    "low volume pullback": "shrinking",
     "tăng khối lượng": "expanding",
     "khối lượng tăng": "expanding",
     "bùng nổ khối lượng": "surging",
@@ -1218,8 +1232,9 @@ def normalize_report_language(
 def is_supported_report_language_value(value: Optional[str]) -> bool:
     """Return whether the raw value is a language the renderer understands.
 
-    包含历史语言（zh/en/ko），用于渲染旧记录；判断"能不能配置成这个语言"
-    请用 :func:`is_selectable_report_language_value`。
+    Includes legacy languages (zh/en/ko) so old records can still be rendered;
+    to check whether a language can be *configured*, use
+    :func:`is_selectable_report_language_value`.
     """
     candidate = (value or "").strip().lower().replace(" ", "_")
     if not candidate:
@@ -1236,7 +1251,7 @@ def is_selectable_report_language_value(value: Optional[str]) -> bool:
     return candidate in SELECTABLE_REPORT_LANGUAGES
 
 
-# 中文 / 韩文排版用全角冒号，越南语和英文用半角冒号加空格。
+# Chinese / Korean typography uses a full-width colon; Vietnamese and English use a half-width colon plus a space.
 _LABEL_SEPARATOR_BY_LANGUAGE = {
     "vi": ": ",
     "en": ": ",
@@ -1519,9 +1534,11 @@ def localize_strategy_skill(value: Any, language: Optional[str]) -> str:
 def localize_volume_status(value: Any, language: Optional[str]) -> str:
     """Translate the LLM-provided volume status at the render boundary.
 
-    模型经常返回复合值（观察到的实例：``"缩量 (Khối lượng thấp)"``），既不是纯
-    中文也不是纯越南语，精确匹配会漏掉。因此在精确匹配失败后再做一次"包含"
-    匹配：按键长度从长到短找第一个出现在文本里的已知取值。
+    The model often returns compound values (observed example: a Chinese
+    "shrinking volume" label followed by ``(Khối lượng thấp)``) that are neither
+    pure Chinese nor pure Vietnamese, so an exact match misses them. After the
+    exact match fails, a "contains" match is tried: keys are scanned from longest
+    to shortest and the first known value found in the text wins.
     """
 
     exact = _translate_from_map(

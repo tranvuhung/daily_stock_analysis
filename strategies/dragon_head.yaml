@@ -1,9 +1,10 @@
-# Dragon Head Strategy / 龙头策略
+# Dragon Head Strategy
 # Identifies sector leaders during sector rotation cycles.
 
 name: dragon_head
 display_name: 龙头策略
-description: 板块轮动中识别龙头股。适用于板块启动或行业催化剂出现时。
+display_name_en: "Sector Leader (Dragon Head)"
+description: Identifies sector leader stocks during sector rotation. Applicable when a sector starts to move or an industry catalyst emerges.
 category: trend
 core_rules: [2, 7]
 required_tools:
@@ -15,30 +16,30 @@ default_priority: 90
 market_regimes: [sector_hot]
 
 instructions: |
-  **龙头策略（Dragon Head Strategy）**
+  **Sector Leader Strategy (Dragon Head Strategy)**
 
-  评估标准：
+  Evaluation criteria:
 
-  1. **板块领涨地位**：
-     - 使用 `get_sector_rankings` 检查该股所在板块是否为近期涨幅前列。
-     - 确认该股是否在板块启动周期中率先上涨或涨停。
+  1. **Sector leadership position**:
+     - Use `get_sector_rankings` to check whether the stock's sector is among the recent top gainers.
+     - Confirm whether the stock was the first to rally or hit limit-up during the sector's launch phase.
 
-  2. **换手率与动能**（关联理念7：强势趋势股放宽）：
-     - 使用 `get_realtime_quote` 检查换手率。龙头股换手率通常 > 5%。
-     - 量比 > 1.5 说明有活跃的交易兴趣。
+  2. **Turnover rate and momentum** (related to Principle 7: relaxed criteria for strong-trend stocks):
+     - Use `get_realtime_quote` to check the turnover rate. A sector leader's turnover rate is usually > 5%.
+     - A volume ratio > 1.5 indicates active trading interest.
 
-  3. **相对强度**：
-     - 对比个股涨跌幅与板块平均值。
-     - 真正的龙头在上涨日应跑赢板块 2% 以上。
+  3. **Relative strength**:
+     - Compare the stock's price change against the sector average.
+     - A true sector leader should outperform its sector by more than 2% on up days.
 
-  4. **新闻催化**：
-     - 使用 `search_stock_news` 搜索板块级催化剂（政策、事件、业绩）。
-     - 龙头行情常伴随板块整体催化。
+  4. **News catalysts**:
+     - Use `search_stock_news` to search for sector-level catalysts (policy, events, earnings).
+     - Sector-leader rallies are often accompanied by a sector-wide catalyst.
 
-  5. **乖离率检查**（关联理念1：严进策略）：
-     - 龙头股可适当放宽乖离率至 7%，但超过 10% 仍需谨慎。
+  5. **Bias ratio check** (related to Principle 1: strict entry discipline):
+     - For a sector leader, the bias ratio threshold may be relaxed to 7%, but caution is still required above 10%.
 
-  评分调整：
-  - 确认为龙头股：sentiment_score +10
-  - 板块正处于主动轮动期：额外 +5
-  - 在 `buy_reason` 中注明"龙头策略"判断结果。
+  Score adjustment:
+  - Confirmed as a sector leader: sentiment_score +10
+  - Sector is in an active rotation phase: additional +5
+  - Note the "Sector Leader Strategy" assessment result in `buy_reason`.

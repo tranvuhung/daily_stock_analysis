@@ -801,6 +801,10 @@ class LLMToolAdapter:
         """Convert internal message format to OpenAI-compatible format for litellm."""
         openai_messages: List[Dict[str, Any]] = []
         target_provider = self._trace_provider_for_target(target_model)
+        # tool_call_id của các assistant tool_calls đã được giữ lại;
+        # dùng để loại tool result mồ côi (provider như Gemini sẽ từ chối).
+        # Ids of kept assistant tool_calls; used to drop orphaned tool results.
+        kept_tool_call_ids: set = set()
         for msg in messages:
             trace_matches_target = _message_trace_matches_target(
                 msg,
@@ -810,11 +814,22 @@ class LLMToolAdapter:
             if not trace_matches_target:
                 continue
             if msg["role"] == "tool":
-                openai_messages.append({
+                tool_call_id = msg.get("tool_call_id", "")
+                if tool_call_id not in kept_tool_call_ids:
+                    logger.debug(
+                        "Dropping orphaned tool message %s for target %s",
+                        tool_call_id,
+                        target_model,
+                    )
+                    continue
+                tool_msg: Dict[str, Any] = {
                     "role": "tool",
-                    "tool_call_id": msg.get("tool_call_id", ""),
+                    "tool_call_id": tool_call_id,
                     "content": msg["content"] if isinstance(msg["content"], str) else json.dumps(msg["content"]),
-                })
+                }
+                if msg.get("name"):
+                    tool_msg["name"] = msg["name"]
+                openai_messages.append(tool_msg)
             elif msg["role"] == "assistant" and msg.get("tool_calls"):
                 openai_tc = []
                 for tc in msg["tool_calls"]:
@@ -833,6 +848,7 @@ class LLMToolAdapter:
                     if provider_specific_fields:
                         tc_dict["provider_specific_fields"] = provider_specific_fields
                     openai_tc.append(tc_dict)
+                    kept_tool_call_ids.add(tc_dict["id"])
                 content = (
                     msg.get("provider_blocks")
                     if msg.get("provider_blocks")

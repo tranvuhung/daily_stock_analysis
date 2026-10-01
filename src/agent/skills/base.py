@@ -4,7 +4,8 @@ Trading skill base classes and SkillManager.
 
 Skills are pluggable trading analysis modules defined in **natural language**
 (YAML files). Each skill describes a common or custom trading pattern
-(e.g., 龙头策略, 缩量回踩, 均线金叉) used for analysis and push notifications.
+(e.g., sector leader, low-volume pullback, MA golden cross) used for analysis
+and push notifications.
 
 Users can write custom skills by creating a YAML file — no Python code needed.
 The built-in YAML files still live under ``strategies/`` for compatibility.
@@ -33,10 +34,11 @@ class Skill:
 
     Attributes:
         name: Unique strategy identifier (e.g., "dragon_head").
-        display_name: Human-readable name (e.g., "龙头策略").
+        display_name: Human-readable name shown in UI/bot/reports (built-in skills use Chinese names).
+        display_name_en: Optional English name used inside LLM prompts (falls back to display_name).
         description: Brief description of when to apply this strategy.
         instructions: Detailed natural language instructions injected into the system prompt.
-        category: Skill category — "trend" (趋势), "pattern" (形态), "reversal" (反转), "framework" (框架).
+        category: Skill category — "trend", "pattern", "reversal", or "framework".
         core_rules: List of core trading rule numbers this strategy relates to (1-7).
         required_tools: List of tool names this skill depends on.
         allowed_tools: Optional allowlist metadata from SKILL.md frontmatter.
@@ -77,6 +79,14 @@ class Skill:
     execution_context: str = "inline"
     subagent_type: str = ""
     preferred_model: str = ""
+    # Tên tiếng Anh dùng trong prompt; display_name giữ cho UI/bot/báo cáo.
+    # English name for prompts; display_name stays for UI/bot/report matching.
+    display_name_en: str = ""
+
+    @property
+    def prompt_name(self) -> str:
+        """Name rendered inside LLM prompts."""
+        return self.display_name_en or self.display_name
 
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\r?\n(.*?)\r?\n---\s*\r?\n?(.*)$", re.DOTALL)
@@ -199,6 +209,7 @@ def load_skill_from_yaml(filepath: Union[str, Path]) -> Skill:
         execution_context=str(data.get("context", "inline")).strip() or "inline",
         subagent_type=str(data.get("agent", "")).strip(),
         preferred_model=str(data.get("model", "")).strip(),
+        display_name_en=str(data.get("display_name_en", "") or "").strip(),
     )
 
 
@@ -441,7 +452,9 @@ class SkillManager:
             return ""
 
         # Group by category
-        categories = {"trend": "趋势", "pattern": "形态", "reversal": "反转", "framework": "框架"}
+        # Prompt dùng tiếng Anh làm chuẩn; ngôn ngữ trả lời do mục Output Language quyết định.
+        # Prompts are canonical English; the reply language comes from the Output Language section.
+        categories = {"trend": "Trend", "pattern": "Pattern", "reversal": "Reversal", "framework": "Framework"}
         grouped: Dict[str, List[Skill]] = {}
         for skill in active:
             cat = skill.category or "trend"
@@ -456,17 +469,17 @@ class SkillManager:
             if not skills_in_cat:
                 continue
             cat_label = categories.get(cat_key, cat_key)
-            parts.append(f"#### {cat_label}类技能\n")
+            parts.append(f"#### {cat_label} skills\n")
             for skill in skills_in_cat:
                 rules_ref = ""
                 if skill.core_rules:
-                    rules_ref = f"（关联核心理念：第{'、'.join(str(r) for r in skill.core_rules)}条）"
+                    rules_ref = f"(related core rules: {', '.join(str(r) for r in skill.core_rules)})"
                 support_ref = ""
                 if skill.bundle_dir and skill.entrypoint.endswith("SKILL.md"):
-                    support_ref = "（bundle）"
+                    support_ref = "(bundle)"
                 parts.append(
-                    f"### 技能 {idx}: {skill.display_name} {rules_ref}{support_ref}\n\n"
-                    f"**适用场景**: {skill.description}\n\n"
+                    f"### Skill {idx}: {skill.prompt_name} {rules_ref}{support_ref}\n\n"
+                    f"**When to use**: {skill.description}\n\n"
                     f"{skill.instructions}\n"
                 )
                 idx += 1

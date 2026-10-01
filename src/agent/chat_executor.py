@@ -9,7 +9,13 @@ from typing import Any, Callable, Dict, List, Optional
 
 from src.agent.agent_backend import AgentBackend, AgentRunRequest
 from src.agent.conversation import conversation_manager
-from src.agent.executor import AgentResult, PreparedAgentChat, prepare_agent_chat
+from src.agent.executor import (
+    AgentResult,
+    PreparedAgentChat,
+    build_chat_failure_note,
+    finalize_chat_answer,
+    prepare_agent_chat,
+)
 from src.agent.provider_trace import persist_provider_trace_turns
 
 
@@ -150,6 +156,13 @@ class AgentChatExecutor:
         )
 
         if result.success:
+            # Câu trả lời tiếng Việt không còn chữ Hán, và luôn kèm câu miễn trừ trách nhiệm đầu tư.
+            # Strip Han text from Vietnamese answers and always append the investment disclaimer.
+            result.content = finalize_chat_answer(
+                result.content,
+                turn.prepared.report_language,
+                self.context_llm_adapter,
+            )
             assistant_message_id = conversation_manager.add_message(turn.session_id, "assistant", result.content)
             if not self.backend.runtime_owns_loop:
                 persist_provider_trace_turns(
@@ -161,14 +174,13 @@ class AgentChatExecutor:
                     assistant_message_id=assistant_message_id,
                 )
         else:
+            language = turn.prepared.report_language
             if not self.backend.runtime_owns_loop:
-                failure_note = f"[分析失败] {result.error or '未知错误'}"
-            elif result.error_code == "cancelled":
-                failure_note = "[已停止] 本次分析已由用户停止。"
-            elif result.error_code == "timeout":
-                failure_note = "[已超时] 本次分析已在时间限制内结束。"
+                failure_note = build_chat_failure_note("failed", result.error, language)
+            elif result.error_code in ("cancelled", "timeout"):
+                failure_note = build_chat_failure_note(result.error_code, result.error, language)
             else:
-                failure_note = f"[分析失败] {result.error or '未知错误'}"
+                failure_note = build_chat_failure_note("failed", result.error, language)
             conversation_manager.add_message(
                 turn.session_id,
                 "assistant",

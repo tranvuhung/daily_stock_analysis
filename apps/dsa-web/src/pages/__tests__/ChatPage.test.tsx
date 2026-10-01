@@ -559,8 +559,8 @@ describe('ChatPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(mockStartStream).toHaveBeenCalledTimes(1));
 
-    // sh000001 (上证指数) must be preserved verbatim — normalizeStockCode would
-    // strip it to 000001 and collide with 平安银行 (000001.SZ).
+    // sh000001 (SSE Composite Index) must be preserved verbatim — normalizeStockCode would
+    // strip it to 000001 and collide with Ping An Bank (000001.SZ).
     expect(sentPayload?.context?.stock_code).toBe('sh000001');
     expect(sentPayload?.context?.stock_name).toBe('上证指数');
   });
@@ -639,7 +639,7 @@ describe('ChatPage', () => {
     fireEvent.change(input, { target: { value: 'Analyze 000001' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
-    // 000001 (平安银行) is a stock; only the sh000001 index canonical hides the
+    // 000001 (Ping An Bank) is a stock; only the sh000001 index canonical hides the
     // action, so the bare same-digit stock keeps its watchlist button.
     expect(await screen.findByText('Add to watchlist')).toBeInTheDocument();
   });
@@ -1086,7 +1086,7 @@ describe('ChatPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Export the session as a Markdown file' }));
 
-    expect(mockDownloadSession).toHaveBeenCalledWith(mockStoreState.messages);
+    expect(mockDownloadSession).toHaveBeenCalledWith(mockStoreState.messages, 'en');
     expect(mockFormatSessionAsMarkdown).not.toHaveBeenCalled();
   });
 
@@ -1128,6 +1128,49 @@ describe('ChatPage', () => {
     expect(skillBadge).toHaveTextContent('趋势分析, 均线金叉');
   });
 
+  it('localizes backend progress and strategy names in Vietnamese', async () => {
+    window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'vi');
+    mockGetSkills.mockResolvedValue({
+      skills: [{ id: 'ma_golden_cross', name: '均线金叉', description: '均线交叉' }],
+      default_skill_id: 'ma_golden_cross',
+    });
+    mockStoreState.loading = true;
+    mockStoreState.progressSteps = [
+      { type: 'tool_done', tool: 'get_realtime_quote', display_name: 'Get realtime quote', success: true, duration: 0.5 },
+      { type: 'thinking', step: 2, message: '「行情获取」已完成，继续深入分析...' },
+    ];
+
+    render(
+      <UiLanguageProvider>
+        <MemoryRouter initialEntries={['/chat']}>
+          <ChatPage />
+        </MemoryRouter>
+      </UiLanguageProvider>,
+    );
+
+    expect(await screen.findByText('Đã xong «Lấy giá thời gian thực», tiếp tục phân tích...')).toBeInTheDocument();
+    expect(screen.queryByText(/继续深入分析/)).not.toBeInTheDocument();
+    expect(await screen.findByRole('checkbox', { name: 'Giao cắt vàng MA' })).toBeInTheDocument();
+  });
+
+  it('shows legacy Chinese failure notes in the UI language', async () => {
+    window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'vi');
+    mockStoreState.messages = [
+      { id: 'assistant-legacy', role: 'assistant', content: '[分析失败] All LLM models failed' },
+    ];
+
+    render(
+      <UiLanguageProvider>
+        <MemoryRouter initialEntries={['/chat']}>
+          <ChatPage />
+        </MemoryRouter>
+      </UiLanguageProvider>,
+    );
+
+    expect(await screen.findByText('[Phân tích thất bại] All LLM models failed')).toBeInTheDocument();
+    expect(screen.queryByText(/分析失败/)).not.toBeInTheDocument();
+  });
+
   it('renders failed stage_done progress as a non-success state', async () => {
     mockStoreState.loading = true;
     mockStoreState.progressSteps = [
@@ -1150,12 +1193,12 @@ describe('ChatPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findAllByText('risk failed')).toHaveLength(1);
+    expect(await screen.findAllByText('risk review failed')).toHaveLength(1);
 
     const thinkingToggle = container.querySelector('button[class*="mb-2"][class*="w-full"]') as HTMLButtonElement;
     fireEvent.click(thinkingToggle);
 
-    const failedStage = screen.getAllByText('risk failed').find((node) =>
+    const failedStage = screen.getAllByText('risk review failed').find((node) =>
       node.closest('.chat-progress-item'),
     );
     expect(failedStage).toBeDefined();
@@ -1226,7 +1269,7 @@ describe('ChatPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByRole('checkbox', { name: '均线金叉' })).toBeChecked();
+    expect(await screen.findByRole('checkbox', { name: 'MA golden cross' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: '趋势分析' })).not.toBeChecked();
 
     fireEvent.change(screen.getByPlaceholderText(/Analyze 600519/), {
@@ -1303,7 +1346,7 @@ describe('ChatPage', () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(await screen.findByRole('checkbox', { name: '均线金叉' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'MA golden cross' }));
     fireEvent.change(screen.getByPlaceholderText(/Analyze 600519/), {
       target: { value: 'Analyze 600519' },
     });
@@ -1316,7 +1359,7 @@ describe('ChatPage', () => {
           skills: ['bull_trend', 'ma_golden_cross'],
         }),
         expect.objectContaining({
-          skillNames: ['趋势分析', '均线金叉'],
+          skillNames: ['趋势分析', 'MA golden cross'],
           skillName: '趋势分析、均线金叉',
         }),
       );
@@ -1379,7 +1422,7 @@ describe('ChatPage', () => {
     expect(skillPanel).not.toHaveClass('hidden');
     expect(skillPanel).toHaveClass('flex');
 
-    fireEvent.click(screen.getByRole('checkbox', { name: '均线金叉' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'MA golden cross' }));
     fireEvent.change(screen.getByPlaceholderText(/Analyze 600519/), {
       target: { value: 'Analyze 600519' },
     });
@@ -1447,13 +1490,13 @@ describe('ChatPage', () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(await screen.findByRole('checkbox', { name: '均线金叉' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: '缠论' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'MA golden cross' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Chan theory' }));
 
-    const wave = screen.getByRole('checkbox', { name: '波浪理论' });
+    const wave = screen.getByRole('checkbox', { name: 'Elliott wave theory' });
     expect(wave).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('checkbox', { name: '均线金叉' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'MA golden cross' }));
     expect(wave).not.toBeDisabled();
   });
 
@@ -1473,7 +1516,7 @@ describe('ChatPage', () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(await screen.findByRole('checkbox', { name: '均线金叉' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'MA golden cross' }));
     fireEvent.click(screen.getByRole('button', { name: 'Analyze Kweichow Moutai with Chan theory' }));
 
     await waitFor(() => {
@@ -1483,8 +1526,8 @@ describe('ChatPage', () => {
           skills: ['chan_theory'],
         }),
         expect.objectContaining({
-          skillNames: ['缠论'],
-          skillName: '缠论',
+          skillNames: ['Chan theory'],
+          skillName: 'Chan theory',
         }),
       );
     });
@@ -1545,8 +1588,8 @@ describe('ChatPage', () => {
           },
         }),
         expect.objectContaining({
-          skillNames: ['箱体震荡'],
-          skillName: '箱体震荡',
+          skillNames: ['Box-range oscillation'],
+          skillName: 'Box-range oscillation',
         }),
       );
     });
@@ -1652,7 +1695,7 @@ describe('ChatPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Send to the configured notification bots / mailboxes' }));
 
     await waitFor(() => {
-      expect(mockFormatSessionAsMarkdown).toHaveBeenCalledWith(mockStoreState.messages);
+      expect(mockFormatSessionAsMarkdown).toHaveBeenCalledWith(mockStoreState.messages, 'en');
       expect(mockSendChat).toHaveBeenCalledWith('# exported markdown');
     });
 
@@ -1948,6 +1991,62 @@ describe('ChatPage', () => {
         expect.objectContaining({
           skillName: '趋势分析',
         }),
+      );
+    });
+  });
+
+  it.each([
+    ['Phân tích mã LAS'],
+    ['LAS có nên mua không?'],
+  ])('switches active stock context for Vietnamese switch message %s', async (message) => {
+    render(
+      <MemoryRouter initialEntries={['/chat?stock=HAG&name=HAG']}>
+        <ChatPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByDisplayValue(/HAG/);
+
+    fireEvent.change(screen.getByPlaceholderText(/Analyze 600519/), {
+      target: { value: message },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => {
+      expect(mockStartStream).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          message,
+          context: {
+            stock_code: 'LAS',
+            stock_name: null,
+          },
+        }),
+        expect.anything(),
+      );
+    });
+  });
+
+  it('keeps both stocks out of the active context for Vietnamese compare messages', async () => {
+    render(
+      <MemoryRouter initialEntries={['/chat?stock=HAG&name=HAG']}>
+        <ChatPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByDisplayValue(/HAG/);
+
+    fireEvent.change(screen.getByPlaceholderText(/Analyze 600519/), {
+      target: { value: 'So sánh HAG và LAS' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => {
+      expect(mockStartStream).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          message: 'So sánh HAG và LAS',
+          context: expect.objectContaining({ stock_code: 'HAG' }),
+        }),
+        expect.anything(),
       );
     });
   });

@@ -27,6 +27,7 @@ from src.agent.provider_trace import persist_provider_trace_turns
 from src.agent.runner import run_agent_loop, parse_dashboard_json
 from src.agent.runtime_facts import AgentRuntimeFacts
 from src.agent.stock_scope import StockScope, resolve_stock_scope
+from src.agent.output_language_guard import enforce_vietnamese_output
 from src.storage import get_db
 from src.agent.tools.registry import ToolRegistry
 from src.report_language import normalize_report_language
@@ -380,95 +381,100 @@ AGENT_SYSTEM_PROMPT = """你是一位{market_role}投资分析 Agent，拥有数
 {language_section}
 """
 
-LEGACY_DEFAULT_CHAT_SYSTEM_PROMPT = """你是一位专注于趋势交易的{market_role}投资分析 Agent，拥有数据工具和交易技能，负责解答用户的股票投资问题。
+# Prompt hệ thống chat viết bằng tiếng Anh làm chuẩn; ngôn ngữ trả lời do {language_section} quyết định.
+# Chat system prompts are canonical English; the reply language comes from {language_section}.
+LEGACY_DEFAULT_CHAT_SYSTEM_PROMPT = """You are a trend-trading focused {market_role} Agent with data tools and trading skills. Your job is to answer the user's stock investment questions.
 
 {market_guidelines}
 
-## 分析工作流程（必须严格按阶段执行，禁止跳步或合并阶段）
+## Analysis workflow (follow the stages strictly; never skip or merge stages)
 
-当用户询问某支股票时，必须按以下四个阶段顺序调用工具，每阶段等工具结果全部返回后再进入下一阶段：
+When the user asks about a stock, call the tools in the four stages below, in order. Wait for all tool results of a stage before moving to the next one:
 
-**第一阶段 · 行情与K线**（必须先执行）
-- 调用 `get_realtime_quote` 获取实时行情和当前价格
-- 调用 `get_daily_history` 获取近期历史K线数据
+**Stage 1 · Quote and candlesticks** (always first)
+- Call `get_realtime_quote` for the live quote and current price
+- Call `get_daily_history` for recent daily candlestick (K-line) history
 
-**第二阶段 · 技术与筹码**（等第一阶段结果返回后再执行）
-- 调用 `analyze_trend` 获取 MA/MACD/RSI 等技术指标
-- 调用 `get_chip_distribution` 获取筹码分布结构
+**Stage 2 · Technicals and chip distribution** (after Stage 1 results return)
+- Call `analyze_trend` for MA/MACD/RSI and other technical indicators
+- Call `get_chip_distribution` for the chip distribution (holder cost structure)
 
-**第三阶段 · 情报搜索**（等前两阶段完成后再执行）
-- 调用 `search_stock_news` 搜索最新新闻公告、减持、业绩预告等风险信号
+**Stage 3 · News and intelligence** (after Stages 1-2 complete)
+- Call `search_stock_news` for the latest news, announcements, insider/major-holder selling, earnings warnings and other risk signals
 
-**第四阶段 · 综合分析**（所有工具数据就绪后生成回答）
-- 基于上述真实数据，结合激活技能进行综合研判，输出投资建议
+**Stage 4 · Synthesis** (answer once all tool data is ready)
+- Combine the real data above with the active skills and give an investment view
 
-> ⚠️ 禁止将不同阶段的工具合并到同一次调用中（例如禁止在第一次调用中同时请求行情、技术指标和新闻）。
+> ⚠️ Do not merge tools from different stages into one call (e.g. never request the quote, technical indicators and news in the same first call).
 {default_skill_policy_section}
 
-## 规则
+## Rules
 
-1. **必须调用工具获取真实数据** — 绝不编造数字，所有数据必须来自工具返回结果。
-2. **应用交易技能** — 评估每个激活技能的条件，在回答中体现技能判断结果。
-3. **自由对话** — 根据用户的问题，自由组织语言回答，不需要输出 JSON。
-4. **风险优先** — 必须排查风险（股东减持、业绩预警、监管问题）。
-5. **工具失败处理** — 记录失败原因，使用已有数据继续分析，不重复调用失败工具。
+1. **Always call tools for real data** — never invent numbers; every figure must come from tool results.
+2. **Apply the trading skills** — evaluate each active skill's conditions and reflect the skill verdicts in the answer.
+3. **Free-form conversation** — answer the user's question in natural prose; no JSON output is needed.
+4. **Risk first** — always check for risks (major-holder selling, earnings warnings, regulatory issues).
+5. **Tool failures** — note the failure reason, continue with the data you have, and do not retry a failed tool.
+6. **No disclaimer line** — do not write your own "not investment advice" disclaimer; the system appends one automatically.
 
 {skills_section}
 {language_section}
 """
 
-CHAT_SYSTEM_PROMPT = """你是一位{market_role}投资分析 Agent，拥有数据工具和可切换交易技能，负责解答用户的股票投资问题。
+CHAT_SYSTEM_PROMPT = """You are a {market_role} Agent with data tools and switchable trading skills. Your job is to answer the user's stock investment questions.
 
 {market_guidelines}
 
-## 分析工作流程（必须严格按阶段执行，禁止跳步或合并阶段）
+## Analysis workflow (follow the stages strictly; never skip or merge stages)
 
-当用户询问某支股票时，必须按以下四个阶段顺序调用工具，每阶段等工具结果全部返回后再进入下一阶段：
+When the user asks about a stock, call the tools in the four stages below, in order. Wait for all tool results of a stage before moving to the next one:
 
-**第一阶段 · 行情与K线**（必须先执行）
-- 调用 `get_realtime_quote` 获取实时行情和当前价格
-- 调用 `get_daily_history` 获取近期历史K线数据
+**Stage 1 · Quote and candlesticks** (always first)
+- Call `get_realtime_quote` for the live quote and current price
+- Call `get_daily_history` for recent daily candlestick (K-line) history
 
-**第二阶段 · 技术与筹码**（等第一阶段结果返回后再执行）
-- 调用 `analyze_trend` 获取 MA/MACD/RSI 等技术指标
-- 调用 `get_chip_distribution` 获取筹码分布结构
+**Stage 2 · Technicals and chip distribution** (after Stage 1 results return)
+- Call `analyze_trend` for MA/MACD/RSI and other technical indicators
+- Call `get_chip_distribution` for the chip distribution (holder cost structure)
 
-**第三阶段 · 情报搜索**（等前两阶段完成后再执行）
-- 调用 `search_stock_news` 搜索最新新闻公告、减持、业绩预告等风险信号
+**Stage 3 · News and intelligence** (after Stages 1-2 complete)
+- Call `search_stock_news` for the latest news, announcements, insider/major-holder selling, earnings warnings and other risk signals
 
-**第四阶段 · 综合分析**（所有工具数据就绪后生成回答）
-- 基于上述真实数据，结合激活技能进行综合研判，输出投资建议
+**Stage 4 · Synthesis** (answer once all tool data is ready)
+- Combine the real data above with the active skills and give an investment view
 
-> ⚠️ 禁止将不同阶段的工具合并到同一次调用中（例如禁止在第一次调用中同时请求行情、技术指标和新闻）。
+> ⚠️ Do not merge tools from different stages into one call (e.g. never request the quote, technical indicators and news in the same first call).
 {default_skill_policy_section}
 
-## 规则
+## Rules
 
-1. **必须调用工具获取真实数据** — 绝不编造数字，所有数据必须来自工具返回结果。
-2. **应用交易技能** — 评估每个激活技能的条件，在回答中体现技能判断结果。
-3. **自由对话** — 根据用户的问题，自由组织语言回答，不需要输出 JSON。
-4. **风险优先** — 必须排查风险（股东减持、业绩预警、监管问题）。
-5. **工具失败处理** — 记录失败原因，使用已有数据继续分析，不重复调用失败工具。
+1. **Always call tools for real data** — never invent numbers; every figure must come from tool results.
+2. **Apply the trading skills** — evaluate each active skill's conditions and reflect the skill verdicts in the answer.
+3. **Free-form conversation** — answer the user's question in natural prose; no JSON output is needed.
+4. **Risk first** — always check for risks (major-holder selling, earnings warnings, regulatory issues).
+5. **Tool failures** — note the failure reason, continue with the data you have, and do not retry a failed tool.
+6. **No disclaimer line** — do not write your own "not investment advice" disclaimer; the system appends one automatically.
 
 {skills_section}
 {language_section}
 """
 
-CODEX_CHAT_SYSTEM_PROMPT = """你是一位{market_role}投资分析 Agent，负责基于 DSA 已保存的数据解答用户的股票投资问题。
+CODEX_CHAT_SYSTEM_PROMPT = """You are a {market_role} Agent that answers the user's stock investment questions using data already saved in DSA.
 
-## 可用数据
+## Available data
 
-- `get_analysis_context`：读取指定股票最近一次已保存的分析上下文。
-- `get_skill_backtest_summary`：读取指定交易技能的已保存回测汇总。
-- `get_strategy_backtest_summary`：读取整体交易策略的已保存回测汇总。
+- `get_analysis_context`: reads the most recent saved analysis context for a given stock.
+- `get_skill_backtest_summary`: reads the saved backtest summary for a given trading skill.
+- `get_strategy_backtest_summary`: reads the saved backtest summary for the overall trading strategy.
 
-## 工作方式
+## How to work
 
-1. 询问具体股票时，先调用 `get_analysis_context`，再依据返回的已保存数据回答。
-2. 用户询问交易技能或策略表现时，按问题调用对应的回测汇总工具。
-3. 明确说明结论基于已保存数据；若数据带有分析时间，应在回答中提示其时间范围。
-4. 工具未返回回答所需的信息时，直接说明当前保存的数据不足，不得补写或猜测数据。
-5. 自由组织面向用户的回答，不需要输出 JSON。
+1. For a specific stock, call `get_analysis_context` first, then answer from the saved data it returns.
+2. When the user asks how a trading skill or strategy performed, call the matching backtest summary tool.
+3. State clearly that conclusions are based on saved data; if the data carries an analysis time, mention its time range in the answer.
+4. If the tools do not return the information needed, say that the saved data is insufficient; never fill in or guess data.
+5. Answer the user in natural prose; no JSON output is needed.
+6. Do not write your own "not investment advice" disclaimer; the system appends one automatically.
 
 {language_section}
 """
@@ -483,6 +489,8 @@ def _build_language_section(report_language: str, *, chat_mode: bool = False) ->
 ## Output Language
 
 - Reply in Vietnamese (Tiếng Việt), with correct diacritics.
+- This applies even when the instructions, skill descriptions, tool results, or earlier messages are in Chinese or English: translate the content, do not copy Chinese text into the answer. Keep stock codes, tickers, and numbers unchanged.
+- Never write any Chinese (Han) characters, not even in parentheses, quotes, or as the original term next to a translation (write only the Vietnamese term, never the Vietnamese term followed by the Chinese original in parentheses).
 - If you output JSON, keep the keys unchanged and write every human-readable value in Vietnamese.
 """
         if normalized in ("en", "vi"):
@@ -543,6 +551,68 @@ class PreparedAgentChat:
     system_prompt: str
     history_messages: List[Dict[str, Any]]
     stock_scope: Optional[StockScope]
+    report_language: str = "zh"
+
+
+# Ghi chú lưu vào lịch sử khi lượt chat không thành công, theo ngôn ngữ báo cáo.
+# Failure/stop/timeout notes persisted as the assistant message, per report language.
+_CHAT_FAILURE_NOTES: Dict[str, Dict[str, str]] = {
+    "vi": {
+        "failed": "[Phân tích thất bại] {error}",
+        "cancelled": "[Đã dừng] Lượt phân tích này đã được người dùng dừng.",
+        "timeout": "[Quá thời gian] Lượt phân tích này đã kết thúc do vượt giới hạn thời gian.",
+        "unknown_error": "Lỗi không xác định",
+    },
+    "en": {
+        "failed": "[Analysis failed] {error}",
+        "cancelled": "[Stopped] This analysis was stopped by the user.",
+        "timeout": "[Timed out] This analysis ended at the time limit.",
+        "unknown_error": "Unknown error",
+    },
+    "zh": {
+        "failed": "[分析失败] {error}",
+        "cancelled": "[已停止] 本次分析已由用户停止。",
+        "timeout": "[已超时] 本次分析已在时间限制内结束。",
+        "unknown_error": "未知错误",
+    },
+}
+
+
+def append_chat_disclaimer(content: Optional[str], report_language: Optional[str]) -> Optional[str]:
+    """Append the localized "AI-generated, not investment advice" line to a chat answer.
+
+    Gắn câu miễn trừ trách nhiệm (dùng chung nhãn ``not_investment_advice`` với báo cáo)
+    vào cuối câu trả lời Hỏi đáp; không phụ thuộc việc model có tự viết hay không.
+    Idempotent: answers that already end with the line are returned unchanged.
+    """
+    if not content or not content.strip():
+        return content
+    from src.report_language import get_report_labels
+
+    disclaimer = get_report_labels(normalize_report_language(report_language or "zh"))["not_investment_advice"]
+    if content.rstrip().endswith(f"*{disclaimer}*") or content.rstrip().endswith(disclaimer):
+        return content
+    return f"{content.rstrip()}\n\n---\n*{disclaimer}*"
+
+
+def finalize_chat_answer(
+    content: Optional[str],
+    report_language: Optional[str],
+    llm_adapter: Any = None,
+) -> Optional[str]:
+    """Apply the output-language guard, then append the investment disclaimer."""
+    return append_chat_disclaimer(
+        enforce_vietnamese_output(content, report_language, llm_adapter),
+        report_language,
+    )
+
+
+def build_chat_failure_note(kind: str, error: Optional[str], report_language: Optional[str]) -> str:
+    """Build the persisted assistant note for a failed/cancelled/timed-out chat turn."""
+    normalized = normalize_report_language(report_language or "zh")
+    notes = _CHAT_FAILURE_NOTES.get(normalized, _CHAT_FAILURE_NOTES["zh"])
+    template = notes.get(kind, notes["failed"])
+    return template.format(error=error or notes["unknown_error"])
 
 
 def prepare_agent_chat(
@@ -569,7 +639,7 @@ def prepare_agent_chat(
 
     skills_section = ""
     if skill_instructions:
-        skills_section = f"## 激活的交易技能\n\n{skill_instructions}"
+        skills_section = f"## Active trading skills\n\n{skill_instructions}"
     default_skill_policy_section = ""
     if default_skill_policy:
         default_skill_policy_section = f"\n{default_skill_policy}\n"
@@ -606,21 +676,21 @@ def prepare_agent_chat(
     if effective_context:
         context_parts = []
         if effective_context.get("stock_code"):
-            context_parts.append(f"股票代码: {effective_context['stock_code']}")
+            context_parts.append(f"Stock code: {effective_context['stock_code']}")
         if effective_context.get("stock_name"):
-            context_parts.append(f"股票名称: {effective_context['stock_name']}")
+            context_parts.append(f"Stock name: {effective_context['stock_name']}")
         if effective_context.get("previous_price"):
-            context_parts.append(f"上次分析价格: {effective_context['previous_price']}")
+            context_parts.append(f"Previous analysis price: {effective_context['previous_price']}")
         if effective_context.get("previous_change_pct"):
-            context_parts.append(f"上次涨跌幅: {effective_context['previous_change_pct']}%")
+            context_parts.append(f"Previous change: {effective_context['previous_change_pct']}%")
         if effective_context.get("previous_analysis_summary"):
             summary = effective_context["previous_analysis_summary"]
             summary_text = json.dumps(summary, ensure_ascii=False) if isinstance(summary, dict) else str(summary)
-            context_parts.append(f"上次分析摘要:\n{summary_text}")
+            context_parts.append(f"Previous analysis summary:\n{summary_text}")
         if effective_context.get("previous_strategy"):
             strategy = effective_context["previous_strategy"]
             strategy_text = json.dumps(strategy, ensure_ascii=False) if isinstance(strategy, dict) else str(strategy)
-            context_parts.append(f"上次策略分析:\n{strategy_text}")
+            context_parts.append(f"Previous strategy analysis:\n{strategy_text}")
         daily_market_context_section = format_daily_market_context_prompt_section(
             effective_context.get("daily_market_context"),
             report_language=report_language,
@@ -638,11 +708,11 @@ def prepare_agent_chat(
                 [
                     {
                         "role": "user",
-                        "content": "[系统提供的历史分析上下文，可供参考对比]\n" + "\n".join(context_parts),
+                        "content": "[System-provided historical analysis context for reference and comparison]\n" + "\n".join(context_parts),
                     },
                     {
                         "role": "assistant",
-                        "content": "好的，我已了解该股票的历史分析数据。请告诉我你想了解什么？",
+                        "content": "Understood. I have the historical analysis data for this stock. What would you like to know?",
                     },
                 ]
             )
@@ -651,6 +721,7 @@ def prepare_agent_chat(
         system_prompt=system_prompt,
         history_messages=history_messages,
         stock_scope=scope_resolution.stock_scope,
+        report_language=report_language,
     )
 
 
@@ -780,6 +851,9 @@ class AgentExecutor:
 
         # Persist assistant reply (or error note) for context continuity
         if result.success:
+            result.content = finalize_chat_answer(
+                result.content, prepared.report_language, self.llm_adapter
+            )
             assistant_message_id = conversation_manager.add_message(session_id, "assistant", result.content)
             self._persist_provider_trace(
                 session_id=session_id,
@@ -790,7 +864,9 @@ class AgentExecutor:
                 assistant_message_id=assistant_message_id,
             )
         else:
-            error_note = f"[分析失败] {result.error or '未知错误'}"
+            error_note = build_chat_failure_note(
+                "failed", result.error, (context or {}).get("report_language")
+            )
             conversation_manager.add_message(session_id, "assistant", error_note)
 
         return result

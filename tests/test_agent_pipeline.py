@@ -910,7 +910,7 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertTrue(result.success)
         self.assertEqual(result.sentiment_score, 64)
-        self.assertEqual(result.trend_prediction, "多头排列")
+        self.assertEqual(result.trend_prediction, "Tăng")
         self.assertEqual(result.operation_advice, "Mua")
         self.assertEqual(result.decision_type, "buy")
         self.assertIn("trend:fallback", result.data_sources)
@@ -951,7 +951,7 @@ class TestAgentResultConversion(unittest.TestCase):
         ok, missing = check_content_integrity(result)
         self.assertTrue(ok, missing)
         self.assertEqual(result.sentiment_score, 68)
-        self.assertEqual(result.analysis_summary, "Nhận định xu hướng: 多头排列; khuyến nghị hành động: Mua.")
+        self.assertEqual(result.analysis_summary, "Nhận định xu hướng: Tăng; khuyến nghị hành động: Mua.")
         self.assertEqual(result.dashboard["sentiment_score"], 68)
         self.assertEqual(result.dashboard["core_conclusion"]["one_sentence"], result.analysis_summary)
         self.assertEqual(result.dashboard["intelligence"]["risk_alerts"], ["跌破 MA20 需止损"])
@@ -1197,11 +1197,11 @@ class TestAgentResultConversion(unittest.TestCase):
         )
 
         self.assertEqual(result.sentiment_score, 66)
-        self.assertEqual(result.trend_prediction, "多头排列")
+        self.assertEqual(result.trend_prediction, "Tăng")
         self.assertEqual(result.operation_advice, "Mua")
         self.assertEqual(result.decision_type, "buy")
         self.assertEqual(result.dashboard["sentiment_score"], 66)
-        self.assertEqual(result.dashboard["trend_prediction"], "多头排列")
+        self.assertEqual(result.dashboard["trend_prediction"], "Tăng")
         self.assertEqual(result.dashboard["operation_advice"], "Mua")
     def test_convert_empty_dashboard_backfills_localized_trend_fallback_for_en(self):
         """English reports should keep trend/advice fallback values localized."""
@@ -1325,7 +1325,7 @@ class TestAgentResultConversion(unittest.TestCase):
         )
 
         self.assertEqual(result.sentiment_score, 66)
-        self.assertEqual(result.trend_prediction, "多头排列")
+        self.assertEqual(result.trend_prediction, "Tăng")
         self.assertEqual(result.operation_advice, "Mua")
         self.assertEqual(result.decision_type, "buy")
         self.assertEqual(result.dashboard["sentiment_score"], 66)
@@ -2451,7 +2451,7 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
             self.assertNotIn("chip_unavailable_reason", dp)
 
     def test_analyze_with_agent_history_context_includes_diagnostic_snapshot(self):
-        """Agent 分析入库存档时应保留 diagnostics 快照，避免历史诊断返回 unknown。"""
+        """Persisted agent analyses must keep the diagnostics snapshot so history diagnostics never return unknown."""
         with patch('src.core.pipeline.get_config') as mock_config, \
              patch('src.core.pipeline.get_db'), \
              patch('src.core.pipeline.DataFetcherManager'), \
@@ -3294,7 +3294,7 @@ class TestSafeInt(unittest.TestCase):
         self.assertEqual(safe_int("80"), 80)
 
     def test_string_with_unit(self):
-        """LLM may return '80分' instead of 80."""
+        """LLM may return 80 with a Chinese "points" unit suffix instead of the bare number 80."""
         safe_int = self._get_safe_int()
         self.assertEqual(safe_int("80分"), 80)
 
@@ -3426,7 +3426,7 @@ class TestSkillActivation(unittest.TestCase):
             from src.enums import ReportType
             pipeline = StockAnalysisPipeline(config=mock_cfg)
 
-            # Dashboard with "80分" instead of 80
+            # Dashboard with 80 plus a Chinese "points" unit suffix instead of 80
             agent_result = AgentResult(
                 success=True,
                 content="{}",

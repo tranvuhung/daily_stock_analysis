@@ -441,7 +441,7 @@ class AgentOrchestrator:
         progress_callback: Optional[Callable] = None,
     ) -> "AgentResult":
         """Execute an accepted multi-agent Chat turn and persist its result."""
-        from src.agent.executor import AgentResult
+        from src.agent.executor import AgentResult, build_chat_failure_note
         from src.agent.conversation import conversation_manager
 
         orch_result = self._execute_pipeline(
@@ -452,11 +452,22 @@ class AgentOrchestrator:
 
         # Persist assistant response
         if orch_result.success:
+            from src.agent.executor import finalize_chat_answer
+
+            orch_result.content = finalize_chat_answer(
+                orch_result.content,
+                turn.context.meta.get("report_language"),
+                self.llm_adapter,
+            )
             conversation_manager.add_message(turn.session_id, "assistant", orch_result.content)
         else:
             conversation_manager.add_message(
                 turn.session_id, "assistant",
-                f"[分析失败] {orch_result.error or '未知错误'}",
+                build_chat_failure_note(
+                    "failed",
+                    orch_result.error,
+                    turn.context.meta.get("report_language"),
+                ),
             )
 
         return AgentResult(
@@ -921,7 +932,7 @@ class AgentOrchestrator:
     def _partition_skill_opinions(self, ctx: AgentContext) -> None:
         """Split skill opinions into Evidence Chain (valid) and Diagnostics (invalid).
 
-        Per docs/multi-strategy-contract.md §"Evidence Chain 与 Diagnostics 分离":
+        Per docs/multi-strategy-contract.md, section "Evidence Chain vs Diagnostics separation":
         this is the ONLY partition point. After this method, ctx.opinions
         contains only valid skill opinions; invalid ones are moved to
         ctx.meta["invalid_opinions"] and never re-enter downstream evidence.

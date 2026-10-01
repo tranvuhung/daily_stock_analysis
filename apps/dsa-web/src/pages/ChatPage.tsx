@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -36,30 +36,34 @@ import {
 import { useStockIndex } from '../hooks/useStockIndex';
 import type { StockIndexItem } from '../types/stockIndex';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
+import type { UiTextKey } from '../i18n/uiText';
+import { getChatStageLabel, getChatToolLabel, localizeChatSkill, localizeLegacyChatNote } from '../locales/chatText';
 
 // Quick question examples shown on empty state
 type ActiveStockContext = Pick<ChatFollowUpContext, 'stock_code' | 'stock_name'>;
 
 const QUICK_QUESTIONS: Array<{
-  label: string;
+  labelKey: UiTextKey;
   skill: string;
   stockContext?: ActiveStockContext;
 }> = [
-  { label: 'Analyze Kweichow Moutai with Chan theory', skill: 'chan_theory', stockContext: { stock_code: '600519', stock_name: '贵州茅台' } },
-  { label: 'Look at CATL through Elliott wave theory', skill: 'wave_theory', stockContext: { stock_code: '300750', stock_name: '宁德时代' } },
-  { label: 'Analyze the trend of BYD', skill: 'bull_trend', stockContext: { stock_code: '002594', stock_name: '比亚迪' } },
-  { label: 'Analyze A-share SMIC 688981 with box-range oscillation', skill: 'box_oscillation', stockContext: { stock_code: '688981', stock_name: '中芯国际' } },
-  { label: 'Analyze Tencent hk00700', skill: 'bull_trend', stockContext: { stock_code: 'HK00700', stock_name: '腾讯控股' } },
-  { label: 'Analyze East Money with the sentiment cycle', skill: 'emotion_cycle', stockContext: { stock_code: '300059', stock_name: '东方财富' } },
+  { labelKey: 'chat.quickChanMoutai', skill: 'chan_theory', stockContext: { stock_code: '600519', stock_name: '贵州茅台' } },
+  { labelKey: 'chat.quickWaveCatl', skill: 'wave_theory', stockContext: { stock_code: '300750', stock_name: '宁德时代' } },
+  { labelKey: 'chat.quickTrendByd', skill: 'bull_trend', stockContext: { stock_code: '002594', stock_name: '比亚迪' } },
+  { labelKey: 'chat.quickBoxSmic', skill: 'box_oscillation', stockContext: { stock_code: '688981', stock_name: '中芯国际' } },
+  { labelKey: 'chat.quickTencent', skill: 'bull_trend', stockContext: { stock_code: 'HK00700', stock_name: '腾讯控股' } },
+  { labelKey: 'chat.quickEmotionEastMoney', skill: 'emotion_cycle', stockContext: { stock_code: '300059', stock_name: '东方财富' } },
 ];
 
 const MAX_SELECTED_SKILLS = 3;
 const CONTEXT_COMPRESSION_CONFIG_KEY = 'AGENT_CONTEXT_COMPRESSION_ENABLED';
-const STRONG_COMPARE_STOCK_MESSAGE_RE = /比较|对比|\bvs\b|和[^，。,.!?！？]{0,40}比/i;
-const WEAK_COMPARE_STOCK_MESSAGE_RE = /差异(?!化)|区别|不同|相比|对照|比一比/;
-const CHOICE_COMPARE_STOCK_MESSAGE_RE = /哪个|哪只|哪一个|谁更|更值得|更适合|怎么选|选哪|二选一/;
+// Từ khoá tiếng Việt / tiếng Anh khớp với backend `src/agent/stock_scope.py` (_VI_EN_*).
+// Vietnamese/English intent keywords mirror the backend `_VI_EN_*` patterns.
+const STRONG_COMPARE_STOCK_MESSAGE_RE = /比较|对比|\bvs\b|和[^，。,.!?！？]{0,40}比|so sánh|so với|đối chiếu|\bcompare\b|\bversus\b/i;
+const WEAK_COMPARE_STOCK_MESSAGE_RE = /差异(?!化)|区别|不同|相比|对照|比一比|khác nhau|khác biệt|chênh lệch|\bdifference\b/i;
+const CHOICE_COMPARE_STOCK_MESSAGE_RE = /哪个|哪只|哪一个|谁更|更值得|更适合|怎么选|选哪|二选一|mã nào|con nào|cái nào|nên chọn|\bwhich\b/i;
 const LINKED_COMPARE_STOCK_MESSAGE_RE = /(?:和|与|跟|同)[^，。,.!?！？]{0,40}(?:差异(?!化)|区别|不同|相比|对照|比一比)/;
-const SWITCH_STOCK_MESSAGE_RE = /换成|改看|分析|看看|研究|诊断/;
+const SWITCH_STOCK_MESSAGE_RE = /换成|改看|分析|看看|研究|诊断|phân tích|đánh giá|nghiên cứu|nhận định|chuyển sang|đổi sang|\bxem\b|\bsoi\b|có nên|thế nào|ra sao|\banaly[sz]e\b|\blook at\b|\bswitch to\b/i;
 
 type ActiveStockResolution = {
   context: ActiveStockContext;
@@ -85,7 +89,7 @@ const resolveUniqueStockNameContext = (
     }
     // Index canonical codes (sh000001 / csi930955) must be preserved verbatim —
     // normalizeStockCode would strip the exchange prefix and collide with a
-    // same-digit stock (sh000001 → 000001 vs 平安银行 000001).
+    // same-digit stock (sh000001 → 000001 vs Ping An Bank 000001).
     const stockCode = item.assetType === 'index'
       ? item.canonicalCode
       : normalizeStockCode(item.canonicalCode);
@@ -110,7 +114,19 @@ const isRegisteredIndexCanonicalCode = (
   return resolveRegisteredIndexCanonical(index, code) !== null;
 };
 
-const getMessageSkillNames = (msg: Message): string[] => {
+const getMessageSkillNames = (
+  msg: Message,
+  resolveSkillNames?: (skillIds: string[]) => string[],
+): string[] => {
+  // Ưu tiên id để tên chiến lược theo ngôn ngữ UI hiện tại.
+  // Prefer ids so strategy names follow the current UI language.
+  if (resolveSkillNames && msg.skills?.length) {
+    const skillIds = msg.skills;
+    const resolved = resolveSkillNames(skillIds);
+    // Chỉ dùng khi mọi id đều có trong danh mục chiến lược hiện tại.
+    // Use only when every id resolves against the loaded strategy catalog.
+    if (resolved.every((name, index) => name !== skillIds[index])) return resolved;
+  }
   if (msg.skillNames?.length) return msg.skillNames;
   if (msg.skillName) return [msg.skillName];
   if (msg.skills?.length) return msg.skills;
@@ -118,24 +134,15 @@ const getMessageSkillNames = (msg: Message): string[] => {
   return [];
 };
 
-const getMessageSkillLabel = (msg: Message): string => getMessageSkillNames(msg).join(', ');
+const getMessageSkillLabel = (
+  msg: Message,
+  resolveSkillNames?: (skillIds: string[]) => string[],
+): string => getMessageSkillNames(msg, resolveSkillNames).join(', ');
 
 const isStageDoneSuccessful = (status?: string): boolean => {
   if (!status) return true;
   const normalized = status.trim().toLowerCase();
   return ['completed', 'success', 'succeeded', 'done'].includes(normalized);
-};
-
-const getStageDoneLabel = (step: ProgressStep): string => {
-  const stage = step.stage || 'stage';
-  if (step.message) return step.message;
-  if (isStageDoneSuccessful(step.status)) return `${stage} completed`;
-  return `${stage} ${step.status || 'finished'}`;
-};
-
-const getPipelineBudgetSkippedLabel = (step: ProgressStep): string => {
-  if (step.message) return step.message;
-  return `${step.stage || 'pipeline'} skipped: insufficient budget`;
 };
 
 // Comparison identity key: registry canonical first (so an index context keeps
@@ -242,11 +249,17 @@ const restoreActiveStockContextFromMessages = (
 };
 
 const ChatPage: React.FC = () => {
-  const { t } = useUiLanguage();
+  const { t, language } = useUiLanguage();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [input, setInput] = useState('');
-  const [skills, setSkills] = useState<SkillInfo[]>([]);
+  const [rawSkills, setSkills] = useState<SkillInfo[]>([]);
+  // Tên/mô tả chiến lược theo ngôn ngữ UI (backend chỉ có tiếng Trung).
+  // Strategy names/descriptions localized to the UI language.
+  const skills = useMemo(
+    () => rawSkills.map((skill) => localizeChatSkill(skill, language)),
+    [rawSkills, language],
+  );
   const [defaultSkillIds, setDefaultSkillIds] = useState<string[]>([]);
   const [showSkillDesc, setShowSkillDesc] = useState<string | null>(null);
   const [mobileSkillPickerOpen, setMobileSkillPickerOpen] = useState(false);
@@ -291,7 +304,7 @@ const ChatPage: React.FC = () => {
   const agentStatusRequestIdRef = useRef(0);
 
   // Get localized text (default to Chinese)
-  const text = getReportText('zh');
+  const text = getReportText(language);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -310,8 +323,8 @@ const ChatPage: React.FC = () => {
 
   // Set page title
   useEffect(() => {
-    document.title = 'Ask - DSA';
-  }, []);
+    document.title = t('chat.documentTitle');
+  }, [t]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -351,18 +364,18 @@ const ChatPage: React.FC = () => {
           const codes = await systemConfigApi.removeFromWatchlist(existingStockCode);
           if (isMountedRef.current) {
             setWatchlistCodes(codes);
-            setWatchlistMessage(`Removed ${stockCode} from the watchlist`);
+            setWatchlistMessage(t('chat.watchlistRemoved', { code: stockCode }));
           }
         } else {
           const codes = await systemConfigApi.addToWatchlist(stockCode);
           if (isMountedRef.current) {
             setWatchlistCodes(codes);
-            setWatchlistMessage(`Added ${stockCode} to the watchlist`);
+            setWatchlistMessage(t('chat.watchlistAdded', { code: stockCode }));
           }
         }
       } catch {
         if (isMountedRef.current) {
-          setWatchlistMessage('Action failed, please try again');
+          setWatchlistMessage(t('chat.watchlistActionFailed'));
         }
       } finally {
         if (isMountedRef.current) {
@@ -378,7 +391,7 @@ const ChatPage: React.FC = () => {
         }
       }
     },
-    [isWatchlistActioning, watchlistCodes],
+    [isWatchlistActioning, t, watchlistCodes],
   );
 
   const {
@@ -540,14 +553,14 @@ const ChatPage: React.FC = () => {
         }
         const parsed = getParsedApiError(error);
         setContextCompressionLoaded(false);
-        setContextCompressionError(parsed.message || 'Could not read the context compression setting');
+        setContextCompressionError(parsed.message || t('chat.compressionLoadFailed'));
         console.error('Failed to load context compression setting:', error);
       });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   const updateContextCompressionEnabled = useCallback(
     async (nextEnabled: boolean) => {
@@ -576,7 +589,7 @@ const ChatPage: React.FC = () => {
       } catch (error) {
         const parsed = getParsedApiError(error);
         setContextCompressionEnabled(previousEnabled);
-        setContextCompressionError(parsed.message || 'Failed to save the context compression setting');
+        setContextCompressionError(parsed.message || t('chat.compressionSaveFailed'));
       } finally {
         setContextCompressionSaving(false);
       }
@@ -587,6 +600,7 @@ const ChatPage: React.FC = () => {
       contextCompressionLoaded,
       contextCompressionMaskToken,
       contextCompressionSaving,
+      t,
     ],
   );
 
@@ -675,7 +689,7 @@ const ChatPage: React.FC = () => {
     setDeleteConfirmId(null);
   }, [deleteConfirmId, sessionId, loadSessions, handleStartNewChat]);
 
-  // Handle follow-up from report page: ?stock=600519&name=贵州茅台&recordId=xxx
+  // Handle follow-up from report page: ?stock=600519&name=<stock name>&recordId=xxx
   useEffect(() => {
     const rawStockCode = searchParams.get('stock');
     if (!rawStockCode) {
@@ -758,7 +772,7 @@ const ChatPage: React.FC = () => {
       const usedSkillIds = normalizeSelectedSkillIds(
         requestedSkillIds ?? selectedSkillIds,
       );
-      const usedSkillNames = usedSkillIds.length > 0 ? getSkillNames(usedSkillIds) : ['General'];
+      const usedSkillNames = usedSkillIds.length > 0 ? getSkillNames(usedSkillIds) : [t('chat.generalSkill')];
       const codexStockContext = agentStatus?.backend === 'codex_app_server'
         ? overrideStockContext
         : undefined;
@@ -811,7 +825,7 @@ const ChatPage: React.FC = () => {
         },
       });
     },
-    [activeStockContext, agentAvailable, agentStatus, getSkillNames, input, loading, normalizeSelectedSkillIds, requestScrollToBottom, selectedSkillIds, sessionId, sessionSelectedSkillIds, startStream, stockIndex, stockIndexLoading],
+    [activeStockContext, agentAvailable, agentStatus, getSkillNames, input, loading, normalizeSelectedSkillIds, requestScrollToBottom, selectedSkillIds, sessionId, sessionSelectedSkillIds, startStream, stockIndex, stockIndexLoading, t],
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -823,7 +837,7 @@ const ChatPage: React.FC = () => {
 
   const handleQuickQuestion = (q: (typeof QUICK_QUESTIONS)[0]) => {
     setSelectedSkillIds([q.skill]);
-    handleSend(q.label, [q.skill], q.stockContext);
+    handleSend(t(q.labelKey), [q.skill], q.stockContext);
   };
 
   const showSendFeedback = useCallback((nextToast: { type: 'success' | 'error'; message: string }, durationMs: number) => {
@@ -868,8 +882,8 @@ const ChatPage: React.FC = () => {
   };
 
   const downloadMessageAsMarkdown = useCallback((msg: Message) => {
-    const skillLabel = getMessageSkillLabel(msg);
-    const heading = msg.role === 'user' ? '# User message' : `# AI reply${skillLabel ? ` · ${skillLabel}` : ''}`;
+    const skillLabel = getMessageSkillLabel(msg, getSkillNames);
+    const heading = msg.role === 'user' ? `# ${t('chat.userMessageHeading')}` : `# ${t('chat.aiReplyHeading')}${skillLabel ? ` · ${skillLabel}` : ''}`;
     const content = [heading, '', msg.content].join('\n');
     const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -880,27 +894,52 @@ const ChatPage: React.FC = () => {
     anchor.click();
     document.body.removeChild(anchor);
     URL.revokeObjectURL(url);
-  }, []);
+  }, [getSkillNames, t]);
+
+  // Dựng nhãn tiến trình theo loại sự kiện và ngôn ngữ UI; bỏ qua `message` của backend
+  // (cố định tiếng Trung/Anh). Loại sự kiện lạ mới dùng `message`.
+  // Build progress labels from the event type in the UI language instead of the
+  // backend's fixed-language `message`; unknown event types fall back to it.
+  const toolLabel = (step: ProgressStep): string =>
+    getChatToolLabel(step.tool, language, step.display_name);
+
+  const describeProgressStep = (steps: ProgressStep[], index: number): string => {
+    const step = steps[index];
+    const stage = getChatStageLabel(step.stage, language);
+    switch (step.type) {
+      case 'thinking': {
+        const previousTool = steps
+          .slice(0, index)
+          .reverse()
+          .find((item) => item.type === 'tool_done');
+        return previousTool
+          ? t('chat.thinkingAfterTool', { tool: toolLabel(previousTool) })
+          : t('chat.thinkingPlanning');
+      }
+      case 'tool_start':
+        return `${toolLabel(step)}...`;
+      case 'tool_done':
+        return t('chat.stageToolDone', { tool: toolLabel(step) });
+      case 'stage_start':
+        return t('chat.stageStarting', { stage });
+      case 'stage_done':
+        return isStageDoneSuccessful(step.status)
+          ? t('chat.stageCompleted', { stage })
+          : t('chat.stageEnded', { stage, status: step.status || 'finished' });
+      case 'pipeline_timeout':
+        return t('chat.stageTimedOut', { stage });
+      case 'pipeline_budget_skipped':
+        return t('chat.stageBudgetSkipped', { stage });
+      case 'generating':
+        return t('chat.stageGeneratingFinal');
+      default:
+        return step.message || t('chat.stageProcessing');
+    }
+  };
 
   const getCurrentStage = (steps: ProgressStep[]): string => {
-    if (steps.length === 0) return 'Connecting...';
-    const last = steps[steps.length - 1];
-    if (last.type === 'thinking') return last.message || 'AI is thinking...';
-    if (last.type === 'tool_start')
-      return `${last.display_name || last.tool}...`;
-    if (last.type === 'tool_done')
-      return `${last.display_name || last.tool} done`;
-    if (last.type === 'stage_start')
-      return last.message || `Starting ${last.stage || 'stage'}...`;
-    if (last.type === 'stage_done')
-      return getStageDoneLabel(last);
-    if (last.type === 'pipeline_timeout')
-      return last.message || `${last.stage || 'pipeline'} timed out`;
-    if (last.type === 'pipeline_budget_skipped')
-      return getPipelineBudgetSkippedLabel(last);
-    if (last.type === 'generating')
-      return last.message || 'Generating the final analysis...';
-    return 'Processing...';
+    if (steps.length === 0) return t('chat.stageConnecting');
+    return describeProgressStep(steps, steps.length - 1);
   };
 
   const renderThinkingBlock = (msg: Message) => {
@@ -911,7 +950,7 @@ const ChatPage: React.FC = () => {
       (sum, s) => sum + (s.duration || 0),
       0,
     );
-    const summary = `${toolSteps.length} tool call(s) · ${totalDuration.toFixed(1)}s`;
+    const summary = t('chat.toolCallSummary', { count: toolSteps.length, seconds: totalDuration.toFixed(1) });
 
     return (
       <button
@@ -932,7 +971,7 @@ const ChatPage: React.FC = () => {
           />
         </svg>
         <span className="flex items-center gap-1.5">
-          <span className="opacity-60">Reasoning</span>
+          <span className="opacity-60">{t('chat.reasoning')}</span>
           <span className="text-muted-text/50">·</span>
           <span className="opacity-50">{summary}</span>
         </span>
@@ -947,36 +986,36 @@ const ChatPage: React.FC = () => {
         let iconClass = 'chat-progress-dot-muted';
         let text = '';
         if (step.type === 'thinking') {
-          text = step.message || `Step ${step.step}: thinking`;
+          text = describeProgressStep(steps, idx);
           statusClass = 'chat-progress-item-thinking';
           iconClass = 'chat-progress-dot-thinking';
         } else if (step.type === 'tool_start') {
-          text = `${step.display_name || step.tool}...`;
+          text = describeProgressStep(steps, idx);
           statusClass = 'chat-progress-item-tool';
           iconClass = 'chat-progress-dot-tool';
         } else if (step.type === 'tool_done') {
-          text = `${step.display_name || step.tool} (${step.duration}s)`;
+          text = `${toolLabel(step)} (${step.duration}s)`;
           statusClass = step.success ? 'chat-progress-item-success' : 'chat-progress-item-danger';
           iconClass = step.success ? 'chat-progress-dot-success' : 'chat-progress-dot-danger';
         } else if (step.type === 'stage_start') {
-          text = step.message || `Starting ${step.stage || 'stage'}...`;
+          text = describeProgressStep(steps, idx);
           statusClass = 'chat-progress-item-thinking';
           iconClass = 'chat-progress-dot-thinking';
         } else if (step.type === 'stage_done') {
           const isSuccess = isStageDoneSuccessful(step.status);
-          text = getStageDoneLabel(step);
+          text = describeProgressStep(steps, idx);
           statusClass = isSuccess ? 'chat-progress-item-success' : 'chat-progress-item-danger';
           iconClass = isSuccess ? 'chat-progress-dot-success' : 'chat-progress-dot-danger';
         } else if (step.type === 'pipeline_timeout') {
-          text = step.message || `${step.stage || 'pipeline'} timed out`;
+          text = describeProgressStep(steps, idx);
           statusClass = 'chat-progress-item-danger';
           iconClass = 'chat-progress-dot-danger';
         } else if (step.type === 'pipeline_budget_skipped') {
-          text = getPipelineBudgetSkippedLabel(step);
+          text = describeProgressStep(steps, idx);
           statusClass = 'chat-progress-item-muted';
           iconClass = 'chat-progress-dot-muted';
         } else if (step.type === 'generating') {
-          text = step.message || 'Generating analysis';
+          text = describeProgressStep(steps, idx);
           statusClass = 'chat-progress-item-generating';
           iconClass = 'chat-progress-dot-generating';
         } else {
@@ -1002,12 +1041,12 @@ const ChatPage: React.FC = () => {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          Past conversations
+          {t('chat.pastConversations')}
         </h2>
         <button
           onClick={handleStartNewChat}
           className="rounded-lg p-1.5 text-muted-text transition-all hover:bg-white/10 hover:text-foreground"
-          aria-label="Start a new conversation"
+          aria-label={t('chat.newConversation')}
         >
           <svg
             className="w-4 h-4"
@@ -1029,14 +1068,14 @@ const ChatPage: React.FC = () => {
           <DashboardStateBlock
             loading
             compact
-            title="Loading conversations..."
+            title={t('chat.loadingConversations')}
             className="rounded-2xl border border-dashed border-border/50 bg-surface/30"
           />
         ) : sessions.length === 0 ? (
           <DashboardStateBlock
             compact
-            title="No past conversations"
-            description="Once you start asking, your sessions are kept here."
+            title={t('chat.noConversations')}
+            description={t('chat.noConversationsHint')}
             className="rounded-2xl border border-dashed border-border/50 bg-surface/30"
           />
         ) : (
@@ -1047,7 +1086,7 @@ const ChatPage: React.FC = () => {
                   type="button"
                   onClick={() => handleSwitchSession(s.session_id)}
                   className={`session-item ${s.session_id === sessionId ? 'active' : ''}`}
-                  aria-label={`Switch to conversation ${s.title}`}
+                  aria-label={t('chat.switchConversation', { title: s.title })}
                   aria-current={s.session_id === sessionId ? 'page' : undefined}
                 >
                   <div className="indicator" />
@@ -1055,13 +1094,13 @@ const ChatPage: React.FC = () => {
                     <span className="title">{s.title}</span>
                     <div className="mt-0.5 flex items-center gap-2">
                       <span className="meta">
-                        {s.message_count} message(s)
+                        {t('chat.messageCount', { count: s.message_count })}
                       </span>
                       {s.last_active && (
                         <>
                           <span className="separator" />
                           <span className="meta">
-                            {new Date(s.last_active).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
+                            {new Date(s.last_active).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', { month: 'short', day: 'numeric' })}
                           </span>
                         </>
                       )}
@@ -1074,7 +1113,7 @@ const ChatPage: React.FC = () => {
                   onClick={() => {
                     setDeleteConfirmId(s.session_id);
                   }}
-                  aria-label={`Delete conversation ${s.title}`}
+                  aria-label={t('chat.deleteConversationAria', { title: s.title })}
                 >
                   <svg
                     className="w-3.5 h-3.5"
@@ -1100,7 +1139,7 @@ const ChatPage: React.FC = () => {
 
   const selectedSkillSummary = selectedSkillIds.length > 0
     ? getSkillNames(selectedSkillIds).join(', ')
-    : 'General analysis';
+    : t('chat.generalAnalysis');
 
   return (
     <div
@@ -1131,10 +1170,10 @@ const ChatPage: React.FC = () => {
       {/* Delete confirmation dialog */}
       <ConfirmDialog
         isOpen={Boolean(deleteConfirmId)}
-        title="Delete conversation"
-        message="This conversation cannot be recovered after deletion. Delete it?"
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t('chat.deleteConversationTitle')}
+        message={t('chat.deleteConversationMessage')}
+        confirmText={t('chat.delete')}
+        cancelText={t('chat.cancel')}
         isDanger
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirmId(null)}
@@ -1148,7 +1187,7 @@ const ChatPage: React.FC = () => {
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-hover transition-colors text-secondary-text hover:text-foreground"
-                aria-label="Past conversations"
+                aria-label={t('chat.pastConversations')}
               >
                 <svg
                   className="w-5 h-5"
@@ -1177,7 +1216,7 @@ const ChatPage: React.FC = () => {
                   d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
                 />
               </svg>
-              Ask
+              {t('layout.route.chat.title')}
               {agentStatus ? (
                 <Badge
                   variant={agentStatus.backend === 'codex_app_server' ? 'warning' : 'history'}
@@ -1189,13 +1228,13 @@ const ChatPage: React.FC = () => {
             </h1>
             {messages.length > 0 && (
               <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
-                <Tooltip content="Export the session as a Markdown file">
+                <Tooltip content={t('chat.exportSessionHint')}>
                   <span className="inline-flex">
                     <Button
                       variant="action-primary"
                       size="sm"
-                      onClick={() => downloadSession(messages)}
-                      aria-label="Export the session as a Markdown file"
+                      onClick={() => downloadSession(messages, language)}
+                      aria-label={t('chat.exportSessionHint')}
                     >
                       <svg
                         className="w-4 h-4"
@@ -1210,11 +1249,11 @@ const ChatPage: React.FC = () => {
                           d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                         />
                       </svg>
-                      Export session
+                      {t('chat.exportSession')}
                     </Button>
                   </span>
                 </Tooltip>
-                <Tooltip content="Send to the configured notification bots / mailboxes">
+                <Tooltip content={t('chat.sendHint')}>
                   <span className="inline-flex">
                     <Button
                       variant="action-primary"
@@ -1225,20 +1264,20 @@ const ChatPage: React.FC = () => {
                         setSending(true);
                         setSendToast(null);
                         try {
-                          const content = formatSessionAsMarkdown(messages);
+                          const content = formatSessionAsMarkdown(messages, language);
                           await agentApi.sendChat(content);
-                          showSendFeedback({ type: 'success', message: 'Sent to the notification channels' }, 3000);
+                          showSendFeedback({ type: 'success', message: t('chat.sendSuccessMessage') }, 3000);
                         } catch (err) {
                           const parsed = getParsedApiError(err);
                           showSendFeedback({
                             type: 'error',
-                            message: parsed.message || 'Failed to send',
+                            message: parsed.message || t('chat.sendFailed'),
                           }, 5000);
                         } finally {
                           setSending(false);
                         }
                       }}
-                      aria-label="Send to the configured notification bots / mailboxes"
+                      aria-label={t('chat.sendHint')}
                     >
                       {sending ? (
                         <svg
@@ -1275,7 +1314,7 @@ const ChatPage: React.FC = () => {
                           />
                         </svg>
                       )}
-                      Send
+                      {t('chat.send')}
                     </Button>
                   </span>
                 </Tooltip>
@@ -1305,7 +1344,7 @@ const ChatPage: React.FC = () => {
           {sendToast ? (
             <InlineAlert
               variant={sendToast.type === 'success' ? 'success' : 'danger'}
-              title={sendToast.type === 'success' ? 'Sent' : 'Failed to send'}
+              title={sendToast.type === 'success' ? t('chat.sent') : t('chat.sendFailed')}
               message={sendToast.message}
               className="max-w-md rounded-xl px-3 py-2 text-xs shadow-none"
             />
@@ -1324,7 +1363,7 @@ const ChatPage: React.FC = () => {
             {messages.length === 0 && !loading ? (
               <div className="flex h-full items-center justify-center">
                 <EmptyState
-                  title="Start asking"
+                  title={t('chat.startAsking')}
                   description={t(
                     agentStatus?.backend === 'codex_app_server'
                       ? 'chat.emptyDescriptionCodex'
@@ -1355,7 +1394,7 @@ const ChatPage: React.FC = () => {
                           disabled={!agentAvailable || stockIndexLoading}
                           className="quick-question-btn disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {q.label}
+                          {t(q.labelKey)}
                         </button>
                       ))}
                     </div>
@@ -1364,7 +1403,7 @@ const ChatPage: React.FC = () => {
               </div>
             ) : (
               messages.map((msg) => {
-                const skillLabel = getMessageSkillLabel(msg);
+                const skillLabel = getMessageSkillLabel(msg, getSkillNames);
                 return (
                 <div
                   key={msg.id}
@@ -1429,14 +1468,14 @@ const ChatPage: React.FC = () => {
                             type="button"
                             onClick={() => downloadMessageAsMarkdown(msg)}
                             className="chat-copy-btn"
-                            aria-label="Export this message as Markdown"
+                            aria-label={t('chat.exportMessageHint')}
                           >
-                            Export
+                            {t('chat.exportMessage')}
                           </button>
                         </div>
                         <div className="chat-prose pr-20 sm:pr-24">
                           <Markdown remarkPlugins={[remarkGfm]}>
-                            {msg.content}
+                            {localizeLegacyChatNote(msg.content, language)}
                           </Markdown>
                         </div>
                       </div>
@@ -1489,7 +1528,7 @@ const ChatPage: React.FC = () => {
                   requestScrollToBottom('smooth');
                   scrollToBottom('smooth');
                 }}
-                aria-label="Jump to the latest message"
+                aria-label={t('chat.jumpToLatest')}
               >
                 <svg
                   className="h-3.5 w-3.5"
@@ -1504,7 +1543,7 @@ const ChatPage: React.FC = () => {
                     d="M19 14l-7 7m0 0l-7-7m7 7V3"
                   />
                 </svg>
-                New messages
+                {t('chat.newMessages')}
               </button>
             </div>
           )}
@@ -1564,8 +1603,8 @@ const ChatPage: React.FC = () => {
               {isFollowUpContextLoading ? (
                 <InlineAlert
                   variant="info"
-                  title="Loading follow-up context"
-                  message="Loading the historical analysis context; you can already send a follow-up."
+                  title={t('chat.followUpLoadingTitle')}
+                  message={t('chat.followUpLoadingMessage')}
                   className="rounded-xl px-3 py-2 text-xs shadow-none"
                 />
               ) : null}
@@ -1585,21 +1624,21 @@ const ChatPage: React.FC = () => {
                     onChange={(event) => void updateContextCompressionEnabled(event.target.checked)}
                     className="chat-skill-checkbox"
                   />
-                  <span className="font-medium">Context compression</span>
-                  <span className="text-xs text-muted-text">Saves tokens in long sessions</span>
+                  <span className="font-medium">{t('chat.contextCompression')}</span>
+                  <span className="text-xs text-muted-text">{t('chat.contextCompressionHint')}</span>
                 </label>
                 <span className="text-xs text-muted-text">
                   {contextCompressionSaving
-                    ? 'Saving...'
+                    ? t('chat.saving')
                     : contextCompressionEnabled
-                      ? 'Enabled'
-                      : 'Disabled'}
+                      ? t('chat.enabled')
+                      : t('chat.disabled')}
                 </span>
               </div>
               {contextCompressionError ? (
                 <InlineAlert
                   variant="danger"
-                  title="Context compression setting not saved"
+                  title={t('chat.compressionNotSaved')}
                   message={contextCompressionError}
                   className="rounded-xl px-3 py-2 text-xs shadow-none"
                 />
@@ -1609,14 +1648,14 @@ const ChatPage: React.FC = () => {
                   <button
                     type="button"
                     className="home-surface-button flex h-10 w-full items-center justify-between gap-3 rounded-xl px-3 text-left text-sm text-foreground md:hidden"
-                    aria-label={mobileSkillPickerOpen ? 'Collapse strategy picker' : 'Expand strategy picker'}
+                    aria-label={mobileSkillPickerOpen ? t('chat.collapseStrategyPicker') : t('chat.expandStrategyPicker')}
                     aria-expanded={mobileSkillPickerOpen}
                     aria-controls="chat-skill-picker-panel"
                     onClick={() => setMobileSkillPickerOpen((open) => !open)}
                   >
                     <span className="flex min-w-0 items-center gap-2">
                       <SlidersHorizontal className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                      <span className="flex-shrink-0 font-medium">Strategy</span>
+                      <span className="flex-shrink-0 font-medium">{t('chat.strategy')}</span>
                       <span className="truncate text-xs text-muted-text">{selectedSkillSummary}</span>
                     </span>
                     <ChevronDown
@@ -1636,7 +1675,7 @@ const ChatPage: React.FC = () => {
                     )}
                   >
                     <span className="text-xs text-muted-text font-medium uppercase tracking-wider flex-shrink-0 mt-1">
-                      Strategy
+                      {t('chat.strategy')}
                     </span>
                     <label className="flex items-center gap-1.5 text-sm cursor-pointer group mt-0.5">
                       <input
@@ -1650,7 +1689,7 @@ const ChatPage: React.FC = () => {
                       <span
                         className={`transition-colors text-sm ${selectedSkillIds.length === 0 ? 'text-foreground font-medium' : 'text-secondary-text group-hover:text-foreground'}`}
                       >
-                        General analysis
+                        {t('chat.generalAnalysis')}
                       </span>
                     </label>
                     {skills.map((s) => {
@@ -1700,7 +1739,7 @@ const ChatPage: React.FC = () => {
                   onClick={() => void handleToggleWatchlist(activeStockCode)}
                   className="text-[11px]"
                 >
-                  {stockInWatchlist(activeStockCode) ? 'Remove from watchlist' : 'Add to watchlist'}
+                  {stockInWatchlist(activeStockCode) ? t('report.removeFromWatchlist') : t('report.addToWatchlist')}
                 </Button>
                 {watchlistMessage && (
                   <span className="text-[11px] text-secondary-text animate-in fade-in">{watchlistMessage}</span>
@@ -1713,7 +1752,7 @@ const ChatPage: React.FC = () => {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="e.g. Analyze 600519 / Is Kweichow Moutai a buy right now? (Enter to send, Shift+Enter for a new line)"
+                  placeholder={t('chat.inputPlaceholder')}
                   disabled={loading || !agentAvailable}
                   rows={1}
                   className="input-surface input-focus-glow flex-1 min-h-[44px] max-h-[200px] rounded-xl border bg-transparent px-4 py-2.5 text-sm transition-all focus:outline-none resize-none disabled:cursor-not-allowed disabled:opacity-60"
@@ -1741,7 +1780,7 @@ const ChatPage: React.FC = () => {
                     isLoading={loading || stockIndexLoading}
                     className="btn-primary flex-shrink-0"
                   >
-                    Send
+                    {t('chat.send')}
                   </Button>
                 )}
               </div>

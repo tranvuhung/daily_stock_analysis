@@ -2118,7 +2118,9 @@ class TestOrchestratorExecution(unittest.TestCase):
 
         self.assertTrue(result.success)
         add_user_message.assert_called_once_with("session-1", "hello", None)
-        add_message.assert_called_once_with("session-1", "assistant", "assistant reply")
+        from src.agent.executor import append_chat_disclaimer
+
+        add_message.assert_called_once_with("session-1", "assistant", append_chat_disclaimer("assistant reply", None))
 
     def test_chat_transaction_persists_user_before_multi_agent_execution(self):
         """SSE acceptance can occur after persistence but before the pipeline starts."""
@@ -2153,10 +2155,12 @@ class TestOrchestratorExecution(unittest.TestCase):
             parse_dashboard=False,
             progress_callback=None,
         )
+        from src.agent.executor import append_chat_disclaimer
+
         self.assertEqual(add_message.call_args_list[-1].args, (
             "session-accepted",
             "assistant",
-            "assistant reply",
+            append_chat_disclaimer("assistant reply", None),
         ))
 
     def test_chat_persists_failure_message(self):

@@ -252,3 +252,103 @@ def test_user_message_persistence_failure_does_not_start_backend() -> None:
             raise AssertionError("database failure must propagate")
 
     assert backend.request is None
+
+
+def test_failure_note_follows_vietnamese_report_language() -> None:
+    backend = _failure_backend(
+        runtime_owns_loop=False,
+        error_code="llm_error",
+        error_message="provider failed",
+    )
+    prepared = PreparedAgentChat(
+        system_prompt="system",
+        history_messages=[],
+        stock_scope=None,
+        report_language="vi",
+    )
+    with patch("src.agent.chat_executor.prepare_agent_chat", return_value=prepared), \
+         patch("src.agent.chat_executor.conversation_manager.get_or_create"), \
+         patch("src.agent.chat_executor.conversation_manager.add_user_message", return_value=1), \
+         patch("src.agent.chat_executor.conversation_manager.add_message", return_value=2) as add_message:
+        _executor(backend).chat("question", "session")
+
+    assert add_message.call_args_list[-1].args == (
+        "session",
+        "assistant",
+        "[Phân tích thất bại] provider failed",
+    )
+
+
+def test_build_chat_failure_note_languages() -> None:
+    from src.agent.executor import build_chat_failure_note
+
+    assert build_chat_failure_note("cancelled", None, "vi") == "[Đã dừng] Lượt phân tích này đã được người dùng dừng."
+    assert build_chat_failure_note("timeout", None, "en") == "[Timed out] This analysis ended at the time limit."
+    assert build_chat_failure_note("failed", None, "vi") == "[Phân tích thất bại] Lỗi không xác định"
+    assert build_chat_failure_note("failed", "boom", None) == "[分析失败] boom"
+
+
+def test_vietnamese_chat_language_section_requires_vietnamese_reply() -> None:
+    from src.agent.executor import _build_language_section
+
+    section = _build_language_section("vi", chat_mode=True)
+
+    assert "Reply in Vietnamese" in section
+    assert "do not copy Chinese text" in section
+
+
+def test_vietnamese_answer_is_persisted_without_han_characters() -> None:
+    backend = _Backend(runtime_owns_loop=True)
+    backend.run = lambda _request: AgentRunResult(
+        success=True,
+        final_answer="Khối lượng: \"thu hẹp\" (缩量回调), xu hướng 多头排列.",
+        backend="codex_app_server",
+        model="model",
+        messages=[],
+        total_steps=1,
+    )
+    prepared = PreparedAgentChat(
+        system_prompt="system",
+        history_messages=[],
+        stock_scope=None,
+        report_language="vi",
+    )
+    with patch("src.agent.chat_executor.prepare_agent_chat", return_value=prepared), \
+         patch("src.agent.chat_executor.conversation_manager.get_or_create"), \
+         patch("src.agent.chat_executor.conversation_manager.add_user_message", return_value=1), \
+         patch("src.agent.chat_executor.conversation_manager.add_message", return_value=2) as add_message:
+        result = AgentChatExecutor(
+            backend=backend,
+            config=SimpleNamespace(),
+            context_llm_adapter=None,
+            max_steps=7,
+            timeout_seconds=45,
+        ).chat("Phân tích mã LAS", "session")
+
+    assert result.content == (
+        "Khối lượng: \"thu hẹp\", xu hướng đường MA xếp tăng."
+        "\n\n---\n*Nội dung do AI tạo, chỉ mang tính tham khảo, không phải khuyến nghị đầu tư*"
+    )
+    assert add_message.call_args_list[-1].args[2] == result.content
+
+
+def test_successful_answer_always_ends_with_localized_disclaimer_once() -> None:
+    from src.agent.executor import append_chat_disclaimer, finalize_chat_answer
+
+    vi = finalize_chat_answer("Phân tích LAS: xu hướng tăng.", "vi")
+    assert vi.endswith("*Nội dung do AI tạo, chỉ mang tính tham khảo, không phải khuyến nghị đầu tư*")
+    assert append_chat_disclaimer(vi, "vi") == vi
+    assert finalize_chat_answer("LAS is bullish.", "en").endswith("*AI-generated content for reference only. Not investment advice.*")
+    assert append_chat_disclaimer("", "vi") == ""
+
+
+def test_failed_turn_note_has_no_disclaimer() -> None:
+    backend = _failure_backend(runtime_owns_loop=False, error_code="llm_error", error_message="provider failed")
+    prepared = PreparedAgentChat(system_prompt="system", history_messages=[], stock_scope=None, report_language="vi")
+    with patch("src.agent.chat_executor.prepare_agent_chat", return_value=prepared), \
+         patch("src.agent.chat_executor.conversation_manager.get_or_create"), \
+         patch("src.agent.chat_executor.conversation_manager.add_user_message", return_value=1), \
+         patch("src.agent.chat_executor.conversation_manager.add_message", return_value=2) as add_message:
+        _executor(backend).chat("question", "session")
+
+    assert "khuyến nghị đầu tư" not in add_message.call_args_list[-1].args[2]

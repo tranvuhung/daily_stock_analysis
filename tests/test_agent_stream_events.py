@@ -374,3 +374,48 @@ def test_orchestrator_emits_budget_skipped_before_unstarted_stage() -> None:
     assert ("stage_start", "decision") not in {
         (event["type"], event.get("stage")) for event in events
     }
+
+
+def test_run_agent_loop_tags_tool_results_so_fallback_has_no_orphan_tool_messages() -> None:
+    """Fallback sang model khác không được nhận tool result mồ côi (lỗi Gemini
+    "Missing corresponding tool call for tool response message")."""
+    from src.agent.llm_adapter import LLMToolAdapter, ToolCall
+
+    snapshots = []
+    responses = [
+        LLMResponse(
+            content="",
+            tool_calls=[ToolCall(id="call_1__thought__sig", name="echo", arguments={"message": "hi"},
+                                 thought_signature="sig")],
+            usage={},
+            provider="gemini",
+            model="gemini/gemini-primary",
+        ),
+        LLMResponse(content="Done.", tool_calls=[], usage={}, provider="gemini", model="gemini/gemini-fallback"),
+    ]
+
+    def _call(messages, *args, **kwargs):
+        snapshots.append([dict(m) for m in messages])
+        return responses[len(snapshots) - 1]
+
+    adapter = MagicMock()
+    adapter.call_with_tools.side_effect = _call
+
+    result = run_agent_loop(
+        messages=[{"role": "user", "content": "Analyze HAG"}],
+        tool_registry=_make_registry(),
+        llm_adapter=adapter,
+        max_steps=3,
+    )
+
+    assert result.success is True
+    second_call = snapshots[1]
+    tool_msgs = [m for m in second_call if m["role"] == "tool"]
+    assert tool_msgs and all(m.get("_trace_model") == "gemini/gemini-primary" for m in tool_msgs)
+
+    converter = LLMToolAdapter.__new__(LLMToolAdapter)
+    fallback = converter._convert_messages(second_call, target_model="gemini/gemini-fallback")
+    assert [m["role"] for m in fallback] == ["user"]
+    primary = converter._convert_messages(second_call, target_model="gemini/gemini-primary")
+    assert [m["role"] for m in primary] == ["user", "assistant", "tool"]
+    assert primary[2]["name"] == "echo"

@@ -26,6 +26,10 @@ instructions: |
 ```yaml
 name: my_strategy
 display_name: 我的策略
+# 可选：写入 LLM prompt 的英文名（未填写时使用 display_name）。
+# display_name / aliases 仍用于 Web、Bot 与报告的名称匹配，内置策略的这两项保持中文。
+# Tùy chọn: tên tiếng Anh đưa vào prompt; display_name/aliases vẫn dùng để đối chiếu trên Web/Bot/báo cáo.
+display_name_en: My Strategy
 description: 简短描述策略适用的市场场景
 
 # 策略分类：trend（趋势）、pattern（形态）、reversal（反转）、framework（框架）

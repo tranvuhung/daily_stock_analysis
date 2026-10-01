@@ -32,6 +32,45 @@ _LINKED_COMPARE_PATTERN = re.compile(
     r"(?:和|与|跟|同)(?P<body>[^，。,.!?！？]{0,40})(?:差异(?!化)|区别|不同|相比|对照|比一比)"
 )
 _SWITCH_PATTERN = re.compile(r"换成|改看|分析|看看|研究|诊断")
+
+# Từ khoá tiếng Việt / tiếng Anh cho ý định chuyển mã và so sánh. Chỉ dùng để
+# quyết định switch/compare; KHÔNG dùng để bật trích mã chữ thường, vì từ tiếng Việt
+# không dấu như "xem", "ma" sẽ bị nhận nhầm thành ticker.
+# Vietnamese/English intent keywords; used for switch/compare decisions only, never
+# to enable lowercase-ticker extraction (plain Vietnamese words would become tickers).
+_VI_EN_SWITCH_PATTERN = re.compile(
+    r"phân tích|đánh giá|nghiên cứu|nhận định|chuyển sang|đổi sang|\bxem\b|\bsoi\b|"
+    r"có nên|thế nào|ra sao|\banaly[sz]e\b|\blook at\b|\bswitch to\b",
+    re.IGNORECASE,
+)
+_VI_EN_STRONG_COMPARE_PATTERN = re.compile(
+    r"so sánh|so với|đối chiếu|\bcompare\b|\bversus\b",
+    re.IGNORECASE,
+)
+_VI_EN_WEAK_COMPARE_HINT_PATTERN = re.compile(
+    r"khác nhau|khác biệt|chênh lệch|\bdifference\b",
+    re.IGNORECASE,
+)
+_VI_EN_CHOICE_COMPARE_PATTERN = re.compile(
+    r"mã nào|con nào|cái nào|nên chọn|\bwhich\b",
+    re.IGNORECASE,
+)
+
+
+def _is_switch_intent(text: str) -> bool:
+    return bool(_SWITCH_PATTERN.search(text) or _VI_EN_SWITCH_PATTERN.search(text))
+
+
+def _is_strong_compare(text: str) -> bool:
+    return bool(_STRONG_COMPARE_PATTERN.search(text) or _VI_EN_STRONG_COMPARE_PATTERN.search(text))
+
+
+def _is_weak_compare_hint(text: str) -> bool:
+    return bool(_WEAK_COMPARE_HINT_PATTERN.search(text) or _VI_EN_WEAK_COMPARE_HINT_PATTERN.search(text))
+
+
+def _is_choice_compare(text: str) -> bool:
+    return bool(_CHOICE_COMPARE_PATTERN.search(text) or _VI_EN_CHOICE_COMPARE_PATTERN.search(text))
 _LOWERCASE_TICKER_PATTERN = re.compile(r"(?<![a-zA-Z.])([a-z]{2,5}(?:\.[a-z]{1,2})?)(?![a-zA-Z0-9])")
 _EXCHANGE_TOKEN_CANDIDATES = {"SH", "SZ", "BJ", "HK", "SS"}
 _CONTEXTUAL_INDICATOR_TOKENS = {"MA"}
@@ -217,14 +256,14 @@ def _is_compare_message(
     current_code: str,
     registry: Optional[Any] = None,
 ) -> bool:
-    if _STRONG_COMPARE_PATTERN.search(message):
+    if _is_strong_compare(message):
         return True
     new_candidates = {code for code in candidates if code != current_code}
     if len(new_candidates) >= 2:
         return True
-    if _CHOICE_COMPARE_PATTERN.search(message) and len(candidates) >= 2:
+    if _is_choice_compare(message) and len(candidates) >= 2:
         return True
-    if not _WEAK_COMPARE_HINT_PATTERN.search(message):
+    if not _is_weak_compare_hint(message):
         return False
     if len(candidates) >= 2:
         return True
@@ -325,7 +364,7 @@ def resolve_stock_scope(
     if _is_compare_message(message_text, candidates, current_code, registry):
         mode = "compare"
         allowed.update(candidates)
-    elif _SWITCH_PATTERN.search(message_text) and len(new_candidates) == 1:
+    elif _is_switch_intent(message_text) and len(new_candidates) == 1:
         mode = "switch"
         expected = new_candidates[0]
         allowed = {expected}

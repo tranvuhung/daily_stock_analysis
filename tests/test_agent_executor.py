@@ -29,6 +29,7 @@ except ModuleNotFoundError:
     sys.modules["litellm"] = MagicMock()
 
 from src.agent.executor import (
+    append_chat_disclaimer,
     AGENT_SYSTEM_PROMPT,
     LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT,
     AgentExecutor,
@@ -312,7 +313,7 @@ class TestAgentExecutor(unittest.TestCase):
         assert messages[0]["role"] == "system"
         assert messages[1:3] == compressed_history
         assert messages[3]["role"] == "user"
-        assert messages[3]["content"].startswith("[系统提供的历史分析上下文，可供参考对比]")
+        assert messages[3]["content"].startswith("[System-provided historical analysis context for reference and comparison]")
         assert "## 市场结构上下文" in messages[3]["content"]
         assert "个股主关联题材：白酒" in messages[3]["content"]
         assert messages[4]["role"] == "assistant"
@@ -363,10 +364,10 @@ class TestAgentExecutor(unittest.TestCase):
         history_context = "\n".join(
             msg["content"] for msg in captured["messages"] if msg["role"] == "user"
         )
-        self.assertIn("股票代码: AAPL", history_context)
-        self.assertNotIn("股票名称: 贵州茅台", history_context)
-        self.assertNotIn("上次分析摘要", history_context)
-        self.assertNotIn("上次策略分析", history_context)
+        self.assertIn("Stock code: AAPL", history_context)
+        self.assertNotIn("Stock name: 贵州茅台", history_context)
+        self.assertNotIn("Previous analysis summary", history_context)
+        self.assertNotIn("Previous strategy analysis", history_context)
         self.assertNotIn("市场结构上下文", history_context)
         self.assertEqual(captured["stock_scope"].mode, "switch")
         self.assertEqual(captured["stock_scope"].expected_stock_code, "AAPL")
@@ -400,8 +401,8 @@ class TestAgentExecutor(unittest.TestCase):
         history_context = "\n".join(
             msg["content"] for msg in captured["messages"] if msg["role"] == "user"
         )
-        self.assertNotIn("股票代码: HK", history_context)
-        self.assertNotIn("股票名称: 港股", history_context)
+        self.assertNotIn("Stock code: HK", history_context)
+        self.assertNotIn("Stock name: 港股", history_context)
         self.assertEqual(captured["stock_scope"].expected_stock_code, "")
         self.assertEqual(captured["stock_scope"].allowed_stock_codes, set())
 
@@ -1284,7 +1285,7 @@ class TestAgentExecutor(unittest.TestCase):
             message["content"]
             for message in captured["messages"]
             if message["role"] == "user"
-            and message["content"].startswith("[系统提供的历史分析上下文")
+            and message["content"].startswith("[System-provided historical analysis context")
         ]
         assert context_messages
         assert "大盘环境摘要" in context_messages[0]
@@ -1507,7 +1508,8 @@ class TestAgentExecutor(unittest.TestCase):
         self.assertEqual(ordered_roles, ["user", "assistant", "tool", "assistant", "user"])
         self.assertEqual(second_request_messages[-4]["reasoning_content"], "r1")
         self.assertEqual(second_request_messages[-3]["tool_call_id"], "call_1")
-        self.assertEqual(second_request_messages[-2]["content"], "first final")
+        # Câu trả lời lưu kèm dòng miễn trừ trách nhiệm (append_chat_disclaimer) và được phát lại nguyên văn.
+        self.assertEqual(second_request_messages[-2]["content"], append_chat_disclaimer("first final", None))
         self.assertEqual(second_request_messages[-1]["content"], "second question")
 
         DatabaseManager.reset_instance()

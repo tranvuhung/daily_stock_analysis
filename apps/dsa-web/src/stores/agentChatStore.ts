@@ -9,6 +9,14 @@ import {
   type ParsedApiError,
 } from '../api/error';
 import { generateUUID } from '../utils/uuid';
+import { UI_TEXT, type UiTextKey } from '../i18n/uiText';
+import { getRuntimeInitialLanguage } from '../utils/uiLanguage';
+
+// Store nằm ngoài React nên đọc ngôn ngữ UI đã lưu để dịch thông báo.
+// The store lives outside React, so read the persisted UI language directly.
+function chatText(key: UiTextKey): string {
+  return UI_TEXT[getRuntimeInitialLanguage()][key];
+}
 
 const STORAGE_KEY_SESSION = 'dsa_chat_session_id';
 
@@ -74,7 +82,7 @@ type StreamFailureEvent = {
 
 function streamFailureFallback(event: StreamFailureEvent, defaultMessage: string): string {
   return event.backend === 'codex_app_server'
-    ? 'The Codex agent could not complete this question; check the runtime status in Agent settings.'
+    ? chatText('chat.codexStreamFailed')
     : defaultMessage;
 }
 
@@ -331,7 +339,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
     };
     const skillNames = meta?.skillNames?.length
       ? meta.skillNames
-      : [meta?.skillName ?? 'General'];
+      : [meta?.skillName ?? chatText('chat.generalSkill')];
     const skillName = skillNames.join(', ');
 
     const userMessage: Message = {
@@ -364,8 +372,8 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
       let acceptedEvent: StreamAcceptedEvent | null = null;
       const currentProgressSteps: ProgressStep[] = [];
       const protocolError = (message: string) => createParsedApiError({
-        title: 'Request was not accepted',
-        message: 'The agent did not acknowledge this question; keep your input and try again.',
+        title: chatText('chat.requestNotAcceptedTitle'),
+        message: chatText('chat.requestNotAcceptedMessage'),
         rawMessage: message,
         category: 'upstream_network',
       });
@@ -423,7 +431,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
           if (doneEvent.success === false) {
             throw getStreamFailureError(
               doneEvent,
-              streamFailureFallback(doneEvent, 'The LLM call failed; check the API key configuration'),
+              streamFailureFallback(doneEvent, chatText('chat.llmCallFailed')),
             );
           }
           finalContent = doneEvent.content ?? '';
@@ -435,7 +443,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
           const failureEvent = event as unknown as StreamFailureEvent;
           throw getStreamFailureError(
             failureEvent,
-            streamFailureFallback(failureEvent, 'Analysis failed'),
+            streamFailureFallback(failureEvent, chatText('chat.analysisFailed')),
           );
         }
 
@@ -477,8 +485,8 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
 
       if (!receivedDoneEvent && !ac.signal.aborted) {
         throw createParsedApiError({
-          title: 'The reply was truncated',
-          message: 'The agent stream ended before the reply completed; please try again.',
+          title: chatText('chat.replyTruncatedTitle'),
+          message: chatText('chat.replyTruncatedMessage'),
           rawMessage: 'Agent stream ended before a done event was received.',
           category: 'upstream_network',
         });
@@ -494,7 +502,7 @@ export const useAgentChatStore = create<AgentChatState & AgentChatActions>((set,
             {
               id: (Date.now() + 1).toString(),
               role: 'assistant',
-              content: finalContent || '(no content)',
+              content: finalContent || chatText('chat.noContent'),
               skills: payload.skills,
               skill: payload.skills?.[0],
               skillNames,

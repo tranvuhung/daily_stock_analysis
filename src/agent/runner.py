@@ -534,6 +534,10 @@ def run_agent_loop(
             # Append tool results preserving original call order
             tc_order = {tc.id: i for i, tc in enumerate(response.tool_calls)}
             tool_results.sort(key=lambda x: tc_order.get(x["tc"].id, 0))
+            # Gắn cùng trace với assistant message để khi fallback sang model khác,
+            # assistant tool_calls và tool results bị lọc cùng nhau (tránh tool mồ côi).
+            # Tag tool results with the same trace as their assistant message so a
+            # cross-model fallback drops the whole segment instead of orphaning them.
             for tr in tool_results:
                 messages.append(
                     {
@@ -541,6 +545,8 @@ def run_agent_loop(
                         "name": tr["tc"].name,
                         "tool_call_id": tr["tc"].id,
                         "content": tr["result_str"],
+                        "_trace_provider": assistant_msg["_trace_provider"],
+                        "_trace_model": assistant_msg["_trace_model"],
                     }
                 )
 

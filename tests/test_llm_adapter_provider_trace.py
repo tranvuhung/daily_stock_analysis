@@ -496,3 +496,26 @@ def test_parse_litellm_response_hmac_covers_tool_call_wire_messages(monkeypatch)
     assert first.usage["messages_hmac"]
     assert second.usage["messages_hmac"]
     assert first.usage["messages_hmac"] != second.usage["messages_hmac"]
+
+
+def test_convert_messages_drops_untagged_tool_message_orphaned_by_mismatched_assistant() -> None:
+    adapter = LLMToolAdapter.__new__(LLMToolAdapter)
+    messages = [
+        {"role": "user", "content": "u1"},
+        {
+            "role": "assistant",
+            "content": "",
+            "_trace_provider": "gemini",
+            "_trace_model": "gemini/gemini-primary",
+            "tool_calls": [{"id": "call_1", "name": "echo", "arguments": {}, "thought_signature": "sig"}],
+        },
+        # Tool message không mang trace (dữ liệu cũ / đường khác) vẫn không được thành mồ côi.
+        {"role": "tool", "name": "echo", "tool_call_id": "call_1", "content": "r"},
+    ]
+
+    fallback = adapter._convert_messages(messages, target_model="gemini/gemini-fallback")
+    primary = adapter._convert_messages(messages, target_model="gemini/gemini-primary")
+
+    assert [msg["role"] for msg in fallback] == ["user"]
+    assert [msg["role"] for msg in primary] == ["user", "assistant", "tool"]
+    assert primary[2]["name"] == "echo"

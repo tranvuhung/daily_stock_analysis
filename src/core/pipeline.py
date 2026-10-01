@@ -384,15 +384,13 @@ class StockAnalysisPipeline:
             self.social_sentiment_service = None
 
     def _progress_text(self, stage: str, *, code: Any = "", name: Any = None, **params: Any) -> str:
-        """Dựng thông báo tiến độ theo ngôn ngữ báo cáo của lượt chạy.
+        """Build the progress message in the run's report language.
 
-        Build the progress message in the run's report language.
-
-        Các chuỗi này đi thẳng ra UI Run Flow qua ``task.message`` (xem
-        ``src/services/run_flow.py``), nên không được để nguyên tiếng Trung.
-        ``name`` có thể đang là chuỗi giữ chỗ ``股票{code}`` do ``_resolve_stock_name``
-        sinh ra, nên phải đưa qua ``get_localized_stock_name`` trước khi hiển thị.
-        ``name`` may still be the ``股票{code}`` placeholder, so it is localized first.
+        These strings go straight to the Run Flow UI via ``task.message`` (see
+        ``src/services/run_flow.py``), so they must not stay in Chinese.
+        ``name`` may still be the Chinese "stock {code}" placeholder produced by
+        ``_resolve_stock_name``, so it is passed through ``get_localized_stock_name``
+        before being displayed.
         """
         # Dựng thông báo tiến độ là việc "best-effort" giống ``_emit_progress``: nó chạy
         # TRƯỚC lớp try/except của hàm đó, nên phải tự chịu được trường hợp pipeline chưa
@@ -832,7 +830,7 @@ class StockAnalysisPipeline:
                 # Ngoại lệ chỉ số Việt Nam: mã của chúng (VNINDEX / VN30 / HNXIndex) chính là tên
                 # gọi thông dụng chứ không phải mã máy, nên vẫn truyền vào để tầng tìm kiếm nhận
                 # ra đây là mục tiêu Việt Nam. Bỏ mã đi thì truy vấn rơi về bộ chiều tiếng Trung
-                # và chỉ số Việt Nam bị tìm bằng "研报 目标价 评级".
+                # và chỉ số Việt Nam bị tìm bằng truy vấn tiếng Trung "research report / target price / rating".
                 intel_stock_code = (
                     "" if (is_index and not is_vn_index_code(code)) else code
                 )
@@ -2617,8 +2615,8 @@ class StockAnalysisPipeline:
             return ""
         trend_status = getattr(trend_result, "trend_status", None)
         value = getattr(trend_status, "value", None) or str(trend_status or "").strip()
-        if report_language != "en":
-            return value
+        # TrendStatus giờ là tiếng Anh chuẩn → luôn bản địa hoá theo ngôn ngữ báo cáo.
+        # TrendStatus values are canonical English, so always localize.
         return localize_trend_prediction(value, report_language)
 
     @staticmethod
