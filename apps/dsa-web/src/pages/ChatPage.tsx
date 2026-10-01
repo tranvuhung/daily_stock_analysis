@@ -47,12 +47,12 @@ const QUICK_QUESTIONS: Array<{
   skill: string;
   stockContext?: ActiveStockContext;
 }> = [
-  { labelKey: 'chat.quickChanMoutai', skill: 'chan_theory', stockContext: { stock_code: '600519', stock_name: '贵州茅台' } },
-  { labelKey: 'chat.quickWaveCatl', skill: 'wave_theory', stockContext: { stock_code: '300750', stock_name: '宁德时代' } },
-  { labelKey: 'chat.quickTrendByd', skill: 'bull_trend', stockContext: { stock_code: '002594', stock_name: '比亚迪' } },
-  { labelKey: 'chat.quickBoxSmic', skill: 'box_oscillation', stockContext: { stock_code: '688981', stock_name: '中芯国际' } },
-  { labelKey: 'chat.quickTencent', skill: 'bull_trend', stockContext: { stock_code: 'HK00700', stock_name: '腾讯控股' } },
-  { labelKey: 'chat.quickEmotionEastMoney', skill: 'emotion_cycle', stockContext: { stock_code: '300059', stock_name: '东方财富' } },
+  { labelKey: 'chat.quickChanFpt', skill: 'chan_theory', stockContext: { stock_code: 'FPT', stock_name: 'CTCP FPT' } },
+  { labelKey: 'chat.quickWaveHpg', skill: 'wave_theory', stockContext: { stock_code: 'HPG', stock_name: 'CTCP Tập đoàn Hòa Phát' } },
+  { labelKey: 'chat.quickTrendVnm', skill: 'bull_trend', stockContext: { stock_code: 'VNM', stock_name: 'CTCP Sữa Việt Nam' } },
+  { labelKey: 'chat.quickBoxMwg', skill: 'box_oscillation', stockContext: { stock_code: 'MWG', stock_name: 'CTCP Đầu tư Thế Giới Di Động' } },
+  { labelKey: 'chat.quickTrendVcb', skill: 'bull_trend', stockContext: { stock_code: 'VCB', stock_name: 'Ngân hàng TMCP Ngoại thương Việt Nam' } },
+  { labelKey: 'chat.quickEmotionSsi', skill: 'emotion_cycle', stockContext: { stock_code: 'SSI', stock_name: 'CTCP Chứng khoán SSI' } },
 ];
 
 const MAX_SELECTED_SKILLS = 3;

@@ -578,6 +578,36 @@ _CHAT_FAILURE_NOTES: Dict[str, Dict[str, str]] = {
 }
 
 
+def build_chat_market_scope_section() -> str:
+    """Tell the chat agent which markets this deployment supports (from SUPPORTED_MARKETS).
+
+    Hỏi đáp chỉ hỗ trợ các thị trường đang bật (mặc định chỉ Việt Nam). Câu hỏi về mã ngoài
+    phạm vi phải được từ chối lịch sự thay vì gọi công cụ (nguồn dữ liệu đã tắt).
+    Returns "" when every market is enabled, keeping the previous behaviour.
+    """
+    from src.core.markets import ALL_MARKET_CODES, enabled_markets, market_label
+
+    markets = enabled_markets()
+    if not markets or set(markets) >= set(ALL_MARKET_CODES):
+        return ""
+    labels = ", ".join(market_label(code, "en") for code in markets)
+    lines = [
+        "",
+        "## Market scope",
+        "",
+        f"- This assistant only supports these markets: **{labels}**.",
+        "- If the user asks about a stock or index outside these markets (for example a US, China A-share or "
+        "Hong Kong ticker), do not call any tools for it; politely explain that only the supported markets are "
+        "covered and suggest asking about a supported stock instead.",
+    ]
+    if "vn" in markets:
+        lines.append(
+            "- Vietnamese stocks trade on HOSE / HNX / UPCoM and are priced in VND; bare 3-letter tickers such as "
+            "HPG, FPT or VNM are Vietnamese stocks."
+        )
+    return "\n".join(lines) + "\n"
+
+
 def append_chat_disclaimer(content: Optional[str], report_language: Optional[str]) -> Optional[str]:
     """Append the localized "AI-generated, not investment advice" line to a chat answer.
 
@@ -656,7 +686,10 @@ def prepare_agent_chat(
         market_guidelines=get_market_guidelines(stock_code, report_language),
         default_skill_policy_section=default_skill_policy_section,
         skills_section=skills_section,
-        language_section=_build_language_section(report_language, chat_mode=True),
+        # Phạm vi thị trường (SUPPORTED_MARKETS) đặt trước mục ngôn ngữ; cả 3 prompt chat đều có slot này.
+        # Market scope goes before the language section, which every chat template has.
+        language_section=build_chat_market_scope_section()
+        + _build_language_section(report_language, chat_mode=True),
     )
 
     if include_provider_trace:

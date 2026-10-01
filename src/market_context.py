@@ -2,7 +2,7 @@
 """
 Market context detection for LLM prompts.
 
-Detects the market (A-shares, HK, US) from a stock code and returns
+Detects the market (Vietnam, A-shares, HK, US, ...) from a stock code and returns
 market-specific role descriptions so prompts are not hardcoded to a
 single market.
 
@@ -54,6 +54,10 @@ def detect_market(stock_code: Optional[str]) -> str:
 # -- Market-specific role descriptions --
 
 _MARKET_ROLES = {
+    "vn": {
+        "zh": "越南股市",
+        "en": "Vietnam stock",
+    },
     "cn": {
         "zh": " A 股",
         "en": "China A-shares",
@@ -81,6 +85,19 @@ _MARKET_ROLES = {
 }
 
 _MARKET_GUIDELINES = {
+    "vn": {
+        "zh": (
+            "- 本次分析对象为 **越南股票**（HOSE / HNX / UPCoM 上市，以 VND 计价）。\n"
+            "- 请按越南市场语境分析：HOSE ±7%、HNX ±10%、UPCoM ±15% 涨跌幅限制，T+2.5 结算，"
+            "外资持股上限与外资买卖动向、国家银行（SBV）利率与汇率政策；不要套用 A 股专属概念。"
+        ),
+        "en": (
+            "- This analysis covers a **Vietnamese stock** (listed on HOSE / HNX / UPCoM, priced in VND).\n"
+            "- Use Vietnam-market context: daily price limits (HOSE ±7%, HNX ±10%, UPCoM ±15%), T+2.5 settlement, "
+            "foreign ownership limits and foreign net buying/selling, and State Bank of Vietnam (SBV) rate and FX policy; "
+            "do not apply China A-share-specific concepts such as Northbound flows or Dragon Tiger lists."
+        ),
+    },
     "cn": {
         "zh": (
             "- 本次分析对象为 **A 股**（中国沪深交易所上市股票）。\n"
@@ -159,7 +176,7 @@ def get_market_role(stock_code: Optional[str], lang: str = "zh") -> str:
     Returns:
         Role string like 'A 股投资分析' or 'US stock investment analysis'.
     """
-    market = detect_market(stock_code)
+    market = _resolve_prompt_market(stock_code)
     lang_key = "en" if lang in ("en", "ko", "vi") else "zh"
     return _MARKET_ROLES.get(market, _MARKET_ROLES["cn"])[lang_key]
 
@@ -174,6 +191,33 @@ def get_market_guidelines(stock_code: Optional[str], lang: str = "zh") -> str:
     Returns:
         Multi-line string with market-specific guidelines.
     """
-    market = detect_market(stock_code)
+    market = _resolve_prompt_market(stock_code)
     lang_key = "en" if lang in ("en", "ko", "vi") else "zh"
     return _MARKET_GUIDELINES.get(market, _MARKET_GUIDELINES["cn"])[lang_key]
+
+
+def _resolve_prompt_market(stock_code: Optional[str]) -> str:
+    """Pick the market used for prompt role/guidelines.
+
+    ``detect_market`` chỉ biết cn/hk/us/jp/kr/tw nên mã Việt Nam trần (HPG, LAS) bị coi là
+    "us". Ưu tiên nhận diện theo danh sách thị trường đang bật (``SUPPORTED_MARKETS``,
+    ``data_provider.base._market_tag``); câu hỏi không kèm mã dùng thị trường bật đầu tiên.
+    ``detect_market`` only knows cn/hk/us/jp/kr/tw and maps bare Vietnamese tickers to "us".
+    Prefer the enabled-market tagger; with no stock code, use the first enabled market.
+    """
+    try:
+        from data_provider.base import _market_tag
+        from src.core.markets import enabled_markets
+
+        code = (stock_code or "").strip()
+        if code:
+            market = _market_tag(code)
+            if market in _MARKET_ROLES:
+                return market
+        else:
+            first_enabled = next((m for m in enabled_markets() if m in _MARKET_ROLES), None)
+            if first_enabled:
+                return first_enabled
+    except Exception:  # noqa: BLE001 - nhận diện lỗi thì giữ hành vi cũ
+        pass
+    return detect_market(stock_code)

@@ -58,6 +58,8 @@ Nhãn tiến trình ("Đang lập kế hoạch phân tích...", "Đã xong «L�
 
 - **Câu miễn trừ trách nhiệm:** mọi câu trả lời thành công đều được backend gắn thêm ở cuối dòng `---` + `*Nội dung do AI tạo, chỉ mang tính tham khảo, không phải khuyến nghị đầu tư*` (nhãn `not_investment_advice` dùng chung với báo cáo, theo `REPORT_LANGUAGE`). Việc gắn chạy sau bộ lọc chữ Hán (`finalize_chat_answer` trong `src/agent/executor.py`), không phụ thuộc model, không gắn trùng; prompt dặn model không tự viết câu này. Ghi chú thất bại / đã dừng không kèm câu miễn trừ.
 
+- **Phạm vi thị trường:** Hỏi đáp chỉ hỗ trợ các thị trường trong `SUPPORTED_MARKETS` (mặc định chỉ `vn`). Prompt chat có mục `## Market scope` liệt kê thị trường được hỗ trợ và yêu cầu từ chối lịch sự (không gọi công cụ) với mã ngoài phạm vi (`build_chat_market_scope_section`); khi bật `all` mục này bị bỏ. Vai trò/hướng dẫn thị trường (`src/market_context.py`) nhận diện mã theo `data_provider.base._market_tag`, nên mã Việt Nam trần (HPG, LAS) được coi là cổ phiếu Việt Nam (trước đây bị coi là cổ phiếu Mỹ) và câu hỏi không kèm mã dùng thị trường bật đầu tiên. Câu hỏi gợi ý và ví dụ trên trang dùng cổ phiếu Việt Nam (FPT, HPG, VNM, MWG, VCB, SSI).
+
 ## 4. Chiến lược (skills)
 
 - Mỗi chiến lược là một file `strategies/*.yaml`. `description` và `instructions` của 15 chiến lược dựng sẵn viết bằng **tiếng Anh**, được chèn vào system prompt dưới mục `## Active trading skills` với tiêu đề `### Skill N: <display_name_en>`. `display_name` và `aliases` giữ tiếng Trung vì Web, bot và báo cáo dùng làm khoá đối chiếu; `display_name_en` (tuỳ chọn, mặc định = `display_name`) chỉ dùng trong prompt.
