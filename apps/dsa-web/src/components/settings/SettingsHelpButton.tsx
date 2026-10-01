@@ -1,4 +1,4 @@
-import { CircleHelp, ExternalLink, X } from 'lucide-react';
+import { CircleHelp, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type React from 'react';
 import { createPortal } from 'react-dom';
@@ -14,6 +14,8 @@ interface SettingsHelpButtonProps {
   schema?: SystemConfigFieldSchema;
   helpKey?: string;
   examples?: string[];
+  // Giữ prop để tương thích caller; mục "Tài liệu liên quan" đã bị ẩn khỏi hộp trợ giúp.
+  // Kept for caller compatibility; the related-docs section is no longer rendered.
   docs?: SystemConfigFieldSchema['docs'];
   description?: string;
 }
@@ -96,7 +98,6 @@ export const SettingsHelpButton: React.FC<SettingsHelpButtonProps> = ({
   schema,
   helpKey,
   examples: providedExamples,
-  docs: providedDocs,
   description,
 }) => {
   const { language, t } = useUiLanguage();
@@ -107,7 +108,6 @@ export const SettingsHelpButton: React.FC<SettingsHelpButtonProps> = ({
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const titleId = useId();
   const examples = providedExamples ?? help?.examples ?? schema?.examples ?? [];
-  const docs = providedDocs?.length ? providedDocs : schema?.docs?.length ? schema.docs : help?.docs ?? [];
   const showFieldKey = help?.showFieldKey ?? true;
   const helpButtonLabel = language === 'en'
     ? `View ${title} configuration help`
@@ -266,25 +266,6 @@ export const SettingsHelpButton: React.FC<SettingsHelpButtonProps> = ({
                   <HelpSection title={t('settings.helpNotes')}>
                     <HelpList items={help.notes} />
                   </HelpSection>
-
-                  {hasItems(docs) ? (
-                    <HelpSection title={t('settings.helpRelatedDocs')}>
-                      <div className="flex flex-wrap gap-2">
-                        {docs.map((doc) => (
-                          <a
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-border/70 bg-background/60 px-3 py-2 text-xs text-secondary-text transition-colors hover:bg-hover hover:text-foreground"
-                            href={doc.href}
-                            key={`${doc.label}-${doc.href}`}
-                            rel="noreferrer"
-                            target="_blank"
-                          >
-                            <span>{doc.label}</span>
-                            <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />
-                          </a>
-                        ))}
-                      </div>
-                    </HelpSection>
-                  ) : null}
                 </div>
               </div>
             </div>,

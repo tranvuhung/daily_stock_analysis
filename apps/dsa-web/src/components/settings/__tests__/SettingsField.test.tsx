@@ -526,12 +526,13 @@ describe('SettingsField', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'View configuration help for Watchlist' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View STOCK_LIST configuration help' }));
 
     expect(screen.getByRole('dialog', { name: 'Watchlist' })).toBeInTheDocument();
     expect(screen.getByText('STOCK_LIST=600519,300750,002594')).toBeInTheDocument();
-    const docLink = screen.getByRole('link', { name: /完整指南/ });
-    expect(docLink).toHaveAttribute('href', 'https://example.com/full-guide');
+    // Mục "Tài liệu liên quan" đã bị ẩn: schema có docs nhưng không render link.
+    expect(screen.queryByRole('link', { name: /完整指南/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Related docs')).not.toBeInTheDocument();
 
     const closeButtons = screen.getAllByRole('button', { name: 'Close configuration help' });
     expect(closeButtons[0].tabIndex).toBe(-1);
@@ -540,7 +541,7 @@ describe('SettingsField', () => {
 
     closeButton?.focus();
     fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
-    expect(docLink).toHaveFocus();
+    expect(closeButton).toHaveFocus();
 
     fireEvent.keyDown(document, { key: 'Tab' });
     expect(closeButton).toHaveFocus();
