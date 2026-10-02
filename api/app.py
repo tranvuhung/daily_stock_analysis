@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-FastAPI 应用工厂模块
+FastAPI application factory module
 ===================================
 
-职责：
-1. 创建和配置 FastAPI 应用实例
-2. 配置 CORS 中间件
-3. 注册路由和异常处理器
-4. 托管前端静态文件（生产模式）
+Responsibilities:
+1. Create and configure the FastAPI application instance
+2. Configure the CORS middleware
+3. Register routes and exception handlers
+4. Serve frontend static files (production mode)
 
-使用方式：
+Usage:
     from api.app import create_app
     app = create_app()
 """
@@ -289,8 +289,8 @@ async def app_lifespan(app: FastAPI):
         runtime_scheduler=app.state.runtime_scheduler_service,
     )
     _schedule_stock_index_background_refresh(app, "startup")
-    # 名称解析器的 AkShare 缓存预热：命中磁盘缓存则零网络加载，否则发起
-    # 后台单飞拉取。把冷启动等待从首个用户请求挪到进程启动窗口。
+    # Warm up the name resolver's AkShare cache: a disk cache hit loads with zero network; otherwise start
+    # a single-flight background fetch. Moves the cold-start wait from the first user request to process startup.
     from src.services.name_to_code_resolver import warmup_akshare_cache
 
     warmup_akshare_cache()
@@ -321,21 +321,21 @@ async def app_lifespan(app: FastAPI):
 
 def create_app(static_dir: Optional[Path] = None) -> FastAPI:
     """
-    创建并配置 FastAPI 应用实例
+    Create and configure the FastAPI application instance
     
     Args:
-        static_dir: 静态文件目录路径（可选，默认为项目根目录下的 static）
+        static_dir: Static file directory path (optional, defaults to static under the project root)
         
     Returns:
-        配置完成的 FastAPI 应用实例
+        Fully configured FastAPI application instance
     """
-    # 默认静态文件目录
+    # Default static file directory
     _register_frontend_asset_mime_types()
 
     if static_dir is None:
         static_dir = Path(__file__).parent.parent / "static"
     
-    # 创建 FastAPI 实例
+    # Create the FastAPI instance
     app = FastAPI(
         title="Daily Stock Analysis API",
         description=(
@@ -354,7 +354,7 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
     )
     
     # ============================================================
-    # CORS 配置
+    # CORS configuration
     # ============================================================
     
     allowed_origins = [
@@ -364,12 +364,12 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
         "http://127.0.0.1:3000",
     ]
     
-    # 从环境变量添加额外的允许来源
+    # Add extra allowed origins from environment variables
     extra_origins = os.environ.get("CORS_ORIGINS", "")
     if extra_origins:
         allowed_origins.extend([o.strip() for o in extra_origins.split(",") if o.strip()])
     
-    # 允许所有来源（开发/演示用）
+    # Allow all origins (for development/demo)
     allow_all_origins = os.environ.get("CORS_ALLOW_ALL", "").lower() == "true"
     allow_credentials = not allow_all_origins
     if allow_all_origins:
@@ -387,14 +387,14 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
     add_auth_middleware(app)
     
     # ============================================================
-    # 注册路由
+    # Register routes
     # ============================================================
     
     app.include_router(api_v1_router, prefix="/api/v1")
     add_error_handlers(app)
     
     # ============================================================
-    # 根路由和健康检查
+    # Root route and health check
     # ============================================================
     
     has_frontend = static_dir.exists() and (static_dir / "index.html").exists()
@@ -407,7 +407,7 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
 
         @app.get("/", include_in_schema=False)
         async def root():
-            """根路由 - 返回前端页面"""
+            """Root route - return the frontend page"""
             return _frontend_index_response(static_dir)
     else:
         _FRONTEND_NOT_BUILT_HTML = """<!DOCTYPE html>
@@ -439,7 +439,7 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
 
         @app.get("/", include_in_schema=False)
         async def root():
-            """根路由 - 前端未构建时返回引导页面"""
+            """Root route - return a guide page when the frontend is not built"""
             return HTMLResponse(content=_FRONTEND_NOT_BUILT_HTML)
     
     @app.get(
@@ -506,7 +506,7 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
         )
     
     # ============================================================
-    # 静态文件托管（前端 SPA）
+    # Static file hosting (frontend SPA)
     # ============================================================
     
     if has_frontend:
@@ -542,10 +542,10 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
                 media_type=_missing_asset_media_type(asset_path),
             )
 
-        # SPA 路由回退
+        # SPA route fallback
         @app.get("/{full_path:path}", include_in_schema=False)
         async def serve_spa(request: Request, full_path: str):
-            """SPA 路由回退 - 非 API 路由返回 index.html"""
+            """SPA route fallback - non-API routes return index.html"""
             if full_path == "api" or full_path.startswith("api/"):
                 return JSONResponse(
                     status_code=404,
@@ -571,5 +571,5 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
     return app
 
 
-# 默认应用实例（供 uvicorn 直接使用）
+# Default application instance (for direct use by uvicorn)
 app = create_app()

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-股票代码与名称映射
+Stock code to name mapping
 ===================================
 
 Shared stock code -> name mapping, used by analyzer, data_provider, and name_to_code_resolver.
@@ -114,7 +114,7 @@ STOCK_NAME_MAP = {
 # Foreign-ticker English identity map (sibling of STOCK_NAME_MAP)
 # ---------------------------------------------------------------------------
 # Issue #2026: when STOCK_NAME_MAP maps a US/HK ticker to a Chinese display
-# name (e.g. AAPL -> 苹果), ``SearchService._company_identity_terms`` cannot
+# name (e.g. AAPL -> the Chinese name for Apple), ``SearchService._company_identity_terms`` cannot
 # derive an English alias from that Chinese name, so English news headlines
 # like "Apple reports earnings beat" never score as ``direct_company_news``.
 #
@@ -128,15 +128,15 @@ STOCK_NAME_MAP = {
 # of the foreign-ticker keys of STOCK_NAME_MAP. Adding an English alias for a
 # ticker requires the ticker to already exist in STOCK_NAME_MAP, so the two
 # maps cannot drift — exactly the single-source-of-truth property demanded by
-# issue #2026 ("alias 来源建议不要再复制一份静态映射").
+# issue #2026 ("the alias source should not duplicate another static mapping").
 #
 # Note: tickers map to a *tuple* of English names rather than a single legal
 # name. ``_company_identity_terms`` only strips one legal suffix layer, so it
 # cannot synthesise the common media short names ("Apple", "Amazon", "Google",
 # "Alibaba", "Tencent", "Pinduoduo", "Xiaomi", ...) that journalists actually
 # use in headlines. Encoding those short names explicitly here is the contract
-# massif-01 asked for on PR #2047 ("将搜索 identity 建模为真实 alias 集, 不要
-# 继续给 suffix stripping 堆启发式规则").
+# massif-01 asked for on PR #2047 ("model search identity as a real alias set; do not
+# keep piling heuristic rules onto suffix stripping").
 STOCK_ENGLISH_NAME_MAP: Dict[str, Tuple[str, ...]] = {
     # === US stocks ===
     "AAPL": ("Apple Inc.", "Apple"),

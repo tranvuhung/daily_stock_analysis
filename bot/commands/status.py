@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-状态命令
+Status command
 ===================================
 
-显示系统运行状态和配置信息。
+Shows system running status and configuration info.
 """
 
 import platform
@@ -18,12 +18,12 @@ from bot.models import BotMessage, BotResponse
 
 class StatusCommand(BotCommand):
     """
-    状态命令
+    Status command
     
-    显示系统运行状态，包括：
-    - 服务状态
-    - 配置信息
-    - 可用功能
+    Shows system running status, including:
+    - Service status
+    - Configuration info
+    - Available features
     """
     
     @property
@@ -43,21 +43,21 @@ class StatusCommand(BotCommand):
         return "/status"
     
     def execute(self, message: BotMessage, args: List[str]) -> BotResponse:
-        """执行状态命令"""
+        """Execute the status command"""
         from src.config import get_config
         
         config = get_config()
         
-        # 收集状态信息
+        # Collect status info
         status_info = self._collect_status(config)
         
-        # 格式化输出
+        # Format output
         text = self._format_status(status_info, message.platform)
         
         return BotResponse.markdown_response(text)
     
     def _collect_status(self, config) -> dict:
-        """收集系统状态信息"""
+        """Collect system status info"""
         from src.config import _uses_direct_env_provider, get_configured_llm_models
 
         status = {
@@ -65,10 +65,10 @@ class StatusCommand(BotCommand):
             "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
             "platform": platform.system(),
             "stock_count": len(config.stock_list),
-            "stock_list": config.stock_list[:5],  # 只显示前5个
+            "stock_list": config.stock_list[:5],  # Show only the first 5
         }
         
-        # AI 配置状态
+        # AI configuration status
         llm_channels = getattr(config, "llm_channels", []) or []
         llm_model_list = getattr(config, "llm_model_list", []) or []
         llm_model = (getattr(config, "litellm_model", "") or "").strip()
@@ -103,7 +103,7 @@ class StatusCommand(BotCommand):
             and (has_direct_env_model or (llm_model_list and primary_model_reachable))
         )
         
-        # 搜索服务状态
+        # Search service status
         status["search_bocha"] = len(config.bocha_api_keys) > 0
         status["search_tavily"] = len(config.tavily_api_keys) > 0
         status["search_brave"] = len(config.brave_api_keys) > 0
@@ -111,7 +111,7 @@ class StatusCommand(BotCommand):
         status["search_minimax"] = len(config.minimax_api_keys) > 0
         status["search_searxng"] = config.has_searxng_enabled()
         
-        # 通知渠道状态
+        # Notification channel status
         status["notify_wechat"] = bool(config.wechat_webhook_url)
         status["notify_feishu"] = bool(config.feishu_webhook_url)
         status["notify_telegram"] = bool(config.telegram_bot_token and config.telegram_chat_id)
@@ -143,8 +143,8 @@ class StatusCommand(BotCommand):
         return status
     
     def _format_status(self, status: dict, platform: str) -> str:
-        """格式化状态信息"""
-        # 状态图标
+        """Format status info"""
+        # Status icons
         def icon(enabled: bool) -> str:
             return "✅" if enabled else "❌"
         
@@ -199,7 +199,7 @@ class StatusCommand(BotCommand):
             f"• PushPlus/Pushover/Server酱3: {icon(status['notify_push'])}",
         ])
         
-        # AI 服务总体状态
+        # Overall AI service status
         if status["ai_available"]:
             lines.extend([
                 "",

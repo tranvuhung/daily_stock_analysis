@@ -1,6 +1,6 @@
 # Derived from AlphaSift revision 9f522747caafd3c0b1ddb7e14d5cf44c8580b6cf.
 # Licensed under Apache-2.0 and modified for daily_stock_analysis.
-# 趋势质量策略
+# Trend quality strategy
 name: momentum_quality
 display_name: 趋势质量
 description: 兼顾趋势确认和基本面质量的中线候选发现

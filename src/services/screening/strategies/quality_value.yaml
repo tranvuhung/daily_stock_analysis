@@ -1,6 +1,6 @@
 # Derived from AlphaSift revision 9f522747caafd3c0b1ddb7e14d5cf44c8580b6cf.
 # Licensed under Apache-2.0 and modified for daily_stock_analysis.
-# 稳健价值策略
+# Steady value strategy
 name: quality_value
 display_name: 稳健价值
 description: 估值合理、流动性充足、波动不过热，并要求有温和活跃度确认的稳健候选

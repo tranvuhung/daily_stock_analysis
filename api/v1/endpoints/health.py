@@ -4,9 +4,9 @@
 Health check endpoint
 ===================================
 
-职责：
-1. 提供 /api/v1/health Health check endpoint
-2. 用于负载均衡器和监控系统
+Responsibilities:
+1. Provide the /api/v1/health Health check endpoint
+2. Used by load balancers and monitoring systems
 """
 
 from datetime import datetime

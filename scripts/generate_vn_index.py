@@ -1,28 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-从 VCI 全量代码表生成越南股票自动补全索引，并合并进现有索引文件。
+Generate the Vietnam stock autocomplete index from the full VCI symbol list and merge it into the existing index file.
 
 Output: apps/dsa-web/public/stocks.index.json
 
-设计要点：
+Design notes:
 
-- **合并而不是替换**。现有文件里还有 CN/US/HK/JP/KR 的三万多条记录，
-  ``SUPPORTED_MARKETS=all`` 回滚时仍然要用。本脚本只重建 ``market == "VN"``
-  的行，其余原样保留。
-- 复用 ``VciFetcher.get_symbol_records()``，不再实现一遍抓取与缓存逻辑。
-- 压缩行格式与 ``scripts/generate_index_from_csv.py`` 的 ``compress_index``
-  保持一致：
+- **Merge, do not replace**. The existing file still holds 30,000+ CN/US/HK/JP/KR records,
+  which are still needed when rolling back to ``SUPPORTED_MARKETS=all``. This script only rebuilds rows with ``market == "VN"``
+  and keeps the rest unchanged.
+- Reuses ``VciFetcher.get_symbol_records()`` instead of reimplementing fetching and caching.
+- The compressed row format matches ``compress_index`` in
+  ``scripts/generate_index_from_csv.py``:
   ``[canonicalCode, displayCode, nameZh, pinyinFull, pinyinAbbr,
      aliases, market, assetType, active, popularity]``
-- 越南语没有拼音，但 ``pinyinFull`` / ``pinyinAbbr`` 两列正好可以放**去声调的
-  搜索键**（"Hòa Phát" -> "hoaphat" / "hp"），让现有前端搜索逻辑不改代码就能
-  按越南语名字检索。
+- Vietnamese has no pinyin, but the ``pinyinFull`` / ``pinyinAbbr`` columns can hold **diacritic-free
+  search keys** ("Hòa Phát" -> "hoaphat" / "hp"), so the existing frontend search logic can
+  search Vietnamese names without code changes.
 
-用法：
+Usage:
 
-    python scripts/generate_vn_index.py            # 生成并写入
-    python scripts/generate_vn_index.py --test     # 只校验不写入
+    python scripts/generate_vn_index.py            # generate and write
+    python scripts/generate_vn_index.py --test     # validate only, do not write
 """
 
 from __future__ import annotations
@@ -42,12 +42,12 @@ OUTPUT_PATH = REPO_ROOT / "apps" / "dsa-web" / "public" / "stocks.index.json"
 
 MARKET = "VN"
 
-# VCI 代码表里 board 的取值；DELISTED / BOND 不纳入分析范围
+# board values in the VCI symbol list; DELISTED / BOND are outside the analysis scope
 _TRADABLE_BOARDS = {"HSX", "HNX", "UPCOM"}
-# 权证（CW）、期货（FU）、债券（BOND）当前不参与分析
+# Covered warrants (CW), futures (FU) and bonds (BOND) are currently not analyzed
 _TRADABLE_TYPES = {"STOCK", "ETF", "UNIT_TRUST"}
 
-# 指数条目手工维护：VCI 代码表里不含指数，且 provider 侧大小写敏感
+# Index entries are maintained by hand: the VCI symbol list has no indices, and the provider side is case-sensitive
 _VN_INDEX_ROWS = [
     ("VNINDEX", "Chỉ số VN-Index", ["VNINDEX", "VN-Index"]),
     ("VN30", "Chỉ số VN30", ["VN30"]),
@@ -59,9 +59,9 @@ _VN_INDEX_ROWS = [
 
 
 def strip_diacritics(text: str) -> str:
-    """去掉越南语声调符号，得到可用于检索的 ASCII 键。
+    """Strip Vietnamese diacritics to get an ASCII key usable for search.
 
-    ``đ``/``Đ`` 不是组合字符，NFD 分解拿不到，需要单独替换。
+    ``đ``/``Đ`` are not combining characters and are not split by NFD, so they need separate replacement.
     """
 
     normalized = unicodedata.normalize("NFD", str(text or ""))
@@ -72,7 +72,7 @@ def strip_diacritics(text: str) -> str:
 
 
 def search_keys(name: str) -> tuple[str, str]:
-    """返回 (全拼等价键, 首字母缩写键)。"""
+    """Return (full-name key, initials key)."""
 
     ascii_name = strip_diacritics(name).lower()
     words = [word for word in "".join(
@@ -116,9 +116,9 @@ def build_rows(records: List[Dict[str, Any]]) -> List[List[Any]]:
             [
                 symbol,            # canonicalCode
                 symbol,            # displayCode
-                name,              # nameZh（此处存越南语名称）
-                full or None,      # pinyinFull -> 去声调全名键
-                abbr or None,      # pinyinAbbr -> 首字母键
+                name,              # nameZh (stores the Vietnamese name here)
+                full or None,      # pinyinFull -> diacritic-free full-name key
+                abbr or None,      # pinyinAbbr -> initials key
                 aliases,
                 MARKET,
                 "etf" if asset in {"ETF", "UNIT_TRUST"} else "stock",
@@ -142,15 +142,15 @@ def build_rows(records: List[Dict[str, Any]]) -> List[List[Any]]:
 
 
 def _atomic_write_json(path: Path, rows: List[List[Any]]) -> None:
-    """原子写入，格式与 ``scripts/generate_index_from_csv.py`` 完全一致。
+    """Atomic write, with exactly the same format as ``scripts/generate_index_from_csv.py``.
 
-    每行一条记录（而不是整个数组压成一行）：该文件有三万多条记录，压成一行会
-    让每次改动都产生一个无法 review 的全文件 diff。
+    One record per line (rather than the whole array on one line): the file has 30,000+ records, and a single line
+    would make every change an unreviewable whole-file diff.
     """
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    # 保留原文件权限：临时文件默认可能是 0600，直接 replace 会把本来 0644 的
-    # 静态资源变成只有属主可读，容器里以非 root 用户跑时会 404。
+    # Preserve the original file permissions: a temp file may default to 0600, and a plain replace would turn a 0644
+    # static asset into owner-only readable, which 404s when the container runs as a non-root user.
     mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
     temp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
@@ -205,9 +205,9 @@ def main() -> int:
     dropped = len(existing) - len(kept)
     print(f"      保留其他市场 {len(kept)} 条，替换旧越南记录 {dropped} 条")
 
-    # 保留其他市场记录的原始顺序，越南记录追加在末尾。重排整个文件会让 diff
-    # 覆盖全部三万多行，无法审阅，也和 generate_index_from_csv.py 的既有做法
-    # （"Preserves all non-index tuples in their original order"）不一致。
+    # Keep other markets' records in their original order and append Vietnam records at the end. Reordering the whole file would make the diff
+    # cover all 30,000+ lines, which is unreviewable and inconsistent with the existing approach in generate_index_from_csv.py
+    # ("Preserves all non-index tuples in their original order").
     merged = kept + vn_rows
 
     if args.test:

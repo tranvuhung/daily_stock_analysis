@@ -1,42 +1,42 @@
 # -*- coding: utf-8 -*-
 """
 =============================================
-Bot 指数入口 transport-independent 在线 E2E smoke
+Bot index entry transport-independent online E2E smoke
 =============================================
 
-从真实 ``CommandDispatcher.dispatch_async -> AnalyzeCommand ->
-TaskService -> StockAnalysisPipeline`` 在线贯穿单标的分析，覆盖
-SH_ALIAS / REGISTERED_NAME / CSI_ALIAS 三条矩阵场景，不经过任何 webhook
-transport（不修 transport，不 mock 在线依赖，不 dry-run）。
+Runs a single-target analysis online end to end through the real ``CommandDispatcher.dispatch_async -> AnalyzeCommand ->
+TaskService -> StockAnalysisPipeline`` chain, covering the
+SH_ALIAS / REGISTERED_NAME / CSI_ALIAS matrix scenarios, without going through any webhook
+transport (no transport changes, no mocking of online dependencies, no dry-run).
 
-运行方式（单 target 参数，--timeout 默认 900 秒）::
+How to run (single target argument, --timeout defaults to 900 seconds)::
 
     .venv\\Scripts\\python.exe scripts/smoke_bot_index_entry.py "SH.000016"
     .venv\\Scripts\\python.exe scripts/smoke_bot_index_entry.py "上证50"
     .venv\\Scripts\\python.exe scripts/smoke_bot_index_entry.py "930955.CSI"
     .venv\\Scripts\\python.exe scripts/smoke_bot_index_entry.py "SH.000016" --timeout 1800
 
-进程职责:
-- 父进程: 只负责 deadline、进程树清理和退出码；worker 继承控制台。
-- worker: 独立子进程（由父进程以内部 ``--worker`` flag 显式拉起，不依赖
-  任何环境变量），经真实 dispatcher 提交并在同一进程内轮询
-  ``TaskService``，输出单行 ``E2E_EVENT {json}`` 事件。
+Process roles:
+- Parent process: only handles the deadline, process-tree cleanup and exit code; the worker inherits the console.
+- worker: separate child process (launched explicitly by the parent with the internal ``--worker`` flag, independent of
+  any environment variable); submits via the real dispatcher and polls
+  ``TaskService`` in the same process, emitting single-line ``E2E_EVENT {json}`` events.
 
-事件契约（单行 ``E2E_EVENT {json}``，phase=submitted|completed|failed|timeout，
-含 target，按阶段附加 task_id / stock_code / result / error）:
-- submitted : 任务已提交，附带 ``task_id`` / ``stock_code``。
-- completed : 任务完成且结构断言通过，附带 ``result``。
-- failed    : 任务失败或 completed 但结果不完整，附带 ``error``。
-- timeout   : worker 超过 deadline 被清理（父进程输出）。
+Event contract (single-line ``E2E_EVENT {json}``, phase=submitted|completed|failed|timeout,
+includes target, plus task_id / stock_code / result / error depending on phase):
+- submitted : task submitted, includes ``task_id`` / ``stock_code``.
+- completed : task completed and structural assertions passed, includes ``result``.
+- failed    : task failed, or completed with an incomplete result, includes ``error``.
+- timeout   : worker exceeded the deadline and was cleaned up (emitted by the parent).
 
-退出码: 0 = 成功；1 = 失败（结构断言或 failed 事件）；124 = 超时。
+Exit codes: 0 = success; 1 = failure (structural assertion or failed event); 124 = timeout.
 
-超时清理: Windows 使用 ``taskkill /T /F`` 结束整个进程树；POSIX 向进程组
-发送 SIGKILL。超时只清理进程树，不回滚 DB / 报告 / 通知等既有副作用。
+Timeout cleanup: Windows uses ``taskkill /T /F`` to end the whole process tree; POSIX sends SIGKILL
+to the process group. Timeout only cleans up the process tree; it does not roll back existing side effects such as DB / reports / notifications.
 
-Ctrl-C 中止: 父进程在轮询窗口收到 Ctrl-C 时同样先清理进程树——清理成功
-透传中断，清理失败输出含清理错误的 ``failed`` 事件并退出 1，绝不静默
-吞掉清理失败。
+Ctrl-C abort: when the parent receives Ctrl-C during the polling window it also cleans up the process tree first; on cleanup success
+the interrupt is propagated, on cleanup failure a ``failed`` event with the cleanup error is emitted and it exits 1, never silently
+swallowing cleanup failures.
 """
 
 from __future__ import annotations
@@ -59,9 +59,9 @@ from scripts.check_env import _reconfigure_output_stream  # noqa: E402
 
 EVENT_PREFIX = "E2E_EVENT "
 
-# 矩阵输入 -> (canonical code, registered display name) 的权威映射。
-# worker 的期望 code/name 只从这里取值，绝不信任响应或任务结果自报的身份，
-# 防止 dispatcher 路由错误时仍假通过。
+# Authoritative mapping: matrix input -> (canonical code, registered display name).
+# The worker's expected code/name come only from here; never trust identity self-reported by the response or task result,
+# so a dispatcher routing error cannot pass falsely.
 EXPECTED_OUTCOMES = {
     "SH.000016": ("sh000016", "上证50"),
     "上证50": ("sh000016", "上证50"),
@@ -143,8 +143,8 @@ def _terminate_process_tree(proc, platform_name: str) -> Optional[str]:
         if killpg is not None:
             killpg(proc.pid, kill_signal)
         else:
-            # 无进程组原语：直接 kill 只能证明 worker 本身被杀，不能证明
-            # 后代已清理，不得返回 None 声称树清理已确认。
+            # No process-group primitive: a direct kill only proves the worker itself was killed, not that
+            # descendants were cleaned up, so we must not return None claiming tree cleanup was confirmed.
             proc.kill()
             return (
                 "process-group kill unavailable; direct worker kill "
@@ -332,8 +332,8 @@ def _run_worker_inner(target: str, expected_code: str) -> int:
 
     response = asyncio.run(dispatcher.dispatch_async(message))
 
-    # 权威期望只来自矩阵映射，绝不信任 ``extra.stock_code`` 或任务结果自报
-    # 身份：dispatcher 路由错误（提交了错误 code/name）时仍会失败。
+    # Authoritative expectations come only from the matrix mapping; never trust ``extra.stock_code`` or identity self-reported
+    # by the task result: a dispatcher routing error (wrong code/name submitted) still fails.
     response_code = response.extra.get("stock_code")
     response_task_id = response.extra.get("task_id")
     if response_task_id and response_code == expected_code:
@@ -345,9 +345,9 @@ def _run_worker_inner(target: str, expected_code: str) -> int:
             stock_code=expected_code,
         )
     elif response_task_id:
-        # 有任务 identity 但 code 与矩阵期望不符：提交了错误的标的，输出
-        # 明确的 mismatch 错误（含期望值与实际值）与结构化实际 code，
-        # 而不是成功响应文本。
+        # Task identity exists but the code differs from the matrix expectation: the wrong target was submitted; emit
+        # an explicit mismatch error (with expected and actual values) and the structured actual code,
+        # rather than the success response text.
         _emit_event(
             "failed",
             target,
@@ -414,11 +414,11 @@ def _run_parent(target: str, timeout: int) -> int:
         except subprocess.TimeoutExpired:
             exit_code = None
         except KeyboardInterrupt:
-            # 用户主动中止：清理 worker 进程树。清理失败不得静默吞掉——
-            # 与 timeout 分支一致，输出结构化 failed 事件并返回 1，避免
-            # 用户误以为进程树已清理而 worker 后代仍在跑真实副作用。
+            # User abort: clean up the worker process tree. Cleanup failures must not be silently swallowed:
+            # like the timeout branch, emit a structured failed event and return 1, so the
+            # user does not wrongly assume the tree was cleaned up while worker descendants still run real side effects.
             if proc.poll() is not None:
-                # worker 已自行退出：无需清理，直接透传中断。
+                # Worker already exited on its own: no cleanup needed, propagate the interrupt directly.
                 raise
             cleanup_error = _cleanup_process_tree(
                 proc, "nt" if os.name == "nt" else "posix"
@@ -432,8 +432,8 @@ def _run_parent(target: str, timeout: int) -> int:
                 return 1
             raise
         if exit_code is not None:
-            # 文档化运行时契约只暴露 0 / 1 / 124：worker 的任意其他退出码
-            # 归一化为 1，避免泄漏任意崩溃码。
+            # The documented runtime contract exposes only 0 / 1 / 124: any other worker exit code
+            # is normalized to 1 to avoid leaking arbitrary crash codes.
             if exit_code in (0, 1, 124):
                 return exit_code
             return 1
@@ -442,7 +442,7 @@ def _run_parent(target: str, timeout: int) -> int:
                 proc, "nt" if os.name == "nt" else "posix"
             )
             if cleanup_error is not None:
-                # 清理失败不得静默声称成功：输出结构化 failed 事件并返回 1。
+                # Cleanup failure must not silently claim success: emit a structured failed event and return 1.
                 _emit_event(
                     "failed",
                     target,
@@ -479,15 +479,15 @@ def main(argv=None) -> int:
         print("ERROR: target 不能为空", file=sys.stderr)
         return 2
 
-    # 权威 target 校验必须先于任何角色分支：不支持的 target 不得构造
-    # dispatcher、不得提交、不得 spawn 子进程（参数/输入错误，非零返回）。
+    # Authoritative target validation must precede any role branch: an unsupported target must not build
+    # a dispatcher, submit, or spawn a child process (argument/input error, non-zero return).
     try:
         _resolve_expected(target)
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
-    # ``--timeout`` 必须为正：非正超时在 spawn/提交之前即拒绝（输入错误）。
+    # ``--timeout`` must be positive: a non-positive timeout is rejected before spawn/submit (input error).
     if args.timeout <= 0:
         print(f"ERROR: --timeout 必须为正整数，got {args.timeout}", file=sys.stderr)
         return 2
@@ -495,8 +495,8 @@ def main(argv=None) -> int:
     _reconfigure_output_stream(sys.stdout)
     _reconfigure_output_stream(sys.stderr)
 
-    # 角色选择只由显式 ``--worker`` flag 决定（父进程拉起子进程时显式传入），
-    # 不依赖任何环境变量，避免外部预置环境变量绕过父进程的硬超时。
+    # Role selection is decided only by the explicit ``--worker`` flag (passed explicitly when the parent launches the child),
+    # independent of any environment variable, so a preset external env var cannot bypass the parent's hard timeout.
     if args.worker:
         return _run_worker(target)
     return _run_parent(target, args.timeout)

@@ -1,19 +1,21 @@
 # -*- coding: utf-8 -*-
-"""新闻检索未执行或零命中时的报告披露文案。
+"""Report disclosure text for when news search did not run or returned zero hits.
 
-单一事实来源：字符串拼接渲染器（src/notification.py）与模板渲染链路
-（src/services/report_renderer.py + templates/*.j2）共用本模块，避免
-同一份分析结果在部分渠道披露、在另一些渠道沉默。
+Single source of truth: the string-concatenation renderer (src/notification.py) and the template
+rendering chain (src/services/report_renderer.py + templates/*.j2) share this module, so the same
+analysis result is not disclosed on some channels and silent on others.
 
-披露断言的是「本次结论有没有用到新闻面证据」，因此第一依据是分析实际收到的消息面
-证据（news_context）是否非空，而不是搜索命中了几条。news_context 可能来自实时检索、
-社交情绪或本地已落库的资讯池，后两者同样进入模型输入却不产生搜索命中；只看计数会把
-这类分析误报成「未纳入新闻面证据」（review OR-COR-2e4b9d61）。
+The disclosure asserts "did this conclusion use any news evidence", so the primary signal is
+whether the news evidence actually received by the analysis (news_context) is non-empty, not how
+many search hits there were. news_context may come from realtime search, social sentiment, or the
+locally persisted news pool; the latter two also feed the model input without producing search
+hits, so looking only at the count would misreport such analyses as "no news evidence included"
+(review OR-COR-2e4b9d61).
 
-news_result_count 因此退居第二位，只用来解释「确实没有证据」时的原因：
-    None  未执行检索（未配置搜索渠道）
-    0     执行了检索但零命中（限流、全部失败等）
-    > 0   实时检索有命中（此时证据必然存在）
+news_result_count is therefore secondary and only explains why there is truly no evidence:
+    None  search did not run (no search channel configured)
+    0     search ran but got zero hits (rate limiting, all failed, etc.)
+    > 0   realtime search had hits (evidence necessarily exists)
 """
 
 from __future__ import annotations
@@ -68,11 +70,11 @@ def persisted_news_result_state(
     raw_result: Any,
     context_snapshot: Any = None,
 ) -> Tuple[Optional[int], bool]:
-    """从持久化载荷恢复计数及其可信度。
+    """Recover the count and its reliability from the persisted payload.
 
-    新记录的 raw_result 明确保存三态值；旧记录可在 context_snapshot 中留下
-    0 / >0 计数。两处都没有字段时只能判定为 legacy unknown，不能把缺字段
-    当成明确的 None。
+    New records store the three-state value explicitly in raw_result; old records may leave a
+    0 / >0 count in context_snapshot. When neither field exists it can only be treated as legacy
+    unknown; a missing field must not be taken as an explicit None.
     """
     if isinstance(raw_result, Mapping):
         if raw_result.get("news_result_count_known") is False:
@@ -87,17 +89,18 @@ def persisted_news_result_state(
 
 
 def news_evidence_present(*sources: Any) -> bool:
-    """本次分析是否真的收到了消息面证据。任一来源为真即为真。
+    """Whether this analysis actually received news evidence. True if any source is truthy.
 
-    每个来源要么是真实条数（int），要么是**已排除占位文本**的内容字符串。
-    实时检索、社交情绪、本地资讯池各算一路，pipeline 两条路径都用本函数，
-    不要在别处另写判断。
+    Each source is either a real item count (int) or a content string **with placeholder text
+    already removed**. Realtime search, social sentiment and the local news pool each count as one
+    source; both pipeline paths use this function — do not write a separate check elsewhere.
 
-    **不要把 pipeline 拼好的整段 news_context 传进来。**
-    `src/search_service.py` 的 `format_intel_report()` 在零命中时仍会输出
-    `【XX 情报搜索结果】` 标题和每个维度的「未找到相关信息」占位文本，整段永远
-    非空；用它判定会把「搜了但一条没拿到」翻成「有证据」，恰好吞掉本模块要补的
-    披露（review OR-COR-8f4c2d1b）。判定必须按来源逐个登记，不能闻字符串。
+    **Do not pass in the whole news_context assembled by the pipeline.**
+    `format_intel_report()` in `src/search_service.py` still emits the
+    `【XX 情报搜索结果】` header and a "未找到相关信息" placeholder per dimension on zero hits, so
+    the whole block is never empty; using it would turn "searched but got nothing" into "has
+    evidence", swallowing exactly the disclosure this module adds (review OR-COR-8f4c2d1b). The
+    check must register each source individually, never sniff strings.
     """
     for source in sources:
         if source is None or isinstance(source, bool):
@@ -127,7 +130,7 @@ def _disclosure_for_state(
 
     if not known:
         return None
-    # 证据存在就不提示，无论它来自哪一路来源；计数只解释「没有证据」的原因。
+    # If evidence exists, no warning regardless of its source; the count only explains why there is no evidence.
     if evidence_present:
         return None
     if news_result_count is None:
@@ -138,12 +141,12 @@ def _disclosure_for_state(
 
 
 def empty_news_disclosure(result: Any, language: str = "zh") -> Optional[str]:
-    """未执行或零命中时返回对应提示；正常命中时返回 None。
+    """Return the matching notice when search did not run or got zero hits; return None on normal hits.
 
-    判定必须独立于模型是否产出了消息面文字：analyzer 的输出 schema 即使
-    在没有新闻时也会要求填 market_sentiment / hot_topics，若以这些字段
-    是否为空来决定，就会出现「展示模型生成的情绪判断、却隐瞒无新闻证据」
-    这一最糟的组合。
+    The decision must be independent of whether the model produced news-related text: the
+    analyzer's output schema requires market_sentiment / hot_topics even when there is no news, so
+    deciding based on whether those fields are empty would produce the worst combination —
+    showing model-generated sentiment while hiding that there was no news evidence.
     """
     if isinstance(result, Mapping):
         news_result_count, known = persisted_news_result_state(result)
@@ -165,7 +168,7 @@ def empty_news_disclosure_from_stored(
     context_snapshot: Any,
     language: str = "zh",
 ) -> Optional[str]:
-    """为历史/API 入口从持久化载荷生成披露；旧记录缺字段时保持静默。"""
+    """Build the disclosure from the persisted payload for history/API entry points; stay silent when old records lack fields."""
     news_result_count, known = persisted_news_result_state(raw_result, context_snapshot)
     return _disclosure_for_state(
         news_result_count,
@@ -176,10 +179,11 @@ def empty_news_disclosure_from_stored(
 
 
 def persisted_news_evidence_present(raw_result: Any, news_result_count: Optional[int]) -> bool:
-    """从持久化载荷恢复「本次分析是否用到新闻面证据」。
+    """Recover "did this analysis use news evidence" from the persisted payload.
 
-    本 PR 之前写入的记录没有该字段，此时退回按计数推断：>0 说明确有证据，
-    其余按无证据处理，与该记录当时的报告表现一致，不会追溯改变旧报告。
+    Records written before this PR lack the field, so fall back to inferring from the count: >0
+    means evidence existed, anything else is treated as no evidence. This matches how the report
+    looked at the time and never retroactively changes old reports.
     """
     if isinstance(raw_result, Mapping) and "news_evidence_present" in raw_result:
         return bool(raw_result.get("news_evidence_present"))

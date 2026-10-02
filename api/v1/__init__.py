@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-API v1 模块初始化
+API v1 module initialisation
 ===================================
 
-职责：
-1. 延迟导出 v1 版本 API 的路由，避免 schema import 触发整棵 endpoint 导入树
+Responsibilities:
+1. Lazily export the v1 API router so a schema import does not pull in the whole endpoint import tree
 """
 
 from typing import Any

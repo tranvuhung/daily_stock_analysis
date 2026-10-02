@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-异步任务服务层
+Async task service layer
 ===================================
 
-职责：
-1. 管理异步分析任务（线程池）
-2. 执行股票分析并推送结果
-3. 查询任务状态和历史
+Responsibilities:
+1. Manage async analysis tasks (thread pool)
+2. Run stock analysis and push results
+3. Query task status and history
 
-迁移自 web/services.py 的 AnalysisService 类
+Migrated from the AnalysisService class in web/services.py
 """
 
 from __future__ import annotations
@@ -31,12 +31,12 @@ logger = logging.getLogger(__name__)
 
 class TaskService:
     """
-    异步任务服务
+    Async task service
 
-    负责：
-    1. 管理异步分析任务
-    2. 执行股票分析
-    3. 触发通知推送
+    Responsible for:
+    1. Managing async analysis tasks
+    2. Running stock analysis
+    3. Triggering notification pushes
     """
 
     _instance: Optional['TaskService'] = None
@@ -50,7 +50,7 @@ class TaskService:
 
     @classmethod
     def get_instance(cls) -> 'TaskService':
-        """获取单例实例"""
+        """Get the singleton instance"""
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -59,7 +59,7 @@ class TaskService:
 
     @property
     def executor(self) -> ThreadPoolExecutor:
-        """获取或创建线程池"""
+        """Get or create the thread pool"""
         if self._executor is None:
             self._executor = ThreadPoolExecutor(
                 max_workers=self._max_workers,
@@ -77,22 +77,22 @@ class TaskService:
         analysis_target: Optional[AnalysisTarget] = None
     ) -> Dict[str, Any]:
         """
-        提交异步分析任务
+        Submit an async analysis task
 
         Args:
-            code: 股票代码
-            report_type: 报告类型枚举
-            source_message: 来源消息（用于回复）
-            save_context_snapshot: 是否保存上下文快照
-            query_source: 任务来源标识（bot/api/cli/system）
-            analysis_target: 可选结构化分析目标（INDEX 时原样使用
-                ``target.canonical_id`` 并跳过股票代码规范化，防止
-                ``sh000016`` 被改写为 ``SH000016``）
+            code: Stock code
+            report_type: Report type enum
+            source_message: Source message (used for replies)
+            save_context_snapshot: Whether to save a context snapshot
+            query_source: Task source identifier (bot/api/cli/system)
+            analysis_target: Optional structured analysis target (for INDEX, use
+                ``target.canonical_id`` as-is and skip stock code normalization so
+                ``sh000016`` is not rewritten to ``SH000016``)
 
         Returns:
-            任务信息字典
+            Task info dict
         """
-        # 确保 report_type 是枚举类型
+        # Ensure report_type is an enum
         if isinstance(report_type, str):
             report_type = ReportType.from_str(report_type)
 
@@ -102,8 +102,8 @@ class TaskService:
         ):
             raise ValueError("analysis_target must be an INDEX target")
         if analysis_target is not None:
-            # INDEX target 携带时原样使用 canonical_id，不再走股票代码
-            # 规范化路径（避免 ``sh000016`` 被改写为 ``SH000016``）。
+            # When an INDEX target is provided, use canonical_id as-is instead of the stock code
+            # normalization path (so ``sh000016`` is not rewritten to ``SH000016``).
             normalized_code = analysis_target.canonical_id
         else:
             normalized_code = resolve_index_stock_code_for_analysis(code)
@@ -112,7 +112,7 @@ class TaskService:
 
         task_id = f"{normalized_code}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
 
-        # 提交到线程池
+        # Submit to the thread pool
         self.executor.submit(
             self._run_analysis,
             normalized_code,
@@ -138,15 +138,15 @@ class TaskService:
         }
 
     def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """获取任务状态"""
+        """Get task status"""
         with self._tasks_lock:
             return self._tasks.get(task_id)
 
     def list_tasks(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """列出最近的任务"""
+        """List recent tasks"""
         with self._tasks_lock:
             tasks = list(self._tasks.values())
-        # 按开始时间倒序
+        # Sort by start time, newest first
         tasks.sort(key=lambda x: x.get('start_time', ''), reverse=True)
         return tasks[:limit]
 
@@ -157,7 +157,7 @@ class TaskService:
         days: int = 30,
         limit: int = 50
     ) -> List[Dict[str, Any]]:
-        """获取分析历史记录"""
+        """Get analysis history records"""
         db = get_db()
         records = db.get_analysis_history(code=code, query_id=query_id, days=days, limit=limit)
         return [r.to_dict() for r in records]
@@ -173,11 +173,11 @@ class TaskService:
         analysis_target: Optional[AnalysisTarget] = None
     ) -> Dict[str, Any]:
         """
-        执行单只股票分析
+        Run single-stock analysis
 
-        内部方法，在线程池中运行
+        Internal method, runs in the thread pool
         """
-        # 初始化任务状态
+        # Initialize task status
         with self._tasks_lock:
             self._tasks[task_id] = {
                 "task_id": task_id,
@@ -190,13 +190,13 @@ class TaskService:
             }
 
         try:
-            # 延迟导入避免循环依赖
+            # Lazy import to avoid circular dependencies
             from src.config import get_config
             from main import StockAnalysisPipeline
 
             logger.info(f"[TaskService] 开始分析股票: {code}")
 
-            # 创建分析管道
+            # Create the analysis pipeline
             config = get_config()
             pipeline = StockAnalysisPipeline(
                 config=config,
@@ -207,7 +207,7 @@ class TaskService:
                 save_context_snapshot=save_context_snapshot
             )
 
-            # 执行单只股票分析（启用单股推送）
+            # Run single-stock analysis (with per-stock push enabled)
             process_kwargs = {
                 "code": code,
                 "skip_analysis": False,
@@ -266,9 +266,9 @@ class TaskService:
 
 
 # ============================================================
-# 便捷函数
+# Convenience functions
 # ============================================================
 
 def get_task_service() -> TaskService:
-    """获取任务服务单例"""
+    """Get the task service singleton"""
     return TaskService.get_instance()

@@ -139,7 +139,7 @@ def render(
         or getattr(get_config(), "report_language", "zh")
     )
     labels = get_report_labels(report_language)
-    # 中文/韩文用全角冒号，越南语与英文用半角冒号加空格。
+    # Chinese/Korean use a full-width colon; Vietnamese and English use a half-width colon plus a space.
     label_sep = get_label_separator(report_language)
 
     # Build template context with pre-computed signal levels (sorted by score)

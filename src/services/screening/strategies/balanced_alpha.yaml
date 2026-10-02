@@ -1,6 +1,6 @@
 # Derived from AlphaSift revision 9f522747caafd3c0b1ddb7e14d5cf44c8580b6cf.
 # Licensed under Apache-2.0 and modified for daily_stock_analysis.
-# 均衡多因子策略
+# Balanced multi-factor strategy
 name: balanced_alpha
 display_name: 均衡多因子
 description: 综合估值、资金、动量、稳定性的通用候选发现策略

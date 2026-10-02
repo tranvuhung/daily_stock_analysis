@@ -389,8 +389,8 @@ def _poster_language(
 
 
 def _poster_text(language: str, key: str) -> str:
-    # 回退链改为越南语：当前部署只产出越南语报告，未登记语言回退到中文会在
-    # 分享图上混入中文字样。
+    # Fallback chain now targets Vietnamese: this deployment only produces Vietnamese reports, and falling back to Chinese
+    # for unregistered languages would mix Chinese text into the share image.
     default_text = _POSTER_TEXT["vi"]
     return _POSTER_TEXT.get(language, default_text).get(key, default_text.get(key, key))
 
@@ -1763,7 +1763,7 @@ def _should_keep_market_fallback(markdown_text: str, data: MarketPoster) -> bool
         0, _meaningful_market_subsection_count(markdown_text) - mapped_subsections
     )
     # A normal report may contain one explanatory detail section such as
-    # “资金与情绪”.  That should not duplicate the entire report in a share
+    # the localized "funds & sentiment" section.  That should not duplicate the entire report in a share
     # poster.  Keep the full fallback only when most localized sections remain
     # outside the structured contract.
     return unmapped_subsections > max(1, mapped_subsections)

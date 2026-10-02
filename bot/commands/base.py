@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-命令基类
+Command base class
 ===================================
 
-定义命令处理器的抽象基类，所有命令都必须继承此类。
+Defines the abstract base class for command handlers; every command must inherit from it.
 """
 
 import asyncio
@@ -16,11 +16,11 @@ from bot.models import BotMessage, BotResponse
 
 class BotCommand(ABC):
     """
-    命令处理器抽象基类
+    Abstract base class for command handlers
 
-    所有命令都必须继承此类并实现抽象方法。
+    Every command must inherit from this class and implement the abstract methods.
 
-    使用示例：
+    Example:
         class MyCommand(BotCommand):
             @property
             def name(self) -> str:
@@ -32,23 +32,23 @@ class BotCommand(ABC):
 
             @property
             def description(self) -> str:
-                return "这是我的命令"
+                return "This is my command"
 
             @property
             def usage(self) -> str:
-                return "/mycommand [参数]"
+                return "/mycommand [args]"
 
             def execute(self, message: BotMessage, args: List[str]) -> BotResponse:
-                return BotResponse.text_response("命令执行成功")
+                return BotResponse.text_response("Command executed successfully")
     """
 
     @property
     @abstractmethod
     def name(self) -> str:
         """
-        命令名称（不含前缀）
+        Command name (without prefix)
 
-        例如 "analyze"，用户输入 "/analyze" 触发
+        e.g. "analyze"; triggered when the user types "/analyze"
         """
         pass
 
@@ -56,81 +56,81 @@ class BotCommand(ABC):
     @abstractmethod
     def aliases(self) -> List[str]:
         """
-        命令别名列表
+        List of command aliases
 
-        例如 ["a", "分析"]，用户输入 "/a" 或 "分析" 也能触发
+        e.g. ["a", "分析"]; typing "/a" or "分析" also triggers it
         """
         pass
 
     @property
     @abstractmethod
     def description(self) -> str:
-        """命令描述（用于帮助信息）"""
+        """Command description (used in help text)"""
         pass
 
     @property
     @abstractmethod
     def usage(self) -> str:
         """
-        使用说明（用于帮助信息）
+        Usage text (used in help text)
 
-        例如 "/analyze <股票代码>"
+        e.g. "/analyze <stock_code>"
         """
         pass
 
     @property
     def hidden(self) -> bool:
         """
-        是否在帮助列表中隐藏
+        Whether to hide from the help list
 
-        默认 False，设为 True 则不显示在 /help 列表中
+        Defaults to False; set True to hide it from the /help list
         """
         return False
 
     @property
     def admin_only(self) -> bool:
         """
-        是否仅管理员可用
+        Whether only admins may use it
 
-        默认 False，设为 True 则需要管理员权限
+        Defaults to False; set True to require admin permission
         """
         return False
 
     @abstractmethod
     def execute(self, message: BotMessage, args: List[str]) -> BotResponse:
         """
-        执行命令
+        Execute the command
 
         Args:
-            message: 原始消息对象
-            args: 命令参数列表（已分割）
+            message: Original message object
+            args: Command argument list (already split)
 
         Returns:
-            BotResponse 响应对象
+            BotResponse object
         """
         pass
 
     async def execute_async(self, message: BotMessage, args: List[str]) -> BotResponse:
-        """异步执行命令。
+        """Execute the command asynchronously.
 
-        默认将同步 `execute()` 下沉到线程池，避免在异步分发链路中阻塞事件循环。
+        By default, offloads the synchronous `execute()` to a thread pool to avoid blocking the event loop in the async dispatch path.
         """
         return await asyncio.to_thread(self.execute, message, args)
 
     def validate_args(self, args: List[str]) -> Optional[str]:
         """
-        验证参数
+        Validate arguments
 
-        子类可重写此方法进行参数校验。
+        Subclasses may override this method to validate arguments.
 
         Args:
-            args: 命令参数列表
+            args: Command argument list
 
         Returns:
-            如果参数有效返回 None，否则返回错误信息
+            None if the arguments are valid, otherwise an error message
         """
         return None
 
     def get_help_text(self) -> str:
-        """获取帮助文本"""
+        """Get the help text"""
         return f"**{self.name}** - {self.description}\n用法: `{self.usage}`"

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-历史记录相关模型
+History record models
 ===================================
 
-职责：
-1. 定义历史记录列表和详情模型
-2. 定义分析报告完整模型
+Responsibilities:
+1. Define history list and detail models
+2. Define the full analysis report model
 """
 
 from typing import Optional, List, Any, Dict, Literal

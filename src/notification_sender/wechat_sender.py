@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Wechat 发送提醒服务
+WeChat notification sender service
 
-职责：
-1. 通过企业微信 Webhook 发送文本消息
-2. 通过企业微信 Webhook 发送图片消息
+Responsibilities:
+1. Send text messages via WeCom Webhook
+2. Send image messages via WeCom Webhook
 """
 import logging
 import base64
@@ -27,10 +27,10 @@ class WechatSender:
     
     def __init__(self, config: Config):
         """
-        初始化企业微信配置
+        Initialize WeCom config
 
         Args:
-            config: 配置对象
+            config: Config object
         """
         self._wechat_url = config.wechat_webhook_url
         self._wechat_max_bytes = getattr(config, 'wechat_max_bytes', 4000)
@@ -39,36 +39,36 @@ class WechatSender:
         
     def send_to_wechat(self, content: str, *, timeout_seconds: Optional[float] = None) -> bool:
         """
-        推送消息到企业微信机器人
+        Push a message to the WeCom bot
         
-        企业微信 Webhook 消息格式：
-        支持 markdown 类型以及 text 类型, markdown 类型在微信中无法展示，可以使用 text 类型,
-        markdown 类型会解析 markdown 格式,text 类型会直接发送纯文本。
+        WeCom Webhook message format:
+        Supports markdown and text types; markdown cannot be displayed in WeChat, so text can be used instead,
+        markdown type parses Markdown formatting, text type sends plain text directly.
 
-        markdown 类型示例：
+        markdown type example:
         {
             "msgtype": "markdown",
             "markdown": {
-                "content": "## 标题\n\n内容"
+                "content": "## Title\n\nContent"
             }
         }
         
-        text 类型示例：
+        text type example:
         {
             "msgtype": "text",
             "text": {
-                "content": "内容"
+                "content": "Content"
             }
         }
 
-        注意：企业微信 Markdown 限制 4096 字节（非字符）, Text 类型限制 2048 字节，超长内容会自动分批发送
-        可通过环境变量 WECHAT_MAX_BYTES 调整限制值
+        Note: WeCom limits Markdown to 4096 bytes (not characters) and Text to 2048 bytes; overly long content is sent in batches automatically
+        The limit can be adjusted via the WECHAT_MAX_BYTES environment variable
         
         Args:
-            content: Markdown 格式的消息内容
+            content: Message content in Markdown format
             
         Returns:
-            是否发送成功
+            Whether the send succeeded
         """
         if not self._wechat_url:
             logger.warning("企业微信 Webhook 未配置，跳过推送")
@@ -79,13 +79,13 @@ class WechatSender:
             logger.warning("企业微信消息内容为空，跳过推送")
             return False
 
-        # 根据消息类型动态限制上限，避免 text 类型超过企业微信 2048 字节限制
+        # Set the limit dynamically by message type so text messages do not exceed WeCom's 2048-byte limit
         if self._wechat_msg_type == 'text':
-            max_bytes = min(self._wechat_max_bytes, 2000)  # 预留一定字节给系统/分页标记
+            max_bytes = min(self._wechat_max_bytes, 2000)  # Reserve some bytes for system/pagination markers
         else:
-            max_bytes = self._wechat_max_bytes  # markdown 默认 4000 字节
+            max_bytes = self._wechat_max_bytes  # markdown defaults to 4000 bytes
 
-        # 检查字节长度，超长则分批发送
+        # Check byte length; send in batches if too long
         content_bytes = len(sanitized_content.encode('utf-8'))
         if content_bytes > max_bytes:
             logger.info(f"消息内容超长({content_bytes}字节/{len(content)}字符)，将分批发送")
@@ -131,7 +131,7 @@ class WechatSender:
             return False
     
     def _send_wechat_message(self, content: str, *, timeout_seconds: Optional[float] = None) -> bool:
-        """发送企业微信消息"""
+        """Send a WeCom message"""
         payload = self._gen_wechat_payload(content)
         
         response = requests.post(
@@ -155,16 +155,16 @@ class WechatSender:
         
     def _send_wechat_chunked(self, content: str, max_bytes: int) -> bool:
         """
-        分批发送长消息到企业微信
+        Send a long message to WeCom in batches
         
-        按股票分析块（以 --- 或 ### 分隔）智能分割，确保每批不超过限制
+        Splits smartly by stock analysis blocks (separated by --- or ###) so each batch stays within the limit
         
         Args:
-            content: 完整消息内容
-            max_bytes: 单条消息最大字节数
+            content: Full message content
+            max_bytes: Maximum bytes per message
             
         Returns:
-            是否全部发送成功
+            Whether all batches were sent successfully
         """
         chunks = chunk_content_by_max_bytes(content, max_bytes, add_page_marker=True)
         total_chunks = len(chunks)
@@ -179,7 +179,7 @@ class WechatSender:
         return success_count == len(chunks)
 
     def _gen_wechat_payload(self, content: str) -> dict:
-        """生成企业微信消息 payload"""
+        """Build the WeCom message payload"""
         sanitized_content = strip_hidden_markdown_metadata(content).strip()
         if self._wechat_msg_type == 'text':
             return {

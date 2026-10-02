@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 
 from src.config import Config
-from src.formatters import chunk_content_by_max_bytes, strip_hidden_markdown_metadata  # <-- 引入项目内置的切片器
+from src.formatters import chunk_content_by_max_bytes, strip_hidden_markdown_metadata  # <-- use the project's built-in chunker
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +19,12 @@ class DingtalkSender:
         self.secret = config.dingtalk_secret
 
     def send_to_dingtalk(self, content: str, title: str = "", timeout_seconds: int = 10) -> bool:
-        """发送 Markdown 消息到钉钉群 (Send DingTalk Markdown message)"""
+        """Send DingTalk Markdown message"""
         if not self.webhook_url:
             return False
         sanitized_content = strip_hidden_markdown_metadata(content).strip()
 
-        # 1. 签名逻辑 (Security Signature)
+        # 1. Security Signature
         if self.secret:
             timestamp = str(round(time.time() * 1000))
             secret_enc = self.secret.encode('utf-8')
@@ -40,11 +40,11 @@ class DingtalkSender:
         else:
             url = self.webhook_url
 
-        # 2. 限制标题长度，防止极端长标题吃掉过多 JSON 字节预算
+        # 2. Limit title length so an extremely long title does not eat too much of the JSON byte budget
         safe_title = (title[:100] + "...") if title and len(title) > 100 else title
 
-        # 3. 切片逻辑 (Chunking for DingTalk's 20,000 byte limit)
-        # 预留 1000 bytes 的安全预算，用于 JSON 结构、标题和分页后缀的额外开销
+        # 3. Chunking for DingTalk's 20,000 byte limit
+        # Reserve a 1000-byte safety budget for JSON structure, title, and page-suffix overhead
         safe_max_bytes = 19000
         chunks = chunk_content_by_max_bytes(sanitized_content, max_bytes=safe_max_bytes)
         all_success = True
@@ -65,7 +65,7 @@ class DingtalkSender:
             }
             headers = {'Content-Type': 'application/json'}
 
-            # 4. 发送请求
+            # 4. Send the request
             try:
                 response = requests.post(url, json=payload, headers=headers, timeout=timeout_seconds)
                 response.raise_for_status()

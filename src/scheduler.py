@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-定时调度模块
+Scheduling module
 ===================================
 
-职责：
-1. 支持每日定时执行股票分析
-2. 支持定时执行大盘复盘
-3. 优雅处理信号，确保可靠退出
+Responsibilities:
+1. Support scheduled daily stock analysis
+2. Support scheduled market review
+3. Handle signals gracefully to ensure a reliable exit
 
-依赖：
-- schedule: 轻量级定时任务库
+Dependencies:
+- schedule: lightweight job scheduling library
 """
 
 import logging
@@ -50,9 +50,9 @@ def normalize_schedule_times(
 
 class GracefulShutdown:
     """
-    优雅退出处理器
+    Graceful shutdown handler
 
-    捕获 SIGTERM/SIGINT 信号，确保任务完成后再退出
+    Catches SIGTERM/SIGINT so the process exits only after the current task completes
     """
 
     def __init__(self, register_signals: bool = True):
@@ -61,12 +61,12 @@ class GracefulShutdown:
         if not register_signals:
             return
 
-        # 注册信号处理器
+        # Register signal handlers
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
 
     def _signal_handler(self, signum, frame):
-        """信号处理函数"""
+        """Signal handler function"""
         with self._lock:
             if not self.shutdown_requested:
                 logger.info(f"收到退出信号 ({signum})，等待当前任务完成...")
@@ -74,19 +74,19 @@ class GracefulShutdown:
 
     @property
     def should_shutdown(self) -> bool:
-        """检查是否应该退出"""
+        """Check whether the scheduler should exit"""
         with self._lock:
             return self.shutdown_requested
 
 
 class Scheduler:
     """
-    定时任务调度器
+    Scheduled task runner
 
-    基于 schedule 库实现，支持：
-    - 每日定时执行
-    - 启动时立即执行
-    - 优雅退出
+    Built on the schedule library; supports:
+    - Daily scheduled execution
+    - Immediate execution on startup
+    - Graceful shutdown
     """
 
     def __init__(
@@ -98,10 +98,10 @@ class Scheduler:
         register_signals: bool = True,
     ):
         """
-        初始化调度器
+        Initialize the scheduler
 
         Args:
-            schedule_time: 每日执行时间，格式 "HH:MM"
+            schedule_time: Daily execution time, format "HH:MM"
         """
         try:
             import schedule
@@ -129,11 +129,11 @@ class Scheduler:
 
     def set_daily_task(self, task: Callable, run_immediately: bool = True):
         """
-        设置每日定时任务
+        Set up the daily scheduled task
 
         Args:
-            task: 要执行的任务函数（无参数）
-            run_immediately: 是否在设置后立即执行一次
+            task: Task function to run (no arguments)
+            run_immediately: Whether to run once immediately after setup
         """
         self._task_callback = task
         if not self._configure_daily_tasks(self.schedule_times):
@@ -281,7 +281,7 @@ class Scheduler:
         self._refresh_daily_schedule_if_needed()
 
     def _safe_run_task(self):
-        """安全执行任务（带异常捕获）"""
+        """Run a task safely (with exception handling)"""
         if self._task_callback is None:
             return
 
@@ -390,9 +390,9 @@ class Scheduler:
 
     def run(self):
         """
-        运行调度器主循环
+        Run the scheduler main loop
 
-        阻塞运行，直到收到退出信号
+        Blocks until an exit signal is received
         """
         with self._lifecycle_lock:
             if self._stop_requested:
@@ -407,16 +407,16 @@ class Scheduler:
             self.schedule.run_pending()
             if not self._dispatch_background_tasks_if_running():
                 break
-            time.sleep(30)  # 每30秒检查一次
+            time.sleep(30)  # Check every 30 seconds
 
-            # 每小时打印一次心跳
+            # Print a heartbeat once per hour
             if datetime.now().minute == 0 and datetime.now().second < 30:
                 logger.info(f"调度器运行中... 下次执行: {self._get_next_run_time()}")
 
         logger.info("调度器已停止")
 
     def _get_next_run_time(self) -> str:
-        """获取下次执行时间"""
+        """Get the next run time"""
         jobs = self.schedule.get_jobs()
         if jobs:
             next_run = min(job.next_run for job in jobs)
@@ -424,7 +424,7 @@ class Scheduler:
         return "未设置"
 
     def stop(self):
-        """停止调度器"""
+        """Stop the scheduler"""
         with self._lifecycle_lock:
             self._stop_requested = True
             self._running = False
@@ -441,17 +441,17 @@ def run_with_schedule(
     schedule_times_provider: Optional[Callable[[], Union[Sequence[str], str]]] = None,
 ):
     """
-    便捷函数：使用定时调度运行任务
+    Convenience function: run a task on a schedule
 
     Args:
-        task: 要执行的任务函数
-        schedule_time: 每日执行时间
-        run_immediately: 是否立即执行一次
-        background_tasks: 可选的后台任务定义列表。每项为一个字典，
-            需包含 `task` 与 `interval_seconds`，可选包含 `name`
-            和 `run_immediately`。`interval_seconds` 单位为秒。
-        schedule_time_provider: 可选的时间提供器；调度器每轮检查前会读取，
-            当返回值变化时自动重建 daily job。
+        task: Task function to run
+        schedule_time: Daily execution time
+        run_immediately: Whether to run once immediately
+        background_tasks: Optional list of background task definitions. Each item is a dict
+            that must contain `task` and `interval_seconds`, and may contain `name`
+            and `run_immediately`. `interval_seconds` is in seconds.
+        schedule_time_provider: Optional time provider; the scheduler reads it before each check
+            and rebuilds the daily job automatically when the returned value changes.
     """
     scheduler_kwargs: Dict[str, Any] = {
         "schedule_time": schedule_time,
@@ -474,7 +474,7 @@ def run_with_schedule(
 
 
 if __name__ == "__main__":
-    # 测试定时调度
+    # Test scheduled execution
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s',

@@ -1,5 +1,5 @@
-# PR 手动辅助审查 - 元数据检查 + AI 语义审查
-# 暂停 PR 自动触发；维护者可按 PR 编号手动运行，且不会检出或执行 fork PR 代码。
+# Manual PR review assist - metadata checks + AI semantic review
+# Automatic PR triggers are paused; maintainers can run it manually by PR number, and fork PR code is never checked out or executed.
 
 name: PR Review
 
@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 jobs:
-  # ==================== 安全检查（仅通过 API 读取 PR 元数据）====================
+  # ==================== Security check (reads PR metadata via API only)====================
   security-check:
     name: 🔒 安全检查
     runs-on: ubuntu-latest
@@ -86,7 +86,7 @@ jobs:
               await core.summary.addRaw('✅ 未检测到敏感文件修改').write();
             }
 
-  # ==================== AI 代码审查（只运行 base 分支脚本）====================
+  # ==================== AI code review (runs base-branch scripts only)====================
   ai-review:
     name: 🤖 AI 代码审查
     runs-on: ubuntu-latest
@@ -142,7 +142,7 @@ jobs:
           path: ai_review_result.txt
           if-no-files-found: ignore
 
-  # ==================== PR 标签自动分类（仅 GitHub API）====================
+  # ==================== Automatic PR labelling (GitHub API only)====================
   labeler:
     name: 🏷️ 自动标签
     runs-on: ubuntu-latest
@@ -204,7 +204,7 @@ jobs:
               }
             }
 
-  # ==================== 自动评论检查结果（仅 GitHub API）====================
+  # ==================== Auto-comment check results (GitHub API only)====================
   comment:
     name: 💬 审查报告
     runs-on: ubuntu-latest

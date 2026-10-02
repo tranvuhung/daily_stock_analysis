@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-Discord 平台适配器
+Discord platform adapter
 ===================================
 
-负责：
-1. 验证 Discord Webhook 请求
-2. 解析 Discord 消息为统一格式
-3. 将响应转换为 Discord 格式
+Responsibilities:
+1. Verify Discord webhook requests
+2. Parse Discord messages into the unified format
+3. Convert responses into Discord format
 """
 
 import logging
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 class DiscordPlatform(BotPlatform):
-    """Discord 平台适配器"""
+    """Discord platform adapter"""
 
     def __init__(self):
         from src.config import get_config
@@ -39,22 +39,22 @@ class DiscordPlatform(BotPlatform):
     
     @property
     def platform_name(self) -> str:
-        """平台标识名称"""
+        """Platform identifier name"""
         return "discord"
     
     def verify_request(self, headers: Dict[str, str], body: bytes) -> bool:
-        """验证 Discord Webhook 请求签名
+        """Verify the Discord webhook request signature
         
-        Discord Webhook 签名验证：
-        1. 从请求头获取 X-Signature-Ed25519 和 X-Signature-Timestamp
-        2. 使用公钥验证签名
+        Discord webhook signature verification:
+        1. Get X-Signature-Ed25519 and X-Signature-Timestamp from the request headers
+        2. Verify the signature with the public key
         
         Args:
-            headers: HTTP 请求头
-            body: 请求体原始字节
+            headers: HTTP request headers
+            body: raw request body bytes
             
         Returns:
-            签名是否有效
+            Whether the signature is valid
         """
         if not self._interactions_public_key:
             logger.warning("[Discord] 未配置 interactions public key，拒绝请求")
@@ -68,7 +68,7 @@ class DiscordPlatform(BotPlatform):
             logger.warning("[Discord] 缺少签名头，拒绝请求")
             return False
 
-        # 校验 timestamp 格式与时效性，防止重放攻击
+        # Validate timestamp format and freshness to prevent replay attacks
         try:
             ts_int = int(timestamp)
         except (TypeError, ValueError):
@@ -81,7 +81,7 @@ class DiscordPlatform(BotPlatform):
             logger.warning("[Discord] 获取当前时间失败: %s，拒绝请求", exc)
             return False
 
-        # 允许的时间窗口：±5 分钟
+        # Allowed time window: ±5 minutes
         if abs(now_ts - ts_int) > 300:
             logger.warning(
                 "[Discord] 请求 timestamp 超出允许窗口，可能为重放攻击：timestamp=%s, now=%s",
@@ -117,7 +117,7 @@ class DiscordPlatform(BotPlatform):
         body: bytes,
         data: Dict[str, Any],
     ) -> Tuple[Optional[BotMessage], Optional[WebhookResponse]]:
-        """Discord 需要先验签，再处理 ping/challenge。"""
+        """Discord requires signature verification first, then ping/challenge handling."""
         if not self.verify_request(headers, body):
             return None, WebhookResponse.error("Invalid Discord signature", 401)
 
@@ -136,13 +136,13 @@ class DiscordPlatform(BotPlatform):
         return message, None
     
     def parse_message(self, data: Dict[str, Any]) -> Optional[BotMessage]:
-        """解析 Discord 消息为统一格式
+        """Parse a Discord message into the unified format
         
         Args:
-            data: 解析后的 JSON 数据
+            data: parsed JSON data
             
         Returns:
-            BotMessage 对象，或 None（不需要处理）
+            BotMessage object, or None (no handling needed)
         """
         interaction_type = data.get("type")
         if interaction_type != 2:
@@ -189,17 +189,17 @@ class DiscordPlatform(BotPlatform):
         )
     
     def format_response(self, response: Any, message: BotMessage) -> WebhookResponse:
-        """将统一响应转换为 Discord 格式
+        """Convert the unified response into Discord format
         
-        对于 Interaction（type=2）请求，返回 Discord Interaction Response
-        callback 格式（type=4 CHANNEL_MESSAGE_WITH_SOURCE + nested data）。
+        For Interaction (type=2) requests, return the Discord Interaction Response
+        callback format (type=4 CHANNEL_MESSAGE_WITH_SOURCE + nested data).
         
         Args:
-            response: 统一响应对象
-            message: 原始消息对象
+            response: unified response object
+            message: original message object
             
         Returns:
-            WebhookResponse 对象
+            WebhookResponse object
         """
         content = response.text if hasattr(response, "text") else str(response)
 
@@ -212,7 +212,7 @@ class DiscordPlatform(BotPlatform):
             },
         }
 
-        # Interaction（slash-command）需要 Interaction Response 回调格式
+        # Interactions (slash commands) require the Interaction Response callback format
         if message.raw_data.get("type") == 2:
             discord_response = {
                 "type": 4,  # CHANNEL_MESSAGE_WITH_SOURCE
@@ -300,23 +300,23 @@ class DiscordPlatform(BotPlatform):
         return success
 
     def handle_challenge(self, data: Dict[str, Any]) -> Optional[WebhookResponse]:
-        """处理 Discord 验证请求
+        """Handle a Discord verification request
         
-        Discord 在配置 Webhook 时会发送验证请求
+        Discord sends a verification request when the webhook is configured
         
         Args:
-            data: 请求数据
+            data: request data
             
         Returns:
-            验证响应，或 None（不是验证请求）
+            Verification response, or None (not a verification request)
         """
-        # Discord Webhook 验证请求类型是 1
+        # Discord webhook verification requests have type 1
         if data.get("type") == 1:
             return WebhookResponse.success({
                 "type": 1
             })
         
-        # Discord 命令交互验证
+        # Discord command interaction verification
         if "challenge" in data:
             return WebhookResponse.success({
                 "challenge": data["challenge"]

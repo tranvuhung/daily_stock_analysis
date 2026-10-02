@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-股票智能分析系统 - 大盘复盘模块（支持 A 股 / 港股 / 美股 / 日本 / 韩国）
+Stock analysis system - market review module (A-shares / HK stocks / US stocks / Japan / Korea)
 ===================================
 
-职责：
-1. 根据 MARKET_REVIEW_REGION 配置选择市场区域（cn / hk / us / jp / kr / both）
-2. 执行大盘复盘分析并生成复盘报告
-3. 保存和发送复盘报告
+Responsibilities:
+1. Select the market region from MARKET_REVIEW_REGION (cn / hk / us / jp / kr / both)
+2. Run the market review analysis and generate the review report
+3. Save and send the review report
 """
 
 import logging
@@ -186,9 +186,9 @@ def _market_review_region_metadata(region: Any) -> str:
 def _resolve_market_review_regions(raw_region: Optional[str]) -> list[str]:
     """Normalize MARKET_REVIEW_REGION into an ordered region list.
 
-    当 ``SUPPORTED_MARKETS`` 下没有任何支持复盘的市场时返回空列表，调用方据此
-    跳过复盘。此前这里无条件回退到 ``cn``，在只启用越南（当时尚无复盘 profile）的部署里会去调用已经
-    停用的 A 股数据源，生成一份没有数据支撑的复盘报告。
+    Returns an empty list when no market under ``SUPPORTED_MARKETS`` supports review, and callers
+    skip the review accordingly. Previously this unconditionally fell back to ``cn``, which, in a Vietnam-only deployment (with no review profile at the time), called the already
+    disabled A-share data sources and produced a review report with no data behind it.
     """
 
     normalized = normalize_market_review_region_lenient(raw_region)
@@ -216,23 +216,23 @@ def run_market_review(
     trigger_source: str = "cli",
 ) -> Optional[str] | Optional[MarketReviewRunResult]:
     """
-    执行大盘复盘分析
+    Run the market review analysis
 
     Args:
-        notifier: 通知服务
-        analyzer: AI分析器（可选）
-        search_service: 搜索服务（可选）
-        config: 本次复盘使用的配置（可选，未传时读取全局配置）
-        send_notification: 是否发送通知
-        merge_notification: 是否合并推送（跳过本次推送，由 main 层合并个股+大盘后统一发送，Issue #190）
-        override_region: 覆盖 config 的 market_review_region（Issue #373 交易日过滤后有效子集）
-        query_id: 历史记录关联 ID；API 后台任务会传入 task_id，CLI/Bot 为空时自动生成
-        save_report_file: 是否保存 Markdown 文件；上下文生成路径可关闭以避免多区域临时复盘互相覆盖
-        persist_history: 是否写入 analysis_history；预热路径可关闭以避免覆盖用户可见的同日大盘复盘记录
-        trigger_source: 触发来源，用于日志排障（cli/schedule/api/bot/service 等）
+        notifier: notification service
+        analyzer: AI analyzer (optional)
+        search_service: search service (optional)
+        config: configuration for this review (optional; the global config is used when omitted)
+        send_notification: whether to send notifications
+        merge_notification: whether to merge the push (skip this push; the main layer merges stocks + market and sends once, Issue #190)
+        override_region: overrides config's market_review_region (the valid subset after Issue #373 trading-day filtering)
+        query_id: history record correlation ID; API background tasks pass task_id, and it is generated automatically when empty for CLI/Bot
+        save_report_file: whether to save the Markdown file; context-generation paths can disable it so temporary multi-region reviews do not overwrite each other
+        persist_history: whether to write analysis_history; warm-up paths can disable it to avoid overwriting the user-visible same-day market review record
+        trigger_source: trigger source, used for log troubleshooting (cli/schedule/api/bot/service, etc.)
 
     Returns:
-        复盘报告文本
+        Review report text
     """
     runtime_config = config or get_config()
     history_query_id = query_id or f"market_review_{uuid.uuid4().hex}"
@@ -244,8 +244,8 @@ def run_market_review(
     )
     run_markets = _resolve_market_review_regions(raw_region)
     if not run_markets:
-        # 当前 SUPPORTED_MARKETS 下没有任何支持大盘复盘的市场（例如只启用台湾，
-        # 其复盘 profile/prompt 尚未实现）。跳过而不是回退到 A 股。
+        # No market under the current SUPPORTED_MARKETS supports market review (e.g. only Taiwan is enabled,
+        # whose review profile/prompt is not implemented yet). Skip instead of falling back to A-shares.
         logger.info(
             "[MarketReview] component=market_review action=skip "
             "reason=no_enabled_review_market trigger_source=%s query_id=%s",
@@ -263,7 +263,7 @@ def run_market_review(
 
     try:
         if len(run_markets) > 1:
-            # 多市场顺序执行，合并报告
+            # Run multiple markets sequentially and merge the reports
             parts = []
             market_light_snapshots: Dict[str, Dict[str, Any]] = {}
             market_review_payloads: Dict[str, Dict[str, Any]] = {}
@@ -355,7 +355,7 @@ def run_market_review(
                 review_report=review_report,
             )
             if save_report_file:
-                # 保存报告到文件
+                # Save the report to a file
                 date_str = datetime.now().strftime('%Y%m%d')
                 report_filename = f"market_review_{date_str}.md"
                 filepath = notifier.save_report_to_file(
@@ -382,7 +382,7 @@ def run_market_review(
                     market_review_payload=market_review_payload,
                 )
             
-            # 推送通知（合并模式下跳过，由 main 层统一发送）
+            # Push notifications (skipped in merge mode; the main layer sends them together)
             if merge_notification and send_notification:
                 logger.info(
                     "[MarketReview] component=market_review action=skip_standalone_notification "
@@ -399,7 +399,7 @@ def run_market_review(
                     attempts=0,
                 )
             elif send_notification and notifier.is_available():
-                # 添加标题
+                # Add the title
                 report_content = _render_market_review_payload_markdown(
                     market_review_payload,
                     wrapper_title=review_text["push_title"],

@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
 """Shared normalization rules for market-review region values.
 
-区域列表不再在本模块硬编码，而是派生自 :mod:`src.core.markets`
-注册表，并在**调用时**按 ``SUPPORTED_MARKETS`` 过滤。这样停用一个市场
-之后，复盘入口不会再接受它，也不会把它默认回 ``cn``。
+The region list is no longer hardcoded in this module; it is derived from the :mod:`src.core.markets`
+registry and filtered by ``SUPPORTED_MARKETS`` **at call time**. That way, once a market is
+disabled, the review entry points no longer accept it nor default it back to ``cn``.
 
-模块级常量保留下来（仍是全量已知区域），因为 API schema 描述、UI 文案和
-既有测试都直接导入它们；它们表示"系统知道哪些复盘区域"，而
-``enabled_market_review_regions()`` 表示"当前启用哪些"。
+The module-level constants are kept (still the full set of known regions) because API schema descriptions, UI text and
+existing tests import them directly; they mean "which review regions the system knows about", while
+``enabled_market_review_regions()`` means "which ones are currently enabled".
 """
 
 from typing import Optional, Tuple
 
 from src.core.markets import ALL_MARKETS, market_review_regions
 
-# 全量已知复盘区域（不受 SUPPORTED_MARKETS 影响），按历史顺序 cn,hk,us,jp,kr,vn
+# All known review regions (unaffected by SUPPORTED_MARKETS), in historical order cn,hk,us,jp,kr,vn
 MARKET_REVIEW_REGION_ORDER: Tuple[str, ...] = tuple(
     spec.code
     for spec in sorted(
@@ -28,18 +28,18 @@ MARKET_REVIEW_REGION_VALID_INPUTS = (*MARKET_REVIEW_REGION_ORDER, "both")
 
 
 def enabled_market_review_regions() -> Tuple[str, ...]:
-    """当前启用且支持复盘的区域，按历史顺序排列。
+    """Regions currently enabled and supporting market review, in historical order.
 
-    可能为空元组：例如只启用台湾时，台湾还没有复盘 profile/prompt，
-    这时调用方应当跳过复盘，而不是回退到 ``cn``（那会用不存在的 A 股
-    数据源去跑复盘）。
+    May be an empty tuple: e.g. when only Taiwan is enabled, Taiwan has no review profile/prompt yet,
+    so callers should skip the review rather than fall back to ``cn`` (which would run the review
+    against an A-share data source that does not exist).
     """
 
     return market_review_regions()
 
 
 def market_review_supported() -> bool:
-    """当前配置下是否还有任何可执行的复盘区域。"""
+    """Whether any runnable review region remains under the current configuration."""
 
     return bool(enabled_market_review_regions())
 
@@ -55,9 +55,9 @@ def _valid_hint() -> str:
 def normalize_market_review_region_lenient(value: Optional[str]) -> Optional[str]:
     """Normalize persistent config input while preserving legacy filtering.
 
-    ``None`` 和空串沿用历史上的默认行为，但默认值现在是"第一个启用的复盘
-    区域"而不是写死的 ``cn``。逗号列表只保留启用区域，``both`` 展开为全部
-    启用区域。没有任何合法 token 时返回 ``None``。
+    ``None`` and empty strings keep the historical default behavior, but the default is now "the first enabled review
+    region" rather than a hardcoded ``cn``. Comma lists keep only enabled regions; ``both`` expands to all
+    enabled regions. Returns ``None`` when there is no valid token.
     """
 
     enabled = enabled_market_review_regions()

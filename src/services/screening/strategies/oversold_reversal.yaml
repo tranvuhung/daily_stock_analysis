@@ -1,6 +1,6 @@
 # Derived from AlphaSift revision 9f522747caafd3c0b1ddb7e14d5cf44c8580b6cf.
 # Licensed under Apache-2.0 and modified for daily_stock_analysis.
-# 超跌反转策略
+# Oversold reversal strategy
 name: oversold_reversal
 display_name: 超跌反转
 description: 跌幅可控、流动性仍在、具备修复观察价值的反转候选

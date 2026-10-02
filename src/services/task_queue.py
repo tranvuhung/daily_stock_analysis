@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-A股自选股智能分析系统 - 异步任务队列
+A-share watchlist intelligent analysis system - async task queue
 ===================================
 
-职责：
-1. 管理异步分析任务的生命周期
-2. 防止相同股票代码重复提交
-3. 提供 SSE 事件广播机制
-4. 任务完成后持久化到数据库
+Responsibilities:
+1. Manage the lifecycle of async analysis tasks
+2. Prevent duplicate submissions of the same stock code
+3. Provide SSE event broadcasting
+4. Persist tasks to the database on completion
 """
 
 from __future__ import annotations
@@ -130,12 +130,12 @@ class TaskInfo:
     trace_id: Optional[str] = None
     region: Optional[str] = None
     flow_events: List[Dict[str, Any]] = field(default_factory=list)
-    # 固化去重键：submit 时按 asset_type 分支算好，完成/失败移除时直接使用，
-    # 避免 key 生成/移除不一致导致 _analyzing_stocks 残留。
+    # Freeze the dedupe key: computed per asset_type branch at submit time and reused on completion/failure removal,
+    # so mismatched key generation/removal cannot leave leftovers in _analyzing_stocks.
     dedupe_key: Optional[str] = None
     analysis_target: Optional[Any] = None
-    # parser 来源的可选资产类型（``index``/``stock``/``None``）；SSE 与任务列表
-    # 从这里透传，不得在消费端重新猜测。
+    # Optional asset type from the parser (``index``/``stock``/``None``); SSE and the task list
+    # pass it through from here and must not re-guess it on the consumer side.
     asset_type: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
@@ -197,9 +197,9 @@ class TaskInfo:
 
 class DuplicateTaskError(Exception):
     """
-    重复提交异常
-    
-    当股票已在分析中时抛出此异常
+    Duplicate submission error
+
+    Raised when the stock is already being analyzed
     """
     def __init__(self, stock_code: str, existing_task_id: str):
         self.stock_code = stock_code
@@ -209,15 +209,15 @@ class DuplicateTaskError(Exception):
 
 class AnalysisTaskQueue:
     """
-    异步分析任务队列
-    
-    单例模式，全局唯一实例
-    
-    特性：
-    1. 防止相同股票代码重复提交
-    2. 线程池执行分析任务
-    3. SSE 事件广播机制
-    4. 任务完成后自动持久化
+    Async analysis task queue
+
+    Singleton, one global instance
+
+    Features:
+    1. Prevents duplicate submissions of the same stock code
+    2. Runs analysis tasks in a thread pool
+    3. SSE event broadcasting
+    4. Automatic persistence on task completion
     """
     
     _instance: Optional['AnalysisTaskQueue'] = None
@@ -231,29 +231,29 @@ class AnalysisTaskQueue:
         return cls._instance
     
     def __init__(self, max_workers: int = 3):
-        # 防止重复初始化
+        # Prevent re-initialization
         if hasattr(self, '_initialized') and self._initialized:
             return
         
         self._max_workers = max_workers
         self._executor: Optional[ThreadPoolExecutor] = None
         
-        # 核心数据结构
+        # Core data structures
         self._tasks: Dict[str, TaskInfo] = {}           # task_id -> TaskInfo
         self._analyzing_stocks: Dict[str, str] = {}     # dedupe_key -> task_id
         self._futures: Dict[str, Future] = {}           # task_id -> Future
         
-        # SSE 订阅者列表（asyncio.Queue 实例）
+        # SSE subscriber list (asyncio.Queue instances)
         self._subscribers: List['AsyncQueue'] = []
         self._subscribers_lock = threading.Lock()
         
-        # 主事件循环引用（用于跨线程广播）
+        # Main event loop reference (for cross-thread broadcasting)
         self._main_loop: Optional[asyncio.AbstractEventLoop] = None
         
-        # 线程安全锁
+        # Thread-safety lock
         self._data_lock = threading.RLock()
         
-        # 任务历史保留数量（内存中）
+        # Number of tasks kept in history (in memory)
         self._max_history = 100
         self._max_flow_events_per_task = 200
         
@@ -262,7 +262,7 @@ class AnalysisTaskQueue:
     
     @property
     def executor(self) -> ThreadPoolExecutor:
-        """懒加载线程池"""
+        """Lazily create the thread pool"""
         if self._executor is None:
             self._executor = ThreadPoolExecutor(
                 max_workers=self._max_workers,
@@ -332,17 +332,17 @@ class AnalysisTaskQueue:
             logger.info("[TaskQueue] 最大并发已更新: %s -> %s", previous, target)
         return "applied"
     
-    # ========== 任务提交与查询 ==========
+    # ========== Task submission & query ==========
     
     def is_analyzing(self, stock_code: str) -> bool:
         """
-        检查股票是否正在分析中
-        
+        Check whether a stock is currently being analyzed
+
         Args:
-            stock_code: 股票代码
-            
+            stock_code: Stock code
+
         Returns:
-            True 表示正在分析中
+            True if it is being analyzed
         """
         dedupe_key = _dedupe_stock_code_key(stock_code)
         with self._data_lock:
@@ -350,13 +350,13 @@ class AnalysisTaskQueue:
     
     def get_analyzing_task_id(self, stock_code: str) -> Optional[str]:
         """
-        获取正在分析该股票的任务 ID
-        
+        Get the ID of the task currently analyzing this stock
+
         Args:
-            stock_code: 股票代码
-            
+            stock_code: Stock code
+
         Returns:
-            任务 ID，如果没有则返回 None
+            Task ID, or None if there is none
         """
         dedupe_key = _dedupe_stock_code_key(stock_code)
         with self._data_lock:
@@ -599,7 +599,7 @@ class AnalysisTaskQueue:
         return task_info.copy()
 
     def _rollback_submitted_tasks_locked(self, task_ids: List[str]) -> None:
-        """回滚当前批次已创建但尚未稳定返回给调用方的任务。"""
+        """Roll back tasks created in the current batch that have not yet been reliably returned to the caller."""
         for task_id in task_ids:
             future = self._futures.pop(task_id, None)
             if future is not None:
@@ -607,8 +607,8 @@ class AnalysisTaskQueue:
 
             task = self._tasks.pop(task_id, None)
             if task:
-                # 使用 submit 时固化的 dedupe_key（若存在），避免按 code 重算
-                # 与提交路径不一致导致 _analyzing_stocks 残留。
+                # Use the dedupe_key frozen at submit time (if present) instead of recomputing from code,
+                # which could diverge from the submit path and leave leftovers in _analyzing_stocks.
                 dedupe_key = task.dedupe_key or _dedupe_task_key(
                     task.stock_code,
                     getattr(task, "analysis_target", None),
@@ -618,13 +618,13 @@ class AnalysisTaskQueue:
     
     def get_task(self, task_id: str) -> Optional[TaskInfo]:
         """
-        获取任务信息
-        
+        Get task info
+
         Args:
-            task_id: 任务 ID
-            
+            task_id: Task ID
+
         Returns:
-            TaskInfo 或 None
+            TaskInfo or None
         """
         with self._data_lock:
             task = self._tasks.get(task_id)
@@ -670,10 +670,10 @@ class AnalysisTaskQueue:
     
     def list_pending_tasks(self) -> List[TaskInfo]:
         """
-        获取所有进行中的任务（pending + processing）
-        
+        Get all in-progress tasks (pending + processing)
+
         Returns:
-            任务列表（副本）
+            Task list (copy)
         """
         with self._data_lock:
             return [
@@ -683,13 +683,13 @@ class AnalysisTaskQueue:
     
     def list_all_tasks(self, limit: int = 50) -> List[TaskInfo]:
         """
-        获取所有任务（按创建时间倒序）
-        
+        Get all tasks (newest created first)
+
         Args:
-            limit: 返回数量限制
-            
+            limit: Maximum number to return
+
         Returns:
-            任务列表（副本）
+            Task list (copy)
         """
         with self._data_lock:
             tasks = sorted(
@@ -701,10 +701,10 @@ class AnalysisTaskQueue:
     
     def get_task_stats(self) -> Dict[str, int]:
         """
-        获取任务统计信息
-        
+        Get task statistics
+
         Returns:
-            统计信息字典
+            Statistics dict
         """
         with self._data_lock:
             stats = {
@@ -754,7 +754,7 @@ class AnalysisTaskQueue:
         self._broadcast_event(event_type, task_snapshot.to_dict())
         return task_snapshot
     
-    # ========== 任务执行 ==========
+    # ========== Task execution ==========
     
     def _execute_task(
         self,
@@ -768,19 +768,19 @@ class AnalysisTaskQueue:
         analysis_target: Optional[Any] = None,
     ) -> Optional[Dict[str, Any]]:
         """
-        执行分析任务（在线程池中运行）
-        
+        Run an analysis task (in the thread pool)
+
         Args:
-            task_id: 任务 ID
-            stock_code: 股票代码
-            report_type: 报告类型
-            force_refresh: 是否强制刷新
-            analysis_target: 可选的结构化分析目标（指数目标透传到 pipeline）
-            
+            task_id: Task ID
+            stock_code: Stock code
+            report_type: Report type
+            force_refresh: Whether to force a refresh
+            analysis_target: Optional structured analysis target (index targets are passed through to the pipeline)
+
         Returns:
-            分析结果字典
+            Analysis result dict
         """
-        # 更新状态为处理中
+        # Set status to processing
         with self._data_lock:
             task = self._tasks.get(task_id)
             if not task:
@@ -797,10 +797,10 @@ class AnalysisTaskQueue:
         self._broadcast_event("task_started", task.to_dict())
         
         try:
-            # 导入分析服务（延迟导入避免循环依赖）
+            # Import the analysis service (lazy import to avoid circular dependencies)
             from src.services.analysis_service import AnalysisService
             
-            # 执行分析
+            # Run analysis
             service = AnalysisService()
 
             def _on_progress(progress: int, message: str) -> None:
@@ -835,7 +835,7 @@ class AnalysisTaskQueue:
             diag_token = None
             
             if result:
-                # 更新任务状态为完成
+                # Set task status to completed
                 with self._data_lock:
                     task = self._tasks.get(task_id)
                     if task:
@@ -846,7 +846,7 @@ class AnalysisTaskQueue:
                         task.message = "Analysis completed"
                         task.stock_name = result.get("stock_name", task.stock_name)
                         
-                        # 从分析中集合移除（使用 submit 时固化的 key，避免不一致残留）
+                        # Remove from the in-analysis set (using the key frozen at submit time to avoid inconsistent leftovers)
                         dedupe_key = task.dedupe_key or _dedupe_task_key(
                             task.stock_code,
                             getattr(task, "analysis_target", None),
@@ -857,7 +857,7 @@ class AnalysisTaskQueue:
                 self._broadcast_event("task_completed", task.to_dict())
                 logger.info(f"[TaskQueue] 任务完成: {task_id} ({stock_code})")
                 
-                # 清理过期任务
+                # Clean up expired tasks
                 self._cleanup_old_tasks()
                 
                 return result
@@ -880,10 +880,10 @@ class AnalysisTaskQueue:
                 if task:
                     task.status = TaskStatus.FAILED
                     task.completed_at = datetime.now()
-                    task.error = error_msg[:200]  # 限制错误信息长度
+                    task.error = error_msg[:200]  # Truncate the error message
                     task.message = f"Analysis failed: {error_msg[:50]}"
                     
-                    # 从分析中集合移除（使用 submit 时固化的 key，避免不一致残留）
+                    # Remove from the in-analysis set (using the key frozen at submit time to avoid inconsistent leftovers)
                     dedupe_key = task.dedupe_key or _dedupe_task_key(
                         task.stock_code,
                         getattr(task, "analysis_target", None),
@@ -893,7 +893,7 @@ class AnalysisTaskQueue:
             
             self._broadcast_event("task_failed", task.to_dict())
             
-            # 清理过期任务
+            # Clean up expired tasks
             self._cleanup_old_tasks()
             
             return None
@@ -904,14 +904,14 @@ class AnalysisTaskQueue:
         run_task: Callable[[], Optional[Dict[str, Any]]],
     ) -> Optional[Dict[str, Any]]:
         """
-        执行通用后台任务（支持自定义运行逻辑）
+        Run a generic background task (supports custom run logic)
 
         Args:
-            task_id: 任务 ID
-            run_task: 任务执行函数
+            task_id: Task ID
+            run_task: Task execution function
 
         Returns:
-            任务执行结果字典（可选）
+            Task execution result dict (optional)
         """
         with self._data_lock:
             task = self._tasks.get(task_id)
@@ -980,18 +980,18 @@ class AnalysisTaskQueue:
     
     def _cleanup_old_tasks(self) -> int:
         """
-        清理过期的已完成任务
-        
-        保留最近 _max_history 个任务
-        
+        Clean up expired completed tasks
+
+        Keeps the most recent _max_history tasks
+
         Returns:
-            清理的任务数量
+            Number of tasks cleaned up
         """
         with self._data_lock:
             if len(self._tasks) <= self._max_history:
                 return 0
             
-            # 按时间排序，删除旧的已完成任务
+            # Sort by time and delete old completed tasks
             completed_tasks = sorted(
                 [t for t in self._tasks.values()
                  if t.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED)],
@@ -1012,22 +1012,22 @@ class AnalysisTaskQueue:
             
             return removed
     
-    # ========== SSE 事件广播 ==========
+    # ========== SSE event broadcasting ==========
     
     def subscribe(self, queue: 'AsyncQueue') -> None:
         """
-        订阅任务事件
-        
+        Subscribe to task events
+
         Args:
-            queue: asyncio.Queue 实例，用于接收事件
+            queue: asyncio.Queue instance that receives events
         """
         with self._subscribers_lock:
             self._subscribers.append(queue)
-            # 捕获当前事件循环（应在主线程的 async 上下文中调用）
+            # Capture the current event loop (should be called from an async context on the main thread)
             try:
                 self._main_loop = asyncio.get_running_loop()
             except RuntimeError:
-                # 如果不在 async 上下文中，尝试获取事件循环
+                # If not in an async context, try to get the event loop
                 try:
                     self._main_loop = asyncio.get_event_loop()
                 except RuntimeError:
@@ -1036,10 +1036,10 @@ class AnalysisTaskQueue:
     
     def unsubscribe(self, queue: 'AsyncQueue') -> None:
         """
-        取消订阅任务事件
-        
+        Unsubscribe from task events
+
         Args:
-            queue: 要取消订阅的 asyncio.Queue 实例
+            queue: The asyncio.Queue instance to unsubscribe
         """
         with self._subscribers_lock:
             if queue in self._subscribers:
@@ -1048,13 +1048,13 @@ class AnalysisTaskQueue:
     
     def _broadcast_event(self, event_type: str, data: Dict[str, Any]) -> None:
         """
-        广播事件到所有订阅者
-        
-        使用 call_soon_threadsafe 确保跨线程安全
-        
+        Broadcast an event to all subscribers
+
+        Uses call_soon_threadsafe for cross-thread safety
+
         Args:
-            event_type: 事件类型
-            data: 事件数据
+            event_type: Event type
+            data: Event data
         """
         event = {"type": event_type, "data": data}
         
@@ -1071,33 +1071,33 @@ class AnalysisTaskQueue:
         
         for queue in subscribers:
             try:
-                # 使用 call_soon_threadsafe 将事件放入 asyncio 队列
-                # 这是从工作线程向主事件循环发送消息的安全方式
+                # Use call_soon_threadsafe to put the event into the asyncio queue
+                # This is the safe way to send messages from a worker thread to the main event loop
                 loop.call_soon_threadsafe(queue.put_nowait, event)
             except RuntimeError as e:
-                # 事件循环已关闭
+                # Event loop is closed
                 logger.debug(f"[TaskQueue] 广播事件跳过（循环已关闭）: {e}")
             except Exception as e:
                 logger.warning(f"[TaskQueue] 广播事件失败: {e}")
     
-    # ========== 清理方法 ==========
+    # ========== Cleanup ==========
     
     def shutdown(self) -> None:
-        """关闭任务队列"""
+        """Shut down the task queue"""
         if self._executor:
             self._executor.shutdown(wait=True)
             self._executor = None
             logger.info("[TaskQueue] 线程池已关闭")
 
 
-# ========== 便捷函数 ==========
+# ========== Convenience functions ==========
 
 def get_task_queue() -> AnalysisTaskQueue:
     """
-    获取任务队列单例
-    
+    Get the task queue singleton
+
     Returns:
-        AnalysisTaskQueue 实例
+        AnalysisTaskQueue instance
     """
     queue = AnalysisTaskQueue()
     try:

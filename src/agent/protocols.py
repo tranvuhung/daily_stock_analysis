@@ -57,7 +57,7 @@ def normalize_strategy_signal(signal: Any, default: str = "hold") -> tuple[str, 
     """Normalize strategy signal labels while preserving invalid input state.
 
     Single normalization entrypoint for the entire multi-strategy pipeline. See
-    docs/multi-strategy-contract.md §"Canonical Signal 与 Valid 判定".
+    docs/multi-strategy-contract.md §"Canonical Signal 与 Valid 判定" (Canonical Signal and Valid check).
 
     Returns (canonical, invalid, original):
     - canonical: canonical lowercase label; falls back to `default` when invalid

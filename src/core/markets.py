@@ -1,26 +1,26 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-市场注册表 / Market registry
+Market registry
 ===================================
 
-本模块是"系统支持哪些市场"的唯一真源。在此之前，市场列表在仓库中被独立
-重复声明了至少 8 处（market_review_region、trading_calendar、
-data_capability_service、config_registry 等），彼此并不同步，
-新增或停用一个市场需要改动分散的几十处分支。
+This module is the single source of truth for "which markets the system supports". Before it, the market list
+was declared independently in at least 8 places across the repo (market_review_region, trading_calendar,
+data_capability_service, config_registry, etc.), which drifted out of sync,
+and adding or disabling a market meant touching dozens of scattered branches.
 
-职责：
-1. 声明所有已知市场及其时区、货币、交易日历代码
-2. 通过 ``SUPPORTED_MARKETS`` 环境变量控制哪些市场处于启用状态
-3. 为上述调用方提供派生列表，避免各自再硬编码
+Responsibilities:
+1. Declare every known market with its timezone, currency and trading-calendar code
+2. Control which markets are enabled via the ``SUPPORTED_MARKETS`` environment variable
+3. Provide derived lists to the callers above so they no longer hardcode their own
 
-设计约束：
-- 本模块**不导入** ``src.config``。``src.config`` 通过
-  ``src.utils.market_review_region`` 间接依赖本模块，直接反向导入会形成
-  循环。因此这里直接读取环境变量，与各 fetcher 读取 ``*_PRIORITY``
-  的既有做法保持一致。
-- 停用一个市场只是把它移出 allowlist，不删除它的 ``MarketSpec``；
-  这样回滚只需要改一个环境变量。
+Design constraints:
+- This module does **not import** ``src.config``. ``src.config`` depends on this module
+  indirectly through ``src.utils.market_review_region``, so a direct reverse import would create
+  a cycle. Hence the environment variable is read directly here, consistent with how the fetchers
+  already read ``*_PRIORITY``.
+- Disabling a market only removes it from the allowlist; its ``MarketSpec`` is not deleted,
+  so rolling back only requires changing one environment variable.
 """
 
 from __future__ import annotations
@@ -39,24 +39,24 @@ DEFAULT_SUPPORTED_MARKETS = "vn"
 
 @dataclass(frozen=True)
 class MarketSpec:
-    """一个市场的静态元数据。
+    """Static metadata for one market.
 
     Attributes:
-        code: 市场代码，小写，全仓库统一使用（``vn`` / ``cn`` / ``us`` …）
-        label_vi: 越南语显示名
-        label_en: 英语显示名
-        timezone: IANA 时区，用于按市场取"今天"
-        currency: 报价币种
-        xcals_code: exchange-calendars 的交易所代码；``None`` 表示该库没有
-            收录这个市场（越南即如此），交易日判断按既有策略 fail-open
-        detect_order: 代码归属判定顺序。数字小的先判定。``vn`` 必须排在
-            ``us`` 之前：越南裸代码（HPG/FPT）与美股 ticker 正则
-            ``^[A-Z]{1,5}$`` 重叠，先判 US 会把越南股误判成美股。
-        supports_market_review: 是否有对应的大盘复盘 profile / prompt
-        review_order: 大盘复盘中的市场顺序。与 ``detect_order`` 分开，因为
-            两者的排序目标不同：``detect_order`` 要让 cn 兜底排最后，而复盘
-            的历史顺序是 cn 在最前（``cn,hk,us,jp,kr``）。报告标题、
-            ``MARKET_REVIEW_REGION_ALL`` 和既有测试都依赖这个顺序。
+        code: market code, lowercase, used uniformly across the repo (``vn`` / ``cn`` / ``us`` ...)
+        label_vi: Vietnamese display name
+        label_en: English display name
+        timezone: IANA timezone, used to determine "today" per market
+        currency: quote currency
+        xcals_code: exchange-calendars exchange code; ``None`` means the library does not
+            cover this market (as with Vietnam), and trading-day checks fail open per the existing policy
+        detect_order: order for deciding which market a code belongs to. Lower numbers are checked first. ``vn`` must come
+            before ``us``: bare Vietnamese codes (HPG/FPT) overlap the US ticker regex
+            ``^[A-Z]{1,5}$``, so checking US first would misclassify Vietnamese stocks as US stocks.
+        supports_market_review: whether a matching market review profile / prompt exists
+        review_order: market order in the market review. Kept separate from ``detect_order`` because
+            the two orderings serve different goals: ``detect_order`` puts cn last as the fallback, while the review's
+            historical order puts cn first (``cn,hk,us,jp,kr``). Report titles,
+            ``MARKET_REVIEW_REGION_ALL`` and existing tests all depend on this order.
     """
 
     code: str
@@ -70,7 +70,7 @@ class MarketSpec:
     review_order: int = 99
 
 
-# 所有已知市场。停用的市场保留在这里，以便通过 SUPPORTED_MARKETS 回滚。
+# All known markets. Disabled markets stay here so they can be restored via SUPPORTED_MARKETS.
 ALL_MARKETS: Dict[str, MarketSpec] = {
     "vn": MarketSpec(
         code="vn",
@@ -78,8 +78,8 @@ ALL_MARKETS: Dict[str, MarketSpec] = {
         label_en="Vietnam",
         timezone="Asia/Ho_Chi_Minh",
         currency="VND",
-        # exchange-calendars 未收录 HOSE/HNX/UPCOM（已核对：该库 102 个日历
-        # 中没有任何越南条目），交易日判断沿用 fail-open 分支。
+        # exchange-calendars does not cover HOSE/HNX/UPCOM (verified: none of the library's 102 calendars
+        # is Vietnamese), so trading-day checks keep using the fail-open branch.
         xcals_code=None,
         detect_order=10,
         # Việt Nam có profile/prompt điểm lại thị trường riêng (chỉ số từ VCI,
@@ -146,8 +146,8 @@ ALL_MARKETS: Dict[str, MarketSpec] = {
         currency="TWD",
         xcals_code="XTAI",
         detect_order=70,
-        # 台股此前也没有 market review profile（market_profile.py 只有
-        # cn/hk/us/jp/kr），保持原状。
+        # Taiwan had no market review profile before either (market_profile.py only has
+        # cn/hk/us/jp/kr); keep it as is.
         supports_market_review=False,
     ),
 }
@@ -162,15 +162,15 @@ _cached_markets: Tuple[str, ...] = ()
 
 
 def parse_supported_markets(raw: Optional[str]) -> Tuple[str, ...]:
-    """把 ``SUPPORTED_MARKETS`` 的原始字符串解析成有序市场元组。
+    """Parse the raw ``SUPPORTED_MARKETS`` string into an ordered tuple of markets.
 
-    与仓库既有的配置解析风格一致：非法值记 warning 并回退默认值，不抛异常，
-    避免一个拼写错误让整个进程起不来。
+    Consistent with the repo's existing config parsing style: invalid values log a warning and fall back to the default instead of raising,
+    so a single typo cannot stop the whole process from starting.
 
-    - 空值 / 仅空白 → 默认值
-    - ``all`` → 所有已知市场
-    - 逗号分隔，忽略大小写与空白，去重
-    - 全部 token 非法 → 默认值
+    - Empty / whitespace only -> default
+    - ``all`` -> all known markets
+    - Comma-separated, case- and whitespace-insensitive, deduplicated
+    - All tokens invalid -> default
     """
 
     normalized = str(raw or "").strip().lower()
@@ -213,11 +213,11 @@ def _default_markets() -> Tuple[str, ...]:
 
 
 def enabled_markets() -> Tuple[str, ...]:
-    """返回当前启用的市场代码，按 ``detect_order`` 排序。
+    """Return the enabled market codes, sorted by ``detect_order``.
 
-    结果按环境变量原始字符串缓存：进程内重复调用很频繁（每次代码归属判定
-    都会用到），但测试会改动环境变量，因此以原始值而不是"是否已初始化"
-    作为缓存键。
+    The result is cached by the raw environment variable string: calls are very frequent within a process (every
+    market-ownership check uses it), but tests change the environment variable, so the raw value rather than "already initialised"
+    is used as the cache key.
     """
 
     raw = os.getenv(SUPPORTED_MARKETS_ENV)
@@ -232,7 +232,7 @@ def enabled_markets() -> Tuple[str, ...]:
 
 
 def reset_cache() -> None:
-    """清空缓存（测试用）。"""
+    """Clear the cache (for tests)."""
 
     global _cached_raw, _cached_markets
     with _cache_lock:
@@ -241,7 +241,7 @@ def reset_cache() -> None:
 
 
 def is_market_enabled(market: Optional[str]) -> bool:
-    """市场是否启用。未知或空值一律视为未启用。"""
+    """Whether a market is enabled. Unknown or empty values are always treated as disabled."""
 
     if not market:
         return False
@@ -249,7 +249,7 @@ def is_market_enabled(market: Optional[str]) -> bool:
 
 
 def enabled_specs() -> Tuple[MarketSpec, ...]:
-    """返回启用市场的 ``MarketSpec``，按 ``detect_order`` 排序。"""
+    """Return the ``MarketSpec`` of enabled markets, sorted by ``detect_order``."""
 
     return tuple(ALL_MARKETS[code] for code in enabled_markets())
 
@@ -259,7 +259,7 @@ def get_spec(market: str) -> Optional[MarketSpec]:
 
 
 def market_label(market: str, language: str = "vi") -> str:
-    """市场显示名。未知市场回退为大写代码，避免 UI 出现空白。"""
+    """Market display name. Unknown markets fall back to the uppercase code so the UI never shows a blank."""
 
     spec = get_spec(market)
     if spec is None:
@@ -268,10 +268,10 @@ def market_label(market: str, language: str = "vi") -> str:
 
 
 def enabled_market_exchanges() -> Dict[str, str]:
-    """启用市场中，exchange-calendars 支持的 ``market -> MIC`` 映射。
+    """``market -> MIC`` mapping for enabled markets supported by exchange-calendars.
 
-    没有日历的市场（如越南）不出现在结果里；``trading_calendar`` 的既有
-    fail-open 分支会接管它们。
+    Markets without a calendar (such as Vietnam) are not included; the existing fail-open
+    branch in ``trading_calendar`` handles them.
     """
 
     return {
@@ -282,16 +282,16 @@ def enabled_market_exchanges() -> Dict[str, str]:
 
 
 def enabled_market_timezones() -> Dict[str, str]:
-    """启用市场的 ``market -> IANA 时区`` 映射。"""
+    """``market -> IANA timezone`` mapping for enabled markets."""
 
     return {spec.code: spec.timezone for spec in enabled_specs()}
 
 
 def market_review_regions() -> Tuple[str, ...]:
-    """支持大盘复盘的启用市场，按 ``detect_order`` 排序。
+    """Enabled markets that support market review, sorted by ``detect_order``.
 
-    复盘的 prompt/profile 是按市场手写的，没有 profile 的市场（台湾）
-    即使启用也不能进复盘链路，否则会生成没有依据的复盘文本。
+    Review prompts/profiles are hand-written per market; a market without a profile (Taiwan)
+    cannot enter the review pipeline even when enabled, otherwise it would produce an unfounded review text.
     """
 
     regions = [spec for spec in enabled_specs() if spec.supports_market_review]

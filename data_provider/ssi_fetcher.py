@@ -288,7 +288,7 @@ class SsiFetcher(BaseFetcher):
         phiếu và mã chưa giao dịch). Trần/sàn xác định bằng cách so giá khớp với
         giá trần/sàn của phiên. ``total_amount`` có đơn vị **tỷ đồng**, vì
         ``MarketOverview.total_amount`` là giá trị đã ở đơn vị hiển thị của thị
-        trường (A-share là 亿, Việt Nam là tỷ đồng / "VND bn"). Đây là giá trị
+        trường (A-share là "CNY 100m", Việt Nam là tỷ đồng / "VND bn"). Đây là giá trị
         **khớp lệnh** (``nmTotalTradedValue``), không gồm giao dịch thỏa thuận,
         nên thấp hơn tổng giá trị giao dịch mà các chỉ số công bố.
 

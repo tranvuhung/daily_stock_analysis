@@ -827,8 +827,8 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        # 注册表里 default_value 统一是字符串（对外 schema 的类型契约），
-        # 布尔字段用 "true"/"false"，与 TICKFLOW_BATCH_DAILY_ENABLED 一致。
+        # default_value in the registry is always a string (the type contract of the public schema);
+        # boolean fields use "true"/"false", consistent with TICKFLOW_BATCH_DAILY_ENABLED.
         "default_value": "false",
         "options": [],
         "validation": {},
@@ -2819,7 +2819,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "display_order": 41,
     },
     # ------------------------------------------------------------------
-    # Notification – Server酱 / misc
+    # Notification – ServerChan / misc
     # ------------------------------------------------------------------
     "SERVERCHAN3_SENDKEY": {
         "title": "ServerChan3 SendKey",

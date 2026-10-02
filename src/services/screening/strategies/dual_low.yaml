@@ -1,6 +1,6 @@
 # Derived from AlphaSift revision 9f522747caafd3c0b1ddb7e14d5cf44c8580b6cf.
 # Licensed under Apache-2.0 and modified for daily_stock_analysis.
-# 双低选股策略（低 PE + 低 PB）
+# Dual-low stock selection strategy (low PE + low PB)
 name: dual_low
 display_name: 双低选股
 description: 偏稳健的低估值筛选策略，叠加当日活跃度与形态确认，避免长期只命中静态低估值票

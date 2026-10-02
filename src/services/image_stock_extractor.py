@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-图片股票代码提取 (Vision LLM)
+Image stock code extraction (Vision LLM)
 ===================================
 
-从截图/图片中提取股票代码，使用 Vision LLM。
-优先级：Gemini -> Anthropic -> OpenAI（首个可用）。
+Extract stock codes from screenshots/images using a Vision LLM.
+Priority: Gemini -> Anthropic -> OpenAI (first available).
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ def _normalize_code(raw: str) -> Optional[str]:
     # US stocks: 1-5 letters, optionally with . (e.g. BRK.B)
     if re.match(r"^[A-Z]{1,5}(\.[A-Z])?$", s):
         return s
-    # 尝试去除 SH/SZ 后缀
+    # Try to strip the SH/SZ suffix
     for suffix in (".SH", ".SZ", ".SS"):
         if s.endswith(suffix):
             base = s[: -len(suffix)].strip()
@@ -110,11 +110,11 @@ def _normalize_code(raw: str) -> Optional[str]:
 
 
 def _parse_codes_from_text(text: str) -> List[str]:
-    """从 LLM 响应文本解析股票代码（legacy format）。"""
+    """Parse stock codes from LLM response text (legacy format)."""
     seen: set[str] = set()
     result: List[str] = []
 
-    # 优先尝试 JSON 数组；只移除开头的 markdown 围栏，避免 find("```") 误删结尾导致清空
+    # Try a JSON array first; only strip a leading markdown fence, since find("```") could wrongly cut the tail and empty the result
     cleaned = text.strip()
     for start in ("```json", "```"):
         if cleaned.startswith(start):
@@ -137,7 +137,7 @@ def _parse_codes_from_text(text: str) -> List[str]:
     except json.JSONDecodeError:
         pass
 
-    # 兜底：查找 5-6 位数字及美股代码
+    # Fallback: look for 5-6 digit codes and US tickers
     for m in re.finditer(r"\b([0-9]{5,6}|[A-Z]{1,5}(\.[A-Z])?)\b", text, re.IGNORECASE):
         c = _normalize_code(m.group(1))
         if c and c not in seen and c not in _FAKE_CODES:
@@ -347,20 +347,20 @@ def extract_stock_codes_from_image(
     mime_type: str,
 ) -> Tuple[List[Tuple[str, Optional[str], str]], str]:
     """
-    从图片中提取股票代码及名称（使用 Vision LLM）。
+    Extract stock codes and names from an image (using a Vision LLM).
 
-    优先级：Gemini -> Anthropic -> OpenAI（首个可用）。
-    支持多 Key 轮询与重试（最多 3 次，指数退避）。
+    Priority: Gemini -> Anthropic -> OpenAI (first available).
+    Supports multi-key rotation and retries (up to 3 attempts, exponential backoff).
 
     Args:
-        image_bytes: 原始图片字节
-        mime_type: MIME 类型（如 image/jpeg, image/png）
+        image_bytes: Raw image bytes
+        mime_type: MIME type (e.g. image/jpeg, image/png)
 
     Returns:
-        (items, raw_text) - items 为 [(code, name?, confidence), ...]，raw_text 为原始 LLM 响应。
+        (items, raw_text) - items is [(code, name?, confidence), ...], raw_text is the raw LLM response.
 
     Raises:
-        ValueError: 图片无效、未配置 Vision API 或提取失败时。
+        ValueError: When the image is invalid, no Vision API is configured, or extraction fails.
     """
     mime_type = (mime_type or "image/jpeg").strip().lower().split(";")[0].strip()
     if mime_type not in ALLOWED_MIME:

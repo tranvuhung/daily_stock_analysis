@@ -1729,7 +1729,7 @@ def _ensure_supported_strategy(strategy: str) -> None:
     if strategy in ids:
         return
 
-    # 策略参数由选股引擎执行最终校验，这里保持透传以支持自定义策略。
+    # Strategy params are finally validated by the screening engine; pass them through here to support custom strategies.
 
 
 def _call_screening_screen(
@@ -1872,8 +1872,8 @@ def _resolve_screening_snapshot_source_priority(config: Config) -> str:
 def _build_screening_runtime_env(config: Config, *, max_results: Optional[int] = None) -> Dict[str, str]:
     # Bridge runtime only: only inject resolved DSA values for this request/process scope.
     # User .env/config is never rewritten here; unset channels/models are not silently migrated.
-    # 与 LiteLLM provider/model、openai-compatible `api_base` 与 headers 注入语义保持一致，
-    # 参见 https://docs.litellm.ai/docs/providers 与
+    # Keep consistent with LiteLLM provider/model, openai-compatible `api_base` and header injection semantics,
+    # see https://docs.litellm.ai/docs/providers and
     # https://docs.litellm.ai/docs/proxy/configs#the-model_list-key
     env: Dict[str, str] = {}
 
@@ -2940,8 +2940,8 @@ class DsaEastMoneyHotspotProvider:
 
 
 def _build_screening_context(config: Config, *, max_results: Optional[int] = None) -> Dict[str, Any]:
-    # context.llm.model/fallback/model_list 与 LiteLLM 路由语义保持一致，
-    # 参见 https://docs.litellm.ai/docs/proxy/configs#the-model_list-key
+    # context.llm.model/fallback/model_list follow LiteLLM routing semantics,
+    # see https://docs.litellm.ai/docs/proxy/configs#the-model_list-key
     channels = _normalize_dsa_llm_channels(config)
     litellm_model, fallback_models = _resolve_screening_llm_models(config)
     return {

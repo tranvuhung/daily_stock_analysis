@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-A股自选股智能分析系统 - 分析服务层
+A-share watchlist intelligent analysis system - analysis service layer
 ===================================
 
-职责：
-1. 封装核心分析逻辑，支持多调用方（CLI、WebUI、Bot）
-2. 提供清晰的API接口，不依赖于命令行参数
-3. 支持依赖注入，便于测试和扩展
-4. 统一管理分析流程和配置
+Responsibilities:
+1. Encapsulate core analysis logic for multiple callers (CLI, WebUI, Bot)
+2. Provide a clean API that does not depend on command-line arguments
+3. Support dependency injection for testing and extension
+4. Centrally manage analysis flow and configuration
 """
 
 import uuid
@@ -29,35 +29,35 @@ def analyze_stock(
     notifier: Optional[NotificationService] = None,
 ) -> Optional[AnalysisResult]:
     """
-    分析单只股票
+    Analyze a single stock
 
     Args:
-        stock_code: 股票代码
-        config: 配置对象（可选，默认使用单例）
-        full_report: 是否生成完整报告
-        notifier: 通知服务（可选）
+        stock_code: Stock code
+        config: Config object (optional, defaults to the singleton)
+        full_report: Whether to generate a full report
+        notifier: Notification service (optional)
 
     Returns:
-        分析结果对象
+        Analysis result object
     """
     if config is None:
         config = get_config()
 
-    # 创建分析流水线
+    # Create the analysis pipeline
     pipeline = StockAnalysisPipeline(
         config=config,
         query_id=uuid.uuid4().hex,
         query_source="cli"
     )
 
-    # 使用通知服务（如果提供）
+    # Use the notification service (if provided)
     if notifier:
         pipeline.notifier = notifier
 
-    # 根据full_report参数设置报告类型
+    # Set report type based on full_report
     report_type = ReportType.FULL if full_report else ReportType.SIMPLE
 
-    # 运行单只股票分析
+    # Run single-stock analysis
     result = pipeline.process_single_stock(
         code=stock_code,
         skip_analysis=False,
@@ -75,16 +75,16 @@ def analyze_stocks(
     notifier: Optional[NotificationService] = None,
 ) -> List[AnalysisResult]:
     """
-    分析多只股票
+    Analyze multiple stocks
 
     Args:
-        stock_codes: 股票代码列表
-        config: 配置对象（可选，默认使用单例）
-        full_report: 是否生成完整报告
-        notifier: 通知服务（可选）
+        stock_codes: List of stock codes
+        config: Config object (optional, defaults to the singleton)
+        full_report: Whether to generate a full report
+        notifier: Notification service (optional)
 
     Returns:
-        分析结果列表
+        List of analysis results
     """
     if config is None:
         config = get_config()
@@ -103,29 +103,29 @@ def perform_market_review(
     notifier: Optional[NotificationService] = None,
 ) -> Optional[str]:
     """
-    执行大盘复盘
+    Run the market review
 
     Args:
-        config: 配置对象（可选，默认使用单例）
-        notifier: 通知服务（可选）
+        config: Config object (optional, defaults to the singleton)
+        notifier: Notification service (optional)
 
     Returns:
-        复盘报告内容
+        Market review report content
     """
     if config is None:
         config = get_config()
 
-    # 创建分析流水线以获取analyzer和search_service
+    # Create the analysis pipeline to obtain the analyzer and search_service
     pipeline = StockAnalysisPipeline(
         config=config,
         query_id=uuid.uuid4().hex,
         query_source="cli",
     )
 
-    # 使用提供的通知服务或创建新的
+    # Use the provided notification service or create a new one
     review_notifier = notifier or pipeline.notifier
 
-    # 调用大盘复盘函数
+    # Call the market review function
     return run_market_review(
         notifier=review_notifier,
         analyzer=pipeline.analyzer,

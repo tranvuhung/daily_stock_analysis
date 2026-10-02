@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-自定义 Webhook 发送提醒服务
+Custom Webhook notification sender
 
-职责：
-1. 发送自定义 Webhook 消息
+Responsibilities:
+1. Send custom Webhook messages
 """
 import logging
 import json
@@ -28,10 +28,10 @@ class CustomWebhookSender:
 
     def __init__(self, config: Config):
         """
-        初始化自定义 Webhook 配置
+        Initialise the custom Webhook configuration
 
         Args:
-            config: 配置对象
+            config: configuration object
         """
         self._custom_webhook_urls = getattr(config, 'custom_webhook_urls', []) or []
         self._custom_webhook_bearer_token = getattr(config, 'custom_webhook_bearer_token', None)
@@ -40,23 +40,23 @@ class CustomWebhookSender:
  
     def send_to_custom(self, content: str) -> bool:
         """
-        推送消息到自定义 Webhook
+        Push a message to custom Webhooks
         
-        支持任意接受 POST JSON 的 Webhook 端点
-        默认发送格式：{"text": "消息内容", "content": "消息内容"}
+        Supports any Webhook endpoint that accepts POST JSON
+        Default payload format: {"text": "message content", "content": "message content"}
         
-        适用于：
-        - 钉钉机器人
+        Suitable for:
+        - DingTalk bots
         - Discord Webhook
         - Slack Incoming Webhook
-        - 自建通知服务
-        - 其他支持 POST JSON 的服务
+        - Self-hosted notification services
+        - Other services that accept POST JSON
         
         Args:
-            content: 消息内容（Markdown 格式）
+            content: message content (Markdown)
             
         Returns:
-            是否至少有一个 Webhook 发送成功
+            Whether at least one Webhook send succeeded
         """
         if not self._custom_webhook_urls:
             logger.warning("未配置自定义 Webhook，跳过推送")
@@ -66,12 +66,12 @@ class CustomWebhookSender:
         
         for i, url in enumerate(self._custom_webhook_urls):
             try:
-                # 通用 JSON 格式，兼容大多数 Webhook
-                # 钉钉格式: {"msgtype": "text", "text": {"content": "xxx"}}
-                # Slack 格式: {"text": "xxx"}
-                # Discord 格式: {"content": "xxx"}
+                # Generic JSON format, compatible with most Webhooks
+                # DingTalk format: {"msgtype": "text", "text": {"content": "xxx"}}
+                # Slack format: {"text": "xxx"}
+                # Discord format: {"content": "xxx"}
                 
-                # 钉钉机器人对 body 有字节上限（约 20000 bytes），超长需要分批发送
+                # DingTalk bots cap the body size (about 20000 bytes); longer content must be sent in batches
                 if self._is_dingtalk_webhook(url):
                     templated_payload = self._build_custom_webhook_template_payload(content)
                     if templated_payload is not None:
@@ -90,7 +90,7 @@ class CustomWebhookSender:
                         logger.error(f"自定义 Webhook {i+1}（钉钉）推送失败")
                     continue
 
-                # 其他 Webhook：单次发送
+                # Other Webhooks: send once
                 payload = self._build_custom_webhook_payload(url, content)
                 if self._post_custom_webhook(url, payload, timeout=30):
                     logger.info(f"自定义 Webhook {i+1} 推送成功")
@@ -155,7 +155,7 @@ class CustomWebhookSender:
             'Content-Type': 'application/json; charset=utf-8',
             'User-Agent': 'StockAnalysis/1.0',
         }
-        # 支持 Bearer Token 认证（#51）
+        # Support Bearer Token authentication (#51)
         if self._custom_webhook_bearer_token:
             headers['Authorization'] = f'Bearer {self._custom_webhook_bearer_token}'
         body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
@@ -272,9 +272,9 @@ class CustomWebhookSender:
     
     def _build_custom_webhook_payload(self, url: str, content: str) -> dict:
         """
-        根据 URL 构建对应的 Webhook payload
+        Build the Webhook payload that matches the URL
         
-        自动识别常见服务并使用对应格式
+        Automatically recognises common services and uses their format
         """
         sanitized_content = strip_hidden_markdown_metadata(content).strip()
         templated_payload = self._build_custom_webhook_template_payload(sanitized_content)
@@ -283,7 +283,7 @@ class CustomWebhookSender:
 
         url_lower = url.lower()
         
-        # 钉钉机器人
+        # DingTalk bot
         if 'dingtalk' in url_lower or 'oapi.dingtalk.com' in url_lower:
             return {
                 "msgtype": "markdown",
@@ -295,7 +295,7 @@ class CustomWebhookSender:
         
         # Discord Webhook
         if 'discord.com/api/webhooks' in url_lower or 'discordapp.com/api/webhooks' in url_lower:
-            # Discord 限制 2000 字符
+            # Discord limit is 2000 characters
             truncated = (
                 sanitized_content[:1900] + "..."
                 if len(sanitized_content) > 1900
@@ -312,15 +312,15 @@ class CustomWebhookSender:
                 "mrkdwn": True
             }
         
-        # Bark (iOS 推送)
+        # Bark (iOS push)
         if 'api.day.app' in url_lower:
             return {
                 "title": "股票分析报告",
-                "body": sanitized_content[:4000],  # Bark 限制
+                "body": sanitized_content[:4000],  # Bark limit
                 "group": "stock"
             }
         
-        # 通用格式（兼容大多数服务）
+        # Generic format (compatible with most services)
         return {
             "text": sanitized_content,
             "content": sanitized_content,
@@ -362,7 +362,7 @@ class CustomWebhookSender:
         import time as _time
         content = strip_hidden_markdown_metadata(content).strip()
 
-        # 为 payload 开销预留空间，避免 body 超限
+        # Reserve room for payload overhead so the body never exceeds the limit
         budget = max(1000, max_bytes - 1500)
         chunks = chunk_content_by_max_bytes(content, budget)
         if not chunks:
@@ -381,7 +381,7 @@ class CustomWebhookSender:
                 },
             }
 
-            # 如果仍超限（极端情况下），再按字节硬截断一次
+            # If still over the limit (extreme cases), hard-truncate once more by bytes
             body_bytes = len(json.dumps(payload, ensure_ascii=False).encode('utf-8'))
             if body_bytes > max_bytes:
                 hard_budget = max(200, budget - (body_bytes - max_bytes) - 200)

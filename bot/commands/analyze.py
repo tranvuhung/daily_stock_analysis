@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-股票分析命令
+Stock analysis command
 ===================================
 
-分析指定股票或已登记指数，调用 AI 生成分析报告。
+Analyzes a given stock or registered index and calls AI to generate an analysis report.
 """
 
 import logging
@@ -28,16 +28,16 @@ logger = logging.getLogger(__name__)
 
 class AnalyzeCommand(BotCommand):
     """
-    股票分析命令
+    Stock analysis command
     
-    分析指定股票代码或已登记指数，生成 AI 分析报告并推送。
+    Analyzes a given stock code or registered index, generates an AI analysis report and pushes it.
     
-    用法：
-        /analyze 600519       - 分析贵州茅台（精简报告）
-        /analyze 600519 full  - 分析并生成完整报告
-        /analyze sh000016     - 分析上证50指数
-        /analyze 930955.CSI   - 分析红利低波100指数（alias 收敛）
-        /analyze 上证50       - 按注册名称分析上证50指数
+    Usage:
+        /analyze 600519       - Analyze Kweichow Moutai (concise report)
+        /analyze 600519 full  - Analyze and generate a full report
+        /analyze sh000016     - Analyze the SSE 50 index
+        /analyze 930955.CSI   - Analyze the CSI Dividend Low Volatility 100 index (alias convergence)
+        /analyze 上证50       - Analyze the SSE 50 index by registered name
     """
     
     @property
@@ -57,18 +57,18 @@ class AnalyzeCommand(BotCommand):
         return "/analyze <股票代码/指数代码/指数名称> [full]"
     
     def validate_args(self, args: List[str]) -> Optional[str]:
-        """验证参数（仅结构检查；语义校验在 execute 中完成）"""
+        """Validate arguments (structural checks only; semantic validation happens in execute)"""
         if not args:
             return "请输入股票代码或指数名称"
         return None
     
     def execute(self, message: BotMessage, args: List[str]) -> BotResponse:
-        """执行分析命令"""
+        """Execute the analyze command"""
         raw = (args[0] or "").strip()
         if not raw:
             return BotResponse.error_response("请输入股票代码或指数名称")
 
-        # 检查是否需要完整报告（默认精简，传 full/完整/详细 切换）
+        # Check whether a full report is requested (concise by default; pass full/完整/详细 to switch)
         report_type = "simple"
         if len(args) > 1 and args[1].lower() in ["full", "完整", "详细"]:
             report_type = "full"
@@ -85,13 +85,13 @@ class AnalyzeCommand(BotCommand):
 
             logger.info(f"[AnalyzeCommand] 分析标的: {code}, 报告类型: {report_type}")
 
-            # 调用分析服务
+            # Call the analysis service
             from src.services.task_service import get_task_service
             from src.enums import ReportType
 
             service = get_task_service()
 
-            # 提交异步分析任务
+            # Submit an async analysis task
             result = service.submit_analysis(
                 code=code,
                 report_type=ReportType.from_str(report_type),
@@ -101,8 +101,8 @@ class AnalyzeCommand(BotCommand):
 
             if result.get("success"):
                 task_id = result.get("task_id", "")
-                # ``extra`` 仅供内部任务 identity 透传（transport-independent
-                # 消费者，如 E2E smoke），文本保持既有契约不变，平台适配器可忽略。
+                # ``extra`` only carries internal task identity through (for transport-independent
+                # consumers such as the E2E smoke); the text keeps the existing contract and platform adapters may ignore it.
                 response = BotResponse.markdown_response(
                     f"✅ **分析任务已提交**\n\n"
                     f"• 标的: `{code}`\n"

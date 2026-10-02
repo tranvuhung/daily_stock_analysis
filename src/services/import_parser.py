@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-统一导入解析管道
+Unified import parsing pipeline
 ===================================
 
 Parse CSV/Excel/clipboard text into stock items (code, name, confidence).

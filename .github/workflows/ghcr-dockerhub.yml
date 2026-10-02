@@ -49,7 +49,7 @@ jobs:
       - name: Set up QEMU for multi-platform build
         uses: docker/setup-qemu-action@v3
 
-      # 登录到 GHCR
+      # Log in to GHCR
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -57,7 +57,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 登录到 Docker Hub（需要预先设置 secrets.DOCKERHUB_USERNAME 和 secrets.DOCKERHUB_TOKEN）
+      # Log in to Docker Hub (requires secrets.DOCKERHUB_USERNAME and secrets.DOCKERHUB_TOKEN to be set)
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:

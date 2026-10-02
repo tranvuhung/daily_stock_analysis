@@ -1,28 +1,28 @@
 #!/bin/bash
 # ===================================
-# A股/港股/美股 智能分析系统 - 测试脚本
+# A-share/HK/US intelligent analysis system - test script
 # ===================================
 #
-# 使用方法：
-#   ./scripts/test.sh [测试场景]
+# Usage:
+#   ./scripts/test.sh [scenario]
 #
-# 测试场景：
-#   market      - 仅大盘复盘
-#   a-stock     - A股个股分析（茅台、平安银行）
-#   etf         - etf分析(卫星etf 563230)
-#   hk-stock    - 港股分析（腾讯、阿里）
-#   us-stock    - 美股分析（苹果、特斯拉）
-#   mixed       - 混合市场分析
-#   single      - 单股模式测试
-#   dry-run     - 仅获取数据不分析
-#   full        - 完整流程测试
-#   quick       - 快速测试（单只股票）
-#   all         - 运行所有测试
+# Scenarios:
+#   market      - market review only
+#   a-stock     - A-share stock analysis (Moutai, Ping An Bank)
+#   etf         - ETF analysis (satellite ETF 563230)
+#   hk-stock    - HK stock analysis (Tencent, Alibaba)
+#   us-stock    - US stock analysis (Apple, Tesla)
+#   mixed       - mixed-market analysis
+#   single      - single-stock mode test
+#   dry-run     - fetch data only, no analysis
+#   full        - full pipeline test
+#   quick       - quick test (one stock)
+#   all         - run all tests
 #
-# 示例：
-#   ./scripts/test.sh market      # 测试大盘复盘
-#   ./scripts/test.sh us-stock    # 测试美股分析
-#   ./scripts/test.sh quick       # 快速测试
+# Examples:
+#   ./scripts/test.sh market      # test market review
+#   ./scripts/test.sh us-stock    # test US stock analysis
+#   ./scripts/test.sh quick       # quick test
 #
 
 set -e
@@ -31,14 +31,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$REPO_ROOT"
 
-# 颜色定义
+# Color definitions
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# 打印带颜色的信息
+# Colored output helpers
 info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
@@ -63,7 +63,7 @@ header() {
     echo ""
 }
 
-# 检查Python环境
+# Check the Python environment
 check_python() {
     if ! command -v python3 &> /dev/null; then
         error "Python3 未安装"
@@ -72,7 +72,7 @@ check_python() {
     info "Python版本: $(python3 --version)"
 }
 
-# 检查依赖
+# Check dependencies
 check_deps() {
     info "检查依赖..."
     python3 -c "import yfinance" 2>/dev/null || { warn "yfinance 未安装，美股测试可能失败"; }
@@ -80,9 +80,9 @@ check_deps() {
     success "依赖检查完成"
 }
 
-# ==================== 测试场景 ====================
+# ==================== Test scenarios ====================
 
-# 测试1: 大盘复盘
+# Test 1: market review
 test_market() {
     header "测试场景: 大盘复盘"
     info "运行大盘复盘分析..."
@@ -90,7 +90,7 @@ test_market() {
     success "大盘复盘测试完成"
 }
 
-# 测试2: A股分析
+# Test 2: A-share analysis
 test_a_stock() {
     header "测试场景: A股分析"
     info "分析A股: 600519(茅台), 000001(平安银行)"
@@ -98,7 +98,7 @@ test_a_stock() {
     success "A股分析测试完成"
 }
 
-# 测试2.5: ETF分析
+# Test 2.5: ETF analysis
 test_etf() {
     header "测试场景: ETF分析"
     info "分析ETF: 563230(卫星ETF)"
@@ -106,7 +106,7 @@ test_etf() {
     success "ETF分析测试完成"
 }
 
-# 测试3: 港股分析
+# Test 3: HK stock analysis
 test_hk_stock() {
     header "测试场景: 港股分析"
     info "分析港股: hk00700(腾讯), hk09988(阿里)"
@@ -114,16 +114,16 @@ test_hk_stock() {
     success "港股分析测试完成"
 }
 
-# 测试4: 美股分析
+# Test 4: US stock analysis
 test_us_stock() {
     header "测试场景: 美股分析"
     info "分析美股: AAPL(苹果), TSLA(特斯拉)"
-    # 允许透传参数，默认不带 --no-notify
+    # Pass extra args through; --no-notify is not added by default
     python3 main.py --stocks AAPL --no-market-review "$@"
     success "美股分析测试完成"
 }
 
-# 测试5: 混合市场
+# Test 5: mixed market
 test_mixed() {
     header "测试场景: 混合市场分析"
     info "分析混合市场: 600519(A股), hk00700(港股), AAPL(美股)"
@@ -131,7 +131,7 @@ test_mixed() {
     success "混合市场测试完成"
 }
 
-# 测试6: 单股推送模式
+# Test 6: single-stock push mode
 test_single() {
     header "测试场景: 单股推送模式"
     info "测试单股推送模式..."
@@ -139,7 +139,7 @@ test_single() {
     success "单股推送模式测试完成"
 }
 
-# 测试7: dry-run模式
+# Test 7: dry-run mode
 test_dry_run() {
     header "测试场景: Dry-Run 模式"
     info "仅获取数据，不进行AI分析..."
@@ -147,7 +147,7 @@ test_dry_run() {
     success "Dry-Run 测试完成"
 }
 
-# 测试8: 完整流程
+# Test 8: full pipeline
 test_full() {
     header "测试场景: 完整流程"
     info "运行完整分析流程（个股+大盘）..."
@@ -155,7 +155,7 @@ test_full() {
     success "完整流程测试完成"
 }
 
-# 测试9: 快速测试
+# Test 9: quick test
 test_quick() {
     header "测试场景: 快速测试"
     info "单只股票快速测试..."
@@ -163,7 +163,7 @@ test_quick() {
     success "快速测试完成"
 }
 
-# 测试10: 代码识别测试
+# Test 10: stock code recognition
 test_code_recognition() {
     header "测试场景: 代码识别"
     info "测试股票代码识别逻辑..."
@@ -174,7 +174,7 @@ sys.path.insert(0, '.')
 from data_provider.akshare_fetcher import _is_hk_code, _is_us_code
 
 test_cases = [
-    # (代码, 预期HK, 预期US, 描述)
+    # (code, expected HK, expected US, description)
     ("AAPL", False, True, "美股-苹果"),
     ("TSLA", False, True, "美股-特斯拉"),
     ("BRK.B", False, True, "美股-伯克希尔B"),
@@ -204,7 +204,7 @@ PYTEST
     success "代码识别测试完成"
 }
 
-# 测试11: YFinance代码转换测试
+# Test 11: YFinance code conversion
 test_yfinance_convert() {
     header "测试场景: YFinance 代码转换"
     info "测试YFinance代码转换逻辑..."
@@ -244,7 +244,7 @@ PYTEST
     success "YFinance 代码转换测试完成"
 }
 
-# 测试12: 语法检查
+# Test 12: syntax check
 test_syntax() {
     header "测试场景: Python 语法检查"
     info "检查所有Python文件语法..."
@@ -257,7 +257,7 @@ test_syntax() {
     success "语法检查通过"
 }
 
-# 测试13: Flake8 静态检查
+# Test 13: Flake8 static check
 test_flake8() {
     header "测试场景: Flake8 静态检查"
     info "运行 Flake8 检查严重错误..."
@@ -270,7 +270,7 @@ test_flake8() {
     fi
 }
 
-# 运行所有测试
+# Run all tests
 test_all() {
     header "运行所有测试"
 
@@ -289,7 +289,7 @@ test_all() {
     success "所有测试完成!"
 }
 
-# ==================== 主程序 ====================
+# ==================== Main ====================
 
 main() {
     header "A股/港股/美股 智能分析系统 - 测试"

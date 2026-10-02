@@ -1,6 +1,6 @@
 # Derived from AlphaSift revision 9f522747caafd3c0b1ddb7e14d5cf44c8580b6cf.
 # Licensed under Apache-2.0 and modified for daily_stock_analysis.
-# 资金热度策略
+# Capital heat strategy
 name: capital_heat
 display_name: 资金热度
 description: 资金活跃、量价同步但未极端过热的短线候选

@@ -1,23 +1,23 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-LongbridgeFetcher - 长桥兜底数据源 (Priority 5)
+LongbridgeFetcher - Longbridge fallback data source (Priority 5)
 ===================================
 
-数据来源：长桥 OpenAPI (https://open.longbridge.com)
-特点：覆盖美股 + 港股，可计算量比/换手率/PE 等 yfinance 缺失字段
-定位：美股/港股最后兜底数据源
+Data source: Longbridge OpenAPI (https://open.longbridge.com)
+Features: covers US + HK stocks; can compute fields yfinance lacks (volume ratio / turnover rate / PE, etc.)
+Role: last-resort fallback data source for US/HK stocks
 
-关键策略：
-1. 组合 quote + static_info 接口计算 turnover_rate / pe_ratio / total_mv
-2. 通过 history_candlesticks 计算 volume_ratio（近5日均量比）
-3. 懒加载 QuoteContext，首次调用时才建立连接
-4. static_info 进程内短缓存，减少重复请求（默认 24h，可调；见 LONGBRIDGE_STATIC_INFO_TTL_SECONDS）
+Key strategies:
+1. Combine the quote + static_info endpoints to compute turnover_rate / pe_ratio / total_mv
+2. Compute volume_ratio from history_candlesticks (ratio to the 5-day average volume)
+3. Lazily load QuoteContext; the connection is only established on first call
+4. Short in-process cache for static_info to reduce repeated requests (default 24h, tunable; see LONGBRIDGE_STATIC_INFO_TTL_SECONDS)
 
-凭证：优先使用 `LONGBRIDGE_OAUTH_CLIENT_ID` + SDK token 缓存（OAuth 2.0）；
-Legacy API Key 三件套（`LONGBRIDGE_APP_KEY` / `LONGBRIDGE_APP_SECRET` / `LONGBRIDGE_ACCESS_TOKEN`）仍兼容。
-可选：`LONGBRIDGE_STATIC_INFO_TTL_SECONDS`；SDK `language` 取自 `REPORT_LANGUAGE`，`log_path` 为 `{LOG_DIR}/longbridge_sdk.log`；
-`LONGBRIDGE_HTTP_URL` / `LONGBRIDGE_QUOTE_WS_URL` / `LONGBRIDGE_TRADE_WS_URL` / `LONGBRIDGE_REGION` （见官方文档默认值）。
+Credentials: prefer `LONGBRIDGE_OAUTH_CLIENT_ID` + SDK token cache (OAuth 2.0);
+the legacy API Key trio (`LONGBRIDGE_APP_KEY` / `LONGBRIDGE_APP_SECRET` / `LONGBRIDGE_ACCESS_TOKEN`) is still supported.
+Optional: `LONGBRIDGE_STATIC_INFO_TTL_SECONDS`; SDK `language` comes from `REPORT_LANGUAGE`, `log_path` is `{LOG_DIR}/longbridge_sdk.log`;
+`LONGBRIDGE_HTTP_URL` / `LONGBRIDGE_QUOTE_WS_URL` / `LONGBRIDGE_TRADE_WS_URL` / `LONGBRIDGE_REGION` (see the official docs for defaults).
 """
 
 import base64
@@ -362,11 +362,11 @@ def _is_us_code(stock_code: str) -> bool:
 
 def _is_hk_code(stock_code: str) -> bool:
     """
-    判定是否为港股代码，与 ``data_provider.base._is_hk_market`` 的市场契约一致：
-    支持 ``.HK`` 后缀、``HK00700`` 前缀形式，以及 4-5 位纯数字裸码（港股
-    普通股为 4 位如 ``0001`` 长和、``0941`` 中国移动；最多 5 位）。
+    Determine whether the code is an HK stock code, consistent with the market contract of ``data_provider.base._is_hk_market``:
+    supports the ``.HK`` suffix, the ``HK00700`` prefix form, and bare 4-5 digit codes (HK
+    ordinary shares are 4 digits, e.g. ``0001`` CK Hutchison, ``0941`` China Mobile; at most 5 digits).
 
-    Note: 4 位裸数字与 A 股不冲突——A 股 ETF/股票均为 6 位。
+    Note: bare 4-digit codes do not conflict with A-shares — A-share ETFs/stocks are all 6 digits.
     """
     normalized = (stock_code or "").strip().upper()
     if normalized.startswith("HK"):
@@ -413,12 +413,12 @@ def _to_longbridge_symbol(stock_code: str) -> Optional[str]:
 
 class LongbridgeFetcher(BaseFetcher):
     """
-    长桥 OpenAPI 数据源实现
+    Longbridge OpenAPI data source implementation
 
-    优先级: 5（最低，作为美股/港股最后兜底）
-    数据来源: Longbridge OpenAPI
+    Priority: 5 (lowest, last-resort fallback for US/HK stocks)
+    Data source: Longbridge OpenAPI
 
-    通过组合多个 API 计算 yfinance 缺失的指标:
+    Computes metrics missing from yfinance by combining several APIs:
     - turnover_rate = volume / circulating_shares * 100
     - volume_ratio = today_volume / avg_5day_volume
     - pe_ratio = price / eps_ttm
@@ -701,11 +701,11 @@ class LongbridgeFetcher(BaseFetcher):
         try:
             from longbridge.openapi import Period, AdjustType
 
-            # history_candlesticks_by_offset 使用 keyword args 确保跨 SDK 版本兼容:
-            # 0.2.74 (Linux) 与 4.x (Windows/macOS/Python>=3.12) 的
-            # positional 签名存在差异 (0.2.74: forward, time, count; 4.x: forward, count, time)，
-            # keyword args 不受顺序影响。
-            # forward=False → 从 time 起向过去取; time 为基准时间; count 为根数。
+            # history_candlesticks_by_offset uses keyword args to stay compatible across SDK versions:
+            # 0.2.74 (Linux) and 4.x (Windows/macOS/Python>=3.12) have different
+            # positional signatures (0.2.74: forward, time, count; 4.x: forward, count, time);
+            # keyword args are unaffected by ordering.
+            # forward=False -> fetch backwards from time; time is the reference time; count is the number of bars.
             candles = ctx.history_candlesticks_by_offset(
                 symbol=symbol,
                 period=Period.Day,

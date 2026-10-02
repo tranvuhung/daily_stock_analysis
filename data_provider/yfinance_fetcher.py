@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-YfinanceFetcher - 兜底数据源 (Priority 4)
+YfinanceFetcher - fallback data source (Priority 4)
 ===================================
 
-数据来源：Yahoo Finance（通过 yfinance 库）
-特点：国际数据源、可能有延迟或缺失
-定位：当所有国内数据源都失败时的最后保障
+Data source: Yahoo Finance (via the yfinance library)
+Features: international data source, may be delayed or incomplete
+Role: last line of defence when all domestic data sources fail
 
-关键策略：
-1. 自动将 A 股代码转换为 yfinance 格式（.SS / .SZ）
-2. 处理 Yahoo Finance 的数据格式差异
-3. 失败后指数退避重试
+Key strategies:
+1. Automatically convert A-share codes to yfinance format (.SS / .SZ)
+2. Handle Yahoo Finance data format differences
+3. Exponential backoff retry on failure
 """
 
 import csv
@@ -47,14 +47,14 @@ from .us_index_mapping import get_us_index_yf_symbol, is_us_stock_code
 from .yfinance_fundamental_adapter import _safe_float
 from src.services.market_symbol_utils import get_suffix_market, is_suffix_market_symbol
 
-# 可选导入本地股票映射补丁，若缺失则使用空字典兜底
+# Optionally import the local stock-name mapping patch; fall back to an empty dict if missing
 try:
     from src.data.stock_mapping import STOCK_NAME_MAP, is_meaningful_stock_name
 except (ImportError, ModuleNotFoundError):
     STOCK_NAME_MAP = {}
 
     def is_meaningful_stock_name(name: str | None, stock_code: str) -> bool:
-        """简单的名称有效性校验兜底"""
+        """Simple fallback for name validity checking"""
         if not name:
             return False
         n = str(name).strip()
@@ -67,27 +67,27 @@ logger = logging.getLogger(__name__)
 
 class YfinanceFetcher(BaseFetcher):
     """
-    Yahoo Finance 数据源实现
+    Yahoo Finance data source implementation
 
-    优先级：4（最低，作为兜底）
-    数据来源：Yahoo Finance
+    Priority: 4 (lowest, used as fallback)
+    Data source: Yahoo Finance
 
-    关键策略：
-    - 自动转换股票代码格式
-    - 处理时区和数据格式差异
-    - 失败后指数退避重试
+    Key strategies:
+    - Automatically convert stock code format
+    - Handle timezone and data format differences
+    - Exponential backoff retry on failure
 
-    注意事项：
-    - A 股数据可能有延迟
-    - 某些股票可能无数据
-    - 数据精度可能与国内源略有差异
+    Notes:
+    - A-share data may be delayed
+    - Some stocks may have no data
+    - Data precision may differ slightly from domestic sources
     """
 
     name = "YfinanceFetcher"
     priority = int(os.getenv("YFINANCE_PRIORITY", "4"))
 
     def __init__(self):
-        """初始化 YfinanceFetcher"""
+        """Initialize YfinanceFetcher"""
         pass
 
     @staticmethod
@@ -106,20 +106,20 @@ class YfinanceFetcher(BaseFetcher):
 
     def _convert_stock_code(self, stock_code: str) -> str:
         """
-        转换股票代码为 Yahoo Finance 格式
+        Convert a stock code to Yahoo Finance format
 
-        Yahoo Finance 代码格式：
-        - A股沪市：600519.SS (Shanghai Stock Exchange)
-        - A股深市：000001.SZ (Shenzhen Stock Exchange)
-        - 港股：0700.HK (Hong Kong Stock Exchange)
-        - 美股：AAPL, TSLA, GOOGL (无需后缀)
-        - 越南股（HOSE）：HPG.VN、FPT.VN
+        Yahoo Finance code formats:
+        - A-share Shanghai: 600519.SS (Shanghai Stock Exchange)
+        - A-share Shenzhen: 000001.SZ (Shenzhen Stock Exchange)
+        - HK stocks: 0700.HK (Hong Kong Stock Exchange)
+        - US stocks: AAPL, TSLA, GOOGL (no suffix needed)
+        - Vietnam stocks (HOSE): HPG.VN, FPT.VN
 
         Args:
-            stock_code: 原始代码，如 '600519', 'hk00700', 'AAPL'
+            stock_code: raw code, e.g. '600519', 'hk00700', 'AAPL'
 
         Returns:
-            Yahoo Finance 格式代码
+            Code in Yahoo Finance format
 
         Examples:
             >>> fetcher._convert_stock_code('600519')
@@ -168,44 +168,44 @@ class YfinanceFetcher(BaseFetcher):
             logger.debug(f"识别为越南股票代码: {stock_code} -> {vn_code}.VN")
             return f"{vn_code}.VN"
 
-        # 美股指数：映射到 Yahoo Finance 符号（如 SPX -> ^GSPC）
+        # US indices: map to the Yahoo Finance symbol (e.g. SPX -> ^GSPC)
         yf_symbol, _ = get_us_index_yf_symbol(code)
         if yf_symbol:
             logger.debug(f"识别为美股指数: {code} -> {yf_symbol}")
             return yf_symbol
 
-        # 美股：1-5 个大写字母（可选 .X 后缀），原样返回
+        # US stocks: 1-5 uppercase letters (optional .X suffix), returned as-is
         if is_us_stock_code(code):
             logger.debug(f"识别为美股代码: {code}")
             return code
 
-        # 日股/韩股/台股 MVP：显式 Yahoo Finance suffix-only 代码，原样传给 Yahoo。
+        # JP/KR/TW stocks MVP: explicit Yahoo Finance suffix-only codes, passed to Yahoo as-is.
         if self._is_jp_kr_suffix_stock(code) or self._is_tw_suffix_stock(code):
             logger.debug(f"识别为日韩台 Yahoo suffix 代码: {code}")
             return code
 
-        # 港股：hk前缀 -> .HK后缀
+        # HK stocks: hk prefix -> .HK suffix
         if code.startswith('HK'):
-            hk_code = code[2:].lstrip('0') or '0'  # 去除前导0，但保留至少一个0
-            hk_code = hk_code.zfill(4)  # 补齐到4位
+            hk_code = code[2:].lstrip('0') or '0'  # Strip leading zeros but keep at least one 0
+            hk_code = hk_code.zfill(4)  # Pad to 4 digits
             logger.debug(f"转换港股代码: {stock_code} -> {hk_code}.HK")
             return f"{hk_code}.HK"
 
-        # 港股裸码：4-5 位纯数字（如 00700、02513、0001）按港股处理。
-        # A 股代码全部是 6 位，4-5 位裸数字不可能是 A 股或 BSE（BSE 是
-        # 4/8/920xxx 6 位），因此可以先于 .SZ 兜底分流到 .HK，避免 yfinance
-        # 把 02513 这类新港股误判为深市后缀导致 Yahoo 404。详见 issue #2091。
+        # Bare HK codes: 4-5 pure digits (e.g. 00700, 02513, 0001) are treated as HK stocks.
+        # A-share codes are all 6 digits, so bare 4-5 digit codes cannot be A-shares or BSE (BSE is
+        # 6-digit 4/8/920xxx); they can therefore be routed to .HK before the .SZ fallback, preventing yfinance
+        # from treating new HK listings like 02513 as Shenzhen and getting a Yahoo 404. See issue #2091.
         if code.isdigit() and 4 <= len(code) <= 5:
             hk_code = code.lstrip('0') or '0'
             hk_code = hk_code.zfill(4)
             logger.debug(f"识别裸港股代码: {stock_code} -> {hk_code}.HK")
             return f"{hk_code}.HK"
 
-        # 已经包含后缀的情况
+        # Code already has a suffix
         if '.SS' in code or '.SZ' in code or '.HK' in code or '.BJ' in code:
             return code
 
-        # 去除可能的 .SH 后缀
+        # Strip a possible .SH suffix
         code = code.replace('.SH', '')
 
         # ETF: Shanghai ETF (51xx, 52xx, 56xx, 58xx) -> .SS; Shenzhen ETF (15xx, 16xx, 18xx) -> .SZ
@@ -220,7 +220,7 @@ class YfinanceFetcher(BaseFetcher):
             base = code.split('.')[0] if '.' in code else code
             return f"{base}.BJ"
 
-        # A股：根据代码前缀判断市场
+        # A-shares: determine the market by code prefix
         if code.startswith(('600', '601', '603', '688')):
             return f"{code}.SS"
         elif code.startswith(('000', '002', '300')):
@@ -237,34 +237,34 @@ class YfinanceFetcher(BaseFetcher):
     )
     def _fetch_raw_data(self, stock_code: str, start_date: str, end_date: str) -> pd.DataFrame:
         """
-        从 Yahoo Finance 获取原始数据
+        Fetch raw data from Yahoo Finance
 
-        使用 yfinance.download() 获取历史数据
+        Uses yfinance.download() to fetch historical data
 
-        流程：
-        1. 转换股票代码格式
-        2. 调用 yfinance API
-        3. 处理返回数据
+        Flow:
+        1. Convert the stock code format
+        2. Call the yfinance API
+        3. Process the returned data
         """
         import yfinance as yf
 
-        # 转换代码格式
+        # Convert the code format
         yf_code = self._convert_stock_code(stock_code)
 
         logger.debug(f"调用 yfinance.download({yf_code}, {start_date}, {end_date})")
 
         try:
-            # 使用 yfinance 下载数据
+            # Download data with yfinance
             df = yf.download(
                 tickers=yf_code,
                 start=start_date,
                 end=end_date,
-                progress=False,  # 禁止进度条
-                auto_adjust=True,  # 自动调整价格（复权）
+                progress=False,  # Disable the progress bar
+                auto_adjust=True,  # Auto-adjust prices (price adjustment)
                 multi_level_index=True
             )
 
-            # 筛选出 yf_code 的列, 避免多只股票数据混淆
+            # Select only the yf_code columns to avoid mixing data from multiple stocks
             if isinstance(df.columns, pd.MultiIndex) and len(df.columns) > 1:
                 ticker_level = df.columns.get_level_values(1)
                 mask = ticker_level == yf_code
@@ -283,30 +283,30 @@ class YfinanceFetcher(BaseFetcher):
 
     def _normalize_data(self, df: pd.DataFrame, stock_code: str) -> pd.DataFrame:
         """
-        标准化 Yahoo Finance 数据
+        Normalize Yahoo Finance data
 
-        yfinance 返回的列名：
-        Open, High, Low, Close, Volume（索引是日期）
+        Column names returned by yfinance:
+        Open, High, Low, Close, Volume (index is the date)
 
-        注意：新版 yfinance 返回 MultiIndex 列名，如 ('Close', 'AMD')
-        需要先扁平化列名再进行处理
+        Note: newer yfinance returns MultiIndex column names, e.g. ('Close', 'AMD'),
+        which must be flattened before processing
 
-        需要映射到标准列名：
+        Must be mapped to the standard column names:
         date, open, high, low, close, volume, amount, pct_chg
         """
         df = df.copy()
 
-        # 处理 MultiIndex 列名（新版 yfinance 返回格式）
-        # 例如: ('Close', 'AMD') -> 'Close'
+        # Handle MultiIndex column names (newer yfinance return format)
+        # e.g. ('Close', 'AMD') -> 'Close'
         if isinstance(df.columns, pd.MultiIndex):
             logger.debug("检测到 MultiIndex 列名，进行扁平化处理")
-            # 取第一级列名（Price level: Close, High, Low, etc.）
+            # Take the first-level column name (Price level: Close, High, Low, etc.)
             df.columns = df.columns.get_level_values(0)
 
-        # 重置索引，将日期从索引变为列
+        # Reset the index, turning the date index into a column
         df = df.reset_index()
 
-        # 列名映射（yfinance 使用首字母大写）
+        # Column name mapping (yfinance uses capitalized names)
         column_mapping = {
             'Date': 'date',
             'Datetime': 'date',
@@ -331,22 +331,22 @@ class YfinanceFetcher(BaseFetcher):
                         df = df.rename(columns={index_col: 'date'})
                         df['date'] = parsed_dates
 
-        # 计算涨跌幅（因为 yfinance 不直接提供）
+        # Compute change percent (yfinance does not provide it directly)
         if 'close' in df.columns:
             df['pct_chg'] = df['close'].pct_change() * 100
             df['pct_chg'] = df['pct_chg'].fillna(0).round(2)
 
-        # 计算成交额（yfinance 不提供，使用估算值）
-        # 成交额 ≈ 成交量 * 平均价格
+        # Compute turnover amount (not provided by yfinance; use an estimate)
+        # turnover amount ≈ volume * average price
         if 'volume' in df.columns and 'close' in df.columns:
             df['amount'] = df['volume'] * df['close']
         else:
             df['amount'] = 0
 
-        # 添加股票代码列
+        # Add the stock code column
         df['code'] = stock_code
 
-        # 只保留需要的列
+        # Keep only the required columns
         keep_cols = ['code'] + STANDARD_COLUMNS
         existing_cols = [col for col in keep_cols if col in df.columns]
         df = df[existing_cols]
@@ -355,19 +355,19 @@ class YfinanceFetcher(BaseFetcher):
 
     def _fetch_yf_ticker_data(self, yf, yf_code: str, name: str, return_code: str) -> Optional[Dict[str, Any]]:
         """
-        通过 yfinance 拉取单个指数/股票的行情数据。
+        Fetch quote data for a single index/stock via yfinance.
 
         Args:
-            yf: yfinance 模块引用
-            yf_code: yfinance 使用的代码（如 '000001.SS'、'^GSPC'）
-            name: 指数显示名称
-            return_code: 写入结果 dict 的 code 字段（如 'sh000001'、'SPX'）
+            yf: reference to the yfinance module
+            yf_code: code used by yfinance (e.g. '000001.SS', '^GSPC')
+            name: index display name
+            return_code: value written to the code field of the result dict (e.g. 'sh000001', 'SPX')
 
         Returns:
-            行情字典，失败时返回 None
+            Quote dict, or None on failure
         """
         ticker = yf.Ticker(yf_code)
-        # 取近两日数据以计算涨跌幅
+        # Fetch the last two days of data to compute the change percent
         hist = ticker.history(period='2d')
         if hist.empty:
             return None
@@ -379,7 +379,7 @@ class YfinanceFetcher(BaseFetcher):
         change_pct = (change / prev_close) * 100 if prev_close else 0
         high = float(today_row['High'])
         low = float(today_row['Low'])
-        # 振幅 = (最高 - 最低) / 昨收 * 100
+        # amplitude = (high - low) / previous close * 100
         amplitude = ((high - low) / prev_close * 100) if prev_close else 0
         return {
             'code': return_code,
@@ -392,17 +392,17 @@ class YfinanceFetcher(BaseFetcher):
             'low': low,
             'prev_close': prev_close,
             'volume': float(today_row['Volume']),
-            'amount': 0.0,  # Yahoo Finance 不提供准确成交额
+            'amount': 0.0,  # Yahoo Finance does not provide accurate turnover amount
             'amplitude': amplitude,
         }
 
     def get_main_indices(self, region: str = "cn") -> Optional[List[Dict[str, Any]]]:
         """
-        获取主要指数行情 (Yahoo Finance)，支持 A 股、美股、港股、日股、韩股与台股。
-        region=us 时委托给 _get_us_main_indices。
-        region=hk 时委托给 _get_hk_main_indices。
-        region=jp/kr/tw 时分别委托给对应市场指数方法。
-        其他非 cn 区域（如 vn）返回 None，交由下一个数据源处理。
+        Get main index quotes (Yahoo Finance) for A-share, US, HK, JP, KR and TW markets.
+        region=us delegates to _get_us_main_indices.
+        region=hk delegates to _get_hk_main_indices.
+        region=jp/kr/tw delegate to the corresponding market index methods.
+        Other non-cn regions (e.g. vn) return None and are left to the next data source.
         """
         import yfinance as yf
 
@@ -418,11 +418,11 @@ class YfinanceFetcher(BaseFetcher):
             return self._get_tw_main_indices(yf)
         if region != "cn":
             # Vùng chưa hỗ trợ (vd. vn) trả None để DataFetcherManager chuyển nguồn,
-            # tránh rơi xuống danh sách chỉ số A 股 bên dưới.
+            # tránh rơi xuống danh sách chỉ số A-share bên dưới.
             # Unsupported regions (e.g. vn) return None instead of A-share indices.
             return None
 
-        # A 股指数：akshare 代码 -> (yfinance 代码, 显示名称)
+        # A-share indices: akshare code -> (yfinance code, display name)
         yf_mapping = {
             'sh000001': ('000001.SS', '上证指数'),
             'sz399001': ('399001.SZ', '深证成指'),
@@ -453,8 +453,8 @@ class YfinanceFetcher(BaseFetcher):
         return None
 
     def _get_us_main_indices(self, yf) -> Optional[List[Dict[str, Any]]]:
-        """获取美股主要指数行情（SPX、IXIC、DJI、VIX），复用 _fetch_yf_ticker_data"""
-        # 大盘复盘所需核心美股指数
+        """Get main US index quotes (SPX, IXIC, DJI, VIX), reusing _fetch_yf_ticker_data"""
+        # Core US indices needed for the market review
         us_indices = ['SPX', 'IXIC', 'DJI', 'VIX']
         results = []
         try:
@@ -480,12 +480,12 @@ class YfinanceFetcher(BaseFetcher):
         return None
 
     def _get_hk_main_indices(self, yf) -> Optional[List[Dict[str, Any]]]:
-        """获取港股主要指数行情（HSI、HSTECH、HSCEI），复用 _fetch_yf_ticker_data"""
-        # Yahoo Finance 港股指数符号映射：
+        """Get main HK index quotes (HSI, HSTECH, HSCEI), reusing _fetch_yf_ticker_data"""
+        # Yahoo Finance HK index symbol mapping:
         # - HSI -> ^HSI
-        # - HSTECH -> HSTECH.HK（不是 ^HSTECH）
-        # - HSCEI -> ^HSCE（不是 ^HSCEI）
-        # 该映射由离线单测 tests/test_yfinance_hk_indices.py 固化，避免在线依赖导致非确定性失败。
+        # - HSTECH -> HSTECH.HK (not ^HSTECH)
+        # - HSCEI -> ^HSCE (not ^HSCEI)
+        # This mapping is pinned by the offline unit test tests/test_yfinance_hk_indices.py to avoid nondeterministic failures from online dependencies.
         hk_indices = {
             'HSI': ('^HSI', '恒生指数'),
             'HSTECH': ('HSTECH.HK', '恒生科技指数'),
@@ -512,7 +512,7 @@ class YfinanceFetcher(BaseFetcher):
         return None
 
     def _get_jp_main_indices(self, yf) -> Optional[List[Dict[str, Any]]]:
-        """获取日本主要指数行情（日经225、TOPIX），复用 _fetch_yf_ticker_data。"""
+        """Get main Japanese index quotes (Nikkei 225, TOPIX), reusing _fetch_yf_ticker_data."""
         jp_indices = {
             'N225': ('^N225', '日经225'),
             'TOPX': ('^TOPX', '东证指数'),
@@ -535,7 +535,7 @@ class YfinanceFetcher(BaseFetcher):
         return None
 
     def _get_kr_main_indices(self, yf) -> Optional[List[Dict[str, Any]]]:
-        """获取韩国主要指数行情（KOSPI、KOSDAQ），复用 _fetch_yf_ticker_data。"""
+        """Get main Korean index quotes (KOSPI, KOSDAQ), reusing _fetch_yf_ticker_data."""
         kr_indices = {
             'KS11': ('^KS11', 'KOSPI'),
             'KQ11': ('^KQ11', 'KOSDAQ'),
@@ -558,7 +558,7 @@ class YfinanceFetcher(BaseFetcher):
         return None
 
     def _get_tw_main_indices(self, yf) -> Optional[List[Dict[str, Any]]]:
-        """获取台湾主要指数行情（加权指数 ^TWII、柜买指数 ^TWOII），复用 _fetch_yf_ticker_data。"""
+        """Get main Taiwan index quotes (TAIEX ^TWII, TPEx index ^TWOII), reusing _fetch_yf_ticker_data."""
         tw_indices = {
             'TWII': ('^TWII', '台湾加权指数'),
             'TWOII': ('^TWOII', '台湾柜买指数'),
@@ -582,18 +582,18 @@ class YfinanceFetcher(BaseFetcher):
 
     def _is_us_stock(self, stock_code: str) -> bool:
         """
-        判断代码是否为美股股票（排除美股指数）。
+        Determine whether the code is a US stock (US indices excluded).
 
-        委托给 us_index_mapping 模块的 is_us_stock_code()。
+        Delegates to is_us_stock_code() in the us_index_mapping module.
         """
         return is_us_stock_code(stock_code)
 
     def _get_us_stock_quote_from_stooq(self, stock_code: str) -> Optional[UnifiedRealtimeQuote]:
         """
-        使用 Stooq 为美股实时行情提供免密钥兜底。
+        Use Stooq as a key-free fallback for US real-time quotes.
 
-        Stooq 提供的是最新交易日行情，精度不如分时实时接口，但在 Yahoo / yfinance
-        被限流时，至少能为 Web UI 提供可用价格；若可获取到昨收价，则同时提供涨跌幅等衍生指标。
+        Stooq provides latest-trading-day quotes, less precise than intraday real-time APIs, but when Yahoo / yfinance
+        is rate-limited it at least gives the Web UI a usable price; if the previous close is available, derived metrics such as change percent are also provided.
         """
         symbol = stock_code.strip().upper()
         stooq_symbol = f"{symbol.lower()}.us"
@@ -847,20 +847,20 @@ class YfinanceFetcher(BaseFetcher):
 
     def get_realtime_quote(self, stock_code: str) -> Optional[UnifiedRealtimeQuote]:
         """
-        获取美股、港股、日韩台股票或美股指数实时行情数据
+        Get real-time quotes for US, HK, JP/KR/TW stocks or US indices
 
-        支持美股股票（AAPL、TSLA）和美股指数（SPX、DJI 等）。
-        数据来源：yfinance Ticker.info
+        Supports US stocks (AAPL, TSLA) and US indices (SPX, DJI, etc.).
+        Data source: yfinance Ticker.info
 
         Args:
-            stock_code: 美股代码或指数代码，如 'AMD', 'AAPL', 'SPX', 'DJI'
+            stock_code: US stock or index code, e.g. 'AMD', 'AAPL', 'SPX', 'DJI'
 
         Returns:
-            UnifiedRealtimeQuote 对象，获取失败返回 None
+            UnifiedRealtimeQuote object, or None on failure
         """
         import yfinance as yf
 
-        # 美股指数：使用映射（SPX -> ^GSPC）
+        # US indices: use the mapping (SPX -> ^GSPC)
         yf_symbol, index_name = get_us_index_yf_symbol(stock_code)
         if yf_symbol:
             return self._get_us_index_realtime_quote(
@@ -869,7 +869,7 @@ class YfinanceFetcher(BaseFetcher):
                 index_name=index_name,
             )
 
-        # 仅处理美股、港股或 JP/KR/TW suffix-only 股票
+        # Only handle US, HK or JP/KR/TW suffix-only stocks
         if not (
             self._is_us_stock(stock_code)
             or _is_hk_market(stock_code)
@@ -887,7 +887,7 @@ class YfinanceFetcher(BaseFetcher):
 
             ticker = yf.Ticker(symbol)
 
-            # 尝试获取 fast_info（更快，但字段较少）
+            # Try fast_info first (faster, but fewer fields)
             try:
                 info = ticker.fast_info
                 if info is None:
@@ -902,7 +902,7 @@ class YfinanceFetcher(BaseFetcher):
                 market_cap = getattr(info, 'marketCap', None) or getattr(info, 'market_cap', None)
 
             except Exception:
-                # 回退到 history 方法获取最新数据
+                # Fall back to the history method for the latest data
                 logger.debug("[Yfinance] fast_info 失败，尝试 history 方法")
                 hist = ticker.history(period='2d')
                 if hist.empty:
@@ -923,19 +923,19 @@ class YfinanceFetcher(BaseFetcher):
                 volume = int(today['Volume'])
                 market_cap = None
 
-            # 计算涨跌幅
+            # Compute change percent
             change_amount = None
             change_pct = None
             if price is not None and prev_close is not None and prev_close > 0:
                 change_amount = price - prev_close
                 change_pct = (change_amount / prev_close) * 100
 
-            # 计算振幅
+            # Compute amplitude
             amplitude = None
             if high is not None and low is not None and prev_close is not None and prev_close > 0:
                 amplitude = ((high - low) / prev_close) * 100
 
-            # 获取股票名称与 provider 元数据
+            # Get the stock name and provider metadata
             try:
                 ticker_info = ticker.info or {}
             except Exception:
@@ -946,7 +946,7 @@ class YfinanceFetcher(BaseFetcher):
             except Exception:
                 name = STOCK_NAME_MAP.get(symbol, '')
 
-            # 复用上方已获取的 ticker_info，无额外请求
+            # Reuse the ticker_info fetched above, no extra request
             pe_ratio = _safe_float(ticker_info.get('trailingPE'))
             pb_ratio = _safe_float(ticker_info.get('priceToBook'))
 
@@ -974,7 +974,7 @@ class YfinanceFetcher(BaseFetcher):
                 change_pct=round(change_pct, 2) if change_pct is not None else None,
                 change_amount=round(change_amount, 4) if change_amount is not None else None,
                 volume=volume,
-                amount=None,  # yfinance 不直接提供成交额
+                amount=None,  # yfinance does not provide turnover amount directly
                 volume_ratio=None,
                 turnover_rate=None,
                 amplitude=round(amplitude, 2) if amplitude is not None else None,
@@ -1000,13 +1000,13 @@ class YfinanceFetcher(BaseFetcher):
 
 
 if __name__ == "__main__":
-    # 测试代码
+    # Test code
     logging.basicConfig(level=logging.DEBUG)
 
     fetcher = YfinanceFetcher()
 
     try:
-        df = fetcher.get_daily_data('600519')  # 茅台
+        df = fetcher.get_daily_data('600519')  # Kweichow Moutai
         print(f"获取成功，共 {len(df)} 条数据")
         print(df.tail())
     except Exception as e:

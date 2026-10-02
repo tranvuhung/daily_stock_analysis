@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-大盘复盘市场区域配置
+Market review region configuration
 
-定义各市场区域的指数、新闻搜索词、Prompt 提示等元数据，
-供 MarketAnalyzer 按 region 切换 A 股/港股/美股/日韩/越南复盘行为。
+Defines metadata for each market region (indices, news search terms, prompt hints, etc.)
+so MarketAnalyzer can switch review behavior by region across A-share/HK/US/Japan-Korea/Vietnam.
 """
 
 from dataclasses import dataclass
@@ -12,18 +12,18 @@ from typing import List
 
 @dataclass
 class MarketProfile:
-    """大盘复盘市场区域配置"""
+    """Market review region configuration"""
 
     region: str  # "cn" | "hk" | "us" | "jp" | "kr" | "vn"
-    # 用于判断整体走势的指数代码，cn 用上证 000001，us 用标普 SPX
+    # Index code used to judge the overall trend: cn uses SSE 000001, us uses S&P SPX
     mood_index_code: str
-    # 新闻搜索关键词
+    # News search keywords
     news_queries: List[str]
-    # 指数点评 Prompt 提示语
+    # Prompt hint for index commentary
     prompt_index_hint: str
-    # 市场概况是否包含涨跌家数、涨停跌停（A 股有，美股无）
+    # Whether the market overview includes advance/decline counts and limit-up/limit-down (available for A-share, not US)
     has_market_stats: bool
-    # 市场概况是否包含板块涨跌（A 股有，美股暂无）
+    # Whether the market overview includes sector performance (available for A-share, not yet for US)
     has_sector_rankings: bool
 
 
@@ -110,7 +110,7 @@ VN_PROFILE = MarketProfile(
 
 
 def get_profile(region: str) -> MarketProfile:
-    """根据 region 返回对应的 MarketProfile"""
+    """Return the MarketProfile for the given region"""
     if region == "us":
         return US_PROFILE
     if region == "hk":

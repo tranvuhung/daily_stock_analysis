@@ -33,7 +33,7 @@ class _ProviderDefinition:
             for markets in self.dataset_markets.values()
             for market in markets
         }
-        # 顺序取自市场注册表，新增市场时不需要再改这里
+        # Order comes from the market registry; adding a market does not require changes here
         from src.core.markets import ALL_MARKET_CODES
 
         return tuple(market for market in ALL_MARKET_CODES if market in supported)
@@ -153,7 +153,7 @@ _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
         fetcher_name="VciFetcher",
         dataset_markets={
             "kline.daily": ("vn",),
-            # VNINDEX / VN30 / HNXIndex / HNX30 / HNXUpcomIndex 走同一个日线接口
+            # VNINDEX / VN30 / HNXIndex / HNX30 / HNXUpcomIndex share the same daily endpoint
             "index.daily": ("vn",),
             # Chỉ số chính cho điểm lại thị trường Việt Nam (get_main_indices)
             "market.overview": ("vn",),
@@ -165,7 +165,7 @@ _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
         label="SSI iBoard",
         fetcher_name="SsiFetcher",
         dataset_markets={
-            # 全市场快照（HOSE/HNX/UPCOM 各一次请求）
+            # Full-market snapshot (one request each for HOSE/HNX/UPCOM)
             "quote.realtime": ("vn",),
             "kline.daily": ("vn",),
             # Độ rộng thị trường (tăng/giảm/trần/sàn) tính từ snapshot
@@ -178,8 +178,8 @@ _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
         label="vnstock (optional)",
         fetcher_name="VnstockFetcher",
         dataset_markets={
-            # 仅在 VNSTOCK_ENABLED=true 且已安装 vnstock 时才会被实例化，
-            # 因此不声明实时行情能力，避免变成 pseudo-fallback。
+            # Only instantiated when VNSTOCK_ENABLED=true and vnstock is installed,
+            # so no realtime-quote capability is declared, to avoid becoming a pseudo-fallback.
             "kline.daily": ("vn",),
         },
     ),
@@ -328,9 +328,9 @@ class DataCapabilityService:
         for definition in _PROVIDER_DEFINITIONS:
             fetcher = fetcher_map.get(definition.fetcher_name or "")
             configured = self._is_provider_configured(definition)
-            # 所有服务市场都被 SUPPORTED_MARKETS 关掉的 provider 在运行时根本不会
-            # 被实例化。如果这里仍然报 enabled=true / unavailable，看板会把"市场
-            # 已停用"误读成"数据源坏了"。
+            # Providers whose served markets are all disabled by SUPPORTED_MARKETS are never
+            # instantiated at runtime. If we still reported enabled=true / unavailable, the dashboard would misread "market
+            # disabled" as "data source broken".
             market_enabled = any(
                 is_market_enabled(market) for market in definition.markets
             ) if definition.markets else True
@@ -338,10 +338,10 @@ class DataCapabilityService:
             warnings: List[str] = []
 
             if not market_enabled:
-                # 复用既有的 unconfigured 状态而不是新增枚举值：
-                # ProviderCapabilityStatus 是对外契约，Web/Desktop 都按它做穷举
-                # 匹配，新增取值会无提示破坏现有客户端。具体原因通过 warnings
-                # 里的 market_disabled 传递，warnings 本来就是自由取值的编码列表。
+                # Reuse the existing unconfigured status instead of adding an enum value:
+                # ProviderCapabilityStatus is an external contract that Web/Desktop match
+                # exhaustively; a new value would silently break existing clients. The concrete reason is passed via
+                # market_disabled in warnings, which is already a free-form list of codes.
                 status = "unconfigured"
                 warnings.append("market_disabled")
             elif not configured and not definition.builtin:

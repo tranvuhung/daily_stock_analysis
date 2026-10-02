@@ -181,10 +181,10 @@ should sum to 100; all-zero means no effective signal and must not be faked.
                 "",
             ]
 
-        # Feed prior opinions — Orchestrator已在 _partition_skill_opinions 中完成
-        # skill 观点的分拣，ctx.opinions 中不再含 invalid skill opinion；
-        # invalid skill 观点存于 ctx.meta["invalid_opinions"]。
-        # DecisionAgent 直接消费，不再二次过滤。
+        # Feed prior opinions — the Orchestrator has already partitioned skill
+        # opinions in _partition_skill_opinions; ctx.opinions no longer holds invalid skill opinions;
+        # invalid skill opinions live in ctx.meta["invalid_opinions"].
+        # DecisionAgent consumes them directly without filtering again.
         if ctx.opinions:
             parts.append("## Agent Opinions (Evidence Chain)")
             for op in ctx.opinions:

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-股票数据访问层
+Stock data access layer
 ===================================
 
-职责：
-1. 封装股票数据的数据库操作
-2. 提供日线数据查询接口
+Responsibilities:
+1. Encapsulate database operations for stock data
+2. Provide daily bar query interfaces
 """
 
 import logging
@@ -23,30 +23,30 @@ logger = logging.getLogger(__name__)
 
 class StockRepository:
     """
-    股票数据访问层
+    Stock data access layer
     
-    封装 StockDaily 表的数据库操作
+    Encapsulates database operations on the StockDaily table
     """
     
     def __init__(self, db_manager: Optional[DatabaseManager] = None):
         """
-        初始化数据访问层
+        Initialize the data access layer
         
         Args:
-            db_manager: 数据库管理器（可选，默认使用单例）
+            db_manager: Database manager (optional, defaults to the singleton)
         """
         self.db = db_manager or DatabaseManager.get_instance()
     
     def get_latest(self, code: str, days: int = 2) -> List[StockDaily]:
         """
-        获取最近 N 天的数据
+        Get data for the last N days
         
         Args:
-            code: 股票代码
-            days: 获取天数
+            code: Stock code
+            days: Number of days
             
         Returns:
-            StockDaily 对象列表（按日期降序）
+            List of StockDaily objects (sorted by date descending)
         """
         try:
             return self.db.get_latest_data(code, days)
@@ -61,15 +61,15 @@ class StockRepository:
         end_date: date
     ) -> List[StockDaily]:
         """
-        获取指定日期范围的数据
+        Get data for the given date range
         
         Args:
-            code: 股票代码
-            start_date: 开始日期
-            end_date: 结束日期
+            code: Stock code
+            start_date: Start date
+            end_date: End date
             
         Returns:
-            StockDaily 对象列表
+            List of StockDaily objects
         """
         try:
             return self.db.get_data_range(code, start_date, end_date)
@@ -84,15 +84,15 @@ class StockRepository:
         data_source: str = "Unknown"
     ) -> int:
         """
-        保存 DataFrame 到数据库
+        Save a DataFrame to the database
         
         Args:
-            df: 包含日线数据的 DataFrame
-            code: 股票代码
-            data_source: 数据来源
+            df: DataFrame containing daily bar data
+            code: Stock code
+            data_source: Data source
             
         Returns:
-            保存的记录数
+            Number of records saved
         """
         try:
             return self.db.save_daily_data(df, code, data_source)
@@ -102,14 +102,14 @@ class StockRepository:
     
     def has_today_data(self, code: str, target_date: Optional[date] = None) -> bool:
         """
-        检查是否有指定日期的数据
+        Check whether data exists for the given date
         
         Args:
-            code: 股票代码
-            target_date: 目标日期（默认今天）
+            code: Stock code
+            target_date: Target date (default today)
             
         Returns:
-            是否存在数据
+            Whether data exists
         """
         try:
             return self.db.has_today_data(code, target_date)
@@ -123,14 +123,14 @@ class StockRepository:
         target_date: Optional[date] = None
     ) -> Optional[Dict[str, Any]]:
         """
-        获取分析上下文
+        Get the analysis context
         
         Args:
-            code: 股票代码
-            target_date: 目标日期
+            code: Stock code
+            target_date: Target date
             
         Returns:
-            分析上下文字典
+            Analysis context dict
         """
         try:
             return self.db.get_analysis_context(code, target_date)

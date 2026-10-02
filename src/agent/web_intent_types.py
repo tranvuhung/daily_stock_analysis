@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Web Chat 意图识别层 — 分词模块的类型与常量（Intent Tokenizer Types）。
+Web Chat intent recognition layer — types and constants for the tokenizer module (Intent Tokenizer Types).
 
-== 模块定位 ==
-本模块是 ``web_intent_tokenizer.py`` 六步分词管道的"数据字典"：Token
-结构、tag/关键词/正则常量。意图层定义（意图枚举、意图识别结果、置信度/
-会话常量）随 ``web_intent_resolver.py`` 在后续 PR 引入。
+== Module role ==
+This module is the "data dictionary" of the six-step tokenizer pipeline in ``web_intent_tokenizer.py``: the Token
+structure plus tag/keyword/regex constants. Intent-layer definitions (intent enum, intent recognition result,
+confidence/session constants) arrive with ``web_intent_resolver.py`` in a later PR.
 """
 
 from __future__ import annotations
@@ -47,68 +47,68 @@ __all__ = [
 
 
 # =========================================================================
-# Token 语义标签常量 — 5 大类 21 个标签，近义词归入同一标签，供正则匹配使用
+# Token semantic tag constants — 21 tags in 5 groups; synonyms share one tag; used for regex matching
 # =========================================================================
 
-# --- 股票识别 ---
-TAG_UNKNOWN_CODE = "unknown_code"      # 待验证的代码形字符串，Step 3 提取的中间态，由 _identify_stock_codes 辨认
-TAG_UNKNOWN_NUMBER = "unknown_number"  # 任意位裸数字（代码/指数/价格/年份/数量/日期…形态歧义），Step 3 直接标记，不进入代码校验
-TAG_STOCK_CODE = "stock_code"          # 库命中的股票代码（stocks 附完整 code/name/market 三元组）
+# --- Stock recognition ---
+TAG_UNKNOWN_CODE = "unknown_code"      # Code-shaped string pending validation: intermediate state extracted in Step 3, identified by _identify_stock_codes
+TAG_UNKNOWN_NUMBER = "unknown_number"  # Bare number of any length (ambiguous shape: code/index/price/year/quantity/date…); tagged directly in Step 3, skips code validation
+TAG_STOCK_CODE = "stock_code"          # Stock code found in the DB (stocks carries the full code/name/market triple)
 
-# 代码辨认失败态按市场细分（_identify_stock_codes 产出）：
-#   wrong_{market}_code   — 确定不存在：形态非法（交易所静态规则），或该市场库已
-#                           全量（A 股 AkShare 已并入）仍未命中
-#   unknown_{market}_code — 存疑：该市场库非全量（hk/us 本地精选库）未命中，
-#                           交下游 LLM 判断，绝不硬猜
+# Code identification failure states, split by market (produced by _identify_stock_codes):
+#   wrong_{market}_code   — definitely nonexistent: invalid shape (static exchange rules), or the market DB is
+#                           full (A-share AkShare merged) and still missed
+#   unknown_{market}_code — uncertain: missed in a non-full market DB (hk/us curated local DBs),
+#                           left to the downstream LLM, never guessed
 
 
 def wrong_code_tag(market: str) -> str:
-    """确定非法代码的 tag（market ∈ a/hk/us → wrong_a_code / wrong_hk_code / wrong_us_code）。"""
+    """Tag for a definitely invalid code (market ∈ a/hk/us → wrong_a_code / wrong_hk_code / wrong_us_code)."""
     return f"wrong_{market}_code"
 
 
 def unknown_code_tag(market: str) -> str:
-    """存疑代码的 tag（market ∈ a/hk/us → unknown_a_code / unknown_hk_code / unknown_us_code）。"""
+    """Tag for an uncertain code (market ∈ a/hk/us → unknown_a_code / unknown_hk_code / unknown_us_code)."""
     return f"unknown_{market}_code"
 
-TAG_STOCK_NAME = "stock_name"          # 股票实体（全名或一对一缩写），Step 1 仅全名精确匹配、Step 6 多策略匹配提取
+TAG_STOCK_NAME = "stock_name"          # Stock entity (full name or one-to-one abbreviation); Step 1 only exact full-name match, Step 6 multi-strategy extraction
 
-# --- 意图主题 ---
-TAG_SUBJECT_RESEARCH = "subject_research"       # 研究主题（走势/趋势/技术面/基本面/筹码）
-TAG_SUBJECT_PORTFOLIO = "subject_portfolio"     # 持仓主题（持仓/仓位/自选股/盈亏）
-TAG_SUBJECT_MARKET = "subject_market"           # 市场标识（A股/港股/美股/沪市…）
-TAG_SUBJECT_MARKET_BROAD = "subject_market_broad"  # 泛市场概念（大盘/行情/指数/两市）
-TAG_SUBJECT_INDEX = "subject_index"             # 具体指数（上证/恒生/纳斯达克/沪深300…）
+# --- Intent subjects ---
+TAG_SUBJECT_RESEARCH = "subject_research"       # Research subject (price action/trend/technicals/fundamentals/chip distribution)
+TAG_SUBJECT_PORTFOLIO = "subject_portfolio"     # Portfolio subject (holdings/position/watchlist/P&L)
+TAG_SUBJECT_MARKET = "subject_market"           # Market identifier (A-share/HK/US/Shanghai market…)
+TAG_SUBJECT_MARKET_BROAD = "subject_market_broad"  # Generic market concept (broad market/quotes/index/both exchanges)
+TAG_SUBJECT_INDEX = "subject_index"             # Specific index (SSE/Hang Seng/Nasdaq/CSI 300…)
 
-# --- 动作 ---
-TAG_REQUEST = "request"                       # 分析动作词（分析/看看/研究/诊断/查一下/评估）
-TAG_ACTION_RESEARCH = "action_research"       # 研究决策（能买/可以买/止损/目标价/buy/sell）
-TAG_ACTION_PORTFOLIO = "action_portfolio"     # 持仓操作（加仓/减仓/调仓/满仓/空仓）
+# --- Actions ---
+TAG_REQUEST = "request"                       # Analysis action words (analyze/take a look/research/diagnose/check/evaluate)
+TAG_ACTION_RESEARCH = "action_research"       # Research decision (can buy/may buy/stop loss/target price/buy/sell)
+TAG_ACTION_PORTFOLIO = "action_portfolio"     # Position operation (add/reduce/rebalance/full position/flat)
 
-# --- 辅助 ---
-TAG_FOLLOWUP = "followup"     # 追问延续（继续/刚才/这只/它/上面/上次/该股）
-TAG_QUESTION = "question"     # 疑问（怎么看/怎么样/涨还是跌/怎么/为何/吗/呢）
-TAG_COMPARISON = "comparison"  # 对比（对比/比较/哪个好/vs/pk/二选一）
-TAG_SECTOR = "sector"          # 板块泛称词（板块/行业/赛道/概念/题材/龙头）+ XX+后缀 复合形态
-TAG_SECTOR_NAME = "sector_name"        # 行业名（金融/建筑/证券/农业…），裸用即行业意图
-TAG_SECTOR_N_STOCK = "sector_n_stock"  # 行业名兼股票全名（机器人=300024），裸用歧义交下游 LLM 消歧
-TAG_TIME = "time"             # 时间指示（今天/本周/交易日/实时）
-TAG_FILLER = "filler"         # 回复填充词（单字独立匹配：的/买/卖/选/那/这…）
-TAG_CORP_SUFFIX = "corp_suffix"  # 通用公司后缀（公司/集团/控股/股份/国际）：零区分度，精确命中即跳过股票名匹配
+# --- Auxiliary ---
+TAG_FOLLOWUP = "followup"     # Follow-up continuation (continue/just now/this one/it/above/last time/this stock)
+TAG_QUESTION = "question"     # Question (what do you think/how is it/up or down/how/why/question particles)
+TAG_COMPARISON = "comparison"  # Comparison (compare/contrast/which is better/vs/pk/pick one of two)
+TAG_SECTOR = "sector"          # Generic sector words (sector/industry/track/concept/theme/leader) + XX+suffix compound forms
+TAG_SECTOR_NAME = "sector_name"        # Industry names (finance/construction/securities/agriculture…); used bare means sector intent
+TAG_SECTOR_N_STOCK = "sector_n_stock"  # Industry name that is also a full stock name (机器人=300024); bare use is ambiguous and left to the downstream LLM
+TAG_TIME = "time"             # Time indicators (today/this week/trading day/realtime)
+TAG_FILLER = "filler"         # Reply filler words (single-char standalone matches: 的/买/卖/选/那/这…)
+TAG_CORP_SUFFIX = "corp_suffix"  # Generic company suffixes (company/group/holdings/shares/international): zero discriminative power; an exact hit skips stock-name matching
 
 class Market(str, Enum):
-    """市场标识枚举（str 子类，成员可直接与字符串比较）。"""
+    """Market identifier enum (str subclass; members compare directly with strings)."""
 
-    A = "a"    # A 股
-    HK = "hk"  # 港股
-    US = "us"  # 美股
+    A = "a"    # A-share
+    HK = "hk"  # HK stocks
+    US = "us"  # US stocks
 
 
 # =========================================================================
-# Tag → 关键词列表 — 所有中文关键词的唯一定义处
+# Tag → keyword list — the single definition point for all Chinese keywords
 # =========================================================================
-# 后续正则全部从这里编译，不手写中文关键词；TAG_SUBJECT_MARKET 由 _MARKET_KEYWORD_MAP 派生。
-# 排除项：多 token 跨词模式（和.*比…）→ extra 参数；"值得" → 与股票名"值得买"冲突，已删除
+# All later regexes are compiled from here, never hand-written Chinese keywords; TAG_SUBJECT_MARKET is derived from _MARKET_KEYWORD_MAP.
+# Exclusions: multi-token cross-word patterns (和.*比…) → extra param; "值得" → conflicts with the stock name "值得买", removed
 
 _MARKET_KEYWORD_MAP: Dict[Market, tuple] = {
     Market.A: ("a股", "大a", "沪市", "深市", "沪深"),
@@ -116,9 +116,9 @@ _MARKET_KEYWORD_MAP: Dict[Market, tuple] = {
     Market.US: ("美股", "美国"),
 }
 
-# 按照是否影响股票实体混合匹配，关键词分两池：clean 无歧义可直接分词，置信度较高；
-#       extend 可能与股票名混淆，增加分词多样性，但置信度较低，需要做交叉验证，否则宁可放弃。
-# _TAG_KEYWORD_LISTS 由两者合并，下游逻辑不变
+# Keywords are split into two pools by whether they affect hybrid stock-entity matching: clean is unambiguous and tokenized directly, with higher confidence;
+#       extend may be confused with stock names; it adds tokenization variety but has lower confidence and needs cross-validation, otherwise it is better dropped.
+# _TAG_KEYWORD_LISTS merges both; downstream logic is unchanged
 
 _TAG_KEYWORD_LISTS_CLEAN: Dict[str, List[str]] = {
     TAG_REQUEST: [
@@ -152,8 +152,8 @@ _TAG_KEYWORD_LISTS_CLEAN: Dict[str, List[str]] = {
         "标普", "道琼斯", "道指", 
         "沪指", "深成指", "深证成指",
         "科创", "科创板", "index", "indices",
-        # 含数字指数词（CJK+数字复合词）：数字段与裸数字共形，Step 3 由
-        # _DIGIT_KEYWORDS_RE 保护区放行，否则整词永远无法在 Step 4/5 命中
+        # Index words containing digits (CJK+digit compounds): the digit part has the same shape as bare numbers, so Step 3
+        # lets them through via the _DIGIT_KEYWORDS_RE protected zone, otherwise the whole word could never match in Step 4/5
         "中证A500", "中证1000", "中证2000", "中证500", "中证800", "中证100",
         "上证50", "北证50", "深证100", "创业板50", "沪深300", "科创50",
     ],
@@ -176,22 +176,22 @@ _TAG_KEYWORD_LISTS_CLEAN: Dict[str, List[str]] = {
 
 _TAG_KEYWORD_LISTS_EXTEND: Dict[str, List[str]] = {
     TAG_SUBJECT_INDEX: [
-        "恒生",  # 与股票名"恒生电子"混淆
+        "恒生",  # Confused with the stock name "恒生电子"
     ],
     TAG_COMPARISON: [
         "对比", "比较", "多选", "选哪",
     ],
     TAG_SECTOR: [
-        # 泛称词：XX行业名的后缀落款（板块/行业/赛道/概念/题材）+ 龙头。
-        # Step 6 DFS 把"建筑板块"分解为相邻 [sector_name]+[sector] 组合，
-        # 该相邻组合即高置信度板块信号（由下游消费）；龙头非后缀，指
-        # 龙头个股（"白酒龙头"），不参与相邻组合语义
+        # Generic words: suffixes of XX industry names (sector/industry/track/concept/theme) + leader.
+        # Step 6 DFS splits "建筑板块" into an adjacent [sector_name]+[sector] combination,
+        # and that adjacent combination is a high-confidence sector signal (consumed downstream); "leader" is not a suffix, it refers to
+        # a leading stock ("白酒龙头") and does not take part in the adjacent-combination semantics
         "板块", "行业", "赛道", "概念", "题材", "龙头",
     ],
     TAG_SECTOR_NAME: [
-        # 行业名：裸用即行业意图。含与股票名冲突的词（全量库实证："证券"⊂
-        # 中信证券、"农业"⊂农业银行…）——名称库子串命中置信度极低，
-        # 行业语义优先，全管道不做个股名匹配
+        # Industry names: bare use means sector intent. Includes words that clash with stock names (verified on the full DB: "证券"⊂
+        # 中信证券, "农业"⊂农业银行…) — name-DB substring hits have very low confidence,
+        # so sector semantics take precedence and the whole pipeline does no stock-name matching for them
         "新能源", "半导体", "消费", "医药", "白酒",
         "军工", "银行", "地产", "保险", "券商",
         "煤炭", "有色", "钢铁", "汽车", "光伏", "锂电",
@@ -200,9 +200,9 @@ _TAG_KEYWORD_LISTS_EXTEND: Dict[str, List[str]] = {
         "航空", "软件", "通信", "旅游",
     ],
     TAG_SECTOR_N_STOCK: [
-        # 行业名兼库中股票全名（"机器人"=300024）：精确全名命中，行业/个股
-        # 双解皆合理——裸用打歧义 tag 交下游 LLM/确认消歧，不直接打
-        # stock_name，也不武断打 sector_name
+        # Industry names that are also full stock names in the DB ("机器人"=300024): exact full-name hit, both sector and stock
+        # readings are plausible — bare use gets the ambiguity tag for downstream LLM/confirmation to resolve, not directly
+        # stock_name, nor arbitrarily sector_name
         "机器人",
     ],
     TAG_FILLER: [
@@ -212,13 +212,13 @@ _TAG_KEYWORD_LISTS_EXTEND: Dict[str, List[str]] = {
         "哦", "嘛", "么", "就", "请", "第", "个",
     ],
     TAG_CORP_SUFFIX: [
-        # 通用公司后缀（零区分度）：精确命中即打 corp_suffix tag 并跳过
-        # 股票名扫描——子串匹配在名库必然命中带词头的全名（"公司"⊂中微
-        # 公司、"集团"⊂上汽集团），命中是噪声非信号；并作为可覆盖片段
-        # 参与 DFS 全覆盖（"腾讯公司"→腾讯+公司）。带区分度词头的
-        # "苹果公司"/"中芯国际"不受影响。区别于 filler：语义是公司名
-        # 后缀而非填充词，下游可单独识别处理。仅 extend 不入 clean
-        # （clean 正则会在 Step 5 从 token 中途撕出后缀）
+        # Generic company suffixes (zero discriminative power): an exact hit gets the corp_suffix tag and skips
+        # stock-name scanning — substring matching on the name DB always hits full names with a head word ("公司"⊂中微
+        # 公司, "集团"⊂上汽集团), so a hit is noise, not signal; they also serve as coverable fragments
+        # in DFS full coverage ("腾讯公司"→腾讯+公司). Names with a discriminative head word such as
+        # "苹果公司"/"中芯国际" are unaffected. Unlike filler: the semantics is a company-name
+        # suffix rather than a filler word, so downstream can recognize it separately. Only in extend, not clean
+        # (the clean regex would tear the suffix out of the middle of a token in Step 5)
         "公司", "集团", "控股", "股份", "国际",
     ],
 }
@@ -230,38 +230,38 @@ for _tag in set(_TAG_KEYWORD_LISTS_CLEAN) | set(_TAG_KEYWORD_LISTS_EXTEND):
         _TAG_KEYWORD_LISTS_EXTEND.get(_tag, [])
     )
 
-# 市场标识关键词 → tag（从 _MARKET_KEYWORD_MAP 派生）
+# Market identifier keyword → tag (derived from _MARKET_KEYWORD_MAP)
 _MARKET_KW_TAG_MAP: Dict[str, str] = {
     kw: TAG_SUBJECT_MARKET
     for keywords in _MARKET_KEYWORD_MAP.values()
     for kw in keywords
 }
 
-# market keyword → Market 枚举（反转，O(1) 查询）
+# market keyword → Market enum (inverted, O(1) lookup)
 _KW_TO_MARKET: Dict[str, Market] = {
     kw: mkt for mkt, keywords in _MARKET_KEYWORD_MAP.items() for kw in keywords
 }
 
-# keyword → tag（反转 + 市场词合并，供 _classify_keyword O(1) 查询）
+# keyword → tag (inverted + market words merged, for O(1) lookup in _classify_keyword)
 _KEYWORD_TAG_MAP: Dict[str, str] = {
     kw: tag for tag, kws in _TAG_KEYWORD_LISTS.items() for kw in kws
 }
 _KEYWORD_TAG_MAP.update(_MARKET_KW_TAG_MAP)
 
-# 小写归一映射：关键词大小写不敏感分类的回退查询点。词池存储形态混合
-# （多数 ASCII 词小写、"AI"/"中证A500" 大写），只做输入 lower 回退会让
-# 大写存储词的小写形态（"ai赛道"/"中证a500"）整体失效，故关键词侧也
-# 统一归一到小写。当前词池无小写同形词；若将来出现会在本表静默合并，
-# 需保持词池互斥。
+# Lowercase-normalized map: fallback lookup for case-insensitive keyword classification. The word pools store mixed forms
+# (most ASCII words lowercase, "AI"/"中证A500" uppercase); a lower() fallback on input alone would make
+# lowercase forms of uppercase-stored words ("ai赛道"/"中证a500") fail entirely, so the keyword side is
+# also normalized to lowercase. The current pools have no lowercase homographs; if one appears it would be silently merged here,
+# so the pools must stay mutually exclusive.
 _KEYWORD_TAG_MAP_LOWER: Dict[str, str] = {
     kw.lower(): tag for kw, tag in _KEYWORD_TAG_MAP.items()
 }
 
-# 含数字的枚举关键词（CJK+数字复合词，如 "沪深300"/"中证1000"）：其数字段
-# 与裸数字在文本中共形，若 Step 3 按裸数字提取，整词将被拆成"前缀+数字"
-# 永远无法在 Step 4/5 命中。_split_by_codes 用本正则把关键词 span 标记为
-# 保护区，完全落在保护区内的数字候选 span 放行（部分重叠如 "沪深3000"
-# 不适用，维持裸数字行为），整词交 Step 4/5 关键词分词。
+# Enumerated keywords containing digits (CJK+digit compounds such as "沪深300"/"中证1000"): their digit part
+# has the same shape as bare numbers in text; if Step 3 extracted them as bare numbers, the word would be split into "prefix+number"
+# and never match in Step 4/5. _split_by_codes uses this regex to mark keyword spans as
+# protected zones; digit candidate spans fully inside a protected zone are let through (partial overlaps like "沪深3000"
+# do not qualify and keep bare-number behavior), and the whole word goes to Step 4/5 keyword tokenization.
 _DIGIT_KEYWORDS: Tuple[str, ...] = tuple(sorted(
     (
         kw
@@ -272,39 +272,39 @@ _DIGIT_KEYWORDS: Tuple[str, ...] = tuple(sorted(
     key=len,
     reverse=True,
 ))
-# 大小写不敏感编译："中证a500" 与 "中证A500" 同受数字段保护（tag 分类侧
-# 的大小写归一见 _KEYWORD_TAG_MAP_LOWER）。
+# Compiled case-insensitively: "中证a500" and "中证A500" are equally protected for the digit part (case
+# normalization on the tag classification side is in _KEYWORD_TAG_MAP_LOWER).
 _DIGIT_KEYWORDS_RE = (
     re.compile("|".join(re.escape(kw) for kw in _DIGIT_KEYWORDS), re.IGNORECASE)
     if _DIGIT_KEYWORDS
     else None
 )
 
-# 全部纯 ASCII 关键词的大写集合：Step 3 代码候选的放行谓词（大小写不敏
-# 感）——"PK"/"Buy"/"AI" 等关键词形态不得被美股 ticker 正则抠走，否则
-# 关键词语义丢失、误入代码辨认（含原 sector 词池精确匹配放行的 "AI"，
-# 取代其职责；"HK"/"US" 非关键词，仍照常作为代码候选）
+# Uppercase set of all pure-ASCII keywords: the pass-through predicate for Step 3 code candidates (case-
+# insensitive) — keyword forms like "PK"/"Buy"/"AI" must not be grabbed by the US ticker regex, otherwise
+# keyword semantics are lost and they wrongly enter code identification (this includes "AI", previously let through by exact match on the sector pool,
+# whose role this takes over; "HK"/"US" are not keywords and still act as code candidates)
 _ASCII_KEYWORD_UPPER: frozenset = frozenset(
     kw.upper() for kw in _KEYWORD_TAG_MAP if kw.isascii() and kw.isalpha()
 )
 
 
 # =========================================================================
-# 正则编译工具 — 全部从 _TAG_KEYWORD_LISTS 编译
+# Regex compilation helpers — everything is compiled from _TAG_KEYWORD_LISTS
 # =========================================================================
 
 def _compile_kw_fragment(kw: str) -> str:
-    """单个关键词 → regex 片段：ASCII 包裹 (?i:)，CJK 直接 escape。"""
+    """Single keyword → regex fragment: ASCII wrapped in (?i:), CJK escaped directly."""
     if re.search(r"[A-Za-z]", kw):
         return f"(?i:{re.escape(kw)})"
     return re.escape(kw)
 
 
 def _compile_kw_pattern(*tags: str, extra: str = "") -> re.Pattern:
-    """从指定 tag 列表提取所有关键词，编译为单个正则。
+    """Extract all keywords from the given tag list and compile them into a single regex.
 
-    按长度降序排列确保长关键词优先（"沪深300" 不被 "沪深" 截断）。
-    extra 参数可追加原生 regex 片段（如 vs 词边界、多 token 跨词模式）。
+    Sorted by length descending so longer keywords win ("沪深300" is not cut by "沪深").
+    The extra param can append raw regex fragments (e.g. vs word boundaries, multi-token cross-word patterns).
     """
     kws: List[str] = []
     for tag in tags:
@@ -320,7 +320,7 @@ def _compile_kw_pattern(*tags: str, extra: str = "") -> re.Pattern:
     return re.compile("|".join(fragments))
 
 
-# Step 5 关键词分词正则（排除市场类 tag，Step 4 独立处理，避免 "大港股份" 消歧失效）
+# Step 5 keyword tokenization regex (market tags excluded and handled separately in Step 4, so "大港股份" disambiguation keeps working)
 _NON_MARKET_TAGS = frozenset({
     TAG_REQUEST, TAG_SUBJECT_RESEARCH, TAG_ACTION_RESEARCH, TAG_QUESTION,
     TAG_SUBJECT_PORTFOLIO, TAG_ACTION_PORTFOLIO,
@@ -330,7 +330,7 @@ _NON_MARKET_TAGS = frozenset({
 
 
 def _compile_clean_kw_pattern(*tags: str) -> re.Pattern:
-    """仅用 _TAG_KEYWORD_LISTS_CLEAN 编译正则，排除可能混淆股票名的扩展关键词。"""
+    """Compile a regex from _TAG_KEYWORD_LISTS_CLEAN only, excluding extended keywords that may be confused with stock names."""
     kws: List[str] = []
     for tag in tags:
         kws.extend(_TAG_KEYWORD_LISTS_CLEAN.get(tag, []))
@@ -338,30 +338,30 @@ def _compile_clean_kw_pattern(*tags: str) -> re.Pattern:
     return re.compile("|".join(fragments))
 
 
-# Step 5 无歧义关键词分词正则（如"分析""走势""持仓"等不可能混淆股票名的词）
+# Step 5 unambiguous keyword tokenization regex (words like "分析" "走势" "持仓" that cannot be confused with stock names)
 _CLEAN_KEYWORDS_PATTERN = _compile_clean_kw_pattern(*_NON_MARKET_TAGS)
 
 
-# 纯标点/空白过滤：至少含一个 CJK/字母/数字
+# Pure punctuation/whitespace filter: must contain at least one CJK char/letter/digit
 _HAS_CONTENT_PATTERN = re.compile(r"[\u3400-\u9fffA-Za-z0-9]")
 
-# 特殊标点集合（Step 1 分词边界）。排除 * - .：可能出现在股票名/代码中（ST*、600519.SH）
+# Special punctuation set (Step 1 token boundaries). Excludes * - . because they may appear in stock names/codes (ST*, 600519.SH)
 _SPECIAL_PUNCT_CHARS = (
     "\uff0c\u3002\uff01\uff1f\uff1b\uff1a\u3001\u201c\u201d\u2018\u2019"
     "\uff08\uff09\u3010\u3011\u300a\u300b\u2026\uff5e\u2014\uff0f\uff20"
     "\uff03\uff04\uff05\uff3e\uff06\uff0b\uff1d"
     ",!?;:\"'()[]{}<>/@#$%^&+=~`|\\\\"
 )
-# 空白（普通/全角空格、制表、换行）同为词界一并切分：ASCII 词与代码间
-# 的分隔（"tsla aapl"）此前仅靠 Step 3 大写或标点兜底，小写多词整段漏给
-# LLM；空白 token 无内容，由管道末端 _HAS_CONTENT_PATTERN 过滤丢弃
+# Whitespace (regular/full-width spaces, tabs, newlines) is also a word boundary: separation between ASCII words and codes
+# ("tsla aapl") previously relied only on Step 3 uppercase or punctuation fallback, so lowercase multi-word runs leaked whole to
+# the LLM; whitespace tokens have no content and are dropped by _HAS_CONTENT_PATTERN at the end of the pipeline
 _SPECIAL_PUNCT_RE = re.compile("[" + re.escape(_SPECIAL_PUNCT_CHARS) + r"|\s]")
 
 
 def _classify_keyword(token_text: str) -> str:
-    """查 _KEYWORD_TAG_MAP 取语义标签；未精确命中按小写归一表回退
-    （大小写不敏感与 (?i:) 编译声明同构，见 _KEYWORD_TAG_MAP_LOWER 注释）；
-    未命中返回空串。"""
+    """Look up the semantic tag in _KEYWORD_TAG_MAP; without an exact hit fall back to the lowercase-normalized map
+    (case-insensitivity mirrors the (?i:) compile flag, see the _KEYWORD_TAG_MAP_LOWER comment);
+    return an empty string on a miss."""
     tag = _KEYWORD_TAG_MAP.get(token_text)
     if tag:
         return tag
@@ -369,17 +369,17 @@ def _classify_keyword(token_text: str) -> str:
 
 
 # =========================================================================
-# Token — 分词结构体，text + tag
+# Token — tokenizer struct, text + tag
 # =========================================================================
 
 
 @dataclass(frozen=True)
 class Token:
-    """分词结构体：文本 + 语义标签 + 可选的已解析股票实体。
+    """Tokenizer struct: text + semantic tag + optional resolved stock entities.
 
-    frozen=True 使 Token 可哈希；tag 为空表示未识别；stocks 透传已解析实体
-    避免下游重复解析。stocks 构造时传 list 会被 __post_init__ 归一为 tuple
-    （frozen 字段值必须可哈希），下游按序列消费不受影响。
+    frozen=True makes Token hashable; an empty tag means unrecognized; stocks passes resolved entities through
+    so downstream does not re-resolve. A list passed for stocks is normalized to a tuple in __post_init__
+    (frozen field values must be hashable); downstream consumes it as a sequence unaffected.
     """
     text: str
     tag: str = ""

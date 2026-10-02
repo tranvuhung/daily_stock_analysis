@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-全局异常处理中间件
+Global exception handling middleware
 ===================================
 
-职责：
-1. 捕获未处理的异常
-2. 统一Error response格式
-3. 记录错误日志
+Responsibilities:
+1. Catch unhandled exceptions
+2. Unify the error response format
+3. Log errors
 """
 
 import logging
@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 class ErrorHandlerMiddleware(BaseHTTPMiddleware):
     """
-    全局异常处理中间件
+    Global exception handling middleware
     
-    捕获所有未处理的异常，返回统一格式的Error response
+    Catches all unhandled exceptions and returns an error response in the unified format
     """
     
     async def dispatch(
@@ -34,21 +34,21 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
         call_next: Callable
     ) -> Response:
         """
-        处理请求，捕获异常
+        Handle the request and catch exceptions
         
         Args:
-            request: 请求对象
-            call_next: 下一个处理器
+            request: request object
+            call_next: next handler
             
         Returns:
-            Response: 响应对象
+            Response: response object
         """
         try:
             response = await call_next(request)
             return response
             
         except Exception as e:
-            # 记录错误日志
+            # Log the error
             logger.error(
                 f"Unhandled exception: {e}\n"
                 f"Request path: {request.url.path}\n"
@@ -56,7 +56,7 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
                 f"Stack: {traceback.format_exc()}"
             )
             
-            # 返回统一格式的Error response
+            # Return an error response in the unified format
             return JSONResponse(
                 status_code=500,
                 content={
@@ -69,26 +69,26 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
 
 def add_error_handlers(app) -> None:
     """
-    添加全局异常处理器
+    Register the global exception handlers
     
-    为 FastAPI 应用添加各类异常的处理器
+    Adds handlers for each exception type to the FastAPI app
     
     Args:
-        app: FastAPI 应用实例
+        app: FastAPI application instance
     """
     from fastapi import HTTPException
     from fastapi.exceptions import RequestValidationError
     
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
-        """处理 HTTP 异常"""
-        # 如果 detail 已经是 ErrorResponse 格式的 dict，直接使用
+        """Handle HTTP exceptions"""
+        # If detail is already a dict in ErrorResponse format, use it as is
         if isinstance(exc.detail, dict) and "error" in exc.detail and "message" in exc.detail:
             return JSONResponse(
                 status_code=exc.status_code,
                 content=exc.detail
             )
-        # 否则将 detail 包装成 ErrorResponse 格式
+        # Otherwise wrap detail in the ErrorResponse format
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -100,7 +100,7 @@ def add_error_handlers(app) -> None:
     
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
-        """处理请求验证异常"""
+        """Handle request validation exceptions"""
         return JSONResponse(
             status_code=422,
             content={
@@ -112,7 +112,7 @@ def add_error_handlers(app) -> None:
     
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception):
-        """处理通用异常"""
+        """Handle generic exceptions"""
         logger.error(
             f"Unhandled exception: {exc}\n"
             f"Request path: {request.url.path}\n"

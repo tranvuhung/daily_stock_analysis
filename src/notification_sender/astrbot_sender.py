@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-AstrBot 发送提醒服务
+AstrBot notification sender service
 
-职责：
-1. 通过 Astrbot API 发送 AstrBot 消息
+Responsibilities:
+1. Send AstrBot messages via the AstrBot API
 """
 import logging
 import json
@@ -24,10 +24,10 @@ class AstrbotSender:
     
     def __init__(self, config: Config):
         """
-        初始化 AstrBot 配置
+        Initialize AstrBot config
 
         Args:
-            config: 配置对象
+            config: Config object
         """
         self._astrbot_config = {
             'astrbot_url': getattr(config, 'astrbot_url', None),
@@ -36,20 +36,20 @@ class AstrbotSender:
         self._webhook_verify_ssl = getattr(config, 'webhook_verify_ssl', True)
         
     def _is_astrbot_configured(self) -> bool:
-        """检查 AstrBot 配置是否完整（支持 Bot 或 Webhook）"""
-        # 只要配置了 URL，即视为可用
+        """Check whether the AstrBot config is complete (supports Bot or Webhook)"""
+        # Available as long as a URL is configured
         url_ok = bool(self._astrbot_config['astrbot_url'])
         return url_ok
 
     def send_to_astrbot(self, content: str, *, timeout_seconds: Optional[float] = None) -> bool:
         """
-        推送消息到 AstrBot（通过适配器支持）
+        Push a message to AstrBot (supported via adapter)
 
         Args:
-            content: Markdown 格式的消息内容
+            content: Message content in Markdown format
 
         Returns:
-            是否发送成功
+            Whether the send succeeded
         """
         if self._astrbot_config['astrbot_url']:
             return self._send_astrbot(content, timeout_seconds=timeout_seconds)

@@ -394,7 +394,7 @@ def localize_action_label(action: Any, language: Optional[str] = None) -> Option
     if not normalized:
         return None
     labels = _ACTION_LABELS[normalized]
-    # 未登记的语言不应让调用方 500：退回英文，再退回该动作的任一标签。
+    # Unregistered languages must not make the caller 500: fall back to English, then to any label of the action.
     return labels.get(normalize_report_language(language)) or labels.get("en") or normalized
 
 

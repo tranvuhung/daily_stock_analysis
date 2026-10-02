@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-通用响应模型
+Common response models
 ===================================
 
-职责：
-1. 定义通用的响应模型（HealthResponse, ErrorResponse 等）
-2. 提供统一的响应格式
+Responsibilities:
+1. Define common response models (HealthResponse, ErrorResponse, etc.)
+2. Provide a unified response format
 """
 
 from typing import Optional, Any
@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class RootResponse(BaseModel):
-    """API 根路由响应"""
+    """API root route response"""
     
     message: str = Field(..., description="API status message", json_schema_extra={"example": "Daily Stock Analysis API is running"})
     version: Optional[str] = Field(None, description="API version", json_schema_extra={"example": "1.0.0"})
@@ -59,7 +59,7 @@ class ErrorResponse(BaseModel):
 
 
 class SuccessResponse(BaseModel):
-    """通用成功响应"""
+    """Generic success response"""
     
     success: bool = Field(True, description="Whether the operation succeeded")
     message: Optional[str] = Field(None, description="Success message")

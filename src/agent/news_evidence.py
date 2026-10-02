@@ -1,17 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Agent 运行期实际消费的新闻证据计数。
+"""Count of news evidence actually consumed by the Agent at runtime.
 
-empty-news disclosure 必须反映「本次分析真正用到的新闻证据」。Agent 模式下情报
-由 Agent 自己调用搜索工具取得，因此计数只能来自这些工具的真实返回，不能用分析
-结束后补打的一次 `search_stock_news()` 代替：那次补查与 Agent 消费的证据无关，
-两个方向都会失真——Agent 明明用了新闻却因补查失败而被标成「未纳入新闻面证据」，
-或 Agent 没拿到新闻却因补查有结果而被错误地不提示。
+The empty-news disclosure must reflect the news evidence actually used by this analysis. In Agent
+mode the Agent gathers intel by calling search tools itself, so the count can only come from what
+those tools really returned. It must not be replaced by an extra `search_stock_news()` call made
+after the analysis: that follow-up query is unrelated to the evidence the Agent consumed and
+distorts the result in both directions — the Agent used news but gets labelled "no news evidence
+included" because the follow-up failed, or the Agent got no news but the warning is wrongly
+suppressed because the follow-up found results.
 
-用法：pipeline 在 `executor.run()` 前后开启并读取作用域；搜索工具在返回结果时
-记录本次真正交给 Agent 的条数。工具在 ThreadPoolExecutor 中执行，
-`src/agent/runner.py` 通过 `contextvars.copy_context()` 提交任务，因此 ContextVar
-中的**可变**累加器在工作线程与父线程之间是同一个对象，工具线程里的累加对
-pipeline 可见。请勿把它换成保存不可变值的 ContextVar，那样父线程读不到。
+Usage: the pipeline opens the scope before `executor.run()` and reads it afterwards; search tools
+record how many items they actually handed to the Agent when returning results. Tools run in a
+ThreadPoolExecutor and `src/agent/runner.py` submits tasks via `contextvars.copy_context()`, so the
+**mutable** accumulator inside the ContextVar is the same object in worker and parent threads, and
+increments made in tool threads are visible to the pipeline. Do not replace it with a ContextVar
+holding an immutable value — the parent thread would not see the updates.
 """
 
 from __future__ import annotations
@@ -25,14 +28,14 @@ logger = logging.getLogger(__name__)
 
 
 class NewsEvidenceAccumulator:
-    """线程安全地累计 Agent 本次分析实际消费的新闻条数。"""
+    """Thread-safe accumulator of news items actually consumed by the Agent in this analysis."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._total = 0
 
     def record(self, count: int) -> None:
-        """记录一次搜索工具真实返回的条数；零命中也必须记录（记 0）。"""
+        """Record the number of items a search tool actually returned; zero hits must be recorded too (as 0)."""
         try:
             value = int(count)
         except (TypeError, ValueError):
@@ -48,14 +51,15 @@ class NewsEvidenceAccumulator:
             return self._total
 
     def resolve(self, *, search_available: bool) -> Optional[int]:
-        """收敛成 `news_result_count` 的三态语义。
+        """Collapse into the three-state semantics of `news_result_count`.
 
-        - 搜索渠道不可用：`None`，即未执行检索，披露「未配置搜索渠道」。
-        - 渠道可用：从 `0` 起步，Agent 调用工具拿到多少算多少。
+        - Search channel unavailable: `None`, i.e. no search ran; disclose "no search channel configured".
+        - Channel available: start from `0` and count whatever the Agent's tool calls returned.
 
-        渠道可用但 Agent 一次都没搜的情况刻意归入 `0` 而不是 `None`：此时报告
-        确实没有新闻证据，但「未配置搜索渠道」是与事实相反的解释，而「未获取到
-        可用的新闻面数据」在这两种子情形下都成立。
+        The case where the channel is available but the Agent never searched is deliberately mapped
+        to `0` rather than `None`: the report really has no news evidence, but "no search channel
+        configured" would be a false explanation, while "no usable news data obtained" holds in
+        both sub-cases.
         """
         if not search_available:
             return None
@@ -69,7 +73,7 @@ _CURRENT_ACCUMULATOR: ContextVar[Optional[NewsEvidenceAccumulator]] = ContextVar
 
 
 def activate_news_evidence_scope() -> Token:
-    """开启一次 Agent 运行的证据作用域，返回重置令牌。"""
+    """Open an evidence scope for one Agent run and return the reset token."""
     return _CURRENT_ACCUMULATOR.set(NewsEvidenceAccumulator())
 
 
@@ -82,16 +86,16 @@ def reset_news_evidence_scope(token: Optional[Token]) -> None:
         return
     try:
         _CURRENT_ACCUMULATOR.reset(token)
-    except Exception as exc:  # pragma: no cover - 防御性 fail-open
+    except Exception as exc:  # pragma: no cover - defensive fail-open
         logger.warning("news evidence scope reset failed: %s", exc)
 
 
 def record_news_evidence(count: int) -> None:
-    """供 Agent 搜索工具调用。
+    """Called by Agent search tools.
 
-    没有活动作用域时静默忽略：非 Agent 路径自己直接维护计数，工具也可能在
-    Agent 分析之外被调用（例如报告页的后续资讯检索），那些都不应影响本次分析的
-    披露判定。
+    Silently ignored when no scope is active: non-Agent paths maintain the count themselves, and
+    tools may also be called outside an Agent analysis (e.g. follow-up news lookups from the report
+    page); none of those should affect this analysis's disclosure decision.
     """
     accumulator = _CURRENT_ACCUMULATOR.get()
     if accumulator is None:

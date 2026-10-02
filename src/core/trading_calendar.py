@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-交易日历模块 (Issue #373 / Issue #1386 P0)
+Trading calendar module (Issue #373 / Issue #1386 P0)
 ===================================
 
-职责：
-1. 按市场（A股/港股/美股/日股/韩股/台股）判断当日是否为交易日
-2. 按市场时区取“今日”日期，避免服务器 UTC 导致日期错误
-3. 支持 per-stock 过滤：只分析当日开市市场的股票
-4. 提供 regular-session 市场阶段推断基线，不改变现有分析入口行为
+Responsibilities:
+1. Determine per market (A-share/HK/US/JP/KR/TW) whether today is a trading day
+2. Take "today" in the market's timezone to avoid wrong dates from a UTC server
+3. Support per-stock filtering: only analyze stocks whose market is open today
+4. Provide a regular-session market phase inference baseline without changing existing analysis entry behavior
 
-依赖：exchange-calendars（可选，交易日判断不可用时 fail-open，阶段推断不可用时 unknown）
+Dependency: exchange-calendars (optional; trading-day checks fail open and phase inference returns unknown when unavailable)
 """
 
 import logging
@@ -39,15 +39,15 @@ except ImportError:
     )
 
 # Market -> exchange code (exchange-calendars), derived from the market registry.
-# 只包含 exchange-calendars 实际收录的市场；越南（HOSE/HNX/UPCOM）不在该库的
-# 102 个日历里，因此不会出现在这里，交易日判断沿用本模块既有的 fail-open 分支。
+# Only markets actually covered by exchange-calendars; Vietnam (HOSE/HNX/UPCOM) is not among the library's
+# 102 calendars, so it does not appear here and trading-day checks use this module's existing fail-open branch.
 MARKET_EXCHANGE = {
     spec.code: spec.xcals_code
     for spec in sorted(ALL_MARKETS.values(), key=lambda item: item.detect_order)
     if spec.xcals_code
 }
 
-# Market -> IANA timezone for "today"（含没有交易日历的市场，如越南）
+# Market -> IANA timezone for "today" (includes markets without a trading calendar, such as Vietnam)
 MARKET_TIMEZONE = {
     spec.code: spec.timezone
     for spec in sorted(ALL_MARKETS.values(), key=lambda item: item.detect_order)
@@ -61,7 +61,7 @@ MARKET_TIMEZONE = {
 # KR 10 min). Without an entry here .get(market, 0) yields a zero-width
 # window, so the last regular-session minutes stay INTRADAY until POSTMARKET.
 _CLOSING_AUCTION_WINDOW_MINUTES = {
-    # 越南 HOSE 收盘集合竞价 ATC 为 14:30-14:45。
+    # Vietnam HOSE closing auction (ATC) runs 14:30-14:45.
     "vn": 15,
     "cn": 3,
     "hk": 10,
@@ -149,12 +149,12 @@ def get_market_for_stock(code: str) -> Optional[str]:
     from data_provider.base import _is_vn_market
     from src.core.markets import is_market_enabled
 
-    # 越南必须排在美股之前判定：越南裸代码（HPG/FPT）同时满足美股 ticker 正则，
-    # 先判美股会让它们在美股停用时被当成"今日休市"，整轮分析被跳过。
+    # Vietnam must be checked before US: bare Vietnamese codes (HPG/FPT) also match the US ticker regex,
+    # and checking US first would treat them as "closed today" when US is disabled, skipping the whole run.
     #
-    # 这里刻意**不**调用 ``_market_tag``：后者有一个"其余都算 A 股"的兜底分支，
-    # 而本函数的契约是无法识别时返回 ``None``（调用方据此 fail-open）。借用
-    # ``_market_tag`` 会让 ``UNKNOWN`` 之类的占位代码被判成 ``cn``。
+    # This deliberately does **not** call ``_market_tag``: it has an "everything else is A-share" fallback,
+    # while this function's contract is to return ``None`` when unrecognized (callers fail open on it). Borrowing
+    # ``_market_tag`` would classify placeholder codes like ``UNKNOWN`` as ``cn``.
     if is_market_enabled("vn") and _is_vn_market(code):
         return "vn"
 
@@ -684,8 +684,8 @@ def get_open_markets_today() -> Set[str]:
     """
     Get markets that are open today (by each market's local timezone).
 
-    只考虑 ``SUPPORTED_MARKETS`` 启用的市场：停用市场不应影响"今天是否需要
-    执行分析"的判断，否则关掉一个市场之后，它仍然能让整轮任务被认为有开市。
+    Only markets enabled in ``SUPPORTED_MARKETS`` are considered: a disabled market must not affect "whether analysis
+    needs to run today"; otherwise a market that was turned off could still make the whole run look open.
 
     Returns:
         Set of market keys that are trading today
@@ -725,14 +725,14 @@ def compute_effective_region(
         '': all relevant markets closed, skip market review
         'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'vn' | 'both': effective subset for today
     """
-    # 与 ``MARKET_REVIEW_REGION`` 的解析口径保持一致：只认当前启用且支持
-    # 大盘复盘的市场。此前这里硬编码了一份市场列表，与
-    # ``market_review_region.py`` 各自维护，容易漂移。
+    # Keep consistent with how ``MARKET_REVIEW_REGION`` is resolved: only markets that are currently enabled and
+    # support market review count. This used to hardcode its own market list, maintained separately from
+    # ``market_review_region.py``, which easily drifted.
     from src.utils.market_review_region import enabled_market_review_regions
 
     markets = enabled_market_review_regions()
     if not markets:
-        # 没有任何可复盘市场（例如只启用台湾）：跳过复盘而不是回退到 cn。
+        # No market can be reviewed (e.g. only Taiwan enabled): skip the review instead of falling back to cn.
         return ""
 
     default_region = markets[0]

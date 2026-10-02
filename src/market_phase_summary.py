@@ -250,8 +250,8 @@ def format_public_phase_pack_excerpt(
         return ""
     # Korean reuses the English structural summary; output language is set by directive.
     raw_language = str(report_language or "").lower()
-    # 越南语必须单独判定：此前它不匹配 ("en", "ko") 前缀而落到 "zh" 分支，
-    # 越南语报告里会混进中文的市场状态行。
+    # Vietnamese must be handled separately: it previously did not match the ("en", "ko") prefixes and fell into the "zh" branch,
+    # so Vietnamese reports mixed in Chinese market-status lines.
     if raw_language.startswith("vi"):
         lang = "vi"
     elif raw_language.startswith(("en", "ko")):
@@ -308,8 +308,8 @@ def format_public_market_status_line(
 
     # Korean reuses the English structural summary; output language is set by directive.
     raw_language = str(report_language or "").lower()
-    # 越南语单独判定：此前它不匹配 ("en", "ko") 前缀而落到 "zh"，
-    # 越南语报告的市场状态行会显示成中文。
+    # Vietnamese is handled separately: it previously did not match the ("en", "ko") prefixes and fell into "zh",
+    # so the market-status line in Vietnamese reports showed in Chinese.
     if raw_language.startswith("vi"):
         lang = "vi"
     elif raw_language.startswith(("en", "ko")):

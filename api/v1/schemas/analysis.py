@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-分析相关模型
+Analysis-related models
 ===================================
 
-职责：
-1. 定义分析请求和响应模型
-2. 定义任务状态模型
-3. 定义异步任务队列相关模型
+Responsibilities:
+1. Define analysis request and response models
+2. Define task status models
+3. Define async task queue models
 """
 
 from typing import Optional, List, Any, Literal

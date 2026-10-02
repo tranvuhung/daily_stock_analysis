@@ -1,6 +1,6 @@
 # Derived from AlphaSift revision 9f522747caafd3c0b1ddb7e14d5cf44c8580b6cf.
 # Licensed under Apache-2.0 and modified for daily_stock_analysis.
-# 放量突破选股策略
+# Volume breakout stock selection strategy
 name: volume_breakout
 display_name: 放量突破
 description: 成交量放大突破关键阻力位，趋势启动信号

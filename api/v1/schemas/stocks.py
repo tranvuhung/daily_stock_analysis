@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-股票数据相关模型
+Stock data models
 ===================================
 
-职责：
-1. 定义Realtime stock quote模型
-2. 定义历史 K 线数据模型
+Responsibilities:
+1. Define the realtime stock quote model
+2. Define the historical K-line data model
 """
 
 from typing import Dict, Literal, Optional, List

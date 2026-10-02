@@ -1,11 +1,11 @@
 # ===================================
-# A股自选股智能分析系统 - Docker Compose
+# A-share watchlist intelligent analysis system - Docker Compose
 # ===================================
 # 
-# 使用方式:
-#   定时模式: docker-compose -f ./docker/docker-compose.yml up -d
-#   FastAPI模式: docker-compose -f ./docker/docker-compose.yml up -d server
-#   同时启动: docker-compose -f ./docker/docker-compose.yml up -d analyzer server
+# Usage:
+#   Scheduled mode: docker-compose -f ./docker/docker-compose.yml up -d
+#   FastAPI mode: docker-compose -f ./docker/docker-compose.yml up -d server
+#   Start both: docker-compose -f ./docker/docker-compose.yml up -d analyzer server
 
 name: daily-stock-analysis
 version: '3.8'
@@ -16,8 +16,8 @@ x-common: &common
     dockerfile: docker/Dockerfile
   restart: unless-stopped
 
-  # 环境变量（从 .env 文件加载）。不要将 ../.env 作为单文件 volume 挂载到 /app/.env，
-  # 否则 Docker mount point 会阻止配置保存时的 os.replace 原子更新。
+  # Environment variables (loaded from the .env file). Do not mount ../.env as a single-file volume at /app/.env,
+  # otherwise the Docker mount point blocks the atomic os.replace update when settings are saved.
   env_file:
     - ../.env
 
@@ -29,7 +29,7 @@ x-common: &common
     # Longbridge OAuth token cache persistence; entrypoint repairs container-side ownership for dsa user.
     # Create ../longbridge_tokens on the host before copying an authorized token cache into it.
     - ../longbridge_tokens:/home/dsa/.longbridge
-    # 如需覆盖前端静态资源，可挂载本地 static 目录
+    # To override frontend static assets, mount a local static directory
     # - ../static:/app/static:ro
 
   environment:
@@ -37,9 +37,9 @@ x-common: &common
 
     # Web/API service bind address (must be 0.0.0.0 inside container)
     - WEBUI_HOST=0.0.0.0
-    # API_PORT 从 .env 文件读取，无需在此硬编码
+    # API_PORT is read from the .env file; no need to hardcode it here
 
-    # 代理设置（如果需要）
+    # Proxy settings (if needed)
     # - http_proxy=http://host.docker.internal:10809
     # - https_proxy=http://host.docker.internal:10809
   logging:
@@ -47,8 +47,8 @@ x-common: &common
     options:
       max-size: "10m"
       max-file: "3"
-  # 资源限制：完整分析建议 1G+；512M 仅适合轻量 Web/API、单股、低并发场景，
-  # 且建议设置 MAX_WORKERS=1 并避免同时启动 analyzer 和 server。
+  # Resource limits: 1G+ recommended for full analysis; 512M only suits light Web/API, single-stock, low-concurrency use,
+  # and then set MAX_WORKERS=1 and avoid running analyzer and server together.
   deploy:
     resources:
       limits:
@@ -57,16 +57,16 @@ x-common: &common
         memory: 512M
 
 services:
-  # 定时任务模式
+  # Scheduled task mode
   analyzer:
     <<: *common
     container_name: stock-analyzer
 
-  # FastAPI 模式
+  # FastAPI mode
   server:
     <<: *common
     container_name: stock-server
     command: ["python", "main.py", "--serve-only", "--host", "0.0.0.0", "--port", "${API_PORT:-8000}"]
-    # 若使用 network_mode: host，则以下 ports 映射无效，端口由 command 中的 --port 指定
+    # With network_mode: host the ports mapping below has no effect; the port comes from --port in command
     ports:
       - "${API_PORT:-8000}:${API_PORT:-8000}"

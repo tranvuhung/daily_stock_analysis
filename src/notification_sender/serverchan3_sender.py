@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Server酱3 发送提醒服务
+ServerChan3 notification sender
 
-职责：
-1. 通过 Server酱3 API 发送 Server酱3 消息
+Responsibilities:
+1. Send ServerChan3 messages via the ServerChan3 API
 """
 import logging
 from typing import Optional
@@ -22,10 +22,10 @@ class Serverchan3Sender:
     
     def __init__(self, config: Config):
         """
-        初始化 Server酱3 配置
+        Initialise the ServerChan3 configuration
 
         Args:
-            config: 配置对象
+            config: configuration object
         """
         self._serverchan3_sendkey = getattr(config, 'serverchan3_sendkey', None)
         
@@ -37,41 +37,41 @@ class Serverchan3Sender:
         timeout_seconds: Optional[float] = None,
     ) -> bool:
         """
-        推送消息到 Server酱3
+        Push a message to ServerChan3
 
-        Server酱3 API 格式：
+        ServerChan3 API format:
         POST https://sctapi.ftqq.com/{sendkey}.send
-        或
+        or
         POST https://{num}.push.ft07.com/send/{sendkey}.send
         {
-            "title": "消息标题",
-            "desp": "消息内容",
+            "title": "message title",
+            "desp": "message content",
             "options": {}
         }
 
-        Server酱3 特点：
-        - 国内推送服务，支持多家国产系统推送通道，可无后台推送
-        - 简单易用的 API 接口
+        ServerChan3 features:
+        - Domestic (China) push service supporting several Chinese vendor push channels, can push without a background app
+        - Simple, easy-to-use API
 
         Args:
-            content: 消息内容（Markdown 格式）
-            title: 消息标题（可选）
+            content: message content (Markdown)
+            title: message title (optional)
 
         Returns:
-            是否发送成功
+            Whether the send succeeded
         """
         if not self._serverchan3_sendkey:
             logger.warning("Server酱3 SendKey 未配置，跳过推送")
             return False
 
-        # 处理消息标题
+        # Resolve the message title
         if title is None:
             date_str = datetime.now().strftime('%Y-%m-%d')
             title = f"📈 股票分析报告 - {date_str}"
         sanitized_content = strip_hidden_markdown_metadata(content).strip()
 
         try:
-            # 根据 sendkey 格式构造 URL
+            # Build the URL based on the sendkey format
             sendkey = self._serverchan3_sendkey
             if sendkey.startswith('sctp'):
                 match = re.match(r'sctp(\d+)t', sendkey)
@@ -84,14 +84,14 @@ class Serverchan3Sender:
             else:
                 url = f"https://sctapi.ftqq.com/{sendkey}.send"
 
-            # 构建请求参数
+            # Build the request parameters
             params = {
                 'title': title,
                 'desp': sanitized_content,
                 'options': {}
             }
 
-            # 发送请求
+            # Send the request
             headers = {
                 'Content-Type': 'application/json;charset=utf-8'
             }
