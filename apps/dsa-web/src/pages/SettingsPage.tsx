@@ -38,6 +38,52 @@ import type {
 } from '../types/systemConfig';
 import type { UiLanguage, UiTextKey } from '../i18n/uiText';
 
+// Ẩn các kênh không dùng tại VN (WeChat/WeCom, Feishu, DingTalk, PushPlus, Pushover, ntfy, Gotify, ServerChan3, AstrBot)
+// khỏi trang Thông báo; backend và giá trị .env giữ nguyên.
+// Hide channels unused in Vietnam from the notification page; backend and .env values are untouched.
+const NOTIFICATION_HIDDEN_KEY_PREFIXES = [
+  'WECHAT_',
+  'FEISHU_',
+  'DINGTALK_',
+  'PUSHPLUS_',
+  'PUSHOVER_',
+  'NTFY_',
+  'GOTIFY_',
+  'SERVERCHAN',
+  'ASTRBOT_',
+];
+const NOTIFICATION_HIDDEN_CHANNEL_OPTIONS = new Set([
+  'wechat',
+  'feishu',
+  'dingtalk',
+  'pushplus',
+  'pushover',
+  'ntfy',
+  'gotify',
+  'serverchan3',
+  'astrbot',
+]);
+
+function filterNotificationItems(items: SystemConfigItem[]): SystemConfigItem[] {
+  return items
+    .filter((item) => !NOTIFICATION_HIDDEN_KEY_PREFIXES.some((prefix) => item.key.startsWith(prefix)))
+    .map((item) => {
+      const options = item.schema?.options;
+      if (!item.schema || !options?.length) {
+        return item;
+      }
+      // Bỏ option của các kênh bị ẩn khỏi các trường định tuyến kênh (NOTIFICATION_*_CHANNELS).
+      // Drop hidden-channel options from channel routing fields (NOTIFICATION_*_CHANNELS).
+      const visibleOptions = options.filter((option) => {
+        const value = typeof option === 'string' ? option : option.value;
+        return !NOTIFICATION_HIDDEN_CHANNEL_OPTIONS.has(value);
+      });
+      return visibleOptions.length === options.length
+        ? item
+        : { ...item, schema: { ...item.schema, options: visibleOptions } };
+    });
+}
+
 const LLM_CHANNEL_EDITOR_RUNTIME_KEYS = new Set([
   'LITELLM_MODEL',
   'LITELLM_FALLBACK_MODELS',
@@ -918,6 +964,8 @@ const SettingsPage: React.FC = () => {
         ? rawActiveItems.filter((item) => !SYSTEM_HIDDEN_KEYS.has(item.key))
       : activeCategory === 'agent'
         ? rawActiveItems.filter((item) => !AGENT_HIDDEN_KEYS.has(item.key))
+      : activeCategory === 'notification'
+        ? filterNotificationItems(rawActiveItems)
       : rawActiveItems;
   const promptCacheAdvancedItems = activeCategory === 'ai_model'
     ? activeItems.filter(isPromptCacheAdvancedSetting)

@@ -47,9 +47,12 @@ describe('NotificationTestPanel', () => {
       />,
     );
 
-    expect(screen.getByRole('option', { name: 'ntfy' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Gotify' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'DingTalk' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Telegram' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'WeCom' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Feishu Webhook' })).not.toBeInTheDocument();
+    for (const hidden of ['DingTalk', 'Pushover', 'ntfy', 'Gotify', 'PushPlus', 'ServerChan3', 'AstrBot']) {
+      expect(screen.queryByRole('option', { name: hidden })).not.toBeInTheDocument();
+    }
     fireEvent.change(screen.getByLabelText('Channel'), { target: { value: 'custom' } });
     fireEvent.click(screen.getByRole('button', { name: /Send test/ }));
 

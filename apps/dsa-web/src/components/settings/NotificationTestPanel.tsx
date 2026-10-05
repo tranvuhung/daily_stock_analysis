@@ -15,20 +15,11 @@ import { SettingsSectionCard } from './SettingsSectionCard';
 
 function getChannelOptions(language: UiLanguage): Array<{ value: NotificationTestChannel; label: string }> {
   return [
-    { value: 'wechat', label: language === 'en' ? 'WeCom' : 'WeCom' },
-    { value: 'feishu', label: language === 'en' ? 'Feishu Webhook' : 'Feishu Webhook' },
-    { value: 'dingtalk', label: language === 'en' ? 'DingTalk' : 'DingTalk' },
     { value: 'telegram', label: 'Telegram' },
     { value: 'email', label: language === 'en' ? 'Email' : 'Email' },
-    { value: 'pushover', label: 'Pushover' },
-    { value: 'ntfy', label: 'ntfy' },
-    { value: 'gotify', label: 'Gotify' },
-    { value: 'pushplus', label: 'PushPlus' },
-    { value: 'serverchan3', label: 'ServerChan3' },
     { value: 'custom', label: language === 'en' ? 'Custom Webhook' : 'Webhook tùy chỉnh' },
     { value: 'discord', label: 'Discord' },
     { value: 'slack', label: 'Slack' },
-    { value: 'astrbot', label: 'AstrBot' },
   ];
 }
 
@@ -50,7 +41,7 @@ export const NotificationTestPanel: React.FC<NotificationTestPanelProps> = ({
   disabled = false,
 }) => {
   const { language, t } = useUiLanguage();
-  const [channel, setChannel] = useState<NotificationTestChannel>('wechat');
+  const [channel, setChannel] = useState<NotificationTestChannel>('telegram');
   const [title, setTitle] = useState(t('settings.notificationTestTitleValue'));
   const [content, setContent] = useState(t('settings.notificationTestContent'));
   const [timeoutSeconds, setTimeoutSeconds] = useState('20');

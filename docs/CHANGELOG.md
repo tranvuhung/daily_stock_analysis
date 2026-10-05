@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [改进] Web: ẩn cấu hình thông báo WeChat (WeCom), Feishu, DingTalk, PushPlus, Pushover, ntfy, Gotify, ServerChan3 và AstrBot khỏi trang Cài đặt → Thông báo (trường `WECHAT_*`/`FEISHU_*`/`DINGTALK_*`/`PUSHPLUS_*`/`PUSHOVER_*`/`NTFY_*`/`GOTIFY_*`/`SERVERCHAN3_*`/`ASTRBOT_*`, kênh tương ứng trong bảng test thông báo và option tương ứng của `NOTIFICATION_*_CHANNELS`); backend và giá trị `.env` đã lưu giữ nguyên.
 - [改进] Web: hộp trợ giúp trong trang Cài đặt không còn hiển thị mục "Tài liệu liên quan" (liên kết tới tài liệu GitHub); dữ liệu `docs` trong schema/caller vẫn giữ nguyên.
 - [改进] Web: tạm ẩn menu Danh mục, Tín hiệu AI, Backtest khỏi sidebar (route `/portfolio`, `/decision-signals`, `/backtest` vẫn giữ nguyên, truy cập trực tiếp URL vẫn được); bật lại bằng cách xoá key khỏi `HIDDEN_NAV_KEYS` trong `SidebarNav.tsx`.
 - [改进] Hỏi đáp chỉ hỗ trợ thị trường Việt Nam (theo `SUPPORTED_MARKETS`, mặc định `vn`): câu hỏi gợi ý, ví dụ và placeholder dùng cổ phiếu Việt Nam thay cho Moutai/CATL/BYD/SMIC/Tencent; prompt chat có mục "Market scope" yêu cầu từ chối mã ngoài phạm vi; `src/market_context.py` nhận diện mã Việt Nam trần (HPG, LAS) là cổ phiếu Việt Nam thay vì cổ phiếu Mỹ và có hướng dẫn thị trường Việt Nam (biên độ HOSE/HNX/UPCoM, T+2.5, room ngoại, chính sách SBV).

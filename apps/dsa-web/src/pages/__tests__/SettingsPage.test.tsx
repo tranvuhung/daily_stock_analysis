@@ -427,6 +427,24 @@ function buildSystemConfigState(overrides: ConfigOverride = {}) {
       ],
       notification: [
         {
+          key: 'TELEGRAM_BOT_TOKEN',
+          value: '123:abc',
+          rawValueExists: true,
+          isMasked: false,
+          schema: {
+            key: 'TELEGRAM_BOT_TOKEN',
+            category: 'notification',
+            dataType: 'string',
+            uiControl: 'password',
+            isSensitive: true,
+            isRequired: false,
+            isEditable: true,
+            options: [],
+            validation: {},
+            displayOrder: 2,
+          },
+        },
+        {
           key: 'WECHAT_WEBHOOK_URL',
           value: 'https://qyapi.example.com/hook',
           rawValueExists: true,
@@ -2390,10 +2408,68 @@ describe('SettingsPage', () => {
 
     renderSettingsPage();
 
-    expect(screen.getByText('通知测试面板:WECHAT_WEBHOOK_URL')).toBeInTheDocument();
-    expect(screen.getByText('WECHAT_WEBHOOK_URL')).toBeInTheDocument();
+    expect(screen.getByText('通知测试面板:TELEGRAM_BOT_TOKEN,WECHAT_WEBHOOK_URL')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-field-TELEGRAM_BOT_TOKEN')).toBeInTheDocument();
     expect(settingsPanelErrorBoundary).toHaveBeenCalledWith('Notification test');
     expect(settingsPanelErrorBoundary).toHaveBeenCalledWith('Notification settings');
+  });
+
+  it('hides unused notification channel fields and routing options', () => {
+    const buildItem = (key: string, value: string, options: string[] = []) => ({
+      key,
+      value,
+      rawValueExists: true,
+      isMasked: false,
+      schema: {
+        key,
+        category: 'notification',
+        dataType: options.length ? 'array' : 'string',
+        uiControl: options.length ? 'multiselect' : 'text',
+        isSensitive: false,
+        isRequired: false,
+        isEditable: true,
+        options,
+        validation: {},
+        displayOrder: 1,
+      },
+    });
+    useSystemConfigMock.mockReturnValue(buildSystemConfigState({
+      activeCategory: 'notification',
+      itemsByCategory: {
+        notification: [
+          buildItem('WECHAT_WEBHOOK_URL', 'https://qyapi.example.com/hook'),
+          buildItem('FEISHU_WEBHOOK_URL', 'https://open.feishu.cn/hook'),
+          buildItem('FEISHU_APP_ID', 'cli_x'),
+          buildItem('DINGTALK_WEBHOOK_URL', 'https://oapi.dingtalk.com/robot/send'),
+          buildItem('PUSHPLUS_TOKEN', 'pp'),
+          buildItem('PUSHOVER_USER_KEY', 'po'),
+          buildItem('NTFY_URL', 'https://ntfy.sh/topic'),
+          buildItem('GOTIFY_URL', 'https://gotify.example.com'),
+          buildItem('SERVERCHAN3_SENDKEY', 'sc'),
+          buildItem('ASTRBOT_URL', 'https://astrbot.example.com'),
+          buildItem('TELEGRAM_BOT_TOKEN', '123:abc'),
+          buildItem('NOTIFICATION_REPORT_CHANNELS', 'telegram', ['wechat', 'feishu', 'dingtalk', 'pushplus', 'pushover', 'ntfy', 'gotify', 'serverchan3', 'astrbot', 'telegram', 'email']),
+        ],
+      },
+    }));
+
+    renderSettingsPage();
+
+    expect(screen.queryByTestId('settings-field-WECHAT_WEBHOOK_URL')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-field-FEISHU_WEBHOOK_URL')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-field-FEISHU_APP_ID')).not.toBeInTheDocument();
+    for (const key of ['DINGTALK_WEBHOOK_URL', 'PUSHPLUS_TOKEN', 'PUSHOVER_USER_KEY', 'NTFY_URL', 'GOTIFY_URL', 'SERVERCHAN3_SENDKEY', 'ASTRBOT_URL']) {
+      expect(screen.queryByTestId(`settings-field-${key}`)).not.toBeInTheDocument();
+    }
+    expect(screen.getByTestId('settings-field-TELEGRAM_BOT_TOKEN')).toBeInTheDocument();
+    const routingField = screen.getByTestId('settings-field-NOTIFICATION_REPORT_CHANNELS');
+    expect(routingField).toHaveTextContent('telegram');
+    expect(routingField).toHaveTextContent('email');
+    expect(routingField).not.toHaveTextContent('wechat');
+    expect(routingField).not.toHaveTextContent('feishu');
+    for (const channel of ['dingtalk', 'pushplus', 'pushover', 'ntfy', 'gotify', 'serverchan3', 'astrbot']) {
+      expect(routingField).not.toHaveTextContent(channel);
+    }
   });
 
   it('uses browser and backend logs in settings panel diagnostic hints outside desktop runtime', () => {
