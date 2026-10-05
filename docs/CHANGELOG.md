@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [改进] Web: chuyển menu điều hướng từ thanh bên trái thành thanh menu ngang ở đầu trang trên desktop (logo, các mục menu, nút giao diện/ngôn ngữ/cập nhật desktop/đăng xuất); mobile vẫn dùng nút mở Drawer như cũ.
 - [改进] Web: ẩn cấu hình thông báo WeChat (WeCom), Feishu, DingTalk, PushPlus, Pushover, ntfy, Gotify, ServerChan3 và AstrBot khỏi trang Cài đặt → Thông báo (trường `WECHAT_*`/`FEISHU_*`/`DINGTALK_*`/`PUSHPLUS_*`/`PUSHOVER_*`/`NTFY_*`/`GOTIFY_*`/`SERVERCHAN3_*`/`ASTRBOT_*`, kênh tương ứng trong bảng test thông báo và option tương ứng của `NOTIFICATION_*_CHANNELS`); backend và giá trị `.env` đã lưu giữ nguyên.
 - [改进] Web: hộp trợ giúp trong trang Cài đặt không còn hiển thị mục "Tài liệu liên quan" (liên kết tới tài liệu GitHub); dữ liệu `docs` trong schema/caller vẫn giữ nguyên.
 - [改进] Web: tạm ẩn menu Trang chủ, Hỏi đáp, Danh mục, Tín hiệu AI, Backtest, Usage khỏi sidebar (route `/`, `/chat`, `/portfolio`, `/decision-signals`, `/backtest`, `/usage` vẫn giữ nguyên, truy cập trực tiếp URL vẫn được); bật lại bằng cách xoá key khỏi `HIDDEN_NAV_KEYS` trong `SidebarNav.tsx`.

@@ -32,7 +32,10 @@ import { ThemeToggle } from "../theme/ThemeToggle";
 type SidebarNavProps = {
   collapsed?: boolean;
   onNavigate?: () => void;
-  variant?: "default" | "rail";
+  // "top": thanh menu ngang ở đầu trang (desktop). "top": horizontal top menu bar (desktop).
+  variant?: "default" | "rail" | "top";
+  // Nút bổ sung bên phải thanh top (vd: cập nhật desktop). Extra right-side actions for the top bar.
+  actions?: React.ReactNode;
 };
 
 type NavItem = {
@@ -114,6 +117,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   collapsed = false,
   onNavigate,
   variant = "default",
+  actions,
 }) => {
   const { authEnabled, logout } = useAuth();
   const { t, language } = useUiLanguage();
@@ -167,14 +171,17 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       (showScreeningNav || item.key !== "screening"),
   );
   const isRail = variant === "rail";
-  const itemBaseClass = cn(
-    "group relative flex h-[var(--nav-item-height)] w-full items-center overflow-hidden rounded-2xl border border-transparent text-sm leading-none text-secondary-text transition-all",
-    isRail
-      ? "justify-center gap-2.5 px-2"
-      : collapsed
-        ? "justify-center px-0"
-        : "gap-3 px-[var(--nav-item-padding-x)]",
-  );
+  const isTop = variant === "top";
+  const itemBaseClass = isTop
+    ? "group relative inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-transparent px-3 text-sm leading-none text-secondary-text transition-all"
+    : cn(
+        "group relative flex h-[var(--nav-item-height)] w-full items-center overflow-hidden rounded-2xl border border-transparent text-sm leading-none text-secondary-text transition-all",
+        isRail
+          ? "justify-center gap-2.5 px-2"
+          : collapsed
+            ? "justify-center px-0"
+            : "gap-3 px-[var(--nav-item-padding-x)]",
+      );
   const itemInteractiveClass = cn(
     itemBaseClass,
     "hover:bg-[var(--nav-hover-bg)] hover:text-foreground",
@@ -182,10 +189,134 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   const itemActiveClass =
     "border-[var(--nav-active-border)] bg-[var(--nav-active-bg)] font-medium text-[hsl(var(--primary))]";
   const itemIconClass = cn(
-    isRail ? "h-[18px] w-[18px]" : "h-5 w-5",
+    isRail || isTop ? "h-[18px] w-[18px]" : "h-5 w-5",
     "shrink-0",
   );
   const itemLabelClass = cn("truncate", isRail ? "text-center" : "");
+
+  const navLinks = navItems.map(
+    ({ key, labelKey, to, icon: Icon, exact, badge }) => {
+      const label = t(labelKey);
+      return (
+        <NavLink
+          key={key}
+          to={to}
+          end={exact}
+          onClick={onNavigate}
+          aria-label={label}
+          className={({ isActive }) =>
+            cn(itemInteractiveClass, isActive ? itemActiveClass : "")
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <Icon
+                className={cn(
+                  itemIconClass,
+                  isActive
+                    ? "text-[var(--nav-icon-active)]"
+                    : "text-current",
+                )}
+              />
+              {!collapsed ? (
+                <span className={itemLabelClass}>{label}</span>
+              ) : null}
+              {badge === "completion" && completionBadge ? (
+                <StatusDot
+                  tone="info"
+                  data-testid="chat-completion-badge"
+                  className={cn(
+                    "absolute border-2 border-background shadow-[0_0_10px_var(--nav-indicator-shadow)]",
+                    isTop
+                      ? "right-1 top-1"
+                      : collapsed
+                        ? "right-2 top-2"
+                        : "right-3",
+                  )}
+                  aria-label={t("layout.newChatMessage")}
+                />
+              ) : null}
+              {badge === "alerts" && alertUnread > 0 ? (
+                <span
+                  data-testid="alerts-unread-badge"
+                  aria-label={formatUiText(
+                    ALERT_REALTIME_TEXT[language].unreadBadge,
+                    { count: alertUnread },
+                  )}
+                  className={cn(
+                    "min-w-[1.25rem] rounded-full bg-[hsl(var(--color-danger-alert-text))] px-1.5 text-center text-[10px] font-semibold leading-5 text-white",
+                    isTop ? "" : "absolute right-2",
+                    collapsed ? "top-1" : "",
+                  )}
+                >
+                  {alertUnread > 99 ? "99+" : alertUnread}
+                </span>
+              ) : null}
+            </>
+          )}
+        </NavLink>
+      );
+    },
+  );
+
+  const logoutDialog = (
+    <ConfirmDialog
+      isOpen={showLogoutConfirm}
+      title={t("layout.logoutTitle")}
+      message={t("layout.logoutMessage")}
+      confirmText={t("layout.logoutConfirm")}
+      cancelText={t("common.cancel")}
+      isDanger
+      onConfirm={() => {
+        setShowLogoutConfirm(false);
+        onNavigate?.();
+        void logout();
+      }}
+      onCancel={() => setShowLogoutConfirm(false)}
+    />
+  );
+
+  if (isTop) {
+    // Thanh menu ngang: logo + menu (desktop) + nút giao diện/ngôn ngữ/đăng xuất.
+    // Horizontal bar: brand + nav links (desktop) + theme/language/logout actions.
+    return (
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-[1rem] bg-primary-gradient text-[hsl(var(--primary-foreground))] shadow-[0_12px_28px_var(--nav-brand-shadow)]">
+            <BarChart3 className="h-[19px] w-[19px]" />
+          </div>
+          <p className="text-[0.95rem] font-semibold leading-none text-foreground">
+            DSA
+          </p>
+        </div>
+
+        <nav
+          className="hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto lg:flex"
+          aria-label={t("layout.mainNav")}
+        >
+          {navLinks}
+        </nav>
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {actions}
+          <UiLanguageToggle />
+          <ThemeToggle />
+          {authEnabled ? (
+            <button
+              type="button"
+              onClick={() => setShowLogoutConfirm(true)}
+              className="hidden h-9 cursor-pointer items-center gap-2 rounded-xl border border-transparent px-3 text-sm text-secondary-text transition-colors hover:bg-[var(--nav-hover-bg)] hover:text-foreground lg:inline-flex"
+            >
+              <LogOut className="h-[18px] w-[18px] shrink-0" />
+              <span>{t("layout.logout")}</span>
+            </button>
+          ) : null}
+        </div>
+
+        {logoutDialog}
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -220,63 +351,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
         className={cn("flex flex-col gap-1.5", isRail ? "" : "flex-1")}
         aria-label={t("layout.mainNav")}
       >
-        {navItems.map(({ key, labelKey, to, icon: Icon, exact, badge }) => {
-          const label = t(labelKey);
-          return (
-            <NavLink
-              key={key}
-              to={to}
-              end={exact}
-              onClick={onNavigate}
-              aria-label={label}
-              className={({ isActive }) =>
-                cn(itemInteractiveClass, isActive ? itemActiveClass : "")
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <Icon
-                    className={cn(
-                      itemIconClass,
-                      isActive
-                        ? "text-[var(--nav-icon-active)]"
-                        : "text-current",
-                    )}
-                  />
-                  {!collapsed ? (
-                    <span className={itemLabelClass}>{label}</span>
-                  ) : null}
-                  {badge === "completion" && completionBadge ? (
-                    <StatusDot
-                      tone="info"
-                      data-testid="chat-completion-badge"
-                      className={cn(
-                        "absolute right-3 border-2 border-background shadow-[0_0_10px_var(--nav-indicator-shadow)]",
-                        collapsed ? "right-2 top-2" : "",
-                      )}
-                      aria-label={t("layout.newChatMessage")}
-                    />
-                  ) : null}
-                  {badge === "alerts" && alertUnread > 0 ? (
-                    <span
-                      data-testid="alerts-unread-badge"
-                      aria-label={formatUiText(
-                        ALERT_REALTIME_TEXT[language].unreadBadge,
-                        { count: alertUnread },
-                      )}
-                      className={cn(
-                        "absolute right-2 min-w-[1.25rem] rounded-full bg-[hsl(var(--color-danger-alert-text))] px-1.5 text-center text-[10px] font-semibold leading-5 text-white",
-                        collapsed ? "top-1" : "",
-                      )}
-                    >
-                      {alertUnread > 99 ? "99+" : alertUnread}
-                    </span>
-                  ) : null}
-                </>
-              )}
-            </NavLink>
-          );
-        })}
+        {navLinks}
 
         <ThemeToggle
           variant={isRail ? "rail" : "nav"}
@@ -311,20 +386,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
         </button>
       ) : null}
 
-      <ConfirmDialog
-        isOpen={showLogoutConfirm}
-        title={t("layout.logoutTitle")}
-        message={t("layout.logoutMessage")}
-        confirmText={t("layout.logoutConfirm")}
-        cancelText={t("common.cancel")}
-        isDanger
-        onConfirm={() => {
-          setShowLogoutConfirm(false);
-          onNavigate?.();
-          void logout();
-        }}
-        onCancel={() => setShowLogoutConfirm(false)}
-      />
+      {logoutDialog}
     </div>
   );
 };

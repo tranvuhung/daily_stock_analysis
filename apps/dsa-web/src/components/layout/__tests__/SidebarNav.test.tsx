@@ -135,6 +135,20 @@ describe('SidebarNav', () => {
     expect(hrefs).not.toContain('/usage');
   });
 
+  it('renders the top variant as a horizontal menu bar with extra actions', () => {
+    render(
+      <MemoryRouter initialEntries={['/alerts']}>
+        <SidebarNav variant="top" actions={<button type="button">extra-action</button>} />
+      </MemoryRouter>,
+    );
+
+    const nav = screen.getByRole('navigation');
+    expect(nav).toHaveClass('lg:flex');
+    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+    expect(hrefs).toEqual(['/alerts', '/settings']);
+    expect(screen.getByRole('button', { name: 'extra-action' })).toBeInTheDocument();
+  });
+
   it('opens the logout confirmation and confirms logout', async () => {
     render(
       <MemoryRouter initialEntries={['/chat']}>
