@@ -49,7 +49,7 @@ describe('SidebarNav', () => {
     expect(screen.queryByRole('link', { name: 'Screening' })).not.toBeInTheDocument();
   });
 
-  it('shows screening directly after chat when Screening is enabled', async () => {
+  it('shows screening first when Screening is enabled', async () => {
     mockGetScreeningStatus.mockResolvedValueOnce({ enabled: true, available: true });
 
     render(
@@ -60,7 +60,7 @@ describe('SidebarNav', () => {
 
     expect(await screen.findByRole('link', { name: 'Screening' })).toHaveAttribute('href', '/screening');
     const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
-    expect(hrefs.slice(0, 5)).toEqual(['/', '/chat', '/screening', '/alerts', '/usage']);
+    expect(hrefs.slice(0, 3)).toEqual(['/screening', '/alerts', '/settings']);
   });
 
   it('refreshes the controlled screening entry after config changes', async () => {
@@ -81,26 +81,17 @@ describe('SidebarNav', () => {
     await waitFor(() => expect(mockGetScreeningStatus.mock.calls.length).toBeGreaterThanOrEqual(2));
   });
 
-  it('shows the shared completion badge only when chat completion is pending', () => {
+  it('does not render the chat completion badge while the chat item is hidden', () => {
     completionBadgeState.value = true;
 
-    const { rerender } = render(
-      <MemoryRouter initialEntries={['/chat']}>
-        <SidebarNav />
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByTestId('chat-completion-badge')).toBeInTheDocument();
-    expect(screen.getByLabelText('New Ask update')).toBeInTheDocument();
-
-    completionBadgeState.value = false;
-    rerender(
+    render(
       <MemoryRouter initialEntries={['/chat']}>
         <SidebarNav />
       </MemoryRouter>,
     );
 
     expect(screen.queryByTestId('chat-completion-badge')).not.toBeInTheDocument();
+    completionBadgeState.value = false;
   });
 
   it('renders the collapsed theme toggle variant when the sidebar is collapsed', () => {
@@ -128,7 +119,7 @@ describe('SidebarNav', () => {
     expect(alertsLink).toHaveClass('font-medium');
   });
 
-  it('temporarily hides the portfolio, AI signals and backtest navigation items', () => {
+  it('temporarily hides the home, chat, portfolio, AI signals, backtest and usage navigation items', () => {
     render(
       <MemoryRouter initialEntries={['/decision-signals']}>
         <SidebarNav />
@@ -139,6 +130,9 @@ describe('SidebarNav', () => {
     expect(hrefs).not.toContain('/portfolio');
     expect(hrefs).not.toContain('/decision-signals');
     expect(hrefs).not.toContain('/backtest');
+    expect(hrefs).not.toContain('/');
+    expect(hrefs).not.toContain('/chat');
+    expect(hrefs).not.toContain('/usage');
   });
 
   it('opens the logout confirmation and confirms logout', async () => {
