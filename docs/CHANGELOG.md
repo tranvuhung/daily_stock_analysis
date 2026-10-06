@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [改进] Cài đặt: thông báo sau khi Lưu cấu hình không còn tiếng Trung — toast phía Web (không có thay đổi, đã cập nhật, kiểm tra thất bại, xung đột phiên bản) hiển thị theo ngôn ngữ UI (Tiếng Việt/English); các cảnh báo `Config.validate_structured()` từ backend (STOCK_LIST, mô hình AI, kênh thông báo, công cụ tìm kiếm, Vision…) chuyển sang tiếng Anh.
 - [改进] Web: chuyển menu điều hướng từ thanh bên trái thành thanh menu ngang ở đầu trang trên desktop (logo, các mục menu, nút giao diện/ngôn ngữ/cập nhật desktop/đăng xuất); mobile vẫn dùng nút mở Drawer như cũ.
 - [改进] Web: ẩn cấu hình thông báo WeChat (WeCom), Feishu, DingTalk, PushPlus, Pushover, ntfy, Gotify, ServerChan3 và AstrBot khỏi trang Cài đặt → Thông báo (trường `WECHAT_*`/`FEISHU_*`/`DINGTALK_*`/`PUSHPLUS_*`/`PUSHOVER_*`/`NTFY_*`/`GOTIFY_*`/`SERVERCHAN3_*`/`ASTRBOT_*`, kênh tương ứng trong bảng test thông báo và option tương ứng của `NOTIFICATION_*_CHANNELS`); backend và giá trị `.env` đã lưu giữ nguyên.
 - [改进] Web: hộp trợ giúp trong trang Cài đặt không còn hiển thị mục "Tài liệu liên quan" (liên kết tới tài liệu GitHub); dữ liệu `docs` trong schema/caller vẫn giữ nguyên.

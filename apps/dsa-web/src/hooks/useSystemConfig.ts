@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { createParsedApiError, getParsedApiError, type ParsedApiError } from '../api/error';
 import { systemConfigApi, SystemConfigConflictError, SystemConfigValidationError } from '../api/systemConfig';
+import { useUiLanguage } from '../contexts/UiLanguageContext';
 import type {
   ConfigValidationIssue,
   SystemConfigCategorySchema,
@@ -80,6 +81,8 @@ export function useSystemConfig() {
   const [activeCategory, setActiveCategory] = useState<string>('base');
   const [validationIssues, setValidationIssues] = useState<ConfigValidationIssue[]>([]);
   const [toast, setToast] = useState<ToastState>(null);
+  // Thông báo theo ngôn ngữ UI (vi/en) / Toast messages follow the UI language (vi/en)
+  const { t } = useUiLanguage();
 
   // Request state
   const [isLoading, setIsLoading] = useState(false);
@@ -301,13 +304,13 @@ export function useSystemConfig() {
     const resolvedChangedItems = explicitItems.length > 0 ? explicitItems : getChangedItems();
 
     if (!explicitItems.length && !hasDirty) {
-      setToast({ type: 'success', message: 'There are no changes to save.' });
-      return { success: true, message: 'There are no changes to save' };
+      setToast({ type: 'success', message: t('settings.saveNoChanges') });
+      return { success: true, message: t('settings.saveNoChanges') };
     }
 
     if (!resolvedChangedItems.length) {
-      setToast({ type: 'success', message: 'There are no changes to save.' });
-      return { success: true, message: 'There are no changes to save' };
+      setToast({ type: 'success', message: t('settings.saveNoChanges') });
+      return { success: true, message: t('settings.saveNoChanges') };
     }
 
     setIsSaving(true);
@@ -320,15 +323,15 @@ export function useSystemConfig() {
 
       if (!validateResult.valid) {
         setSaveError(createParsedApiError({
-          title: 'Configuration validation failed',
-          message: 'Fix the form errors before saving.',
+          title: t('settings.saveValidationFailedTitle'),
+          message: t('settings.saveValidationFailedMessage'),
           rawMessage: 'Configuration validation failed; fix the form errors first.',
           category: 'http_error',
         }));
         setRetryAction('save');
         return {
           success: false,
-          message: 'Configuration validation failed',
+          message: t('settings.saveValidationFailedTitle'),
           issues: validateResult.issues,
         };
       }
@@ -344,10 +347,10 @@ export function useSystemConfig() {
       setLlmModelProviders(refreshed.llmModelProviders || []);
       applyServerPayload(refreshed.items, refreshed.configVersion, refreshed.maskToken);
 
-      const warningText = updateResult.warnings?.length
-        ? `; warnings: ${updateResult.warnings.join('; ')}`
-        : '';
-      setToast({ type: 'success', message: `Configuration updated${warningText}` });
+      const successMessage = updateResult.warnings?.length
+        ? t('settings.saveSuccessWithWarnings', { warnings: updateResult.warnings.join('; ') })
+        : t('settings.saveSuccess');
+      setToast({ type: 'success', message: successMessage });
       return { success: true };
     } catch (error: unknown) {
       if (error instanceof SystemConfigValidationError) {
@@ -355,8 +358,8 @@ export function useSystemConfig() {
         setSaveError(error.parsedError);
       } else if (error instanceof SystemConfigConflictError) {
         setSaveError(createParsedApiError({
-          title: 'Configuration version conflict',
-          message: `${error.message}. Reload the configuration first.`,
+          title: t('settings.saveConflictTitle'),
+          message: t('settings.saveConflictMessage', { error: error.message }),
           rawMessage: error.parsedError.rawMessage,
           status: error.parsedError.status,
           category: error.parsedError.category,
@@ -367,7 +370,7 @@ export function useSystemConfig() {
 
       setToast({ type: 'error', error: getParsedApiError(error) });
       setRetryAction('save');
-      return { success: false, message: 'Save failed' };
+      return { success: false, message: t('settings.saveFailed') };
     } finally {
       setIsSaving(false);
     }
@@ -377,6 +380,7 @@ export function useSystemConfig() {
     getChangedItems,
     hasDirty,
     maskToken,
+    t,
   ]);
 
   const retry = useCallback(async () => {
