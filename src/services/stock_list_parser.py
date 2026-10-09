@@ -189,8 +189,9 @@ _KNOWN_PREFIXES_SORTED = tuple(
 _US_TICKER_SHAPE_RE = re.compile(r"^[A-Z]{1,5}(\.[A-Z]{1,2})?$")
 
 
-# Vietnamese stock/ETF codes are fixed at 3 characters (checked against the full VCI code list: 1602 all-letter + 151
-# containing digits). 8-9 character warrants/futures/bonds are currently out of analysis scope.
+# Vietnamese stock codes are fixed at 3 characters (checked against the full VCI code list: 1602 all-letter + 151
+# containing digits). 8-character ETF/fund certificates (FUEVN100, E1VFVN30) are recognized via
+# ``data_provider.base.is_vn_fund_code``; warrants/futures/bonds are currently out of analysis scope.
 _VN_CODE_SHAPE_RE = re.compile(r"^[A-Z][A-Z0-9]{2}$")
 
 # Vietnamese indices. The VCI API is case-sensitive, so store the exact spelling the provider expects.
@@ -215,6 +216,7 @@ def _classify_vn_token(raw_input: str, raw: str) -> Optional["AnalysisTarget"]:
     chain to reach ``VciFetcher``.
     """
 
+    from data_provider.base import is_vn_fund_code, is_vn_security_code
     from src.core.markets import is_market_enabled
 
     if not is_market_enabled("vn"):
@@ -227,7 +229,7 @@ def _classify_vn_token(raw_input: str, raw: str) -> Optional["AnalysisTarget"]:
     upper = token.upper()
     bare: Optional[str] = None
 
-    if upper.endswith(".VN") and _VN_CODE_SHAPE_RE.match(upper[:-3]):
+    if upper.endswith(".VN") and is_vn_security_code(upper[:-3]):
         bare = upper[:-3]
     elif (
         len(token) > 2
@@ -236,11 +238,18 @@ def _classify_vn_token(raw_input: str, raw: str) -> Optional["AnalysisTarget"]:
         # wrongly stripped into the Vietnamese code ``RDF``.
         and token[:2] == "vn"
         and upper not in _VN_INDEX_CANONICAL
-        and _VN_CODE_SHAPE_RE.match(upper[2:])
+        and is_vn_security_code(upper[2:])
     ):
+        bare = upper[2:]
+    elif upper.startswith("VN") and is_vn_fund_code(upper[2:]):
+        # ``VN`` + mã quỹ (kể cả viết hoa) không trùng ticker Mỹ nên luôn là Việt Nam.
         bare = upper[2:]
     elif upper in _VN_INDEX_CANONICAL:
         bare = _VN_INDEX_CANONICAL[upper]
+    elif is_vn_fund_code(upper):
+        # Mã chứng chỉ quỹ 8 ký tự không trùng ticker Mỹ nên nhận luôn là Việt Nam.
+        # Fund certificates never overlap US tickers, so no US disambiguation is needed.
+        bare = upper
     elif _VN_CODE_SHAPE_RE.match(upper):
         # Bare codes overlap with the US ticker space; only treat them unambiguously as Vietnamese when US is disabled.
         # When both markets are enabled (rollback config), return None so the token keeps going down the existing US

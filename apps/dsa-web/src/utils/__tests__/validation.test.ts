@@ -20,6 +20,27 @@ describe('stock code validation', () => {
     expect(isObviouslyInvalidStockQuery(input)).toBe(false);
   });
 
+  // Chứng chỉ quỹ ETF Việt Nam 8 ký tự (FU*/E1VF*) phải hợp lệ.
+  test.each([
+    ['FUEVN100', 'FUEVN100'],
+    ['fuevn100', 'FUEVN100'],
+    ['E1VFVN30', 'E1VFVN30'],
+    ['FUEVN100.VN', 'FUEVN100.VN'],
+    ['vnFUEVN100', 'VNFUEVN100'],
+  ])('accepts Vietnam ETF / fund certificate %s', (input, normalized) => {
+    expect(looksLikeStockCode(input)).toBe(true);
+    expect(validateStockCode(input)).toEqual({
+      valid: true,
+      normalized,
+    });
+    expect(isObviouslyInvalidStockQuery(input)).toBe(false);
+  });
+
+  // Chứng quyền và hợp đồng phái sinh vẫn nằm ngoài phạm vi.
+  test.each(['CHPG2401', 'VN30F2410'])('rejects Vietnam warrant/futures code %s', (input) => {
+    expect(validateStockCode(input).valid).toBe(false);
+  });
+
   test.each(['7203', '005930.K', '035720.KRX'])(
     'does not treat ambiguous JP/KR-like query %s as a valid suffix code',
     (input) => {

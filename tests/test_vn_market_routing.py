@@ -116,11 +116,28 @@ class MarketTagTestCase(unittest.TestCase):
             self.assertEqual(_market_tag("HPG"), "us")
             self.assertEqual(_market_tag("HPG.VN"), "vn")
 
+    def test_vn_fund_certificates_are_recognised(self):
+        # Chứng chỉ quỹ ETF 8 ký tự không trùng ticker Mỹ nên luôn là Việt Nam,
+        # kể cả khi bật đồng thời vn và us.
+        for value in ("vn", "vn,us"):
+            with supported_markets(value):
+                for code in ("FUEVN100", "E1VFVN30", "FUCVREIT", "FUEVN100.VN", "vnFUEVN100"):
+                    self.assertEqual(_market_tag(code), "vn", f"{value}:{code}")
+
+    def test_warrants_and_futures_are_not_vn_funds(self):
+        with supported_markets("vn"):
+            for code in ("CHPG2401", "VN30F2410"):
+                self.assertNotEqual(_market_tag(code), "vn", code)
+
 
 class NormalizeVnCodeTestCase(unittest.TestCase):
     def test_all_vn_spellings_collapse_to_one_bare_code(self):
         for raw in ("HPG", "hpg.vn", "HPG.VN", "vnHPG"):
             self.assertEqual(normalize_stock_code(raw).upper(), "HPG", raw)
+
+    def test_vn_fund_spellings_collapse_to_one_bare_code(self):
+        for raw in ("FUEVN100", "fuevn100.vn", "FUEVN100.VN", "vnFUEVN100", "VNFUEVN100"):
+            self.assertEqual(normalize_stock_code(raw).upper(), "FUEVN100", raw)
 
     def test_index_codes_are_not_mistaken_for_vn_prefix(self):
         # ``VN30`` 以 VN 开头，但它是指数代码，不能被剥成 ``30``
@@ -140,6 +157,42 @@ class ParseAnalysisTargetVnTestCase(unittest.TestCase):
                 for raw in ("HPG", "hpg", "HPG.VN", "vnHPG")
             }
             self.assertEqual(ids, {"HPG"})
+
+    def test_vn_fund_target_routes_to_vn(self):
+        for value in ("vn", "vn,us"):
+            with supported_markets(value):
+                for raw in ("FUEVN100", "fuevn100", "FUEVN100.VN", "vnFUEVN100"):
+                    target = parse_analysis_target(raw)
+                    self.assertEqual(target.exchange, "VN", f"{value}:{raw}")
+                    self.assertEqual(target.canonical_id, "FUEVN100", f"{value}:{raw}")
+                    self.assertEqual(target.asset_type, ParseStatus.STOCK, f"{value}:{raw}")
+
+    def test_vn_fund_codes_are_code_like(self):
+        # Endpoint /analyze dùng is_code_like để quyết định mã hay tên; nếu mã quỹ
+        # không code-like thì "FUEVN100" (chữ + số) bị từ chối như chuỗi rác.
+        from src.services.stock_code_utils import is_code_like
+
+        for code in ("FUEVN100", "fuevn100", "E1VFVN30", "FUEVN100.VN", "vnFUEVN100", "HPG.VN"):
+            self.assertTrue(is_code_like(code), code)
+        for code in ("CHPG2401", "VN30F2410"):
+            self.assertFalse(is_code_like(code), code)
+
+    def test_analysis_endpoint_accepts_vn_fund_codes(self):
+        from tests.litellm_stub import ensure_litellm_stub
+
+        ensure_litellm_stub()
+        from data_provider.base import normalize_stock_code as _normalize
+        from fastapi import HTTPException
+        from api.v1.endpoints.analysis import _resolve_analysis_input
+
+        with supported_markets("vn"):
+            for raw in ("FUEVN100", "fuevn100", "FUEVN100.VN", "vnFUEVN100"):
+                code, _target = _resolve_analysis_input(raw)
+                # Mã trả về phải quy về đúng mã quỹ và được nhận là Việt Nam ở bước sau.
+                self.assertEqual(_normalize(code), "FUEVN100", raw)
+                self.assertEqual(_market_tag(code), "vn", raw)
+            with self.assertRaises(HTTPException):
+                _resolve_analysis_input("CHPG2401")
 
     def test_vn_target_is_stock_not_index(self):
         # ParseStatus.INDEX 会被路由到 A 股专用指数链，越南指数必须走普通日线链

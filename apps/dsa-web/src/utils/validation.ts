@@ -13,6 +13,11 @@ const STOCK_CODE_PATTERNS = [
   /^[A-Z][A-Z0-9]{2}$/, // Vietnam bare ticker
   /^[A-Z][A-Z0-9]{2}\.VN$/, // Vietnam explicit suffix, for example HPG.VN
   /^VN[A-Z][A-Z0-9]{2}$/, // Vietnam explicit prefix, for example vnHPG
+  // Chứng chỉ quỹ ETF / quỹ đóng Việt Nam: 8 ký tự, tiền tố FU hoặc E1VF (FUEVN100, E1VFVN30).
+  // Vietnam ETF / fund certificates; they never overlap US tickers.
+  /^(?:FU[A-Z0-9]{6}|E1VF[A-Z0-9]{4})$/, // Vietnam fund bare code
+  /^(?:FU[A-Z0-9]{6}|E1VF[A-Z0-9]{4})\.VN$/, // Vietnam fund explicit suffix, for example FUEVN100.VN
+  /^VN(?:FU[A-Z0-9]{6}|E1VF[A-Z0-9]{4})$/, // Vietnam fund explicit prefix, for example vnFUEVN100
   /^(VNINDEX|VN30|VN100|HNXINDEX|HNX30|HNXUPCOMINDEX|UPCOMINDEX)$/, // Vietnam indices
   /^\d{6}$/, // A-share 6-digit code
   /^(SH|SZ|BJ)\d{6}$/, // A-share code with exchange prefix (also covers index canonical sh000016 / sh000300)
@@ -36,7 +41,7 @@ export const looksLikeStockCode = (value: string): boolean => {
 };
 
 /**
- * Validate common Vietnam, A-share, HK, US, JP, and KR stock code formats.
+ * Validate common Vietnam (stocks and ETF/fund certificates), A-share, HK, US, JP, and KR stock code formats.
  */
 export const validateStockCode = (value: string): ValidationResult => {
   const normalized = value.trim().toUpperCase();

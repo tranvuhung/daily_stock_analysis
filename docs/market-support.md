@@ -117,6 +117,7 @@ PY
 - 裸代码：`HPG`、`FPT`、`X77`（固定 3 位大写字母数字）
 - 显式后缀：`HPG.VN`
 - 显式前缀：`vnHPG`（**前缀必须小写**，与 `us` 前缀的既有约定一致；全大写的 `VNHPG` 会按美股 ticker 处理，避免 `VNRDF` 这类 5 位美股代码被误剥成 `RDF`）
+- Chứng chỉ quỹ ETF / quỹ đóng: `FUEVN100`、`E1VFVN30`、`FUCVREIT`（8 ký tự, tiền tố `FU` hoặc `E1VF`; cũng nhận `FUEVN100.VN`、`vnFUEVN100`）。Không trùng ticker Mỹ nên mã trần luôn được nhận là Việt Nam kể cả khi bật `us`；dữ liệu ngày lấy từ VCI như cổ phiếu.
 
 指数：`VNINDEX`、`VN30`、`VN100`、`HNXIndex`、`HNX30`、`HNXUpcomIndex`。用户输入大小写不敏感，但发往 VCI 的写法**大小写敏感**（`HNXINDEX` 返回空、`HNXIndex` 才有数据），映射表在 `data_provider/base.py:VN_INDEX_SYMBOLS`。
 
@@ -129,7 +130,7 @@ PY
 - **没有基本面 / 资金流 / 板块**：这些能力当前只有 A 股实现，越南按 `not_supported` 降级。
 - **选股引擎不支持**：`src/services/screening/pipeline.py` 仍限定 `cn`/`us`。
 - **报告语言**：已切换为**仅越南语**。`REPORT_LANGUAGE` 只接受 `vi`，请求 schema 收敛为 `Literal["vi"]`；`zh`/`en`/`ko` 保留在渲染层以便历史记录按原语言显示。Web UI 语言与报告语言仍是两套独立契约。
-- **权证 / 期货 / 债券不纳入**：VCI 代码表里的 8-9 位代码（`CFPT2314`、`VN30F2512`）当前不参与分析。
+- **权证 / 期货 / 债券不纳入**：VCI 代码表里的 8-9 位代码（`CFPT2314`、`VN30F2512`）当前不参与分析（chứng chỉ quỹ `FU*`/`E1VF*` là ngoại lệ, đã được hỗ trợ）。
 - **同时启用 `vn` 和 `us` 时裸代码有歧义**：`HPG`/`FPT`/`VNM` 同时满足越南代码形状和美股 ticker 正则 `^[A-Z]{1,5}$`。此时按既有美股语义处理（保证回滚行为不变），越南标的需写成 `HPG.VN` 或 `vnHPG`。市场判定发生在 `normalize_stock_code` 之前，因此这两种显式写法不会被归一化抹掉。
 
 ### Điểm lại thị trường Việt Nam (`MARKET_REVIEW_REGION=vn`)

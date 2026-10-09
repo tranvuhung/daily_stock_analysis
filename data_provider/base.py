@@ -109,7 +109,7 @@ def normalize_stock_code(stock_code: str) -> str:
     # nữa, phải khử nhập nhằng bằng tiền tố tường minh ở tầng stock_list_parser.
     if upper.endswith(".VN"):
         candidate = upper[:-3]
-        if _VN_STOCK_CODE_RE.match(candidate):
+        if is_vn_security_code(candidate):
             return candidate
     # Tiền tố ``vn`` bắt buộc viết thường, thống nhất với quy ước sẵn có của tiền
     # tố ``us``; những mã viết hoa toàn bộ như ``VNRDF`` phải coi là ticker Mỹ,
@@ -117,8 +117,13 @@ def normalize_stock_code(stock_code: str) -> str:
     if code[:2] == "vn" and len(code) > 2:
         candidate = upper[2:]
         # ``VN30``/``VNINDEX`` bản thân là mã chỉ số, không được cắt như tiền tố ``vn``
-        if upper not in VN_INDEX_SYMBOLS and _VN_STOCK_CODE_RE.match(candidate):
+        if upper not in VN_INDEX_SYMBOLS and is_vn_security_code(candidate):
             return candidate
+    # Mã quỹ có tiền tố ``VN`` viết hoa (``VNFUEVN100``, sinh ra khi tầng API chuẩn
+    # hoá chữ hoa ``vnFUEVN100``): dài 10 ký tự nên không thể là ticker Mỹ.
+    # Upper-case ``VN`` + fund code is unambiguous, strip it too.
+    if upper.startswith("VN") and _VN_FUND_CODE_RE.match(upper[2:]):
+        return upper[2:]
 
     # Normalize HK prefix to a canonical 5-digit form (e.g. hk1810 -> HK01810)
     if upper.startswith('HK') and not upper.startswith('HK.'):
@@ -279,11 +284,31 @@ VN_INDEX_SYMBOLS = {
     "UPCOM": "HNXUpcomIndex",
 }
 
-# Mã cổ phiếu/ETF Việt Nam cố định 3 ký tự chữ hoa hoặc số (đã đối chiếu bảng mã
+# Mã cổ phiếu Việt Nam cố định 3 ký tự chữ hoa hoặc số (đã đối chiếu bảng mã
 # đầy đủ của VCI: 1602 mã thuần chữ + 151 mã có số, ví dụ ``X77``/``VW3``).
-# Các mã 8-9 ký tự là chứng quyền, phái sinh và trái phiếu, hiện chưa đưa vào
-# phạm vi phân tích.
+# Vietnam stock codes: exactly 3 uppercase alphanumerics.
 _VN_STOCK_CODE_RE = re.compile(r"^[A-Z][A-Z0-9]{2}$")
+
+# Chứng chỉ quỹ ETF / quỹ đóng Việt Nam: 8 ký tự, tiền tố ``FU`` (``FUEVN100``,
+# ``FUESSV30``, ``FUCVREIT``) hoặc ``E1VF`` (``E1VFVN30``). Không trùng ticker Mỹ
+# (1-5 ký tự) nên mã trần luôn được nhận là Việt Nam, không cần khử nhập nhằng.
+# Chứng quyền (``CHPG2401``), phái sinh (``VN30F2410``) và trái phiếu vẫn nằm
+# ngoài phạm vi phân tích.
+# Vietnam ETF / closed-end fund certificates (8 chars, FU*/E1VF* prefixes).
+_VN_FUND_CODE_RE = re.compile(r"^(?:FU[A-Z0-9]{6}|E1VF[A-Z0-9]{4})$")
+
+
+def is_vn_fund_code(code: str) -> bool:
+    """Có phải mã chứng chỉ quỹ ETF / quỹ đóng Việt Nam (dạng trần) hay không."""
+
+    return bool(_VN_FUND_CODE_RE.match((code or "").strip().upper()))
+
+
+def is_vn_security_code(code: str) -> bool:
+    """Mã trần có đúng hình dạng mã cổ phiếu (3 ký tự) hoặc chứng chỉ quỹ Việt Nam."""
+
+    normalized = (code or "").strip().upper()
+    return bool(_VN_STOCK_CODE_RE.match(normalized) or _VN_FUND_CODE_RE.match(normalized))
 
 
 def is_vn_index_code(code: str) -> bool:
@@ -305,6 +330,7 @@ def _is_vn_market(code: str) -> bool:
     - Hậu tố tường minh ``HPG.VN``
     - Chỉ số đã đăng ký ``VNINDEX`` / ``VN30`` / ``HNXIndex`` / ``HNXUpcomIndex``
     - Mã trần ``HPG`` (3 ký tự chữ hoa hoặc số)
+    - Mã chứng chỉ quỹ ETF trần ``FUEVN100`` / ``E1VFVN30`` (luôn là Việt Nam)
 
     Mã trần chồng lấn thật sự với regex ticker Mỹ ``^[A-Z]{1,5}$`` (``FPT``/``VNM``
     vừa là cổ phiếu Việt Nam vừa có thể bị hiểu là ticker Mỹ). Vì vậy mã trần chỉ
@@ -321,7 +347,7 @@ def _is_vn_market(code: str) -> bool:
 
     if normalized.endswith(".VN"):
         base = normalized[:-3]
-        return bool(_VN_STOCK_CODE_RE.match(base))
+        return is_vn_security_code(base)
 
     if normalized in VN_INDEX_SYMBOLS:
         return True
@@ -333,7 +359,14 @@ def _is_vn_market(code: str) -> bool:
     # mã Việt Nam. ``VN30`` / ``VNINDEX`` đã được trả về ở nhánh chỉ số phía trên
     # nên không xuống tới đây.
     raw = (code or "").strip()
-    if raw[:2] == "vn" and _VN_STOCK_CODE_RE.match(raw[2:].upper()):
+    if raw[:2] == "vn" and is_vn_security_code(raw[2:]):
+        return True
+    if normalized.startswith("VN") and _VN_FUND_CODE_RE.match(normalized[2:]):
+        return True
+
+    # Mã chứng chỉ quỹ 8 ký tự không chồng lấn ticker Mỹ nên nhận luôn là Việt Nam.
+    # Fund certificates never collide with US tickers, accept them unconditionally.
+    if _VN_FUND_CODE_RE.match(normalized):
         return True
 
     if not _VN_STOCK_CODE_RE.match(normalized):

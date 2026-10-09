@@ -11,7 +11,7 @@ from importlib import import_module
 from dataclasses import dataclass
 from typing import List, Optional
 
-from data_provider.base import canonical_stock_code
+from data_provider.base import canonical_stock_code, is_vn_fund_code, is_vn_security_code
 from src.services.market_symbol_utils import (
     get_suffix_market,
     normalize_suffix_market_symbol,
@@ -201,6 +201,15 @@ def is_code_like(value: str) -> bool:
     if not text:
         return False
     if text.isdigit() and len(text) in (5, 6):
+        return True
+    # Mã Việt Nam: chứng chỉ quỹ ETF trần (FUEVN100), hậu tố ``.VN`` (HPG.VN /
+    # FUEVN100.VN) và tiền tố ``vn`` + mã quỹ (vnFUEVN100).
+    # Vietnam ETF/fund certificates and explicit ``.VN`` / ``vn`` forms.
+    if is_vn_fund_code(text):
+        return True
+    if text.endswith(".VN") and is_vn_security_code(text[:-3]):
+        return True
+    if text.startswith("VN") and is_vn_fund_code(text[2:]):
         return True
     explicit_parts = _split_explicit_exchange(text)
     if explicit_parts is not None:
