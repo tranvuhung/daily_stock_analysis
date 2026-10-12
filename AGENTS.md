@@ -87,7 +87,7 @@ python scripts/check_ai_assets.py
 python main.py
 python main.py --debug
 python main.py --dry-run
-python main.py --stocks 600519,hk00700,AAPL
+python main.py --stocks HCM,TCB,FPT
 python main.py --market-review
 python main.py --schedule
 python main.py --serve
@@ -149,14 +149,14 @@ gh run view <run_id> --log-failed
 
 The repository CI currently consists of:
 
-| Check | Source | Description | Blocking |
-| --- | --- | --- | --- |
-| `ai-governance` | `.github/workflows/ci.yml` | Validates the relationship between `AGENTS.md` / `CLAUDE.md` / `.github` instructions / `.claude/skills` | Yes |
-| `backend-gate` | `.github/workflows/ci.yml` | Runs `./scripts/ci_gate.sh` | Yes |
-| `docker-build` | `.github/workflows/ci.yml` | Docker build plus an import smoke test of key modules | Yes |
-| `web-gate` | `.github/workflows/ci.yml` | Runs `npm run lint` + `npm run build` when the frontend changes | Yes (when triggered) |
-| `network-smoke` | `.github/workflows/network-smoke.yml` | `pytest -m network` + `scripts/test.sh quick` | No, observational |
-| `pr-review` | `.github/workflows/pr-review.yml` | PR static checks + AI review + automatic labelling | No, advisory |
+| Check           | Source                                | Description                                                                                              | Blocking             |
+| --------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------- |
+| `ai-governance` | `.github/workflows/ci.yml`            | Validates the relationship between `AGENTS.md` / `CLAUDE.md` / `.github` instructions / `.claude/skills` | Yes                  |
+| `backend-gate`  | `.github/workflows/ci.yml`            | Runs `./scripts/ci_gate.sh`                                                                              | Yes                  |
+| `docker-build`  | `.github/workflows/ci.yml`            | Docker build plus an import smoke test of key modules                                                    | Yes                  |
+| `web-gate`      | `.github/workflows/ci.yml`            | Runs `npm run lint` + `npm run build` when the frontend changes                                          | Yes (when triggered) |
+| `network-smoke` | `.github/workflows/network-smoke.yml` | `pytest -m network` + `scripts/test.sh quick`                                                            | No, observational    |
+| `pr-review`     | `.github/workflows/pr-review.yml`     | PR static checks + AI review + automatic labelling                                                       | No, advisory         |
 
 If the PR already has the corresponding CI result, cite the CI conclusion directly. If CI does not cover the change, or the local environment differs substantially from CI, describe the local verification and the gap.
 
