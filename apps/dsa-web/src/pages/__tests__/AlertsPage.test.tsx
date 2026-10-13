@@ -52,17 +52,17 @@ vi.mock('../../api/portfolio', () => ({
 
 const parsedError = {
   title: 'tải thất bại',
-  message: '告警 API 不可用',
-  rawMessage: '告警 API 不可用',
+  message: 'Alert API unavailable',
+  rawMessage: 'Alert API unavailable',
   category: 'http_error' as const,
   status: 500,
 };
 
 const rule = {
   id: 1,
-  name: '茅台价格突破',
+  name: 'HPG price breakout',
   targetScope: 'single_symbol' as const,
-  target: '600519',
+  target: 'HPG',
   alertType: 'price_cross' as const,
   parameters: { direction: 'above' as const, price: 1800 },
   severity: 'warning' as const,
@@ -88,10 +88,10 @@ beforeEach(() => {
       {
         id: 10,
         ruleId: 1,
-        target: '600519',
+        target: 'HPG',
         observedValue: 1801,
         threshold: 1800,
-        reason: '600519 price above 1800',
+        reason: 'HPG price above 1800',
         dataSource: 'realtime_quote',
         dataTimestamp: '2026-05-18T09:30:00',
         triggeredAt: '2026-05-18T09:30:01',
@@ -105,7 +105,7 @@ beforeEach(() => {
   listNotifications.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
   listLiveQuotes.mockResolvedValue({
     feed: { enabled: true, connected: true, inSession: true },
-    quotes: [{ target: '600519', symbol: '600519', price: 1750, changePct: 1.25, source: 'tvsi_mqtt' }],
+    quotes: [{ target: 'HPG', symbol: 'HPG', price: 1750, changePct: 1.25, source: 'tvsi_mqtt' }],
   });
   useAlertStore.setState({ unreadCount: 0, toasts: [], livePrices: {}, feedStatus: null, triggerVersion: 0 });
   testRule.mockResolvedValue({
@@ -113,7 +113,7 @@ beforeEach(() => {
     status: 'triggered',
     triggered: true,
     observedValue: 1801,
-    message: '600519 price above 1800',
+    message: 'HPG price above 1800',
   });
   createRule.mockResolvedValue(rule);
   disableRule.mockResolvedValue({ ...rule, enabled: false });
@@ -126,8 +126,8 @@ describe('AlertsPage', () => {
     render(<AlertsPage />);
 
     expect(screen.getByText('Manage event alerts, daily technical indicators, watchlist, portfolio/account linkage and market traffic-light rules; run one-off tests and review the trigger history recorded by the background evaluation job.')).toBeInTheDocument();
-    expect(await screen.findByText('茅台价格突破')).toBeInTheDocument();
-    expect(await screen.findByText('600519 price above 1800')).toBeInTheDocument();
+    expect(await screen.findByText('HPG price breakout')).toBeInTheDocument();
+    expect(await screen.findByText('HPG price above 1800')).toBeInTheDocument();
     expect(await screen.findByText('No notification attempts yet')).toBeInTheDocument();
     expect(listRules).toHaveBeenCalledWith({
       enabled: undefined,
@@ -147,7 +147,7 @@ describe('AlertsPage', () => {
 
     await waitFor(() => expect(testRule).toHaveBeenCalledWith(1));
     expect(await screen.findByText('Test result')).toBeInTheDocument();
-    expect(screen.getByText(/600519 price above 1800/)).toBeInTheDocument();
+    expect(screen.getByText(/HPG price above 1800/)).toBeInTheDocument();
     expect(screen.getByText(/observed: 1801/)).toBeInTheDocument();
     expect(screen.queryByText(/realtime_quote/)).not.toBeInTheDocument();
   });
@@ -166,8 +166,8 @@ describe('AlertsPage', () => {
       skippedCount: 0,
       targetResults: [
         {
-          target: '600519',
-          displayTarget: '自选股 - 600519',
+          target: 'HPG',
+          displayTarget: 'Watchlist - HPG',
           status: 'triggered',
           recordStatus: 'triggered',
           triggered: true,
@@ -175,8 +175,8 @@ describe('AlertsPage', () => {
           message: 'triggered',
         },
         {
-          target: '000001',
-          displayTarget: '自选股 - 000001',
+          target: 'VCB',
+          displayTarget: 'Watchlist - VCB',
           status: 'not_triggered',
           recordStatus: 'degraded',
           triggered: false,
@@ -190,21 +190,21 @@ describe('AlertsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Test' }));
 
     expect(await screen.findByText(/Evaluated 2 · triggered 1 · degraded 1 · skipped 0/)).toBeInTheDocument();
-    expect(screen.getByText('自选股 - 600519')).toBeInTheDocument();
+    expect(screen.getByText('Watchlist - HPG')).toBeInTheDocument();
     expect(screen.getByText(/not_triggered \/ degraded/)).toBeInTheDocument();
   });
 
   it('creates a rule through the page form and reloads rules', async () => {
     render(<AlertsPage />);
 
-    await screen.findByText('茅台价格突破');
-    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'aapl' } });
+    await screen.findByText('HPG price breakout');
+    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'fpt' } });
     fireEvent.change(screen.getByLabelText('Price threshold'), { target: { value: '200' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
 
     await waitFor(() => {
       expect(createRule).toHaveBeenCalledWith(expect.objectContaining({
-        target: 'AAPL',
+        target: 'FPT',
         alertType: 'price_cross',
         parameters: { direction: 'above', price: 200 },
       }));
@@ -216,18 +216,18 @@ describe('AlertsPage', () => {
     createRule.mockRejectedValueOnce({ parsedError });
     render(<AlertsPage />);
 
-    await screen.findByText('茅台价格突破');
-    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'aapl' } });
+    await screen.findByText('HPG price breakout');
+    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'fpt' } });
     fireEvent.change(screen.getByLabelText('Price threshold'), { target: { value: '200' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
 
     expect(await screen.findByText('tải thất bại')).toBeInTheDocument();
-    expect(screen.getByLabelText('Symbol')).toHaveValue('aapl');
+    expect(screen.getByLabelText('Symbol')).toHaveValue('fpt');
     expect(screen.getByLabelText('Price threshold')).toHaveValue(200);
   });
 
   it('clamps rules pagination when a mutation leaves the current page empty', async () => {
-    const page2Rule = { ...rule, id: 2, name: '第二页规则', target: 'AAPL' };
+    const page2Rule = { ...rule, id: 2, name: 'Page two rule', target: 'FPT' };
     listRules
       .mockResolvedValueOnce({ items: [rule], total: 21, page: 1, pageSize: 20 })
       .mockResolvedValueOnce({ items: [page2Rule], total: 21, page: 2, pageSize: 20 })
@@ -236,10 +236,10 @@ describe('AlertsPage', () => {
 
     render(<AlertsPage />);
 
-    expect(await screen.findByText('茅台价格突破')).toBeInTheDocument();
+    expect(await screen.findByText('HPG price breakout')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '2' }));
-    expect(await screen.findByText('第二页规则')).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText('Delete 第二页规则'));
+    expect(await screen.findByText('Page two rule')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Delete Page two rule'));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(deleteRule).toHaveBeenCalledWith(2));
@@ -251,14 +251,14 @@ describe('AlertsPage', () => {
         pageSize: 20,
       });
     });
-    expect(await screen.findByText('茅台价格突破')).toBeInTheDocument();
+    expect(await screen.findByText('HPG price breakout')).toBeInTheDocument();
   });
 
   it('keeps the latest rules response when filter requests resolve out of order', async () => {
     const initialRequest = createDeferred<{ items: Array<typeof rule>; total: number; page: number; pageSize: number }>();
     const filteredRequest = createDeferred<{ items: Array<typeof rule>; total: number; page: number; pageSize: number }>();
-    const staleRule = { ...rule, id: 3, name: '旧筛选规则', enabled: true };
-    const filteredRule = { ...rule, id: 4, name: '停用规则', enabled: false };
+    const staleRule = { ...rule, id: 3, name: 'Stale filter rule', enabled: true };
+    const filteredRule = { ...rule, id: 4, name: 'Disabled rule', enabled: false };
     listRules
       .mockReset()
       .mockReturnValueOnce(initialRequest.promise)
@@ -270,11 +270,11 @@ describe('AlertsPage', () => {
     await waitFor(() => expect(listRules).toHaveBeenCalledTimes(2));
 
     filteredRequest.resolve({ items: [filteredRule], total: 1, page: 1, pageSize: 20 });
-    expect(await screen.findByText('停用规则')).toBeInTheDocument();
+    expect(await screen.findByText('Disabled rule')).toBeInTheDocument();
 
     initialRequest.resolve({ items: [staleRule], total: 1, page: 1, pageSize: 20 });
-    await waitFor(() => expect(screen.queryByText('旧筛选规则')).not.toBeInTheDocument());
-    expect(screen.getByText('停用规则')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Stale filter rule')).not.toBeInTheDocument());
+    expect(screen.getByText('Disabled rule')).toBeInTheDocument();
   });
 
   it('renders API errors through ApiErrorAlert', async () => {
@@ -283,7 +283,7 @@ describe('AlertsPage', () => {
     render(<AlertsPage />);
 
     expect(await screen.findByText('tải thất bại')).toBeInTheDocument();
-    expect(screen.getByText('告警 API 不可用')).toBeInTheDocument();
+    expect(screen.getByText('Alert API unavailable')).toBeInTheDocument();
   });
 
   it('shows live prices, feed status and reloads history on realtime alerts', async () => {
@@ -301,13 +301,13 @@ describe('AlertsPage', () => {
     act(() => {
       useAlertStore.getState().pushAlert({
         ruleId: 1,
-        target: '600519',
+        target: 'HPG',
         alertType: 'price_cross',
         severity: 'warning',
-        reason: '600519 price crossed above 1800',
+        reason: 'HPG price crossed above 1800',
         triggeredAt: '2026-09-28T10:00:00',
       });
-      useAlertStore.getState().upsertPrice({ symbol: '600519', price: 1805, changePct: 4.1 });
+      useAlertStore.getState().upsertPrice({ symbol: 'HPG', price: 1805, changePct: 4.1 });
     });
 
     await waitFor(() => expect(listTriggers).toHaveBeenCalledTimes(2));
@@ -334,14 +334,15 @@ describe('AlertsPage edit rule', () => {
     await waitFor(() => expect(updateRule).toHaveBeenCalledTimes(1));
     expect(updateRule).toHaveBeenCalledWith(1, expect.objectContaining({
       targetScope: 'single_symbol',
-      target: '600519',
+      target: 'HPG',
       alertType: 'price_cross',
       parameters: { direction: 'above', price: 1900 },
       enabled: true,
     }));
     expect(createRule).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText('Create alert rule')).toBeInTheDocument());
-    expect((screen.getByLabelText('Price threshold') as HTMLInputElement).value).toBe('');
+    // Form reset happens after the edit-mode switch; wait for it under heavy suite load.
+    await waitFor(() => expect((screen.getByLabelText('Price threshold') as HTMLInputElement).value).toBe(''));
   });
 
   it('cancels edit mode without saving', async () => {

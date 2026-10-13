@@ -9,10 +9,10 @@ describe('RunFlowNodeDetails', () => {
       id: 'task_queue',
       lane: 'entry',
       kind: 'queue',
-      label: 'Task 队列',
+      label: 'Task Hàng đợi',
       status: 'success',
       startedAt: '2026-06-08T22:14:25',
-      message: 'Task 进入运行队列',
+      message: 'Task Vào hàng đợi chạy',
     };
 
     render(<RunFlowNodeDetails node={node} />);
@@ -86,7 +86,7 @@ describe('RunFlowNodeDetails', () => {
       id: 'topology_data_realtime_quote',
       lane: 'data_source',
       kind: 'data_source',
-      label: '实时行情',
+      label: 'Báo giá thời gian thực',
       provider: 'TushareFetcher -> AkshareFetcher',
       status: 'fallback',
       durationMs: 750,

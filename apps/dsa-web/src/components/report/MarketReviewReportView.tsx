@@ -47,8 +47,6 @@ type StructuredMarketData = {
   title?: string;
   breadth?: MarketReviewPayload['breadth'];
   indices: NonNullable<MarketReviewPayload['indices']>;
-  sectors?: MarketReviewPayload['sectors'];
-  concepts?: MarketReviewPayload['concepts'];
 };
 
 const isMarketReviewPayload = (value: unknown): value is MarketReviewPayload =>
@@ -68,17 +66,12 @@ const stripTopHeading = (markdown: string, title?: string): string => {
 
   const heading = normalizeHeading(match[1]);
   const reportTitle = normalizeHeading(title || '');
-  // Đây là các chuỗi để NHẬN DẠNG tiêu đề do backend sinh ra, không phải nhãn giao
-  // diện. Giữ lại bản tiếng Trung để còn xử lý được nội dung cũ; bổ sung bản tiếng
-  // Việt cho nội dung hiện tại.
+  // Các chuỗi để NHẬN DẠNG tiêu đề do backend sinh ra (chỉ vi/en), không phải nhãn giao diện.
+  // Strings used to RECOGNISE backend-generated titles (vi/en only), not UI labels.
   const genericTitles = new Set([
     'market review',
     'điểm lại thị trường',
     'điểm lại thị trường chi tiết',
-    '大盘复盘',
-    '大盘复盘详情',
-    'a股市场复盘',
-    'a 股市场复盘',
   ]);
 
   if (heading === reportTitle || genericTitles.has(heading)) {
@@ -89,23 +82,23 @@ const stripTopHeading = (markdown: string, title?: string): string => {
 };
 
 const getSectionIcon = (title: string): typeof FileText => {
-  // Các biểu thức dưới đây khớp TIÊU ĐỀ MỤC do backend sinh ra để chọn icon — là
-  // logic nhận dạng dữ liệu, không phải nhãn hiển thị. Phần tiếng Trung được giữ
-  // để tương thích nội dung cũ, phần tiếng Việt là bổ sung cho nội dung hiện tại.
+  // Các biểu thức dưới đây khớp TIÊU ĐỀ MỤC do backend sinh ra (vi/en) để chọn icon — là
+  // logic nhận dạng dữ liệu, không phải nhãn hiển thị.
+  // Patterns below match backend-generated section titles (vi/en) to pick an icon.
   const normalized = normalizeHeading(title);
-  if (/chỉ số|toàn thị trường|指数|index|overview|大盘/.test(normalized)) {
+  if (/chỉ số|toàn thị trường|index|overview/.test(normalized)) {
     return BarChart3;
   }
-  if (/tâm lý|độ rộng|情绪|赚钱|sentiment|breadth|temperature/.test(normalized)) {
+  if (/tâm lý|độ rộng|sentiment|breadth|temperature/.test(normalized)) {
     return Gauge;
   }
-  if (/ngành|nhóm ngành|chủ đề|luân chuyển|行业|板块|主题|轮动|sector|theme|rotation/.test(normalized)) {
+  if (/ngành|nhóm ngành|chủ đề|luân chuyển|sector|theme|rotation/.test(normalized)) {
     return TrendingUp;
   }
-  if (/dòng tiền|thanh khoản|giá trị giao dịch|资金|成交|量能|flow|turnover|volume|capital/.test(normalized)) {
+  if (/dòng tiền|thanh khoản|giá trị giao dịch|flow|turnover|volume|capital/.test(normalized)) {
     return WalletCards;
   }
-  if (/rủi ro|cơ hội|theo dõi|风险|机会|观察|risk|watch|next/.test(normalized)) {
+  if (/rủi ro|cơ hội|theo dõi|risk|watch|next/.test(normalized)) {
     return ShieldAlert;
   }
   return FileText;
@@ -141,7 +134,7 @@ const splitMarketReviewSections = (markdown: string): MarketReviewSection[] => {
       return;
     }
     sections.push({
-      id: `${index}-${normalizeHeading(title).replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-').replace(/^-|-$/g, '') || 'section'}`,
+      id: `${index}-${normalizeHeading(title).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'section'}`,
       title,
       content,
       icon: getSectionIcon(title),
@@ -156,51 +149,24 @@ const getPayloadSections = (payload?: MarketReviewPayload | null): MarketReviewS
     return [];
   }
 
-  if (payload.markets) {
-    return Object.entries(payload.markets).flatMap(([region, marketPayload]) => {
-      const marketTitle = marketPayload.title || region.toUpperCase();
-      return getPayloadSections(marketPayload).map((section) => ({
-        ...section,
-        id: `${region}-${section.id}`,
-        title: `${marketTitle} / ${section.title}`,
-      }));
-    });
-  }
-
   const payloadTitle = normalizeHeading(payload.title || '');
   return (payload.sections || [])
     .filter((section: MarketReviewPayloadSection) => section.markdown?.trim())
     .filter((section: MarketReviewPayloadSection) => normalizeHeading(section.title || '') !== payloadTitle)
     .map((section, index) => ({
-      id: `${section.key || index}-${normalizeHeading(section.title).replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-') || 'section'}`,
+      id: `${section.key || index}-${normalizeHeading(section.title).replace(/[^a-z0-9]+/g, '-') || 'section'}`,
       title: section.title || 'Review',
       content: section.markdown,
       icon: getSectionIcon(section.title || ''),
     }));
 };
 
-const hasRankingRows = (rankings?: MarketReviewPayload['sectors']): boolean =>
-  Boolean(rankings?.top?.length || rankings?.bottom?.length);
-
 const hasStructuredMarketData = (payload?: MarketReviewPayload | null): boolean =>
-  Boolean(payload?.breadth || payload?.indices?.length || hasRankingRows(payload?.sectors) || hasRankingRows(payload?.concepts));
+  Boolean(payload?.breadth || payload?.indices?.length);
 
 const getStructuredMarketData = (payload?: MarketReviewPayload | null): StructuredMarketData[] => {
   if (!payload) {
     return [];
-  }
-
-  if (payload.markets) {
-    return Object.entries(payload.markets)
-      .filter(([, marketPayload]) => hasStructuredMarketData(marketPayload))
-      .map(([region, marketPayload]) => ({
-        id: region,
-        title: marketPayload.title || region.toUpperCase(),
-        breadth: marketPayload.breadth,
-        indices: marketPayload.indices || [],
-        sectors: marketPayload.sectors,
-        concepts: marketPayload.concepts,
-      }));
   }
 
   if (!hasStructuredMarketData(payload)) {
@@ -212,8 +178,6 @@ const getStructuredMarketData = (payload?: MarketReviewPayload | null): Structur
     title: payload.title,
     breadth: payload.breadth,
     indices: payload.indices || [],
-    sectors: payload.sectors,
-    concepts: payload.concepts,
   }];
 };
 
@@ -284,10 +248,6 @@ const MARKET_REVIEW_TEXT: Record<ReportLanguage, {
   last: string;
   change: string;
   highLow: string;
-  industryBoards: string;
-  conceptBoards: string;
-  leading: string;
-  lagging: string;
 }> = {
   vi: {
     reviewSummary: 'Tóm tắt điểm lại',
@@ -307,10 +267,6 @@ const MARKET_REVIEW_TEXT: Record<ReportLanguage, {
     last: 'Mới nhất',
     change: 'Biến động',
     highLow: 'Cao/Thấp',
-    industryBoards: 'Nhóm ngành',
-    conceptBoards: 'Nhóm khái niệm',
-    leading: 'Dẫn dắt',
-    lagging: 'Suy yếu',
   },
   en: {
     reviewSummary: 'Review Summary',
@@ -330,20 +286,7 @@ const MARKET_REVIEW_TEXT: Record<ReportLanguage, {
     last: 'Last',
     change: 'Change',
     highLow: 'High/Low',
-    industryBoards: 'Industry Sectors',
-    conceptBoards: 'Concept Themes',
-    leading: 'Leading',
-    lagging: 'Lagging',
   },
-};
-
-const formatRankingChange = (value: unknown): string => {
-  const numeric = typeof value === 'number' ? value : Number(String(value ?? '').replace(/%$/, ''));
-  if (!Number.isFinite(numeric)) {
-    return '-';
-  }
-  const sign = numeric > 0 ? '+' : '';
-  return `${sign}${numeric.toFixed(2)}%`;
 };
 
 export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
@@ -370,7 +313,7 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
   const loadedContent = loadedMarkdown && loadedMarkdown.recordId === recordId ? loadedMarkdown.content : '';
   const content = providedContent ?? marketReviewPayload?.markdownReport ?? loadedContent;
   const error = loadError && loadError.recordId === recordId ? loadError.message : null;
-  const hasStructuredContent = Boolean(marketReviewPayload?.sections?.length || marketReviewPayload?.markets);
+  const hasStructuredContent = Boolean(marketReviewPayload?.sections?.length);
   const isLoading = Boolean(recordId && !providedContent && !hasStructuredContent && loadedMarkdown?.recordId !== recordId && !error);
   const displayTitle = marketReviewPayload?.rootTitle || marketReviewPayload?.title || meta?.stockName || 'Market Review';
   const structuredContent = useMemo(
@@ -388,7 +331,6 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
     () => getStructuredMarketData(marketReviewPayload),
     [marketReviewPayload],
   );
-  const showStructuredMarketTitles = Boolean(marketReviewPayload?.markets);
   const canOpenRunFlow = recordId !== undefined && onOpenRunFlow;
 
   useEffect(() => {
@@ -569,9 +511,6 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
           <div className="space-y-5">
             {structuredMarketData.map((marketData) => (
               <div key={marketData.id} className="space-y-3">
-                {showStructuredMarketTitles ? (
-                  <h4 className="text-sm font-semibold text-foreground">{marketData.title}</h4>
-                ) : null}
                 {marketData.breadth ? (
                   <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
                     <div className="rounded-lg border border-subtle p-3">
@@ -627,68 +566,6 @@ export const MarketReviewReportView: React.FC<MarketReviewReportViewProps> = ({
                     </table>
                   </div>
                 ) : null}
-                {(() => {
-                  const boardTypes = [{
-                    key: 'sectors' as const,
-                    title: marketReviewText.industryBoards,
-                    rankings: marketData.sectors,
-                  }, {
-                    key: 'concepts' as const,
-                    title: marketReviewText.conceptBoards,
-                    rankings: marketData.concepts,
-                  }].filter(({ rankings }) => hasRankingRows(rankings));
-                  if (boardTypes.length === 0) {
-                    return null;
-                  }
-                  const renderPanels = (
-                    key: string,
-                    title: string,
-                    rankings: MarketReviewPayload['sectors'],
-                  ) => (['top', 'bottom'] as const).map((side) => {
-                    const rows = rankings?.[side] || [];
-                    if (rows.length === 0) {
-                      return null;
-                    }
-                    return (
-                      <div key={`${key}-${side}`} className="rounded-lg border border-subtle p-3">
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <p className="label-uppercase">{title}</p>
-                          <span className="text-xs text-secondary-text">
-                            {side === 'top' ? marketReviewText.leading : marketReviewText.lagging}
-                          </span>
-                        </div>
-                        <div className="space-y-1.5">
-                          {rows.slice(0, 5).map((item, index) => (
-                            <div key={`${item.name}-${index}`} className="flex items-center justify-between gap-3 text-sm">
-                              <span className="min-w-0 truncate text-foreground">{item.name}</span>
-                              <span className="shrink-0 font-mono text-secondary-text">
-                                {formatRankingChange(item.changePct)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  });
-                  // When both board types exist, lay industry|concept side by side to save vertical space; with only one, keep the leading|lagging horizontal layout.
-                  if (boardTypes.length >= 2) {
-                    return (
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                        {boardTypes.map(({ key, title, rankings }) => (
-                          <div key={key} className="space-y-3">
-                            {renderPanels(key, title, rankings)}
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  }
-                  const { key, title, rankings } = boardTypes[0];
-                  return (
-                    <div key={key} className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                      {renderPanels(key, title, rankings)}
-                    </div>
-                  );
-                })()}
               </div>
             ))}
           </div>

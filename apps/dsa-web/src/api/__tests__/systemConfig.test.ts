@@ -159,12 +159,12 @@ describe('systemConfigApi', () => {
         checks: [
           {
             key: 'llm_primary',
-            title: 'LLM 主渠道',
+            title: 'LLM Kênh chính',
             category: 'ai_model',
             required: true,
             status: 'needs_action',
-            message: '缺少主模型配置',
-            next_step: '打开系统设置',
+            message: 'Thiếu cấu hình mô hình chính',
+            next_step: 'Mở cài đặt hệ thống',
           },
         ],
       },
@@ -175,7 +175,7 @@ describe('systemConfigApi', () => {
     expect(get).toHaveBeenCalledWith('/api/v1/system/config/setup/status');
     expect(result.isComplete).toBe(false);
     expect(result.nextStepKey).toBe('llm_primary');
-    expect(result.checks[0].nextStep).toBe('打开系统设置');
+    expect(result.checks[0].nextStep).toBe('Mở cài đặt hệ thống');
   });
 
   it('loads generation backend status with camelCase fields', async () => {

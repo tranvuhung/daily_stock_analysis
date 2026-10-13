@@ -9,9 +9,9 @@ import { UI_LANGUAGE_STORAGE_KEY } from '../../../utils/uiLanguage';
 const rules: AlertRuleItem[] = [
   {
     id: 1,
-    name: '茅台价格突破',
+    name: 'HPG price breakout',
     targetScope: 'single_symbol',
-    target: '600519',
+    target: 'HPG',
     alertType: 'price_cross',
     parameters: { direction: 'above', price: 1800 },
     severity: 'warning',
@@ -24,9 +24,9 @@ const rules: AlertRuleItem[] = [
   },
   {
     id: 2,
-    name: 'MACD 金叉',
+    name: 'MACD bullish',
     targetScope: 'single_symbol',
-    target: '300750',
+    target: 'FPT',
     alertType: 'macd_cross',
     parameters: { direction: 'bullish_cross', fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 },
     severity: 'info',
@@ -38,9 +38,9 @@ const rules: AlertRuleItem[] = [
   },
   {
     id: 3,
-    name: 'KDJ 死叉',
+    name: 'KDJ bearish',
     targetScope: 'single_symbol',
-    target: '000001',
+    target: 'VCB',
     alertType: 'kdj_cross',
     parameters: { direction: 'bearish_cross', period: 9, kPeriod: 3, dPeriod: 3 },
     severity: 'warning',
@@ -111,13 +111,13 @@ describe('AlertRuleList', () => {
   it('renders rules, filters, and pagination', () => {
     renderList();
 
-    expect(screen.getByText('茅台价格突破')).toBeInTheDocument();
-    expect(screen.getByText('600519')).toBeInTheDocument();
+    expect(screen.getByText('HPG price breakout')).toBeInTheDocument();
+    expect(screen.getByText('HPG')).toBeInTheDocument();
     expect(screen.getAllByText('Price crossing').length).toBeGreaterThan(0);
     expect(screen.getByText('above 1800')).toBeInTheDocument();
     expect(screen.getAllByText('MACD cross').length).toBeGreaterThan(0);
-    expect(screen.getByText('MACD(12,26,9) 金叉')).toBeInTheDocument();
-    expect(screen.getByText('KDJ(9,3,3) 死叉')).toBeInTheDocument();
+    expect(screen.getByText('MACD(12,26,9) bullish cross')).toBeInTheDocument();
+    expect(screen.getByText('KDJ(9,3,3) bearish cross')).toBeInTheDocument();
     expect(screen.getByText('Cooling down')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'enabled' } });
@@ -148,7 +148,7 @@ describe('AlertRuleList', () => {
       rules: [
         {
           id: 4,
-          name: '持仓 RSI',
+          name: 'Holdings RSI',
           targetScope: 'portfolio_holdings',
           target: 'all',
           alertType: 'rsi_threshold',
@@ -204,7 +204,7 @@ describe('AlertRuleList', () => {
     expect(screen.getByText('Portfolio account')).toBeInTheDocument();
     expect(screen.getAllByText('Enabled').length).toBeGreaterThan(0);
     expect(screen.getByText('Warning')).toBeInTheDocument();
-    expect(screen.queryByText('Portfolio drawdown')).not.toBeInTheDocument();
+    expect(screen.queryByText('Mức sụt giảm danh mục')).not.toBeInTheDocument();
   });
 
   it('renders market scope labels, filters, and parameters', () => {
@@ -212,9 +212,9 @@ describe('AlertRuleList', () => {
       rules: [
         {
           id: 6,
-          name: 'A 股红黄灯',
+          name: 'VN traffic light',
           targetScope: 'market',
-          target: 'cn',
+          target: 'vn',
           alertType: 'market_light_status',
           parameters: { statuses: ['red', 'yellow'] },
           severity: 'critical',
@@ -224,9 +224,9 @@ describe('AlertRuleList', () => {
         },
         {
           id: 7,
-          name: '美股分数下降',
+          name: 'VN score drop',
           targetScope: 'market',
-          target: 'us',
+          target: 'vn',
           alertType: 'market_light_score_drop',
           parameters: { minDrop: 15 },
           severity: 'warning',
@@ -237,11 +237,10 @@ describe('AlertRuleList', () => {
       ],
     });
 
-    expect(screen.getByText('A-shares')).toBeInTheDocument();
-    expect(screen.getByText('US')).toBeInTheDocument();
+    expect(screen.getAllByText('Vietnam').length).toBe(2);
     expect(screen.getAllByText('Market').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Market traffic light status').length).toBeGreaterThan(0);
-    expect(screen.getByText('红灯 / 黄灯')).toBeInTheDocument();
+    expect(screen.getByText('Red / Yellow')).toBeInTheDocument();
     expect(screen.getByText('Score drop >= 15')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Rule type'), { target: { value: 'market_light_score_drop' } });
@@ -270,7 +269,7 @@ describe('AlertRuleList', () => {
   it('confirms deletion before calling onDelete', async () => {
     renderList();
 
-    fireEvent.click(screen.getByLabelText('Delete 茅台价格突破'));
+    fireEvent.click(screen.getByLabelText('Delete HPG price breakout'));
     expect(await screen.findByRole('heading', { name: 'Delete alert rule' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 

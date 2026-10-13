@@ -118,7 +118,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-const MARKET_OPTIONS: DecisionSignalMarket[] = ['cn', 'hk', 'us', 'jp', 'kr', 'tw'];
+const MARKET_OPTIONS: DecisionSignalMarket[] = ['vn'];
 const ACTION_OPTIONS: DecisionAction[] = ['buy', 'add', 'hold', 'reduce', 'sell', 'watch', 'avoid', 'alert'];
 const PHASE_OPTIONS: MarketPhaseValue[] = ['premarket', 'intraday', 'lunch_break', 'closing_auction', 'postmarket', 'non_trading', 'unknown'];
 const SOURCE_OPTIONS: DecisionSignalSourceType[] = ['analysis', 'agent', 'alert', 'market_review', 'manual'];
@@ -230,13 +230,10 @@ function refreshTimelineSelection(
 
 function normalizeDecisionSignalMarket(value: unknown): DecisionSignalMarket | undefined {
   const market = String(value ?? '').trim().toUpperCase();
-  if (!market || market === 'INDEX' || market === 'ETF' || market === 'UNKNOWN') return undefined;
-  if (market === 'CN' || market === 'BSE') return 'cn';
-  if (market === 'HK') return 'hk';
-  if (market === 'US') return 'us';
-  if (market === 'JP') return 'jp';
-  if (market === 'KR') return 'kr';
-  if (market === 'TW') return 'tw';
+  if (!market || market === 'INDEX' || market === 'UNKNOWN') return undefined;
+  // Chỉ còn thị trường Việt Nam: mã VN và chứng chỉ quỹ/ETF VN đều thuộc 'vn'.
+  // Vietnam-only: VN stocks and VN ETFs both map to 'vn'.
+  if (market === 'VN' || market === 'ETF') return 'vn';
   if (MARKET_OPTIONS.includes(market.toLowerCase() as DecisionSignalMarket)) {
     return market.toLowerCase() as DecisionSignalMarket;
   }

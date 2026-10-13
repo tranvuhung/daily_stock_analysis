@@ -21,7 +21,7 @@ describe('ReportMarkdown', () => {
       <ReportMarkdown
         recordId={1}
         stockName="Apple"
-        stockCode="AAPL"
+        stockCode="FPT"
         reportLanguage="en"
         onClose={() => {}}
       />

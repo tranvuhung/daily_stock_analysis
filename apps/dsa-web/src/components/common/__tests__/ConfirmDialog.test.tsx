@@ -11,8 +11,8 @@ function renderDialog(overrides: Partial<React.ComponentProps<typeof ConfirmDial
     <UiLanguageProvider>
       <ConfirmDialog
         isOpen
-        title="确认操作"
-        message="确认继续吗？"
+        title="Xác nhận thao tác"
+        message="Xác nhận tiếp tục?"
         confirmText="OK"
         cancelText="Cancel"
         onConfirm={onConfirm}

@@ -36,17 +36,17 @@ function createStorage(value: string | null): Storage {
 describe('UiLanguageContext', () => {
   it('resolves explicit storage choice before browser language', () => {
     expect(resolveInitialUiLanguage({
-      storage: createStorage('zh'),
+      storage: createStorage('vi'),
       navigatorLike: { language: 'en-US', languages: ['en-US'] },
-    })).toBe('zh');
+    })).toBe('vi');
 
     expect(resolveInitialUiLanguage({
       storage: createStorage('en'),
-      navigatorLike: { language: 'zh-CN', languages: ['zh-CN'] },
+      navigatorLike: { language: 'vi-VN', languages: ['vi-VN'] },
     })).toBe('en');
   });
 
-  it('falls back from invalid storage to the first supported browser language and then zh', () => {
+  it('falls back from invalid storage to the first supported browser language and then en', () => {
     expect(resolveInitialUiLanguage({
       storage: createStorage('fr'),
       navigatorLike: { language: 'en-US', languages: ['en-US'] },
@@ -54,13 +54,13 @@ describe('UiLanguageContext', () => {
 
     expect(resolveInitialUiLanguage({
       storage: createStorage('fr'),
-      navigatorLike: { language: 'zh-CN', languages: ['zh-CN', 'en-US'] },
-    })).toBe('zh');
+      navigatorLike: { language: 'vi-VN', languages: ['vi-VN', 'en-US'] },
+    })).toBe('vi');
 
     expect(resolveInitialUiLanguage({
       storage: createStorage(null),
       navigatorLike: { language: 'tr-TR', languages: ['tr-TR'] },
-    })).toBe('zh');
+    })).toBe('en');
   });
 
   it('falls back to browser language if storage getItem throws', () => {
@@ -76,7 +76,7 @@ describe('UiLanguageContext', () => {
   });
 
   it('persists language preference via storage in a safe, non-throwing path', () => {
-    const throwingStorage = createStorage('zh');
+    const throwingStorage = createStorage('vi');
     throwingStorage.setItem = () => {
       throw new Error('Storage setItem disabled');
     };
@@ -103,7 +103,7 @@ describe('UiLanguageContext', () => {
   });
 
   it('switches UI language immediately and persists the explicit choice', () => {
-    localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'zh');
+    localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'en');
 
     render(
       <UiLanguageProvider>
@@ -112,12 +112,12 @@ describe('UiLanguageContext', () => {
     );
 
     const toggle = screen.getByRole('button', { name: 'Switch UI language' });
-    expect(screen.getByText('UI language')).toBeInTheDocument();
+    expect(screen.getByText('English')).toBeInTheDocument();
 
     fireEvent.click(toggle);
 
-    expect(localStorage.getItem(UI_LANGUAGE_STORAGE_KEY)).toBe('en');
-    expect(screen.getByRole('button', { name: 'Switch UI language' })).toBeInTheDocument();
-    expect(screen.getByText('English')).toBeInTheDocument();
+    expect(localStorage.getItem(UI_LANGUAGE_STORAGE_KEY)).toBe('vi');
+    expect(screen.getByRole('button', { name: 'Chuyển ngôn ngữ giao diện' })).toBeInTheDocument();
+    expect(screen.getByText('Tiếng Việt')).toBeInTheDocument();
   });
 });

@@ -5,7 +5,6 @@ import type {
   AnalysisContextPackOverview,
   AnalysisReport,
   AnalysisResult,
-  MarketStructureContext,
 } from '../../../types/analysis';
 import { AnalysisContextSummary } from '../AnalysisContextSummary';
 import { ReportSummary } from '../ReportSummary';
@@ -21,9 +20,9 @@ const overview: AnalysisContextPackOverview = {
   packVersion: '1.0',
   createdAt: '2026-04-10T08:30:00+00:00',
   subject: {
-    code: '600519',
-    stockName: '贵州茅台',
-    market: 'cn',
+    code: 'HPG',
+    stockName: 'Hoa Phat',
+    market: 'vn',
   },
   blocks: [
     {
@@ -70,7 +69,6 @@ const overview: AnalysisContextPackOverview = {
       technical: 100,
       news: 35,
       fundamentals: 25,
-      chip: 100,
     },
     limitations: ['fundamentals: fetch_failed'],
   },
@@ -78,42 +76,6 @@ const overview: AnalysisContextPackOverview = {
   metadata: {
     triggerSource: 'api',
     newsResultCount: 3,
-  },
-};
-
-const marketStructure: MarketStructureContext = {
-  schemaVersion: 'market-structure-v1',
-  status: 'ok',
-  market: 'cn',
-  tradeDate: '2026-07-12',
-  marketThemeContext: {
-    schemaVersion: 'market-theme-v1',
-    status: 'ok',
-    market: 'cn',
-    activeThemes: [{ name: 'Robotics', rank: 1, source: 'concept' }],
-    leadingConcepts: [],
-    leadingIndustries: [],
-    laggingThemes: [],
-    themeBreadth: {
-      activeCount: 1,
-      leadingConceptCount: 0,
-      leadingIndustryCount: 0,
-      laggingCount: 0,
-    },
-    dataQuality: { status: 'ok', missingFields: [], sources: [], errors: [] },
-  },
-  stockMarketPosition: {
-    schemaVersion: 'stock-market-position-v1',
-    status: 'ok',
-    stockCode: '600519',
-    stockName: 'Kweichow Moutai',
-    market: 'cn',
-    primaryTheme: { name: 'Robotics', source: 'concept', rank: 1 },
-    relatedBoards: [],
-    stockRole: 'follower',
-    themePhase: 'accelerating',
-    riskTags: [],
-    missingFields: [],
   },
 };
 
@@ -149,8 +111,8 @@ describe('AnalysisContextSummary', () => {
     expect(screen.getByText(/Mã chẩn đoán: news_context_missing/)).toBeInTheDocument();
     expect(screen.getByText(/mục tin liên quan trên trang báo cáo do một API riêng bổ sung/)).toBeInTheDocument();
     expect(screen.getByText('Nguồn: Không ghi nhận nguồn đầu vào')).toBeInTheDocument();
-    expect(screen.queryByText(/^处理:/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/^范围:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Xử lý:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Phạm vi:/)).not.toBeInTheDocument();
     const fundamentalsBlock = screen.getByText('cơ bản').closest('.home-subpanel');
     expect(fundamentalsBlock).not.toBeNull();
     const fundamentals = within(fundamentalsBlock as HTMLElement);
@@ -213,7 +175,7 @@ describe('AnalysisContextSummary', () => {
     expect(screen.getByText(/Diễn giải: Không ghi nhận metadata chuỗi nguồn của dữ liệu cơ bản/)).toBeInTheDocument();
     expect(screen.getByText(/lấy theo trạng thái hiện tại/)).toBeInTheDocument();
     expect(screen.getByText(/Mã chẩn đoán: fundamental_source_chain_missing/)).toBeInTheDocument();
-    expect(screen.queryByText(/本次分析未使用基本面数据/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Lần phân tích này không dùng dữ liệu cơ bản/)).not.toBeInTheDocument();
   });
 
   it('uses status guidance for unknown reason codes without adding another field', () => {
@@ -245,39 +207,7 @@ describe('AnalysisContextSummary', () => {
 
     expect(screen.getByText(/Diễn giải: Lấy dữ liệu thất bại, lượt phân tích này không dùng dữ liệu đó/)).toBeInTheDocument();
     expect(screen.getByText(/Mã chẩn đoán: brand_new_internal_code/)).toBeInTheDocument();
-    expect(screen.queryByText(/^处理:/)).not.toBeInTheDocument();
-  });
-
-  it('explains the real chip_not_supported reason with actionable guidance', () => {
-    const unsupportedChipOverview: AnalysisContextPackOverview = {
-      ...overview,
-      blocks: [{
-        key: 'chip',
-        label: 'phân bổ cổ phiếu',
-        status: 'not_supported',
-        source: null,
-        warnings: [],
-        missingReasons: ['chip_not_supported'],
-      }],
-      counts: {
-        available: 0,
-        missing: 0,
-        notSupported: 1,
-        fallback: 0,
-        stale: 0,
-        estimated: 0,
-        partial: 0,
-        fetchFailed: 0,
-      },
-    };
-
-    render(<AnalysisContextSummary overview={unsupportedChipOverview} />);
-
-    fireEvent.click(screen.getAllByText('Khối dữ liệu đầu vào')[0]);
-
-    expect(screen.getByText(/Diễn giải: Thị trường hoặc mã hiện tại không hỗ trợ dữ liệu phân bổ cổ phiếu/)).toBeInTheDocument();
-    expect(screen.getByText(/Mã chẩn đoán: chip_not_supported/)).toBeInTheDocument();
-    expect(screen.queryByText(/^处理:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Xử lý:/)).not.toBeInTheDocument();
   });
 
   it('surfaces degraded non-zero states in the collapsed summary', () => {
@@ -309,10 +239,10 @@ describe('AnalysisContextSummary', () => {
           missingReasons: [],
         },
         {
-          key: 'chip',
-          label: 'phân bổ cổ phiếu',
+          key: 'news',
+          label: 'tin tức',
           status: 'estimated',
-          source: 'estimated_chip',
+          source: 'estimated_news',
           warnings: [],
           missingReasons: [],
         },
@@ -354,7 +284,7 @@ describe('AnalysisContextSummary', () => {
     const quoteBlock = screen.getByText('giá').closest('.home-subpanel');
     expect(quoteBlock).not.toBeNull();
     expect(within(quoteBlock as HTMLElement).getByText('Diễn giải: Lượt phân tích này dùng đường dữ liệu dự phòng; hãy đối chiếu nguồn và cảnh báo để rà soát kết quả')).toBeInTheDocument();
-    expect(within(quoteBlock as HTMLElement).queryByText(/^处理:/)).not.toBeInTheDocument();
+    expect(within(quoteBlock as HTMLElement).queryByText(/^Xử lý:/)).not.toBeInTheDocument();
 
     expect(screen.getByText('Diễn giải: Lượt phân tích này dùng dữ liệu có thể không phải mới nhất; hãy kiểm tra thời điểm cập nhật và phân tích lại nếu cần')).toBeInTheDocument();
     expect(screen.getByText('Diễn giải: Chỉ một phần dữ liệu đi vào lượt phân tích này nên kết luận liên quan có thể thiếu; hãy kiểm tra cảnh báo và nguồn rồi phân tích lại')).toBeInTheDocument();
@@ -371,7 +301,7 @@ describe('AnalysisContextSummary', () => {
     const unsafeOverview = {
       ...overview,
       value: 'raw trend payload',
-      content: '完整新闻正文不应出现',
+      content: 'Không được hiện toàn văn tin tức',
       apiKey: 'secret-key',
       blocks: [
         {
@@ -391,7 +321,7 @@ describe('AnalysisContextSummary', () => {
     fireEvent.click(screen.getAllByText('Khối dữ liệu đầu vào')[0]);
 
     expect(screen.queryByText('raw trend payload')).not.toBeInTheDocument();
-    expect(screen.queryByText('完整新闻正文不应出现')).not.toBeInTheDocument();
+    expect(screen.queryByText('Không được hiện toàn văn tin tức')).not.toBeInTheDocument();
     expect(screen.queryByText('secret-key')).not.toBeInTheDocument();
   });
 });
@@ -411,15 +341,15 @@ describe('ReportSummary analysis context placement', () => {
       meta: {
         id: 1,
         queryId: 'q1',
-        stockCode: '600519',
-        stockName: '贵州茅台',
+        stockCode: 'HPG',
+        stockName: 'Hoa Phat',
         reportType: 'detailed',
         reportLanguage: 'vi',
         createdAt: '2026-04-10T12:00:00',
         marketPhaseSummary: {
-          market: 'cn',
+          market: 'vn',
           phase: 'intraday',
-          marketLocalTime: '2026-04-10T10:30:00+08:00',
+          marketLocalTime: '2026-04-10T10:30:00+07:00',
           sessionDate: '2026-04-10',
           effectiveDailyBarDate: '2026-04-09',
           isTradingDay: true,
@@ -434,8 +364,8 @@ describe('ReportSummary analysis context placement', () => {
       },
       summary: {
         analysisSummary: 'summary',
-        operationAdvice: '持有',
-        trendPrediction: '震荡',
+        operationAdvice: 'Nắm giữ',
+        trendPrediction: 'Dao động',
         sentimentScore: 70,
       },
       strategy: {
@@ -443,18 +373,17 @@ describe('ReportSummary analysis context placement', () => {
       },
       details: {
         analysisContextPackOverview: overview,
-        marketStructure,
       },
     };
     const result: AnalysisResult = {
       queryId: 'q1',
-      stockCode: '600519',
-      stockName: '贵州茅台',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
       report,
       diagnosticSummary: {
         status: 'normal',
         statusLabel: 'Bình thường',
-        reason: '运行正常',
+        reason: 'Hoạt động bình thường',
         components: {},
         copyText: '',
       },
@@ -467,7 +396,7 @@ describe('ReportSummary analysis context placement', () => {
       expect(screen.getByText('Chưa có tin liên quan')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Giai đoạn thị trường: CN · Trong phiên')).toBeInTheDocument();
+    expect(screen.getByText('Giai đoạn thị trường: VN · Trong phiên')).toBeInTheDocument();
     expect(screen.getByText('Nến chưa hoàn chỉnh')).toBeInTheDocument();
     expect(screen.getAllByText('Điểm chất lượng 82/100 Dùng được')[0]).toBeInTheDocument();
 
@@ -486,7 +415,7 @@ describe('ReportSummary analysis context placement', () => {
     fireEvent.click(within(contextSummary).getAllByText('Khối dữ liệu đầu vào')[0]);
     expect(within(contextSummary).getByText(/Diễn giải: Tin tức không đi vào lượt chạy LLM này/)).toBeInTheDocument();
     expect(within(contextSummary).getByText(/mục tin liên quan trên trang báo cáo do một API riêng bổ sung/)).toBeInTheDocument();
-    expect(screen.queryByText('AI 建议 / 决策信号')).not.toBeInTheDocument();
+    expect(screen.queryByText('AI Khuyến nghị / Tín hiệu quyết định')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Dòng chủ đề và vị thế cổ phiếu' })).not.toBeInTheDocument();
     expect(screen.queryByText('Robotics')).not.toBeInTheDocument();
   });

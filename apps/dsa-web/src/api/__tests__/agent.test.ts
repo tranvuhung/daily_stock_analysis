@@ -46,7 +46,7 @@ describe('agentApi', () => {
       data: {
         session_id: 'session-1',
         messages: [
-          { id: '1', role: 'user', content: 'Analyze AAPL', created_at: null },
+          { id: '1', role: 'user', content: 'Analyze FPT', created_at: null },
         ],
         session_state: {
           selected_skill_ids: ['technical', 'risk'],
@@ -65,7 +65,7 @@ describe('agentApi', () => {
       data: {
         session_id: 'legacy-session',
         messages: [
-          { id: '1', role: 'user', content: '继续分析', created_at: null },
+          { id: '1', role: 'user', content: 'Tiếp tục phân tích', created_at: null },
         ],
         session_state: {
           selected_skill_ids: null,

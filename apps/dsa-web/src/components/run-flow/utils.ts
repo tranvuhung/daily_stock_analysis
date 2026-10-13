@@ -143,8 +143,6 @@ const DATA_TYPE_LABEL_KEYS: Record<string, UiTextKey> = {
   news_search: 'runFlow.dataType.news',
   fundamental: 'runFlow.dataType.fundamentals',
   fundamentals: 'runFlow.dataType.fundamentals',
-  belong_boards: 'runFlow.dataType.belongBoards',
-  chip: 'runFlow.dataType.chip',
 };
 
 // Node cố định của pipeline: ``node.id`` là định danh ổn định (schema ghi rõ "Stable node
@@ -177,7 +175,6 @@ const CONTEXT_BLOCK_LABEL_KEYS: Record<string, UiTextKey> = {
   technical: 'runFlow.contextBlock.technical',
   news: 'runFlow.contextBlock.news',
   fundamentals: 'runFlow.contextBlock.fundamentals',
-  chip: 'runFlow.contextBlock.chip',
 };
 
 /**
@@ -376,7 +373,7 @@ export const getRunFlowEventTitle = (event: RunFlowEvent, t: RunFlowT): string =
 
 /**
  * Bộ lọc sự kiện khớp trên TRƯỜNG ỔN ĐỊNH, không khớp trên văn bản hiển thị.
- * Trước đây dùng regex ``/fallback|retry|降级|重试/`` trên ``type + title + message``, nên
+ * Trước đây dùng regex ``/fallback|retry|<CJK keywords>/`` trên ``type + title + message``, nên
  * mỗi lần đổi ngôn ngữ nhãn là bộ lọc hỏng âm thầm.
  * Event filters match on stable fields, never on displayed text: the previous regex over
  * the rendered title/message broke silently whenever the label language changed.

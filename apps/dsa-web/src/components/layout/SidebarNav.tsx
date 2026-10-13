@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   Activity,
   BarChart3,
@@ -8,15 +8,9 @@ import {
   Home,
   LogOut,
   MessageSquareQuote,
-  Search,
   Settings2,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
-import {
-  SCREENING_CONFIG_CHANGED_EVENT,
-  SYSTEM_CONFIG_CHANGED_EVENT,
-  screeningApi,
-} from "../../api/screening";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAgentChatStore } from "../../stores/agentChatStore";
 import { useAlertStore } from "../../stores/alertStore";
@@ -61,12 +55,6 @@ const NAV_ITEMS: NavItem[] = [
     to: "/chat",
     icon: MessageSquareQuote,
     badge: "completion",
-  },
-  {
-    key: "screening",
-    labelKey: "layout.nav.screening",
-    to: "/screening",
-    icon: Search,
   },
   {
     key: "portfolio",
@@ -124,52 +112,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   const completionBadge = useAgentChatStore((state) => state.completionBadge);
   const alertUnread = useAlertStore((state) => state.unreadCount);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [showScreeningNav, setShowScreeningNav] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-
-    const refreshScreeningStatus = async () => {
-      try {
-        const status = await screeningApi.getStatus();
-        if (active) {
-          setShowScreeningNav(status.enabled);
-        }
-      } catch {
-        if (active) {
-          setShowScreeningNav(false);
-        }
-      }
-    };
-
-    void refreshScreeningStatus();
-    window.addEventListener(
-      SCREENING_CONFIG_CHANGED_EVENT,
-      refreshScreeningStatus,
-    );
-    window.addEventListener(
-      SYSTEM_CONFIG_CHANGED_EVENT,
-      refreshScreeningStatus,
-    );
-
-    return () => {
-      active = false;
-      window.removeEventListener(
-        SCREENING_CONFIG_CHANGED_EVENT,
-        refreshScreeningStatus,
-      );
-      window.removeEventListener(
-        SYSTEM_CONFIG_CHANGED_EVENT,
-        refreshScreeningStatus,
-      );
-    };
-  }, []);
-
-  const navItems = NAV_ITEMS.filter(
-    (item) =>
-      !HIDDEN_NAV_KEYS.has(item.key) &&
-      (showScreeningNav || item.key !== "screening"),
-  );
+  const navItems = NAV_ITEMS.filter((item) => !HIDDEN_NAV_KEYS.has(item.key));
   const isRail = variant === "rail";
   const isTop = variant === "top";
   const itemBaseClass = isTop

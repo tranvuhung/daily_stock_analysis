@@ -8,7 +8,7 @@ import type { UiLanguage } from '../i18n/uiText';
 /**
  * Phase labels are UI chrome, so they follow the UI language (vi/en) rather than the
  * report content language. Callers may pass either a UiLanguage or a backend
- * ReportLanguage ('zh' | 'en' | 'ko'); anything that is not Vietnamese renders in
+ * ReportLanguage ('vi' | 'en'); anything that is not Vietnamese renders in
  * English, the UI fallback language.
  */
 const toUiLanguage = (value?: string | null): UiLanguage =>

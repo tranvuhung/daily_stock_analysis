@@ -84,7 +84,7 @@ describe('Shell', () => {
       </MemoryRouter>
     );
 
-    expect(screen.queryByRole('button', { name: 'Desktop update' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Desktop updates' })).not.toBeInTheDocument();
   });
 
   it('shows the desktop update entry in Electron runtime', async () => {
@@ -106,7 +106,7 @@ describe('Shell', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByRole('button', { name: 'Desktop update' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Desktop updates' })).toBeInTheDocument();
   });
 
   it('shows a confirmation dialog before logout', async () => {
@@ -123,7 +123,9 @@ describe('Shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
 
     expect(await screen.findByRole('heading', { name: 'Log out' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
+    // Nút xác nhận trong hộp thoại là nút "Log out" cuối cùng. / The dialog confirm button is the last "Log out" button.
+    const logoutButtons = screen.getAllByRole('button', { name: 'Log out' });
+    fireEvent.click(logoutButtons[logoutButtons.length - 1]);
     expect(mockLogout).toHaveBeenCalled();
   });
 });

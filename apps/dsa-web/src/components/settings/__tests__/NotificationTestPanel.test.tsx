@@ -106,7 +106,7 @@ describe('NotificationTestPanel', () => {
       expect(contentInput).toHaveValue('This is a test notification from the DSA Web settings page.');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /发送测试|Send test/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Gửi thử|Send test/ }));
     await waitFor(() => expect(testNotificationChannel).toHaveBeenCalledWith(expect.objectContaining({
       title: 'DSA notification test',
       content: 'This is a test notification from the DSA Web settings page.',
@@ -143,18 +143,18 @@ describe('NotificationTestPanel', () => {
     const titleInput = screen.getByLabelText('Title');
     const contentInput = screen.getByLabelText('Body');
 
-    fireEvent.change(titleInput, { target: { value: '自定义标题' } });
-    fireEvent.change(contentInput, { target: { value: '自定义正文' } });
+    fireEvent.change(titleInput, { target: { value: 'Tiêu đề tuỳ chỉnh' } });
+    fireEvent.change(contentInput, { target: { value: 'Nội dung tuỳ chỉnh' } });
 
     fireEvent.click(screen.getByRole('button', { name: 'switch-en' }));
-    expect(titleInput).toHaveValue('自定义标题');
-    expect(contentInput).toHaveValue('自定义正文');
+    expect(titleInput).toHaveValue('Tiêu đề tuỳ chỉnh');
+    expect(contentInput).toHaveValue('Nội dung tuỳ chỉnh');
   });
 
   it('renders custom webhook partial failure attempts', async () => {
     testNotificationChannel.mockResolvedValueOnce({
       success: true,
-      message: '自定义 Webhook 通知测试部分成功（1/2）',
+      message: 'Kiểm thử thông báo Webhook tuỳ chỉnh thành công một phần (1/2)',
       errorCode: null,
       stage: 'notification_send',
       retryable: true,
@@ -196,7 +196,7 @@ describe('NotificationTestPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /Send test/ }));
 
     expect(await screen.findByText('Test succeeded')).toBeInTheDocument();
-    expect(screen.getByText(/部分成功/)).toBeInTheDocument();
+    expect(screen.getByText(/thành công một phần/)).toBeInTheDocument();
     expect(screen.getAllByText('HTTP 500').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('HTTP 200')).toBeInTheDocument();
     expect(screen.getByText('http_500')).toHaveClass('text-warning');
@@ -206,17 +206,17 @@ describe('NotificationTestPanel', () => {
   it('renders retryable timeout diagnostics', async () => {
     testNotificationChannel.mockResolvedValueOnce({
       success: false,
-      message: '通知测试异常: timeout',
+      message: 'Kiểm thử thông báo lỗi: timeout',
       errorCode: 'timeout',
       stage: 'notification_send',
       retryable: true,
       latencyMs: null,
       attempts: [
         {
-          channel: 'wechat',
+          channel: 'discord',
           success: false,
           message: 'timeout',
-          target: 'https://qyapi.example.com/cgi-bin/webhook/send?key=***',
+          target: 'https://discord.example.com/api/webhooks/send?key=***',
           errorCode: 'timeout',
           stage: 'notification_send',
           retryable: true,
@@ -228,7 +228,7 @@ describe('NotificationTestPanel', () => {
 
     render(
       <NotificationTestPanel
-        items={[{ key: 'WECHAT_WEBHOOK_URL', value: 'https://qyapi.example.com/cgi-bin/webhook/send?key=secret' }]}
+        items={[{ key: 'DISCORD_WEBHOOK_URL', value: 'https://discord.example.com/api/webhooks/send?key=secret' }]}
         maskToken="******"
       />,
     );
@@ -238,7 +238,7 @@ describe('NotificationTestPanel', () => {
     expect(await screen.findByText('Test failed')).toBeInTheDocument();
     const timeoutEntries = screen.getAllByText('timeout');
     expect(timeoutEntries[0]).toBeInTheDocument();
-    expect(screen.getByText('https://qyapi.example.com/cgi-bin/webhook/send?key=***')).toBeInTheDocument();
+    expect(screen.getByText('https://discord.example.com/api/webhooks/send?key=***')).toBeInTheDocument();
     expect(timeoutEntries[0]).toHaveClass('text-warning');
   });
 });

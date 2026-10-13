@@ -21,8 +21,8 @@ vi.mock('../../../api/history', () => ({
 const snapshot: RunFlowSnapshot = {
   taskId: 'task-1',
   traceId: 'trace-1',
-  stockCode: '600519',
-  stockName: '贵州茅台',
+  stockCode: 'HPG',
+  stockName: 'Hoa Phat',
   status: 'degraded',
   generatedAt: '2026-06-08T08:00:00Z',
   summary: {
@@ -36,7 +36,7 @@ const snapshot: RunFlowSnapshot = {
   lanes: [
     { id: 'entry', label: 'Entry', order: 1 },
     { id: 'data_source', label: 'Data source', order: 2 },
-    { id: 'analysis', label: '分析引擎', order: 3 },
+    { id: 'analysis', label: 'Bộ máy phân tích', order: 3 },
     { id: 'artifact', label: 'Artifact', order: 4 },
   ],
   nodes: [
@@ -44,9 +44,9 @@ const snapshot: RunFlowSnapshot = {
       id: 'request',
       lane: 'entry',
       kind: 'entry',
-      label: '用户请求',
+      label: 'Yêu cầu người dùng',
       status: 'success',
-      message: 'Task 请求已创建',
+      message: 'Task Đã tạo yêu cầu',
     },
     {
       id: 'news',
@@ -81,7 +81,7 @@ const snapshot: RunFlowSnapshot = {
       to: 'news',
       kind: 'control',
       status: 'success',
-      label: '调度',
+      label: 'Điều phối',
     },
     {
       id: 'news-llm',
@@ -89,7 +89,7 @@ const snapshot: RunFlowSnapshot = {
       to: 'llm',
       kind: 'fallback',
       status: 'fallback',
-      label: '降级输入',
+      label: 'Đầu vào suy giảm',
     },
   ],
   events: [
@@ -107,8 +107,8 @@ const snapshot: RunFlowSnapshot = {
       severity: 'warning',
       type: 'provider_fallback',
       nodeId: 'news',
-      title: '新闻数据源降级',
-      message: '重试后切换数据源',
+      title: 'Nguồn tin tức suy giảm',
+      message: 'Chuyển nguồn dữ liệu sau khi thử lại',
     },
   ],
 };
@@ -120,14 +120,14 @@ const providerAttemptSnapshot: RunFlowSnapshot = {
       id: 'task_queue',
       lane: 'entry',
       kind: 'queue',
-      label: 'Task 队列',
+      label: 'Task Hàng đợi',
       status: 'success',
     },
     {
       id: 'provider_news_search_tavily_1',
       lane: 'data_source',
       kind: 'data_source',
-      label: '新闻舆情 · Tavily',
+      label: 'Tin tức dư luận · Tavily',
       provider: 'Tavily',
       status: 'failed',
       durationMs: 1200,
@@ -137,7 +137,7 @@ const providerAttemptSnapshot: RunFlowSnapshot = {
       id: 'provider_news_search_searxng_2',
       lane: 'data_source',
       kind: 'data_source',
-      label: '新闻舆情 · SearXNG',
+      label: 'Tin tức dư luận · SearXNG',
       provider: 'SearXNG',
       status: 'success',
       durationMs: 800,
@@ -182,7 +182,7 @@ const providerAttemptSnapshot: RunFlowSnapshot = {
       severity: 'warning',
       type: 'provider_run',
       nodeId: 'provider_news_search_tavily_1',
-      title: '新闻舆情失败',
+      title: 'Tin tức dư luận thất bại',
     },
   ],
 };
@@ -195,7 +195,7 @@ const contextBlockSnapshot: RunFlowSnapshot = {
       id: 'context_block_news',
       lane: 'data_source',
       kind: 'data_source',
-      label: '新闻',
+      label: 'Tin tức',
       status: 'success',
       recordCount: 6,
       metadata: { block_key: 'news' },
@@ -204,7 +204,7 @@ const contextBlockSnapshot: RunFlowSnapshot = {
       id: 'context_block_fundamental',
       lane: 'data_source',
       kind: 'data_source',
-      label: '基本面',
+      label: 'Cơ bản',
       status: 'degraded',
       metadata: { block_key: 'fundamental' },
     },
@@ -253,7 +253,7 @@ describe('RunFlowPanel', () => {
     vi.mocked(analysisApi.getTaskFlow).mockRejectedValue({
       response: {
         status: 404,
-        data: { message: '运行流不存在' },
+        data: { message: 'Luồng chạy không tồn tại' },
       },
     });
 
@@ -281,10 +281,10 @@ describe('RunFlowPanel', () => {
   it('renders a successful graph, event stream, and selectable node details', async () => {
     vi.mocked(analysisApi.getTaskFlow).mockResolvedValue(snapshot);
 
-    render(<RunFlowPanel source={{ type: 'task', taskId: 'task-1' }} title="贵州茅台运行流" />);
+    render(<RunFlowPanel source={{ type: 'task', taskId: 'task-1' }} title="Luồng chạy Hoa Phat" />);
 
     expect(await screen.findByTestId('run-flow-panel')).toBeInTheDocument();
-    expect(screen.getByText('贵州茅台运行流')).toBeInTheDocument();
+    expect(screen.getByText('Luồng chạy Hoa Phat')).toBeInTheDocument();
     expect(screen.getByTestId('run-flow-layout')).toHaveClass('xl:grid-cols-[minmax(0,1fr)_19.25rem]');
     expect(screen.getByTestId('run-flow-events-column')).toHaveClass('xl:max-h-[calc(100vh-18rem)]');
     expect(screen.getByTestId('run-flow-graph')).toBeInTheDocument();
@@ -367,7 +367,7 @@ describe('RunFlowPanel', () => {
           id: 'provider_realtime_quote_tickflowfetcher_1',
           lane: 'data_source',
           kind: 'data_source',
-          label: '实时行情 · TickFlowFetcher',
+          label: 'Báo giá thời gian thực · TickFlowFetcher',
           provider: 'TickFlowFetcher',
           status: 'failed',
           durationMs: 892,
@@ -377,7 +377,7 @@ describe('RunFlowPanel', () => {
           id: 'provider_realtime_quote_aksharefetcher_2',
           lane: 'data_source',
           kind: 'data_source',
-          label: '实时行情 · AkshareFetcher',
+          label: 'Báo giá thời gian thực · AkshareFetcher',
           provider: 'AkshareFetcher',
           status: 'success',
           durationMs: 8700,
@@ -467,7 +467,7 @@ describe('RunFlowPanel', () => {
     // (số ít) không thuộc bộ khoá thật của backend nên lùi về nhãn thô — giữ cả hai nhánh.
     // A known block_key renders the localized label; an unknown one falls back to the raw label.
     expect(details).toHaveTextContent('News');
-    expect(details).toHaveTextContent('基本面');
+    expect(details).toHaveTextContent('Cơ bản');
     expect(details).not.toHaveTextContent('context_status_counts');
   });
 

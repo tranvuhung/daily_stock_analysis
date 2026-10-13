@@ -78,14 +78,8 @@ export function SuggestionsList({
 
 const MARKET_BADGE_CONFIG = {
   VN: { label: 'VN', className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-500' },
-  CN: { label: 'A-share', className: 'border-danger/25 bg-danger/10 text-danger' },
-  HK: { label: 'HK', className: 'border-success/25 bg-success/10 text-success' },
-  US: { label: 'US', className: 'border-cyan/25 bg-cyan/10 text-cyan' },
-  JP: { label: 'JP', className: 'border-indigo-500/25 bg-indigo-500/10 text-indigo-500' },
-  KR: { label: 'KR', className: 'border-rose-500/25 bg-rose-500/10 text-rose-500' },
   INDEX: { label: 'Index', className: 'border-purple/25 bg-purple/10 text-purple' },
   ETF: { label: 'ETF', className: 'border-warning/25 bg-warning/10 text-warning' },
-  BSE: { label: 'BSE', className: 'border-orange-500/25 bg-orange-500/10 text-orange-500' },
 } as const;
 
 function MarketBadge({ market }: { market: string }) {

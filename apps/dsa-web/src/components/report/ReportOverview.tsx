@@ -24,143 +24,6 @@ interface ReportOverviewProps {
   };
 }
 
-type BoardStatus = 'leading' | 'lagging';
-
-type BoardSignal = {
-  status: BoardStatus;
-  changePct?: number;
-};
-
-type BoardSignalMaps = {
-  sectors: Map<string, BoardSignal>;
-  concepts: Map<string, BoardSignal>;
-};
-
-type PreparedBoard = {
-  key: string;
-  name: string;
-  signal?: BoardSignal;
-};
-
-const normalizeBoardName = (value?: string): string =>
-  (value || '').trim().replace(/\s+/g, ' ');
-
-const normalizeBoardType = (value?: string): 'sector' | 'concept' | null => {
-  const normalized = (value || '').trim().toLowerCase();
-  if (!normalized) {
-    return null;
-  }
-  // Giá trị so khớp đến từ backend (không phải nhãn hiển thị): giữ bản tiếng Trung
-  // cho dữ liệu cũ, thêm bản tiếng Việt cho dữ liệu hiện tại.
-  if (['ngành', 'nhóm ngành', '行业', '行业板块', 'industry', 'sector'].includes(normalized)) {
-    return 'sector';
-  }
-  if (['khái niệm', 'chủ đề', '概念', '概念板块', '题材', 'concept', 'theme'].includes(normalized)) {
-    return 'concept';
-  }
-  return null;
-};
-
-const coerceFiniteNumber = (value: unknown): number | undefined => {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : undefined;
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim().replace(/%$/, '');
-    if (!trimmed) {
-      return undefined;
-    }
-    const parsed = Number(trimmed);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
-};
-
-const buildRankingSignalMap = (rankings?: ReportDetailsType['sectorRankings']): Map<string, BoardSignal> => {
-  const signalMap = new Map<string, BoardSignal>();
-  const topBoards = Array.isArray(rankings?.top) ? rankings.top : [];
-  const bottomBoards = Array.isArray(rankings?.bottom) ? rankings.bottom : [];
-
-  topBoards.forEach((item) => {
-    const normalizedName = normalizeBoardName(item?.name);
-    const changePct = coerceFiniteNumber(item?.changePct);
-    if (!normalizedName || changePct === undefined) {
-      return;
-    }
-    signalMap.set(normalizedName, {
-      status: 'leading',
-      changePct,
-    });
-  });
-
-  bottomBoards.forEach((item) => {
-    const normalizedName = normalizeBoardName(item?.name);
-    const changePct = coerceFiniteNumber(item?.changePct);
-    if (!normalizedName || changePct === undefined) {
-      return;
-    }
-    signalMap.set(normalizedName, {
-      status: 'lagging',
-      changePct,
-    });
-  });
-
-  return signalMap;
-};
-
-const buildBoardSignalMaps = (details?: ReportDetailsType): BoardSignalMaps => ({
-  sectors: buildRankingSignalMap(details?.sectorRankings),
-  concepts: buildRankingSignalMap(details?.conceptRankings),
-});
-
-const resolveBoardSignal = (
-  board: { name?: string; type?: string },
-  signalMaps: BoardSignalMaps,
-): BoardSignal | undefined => {
-  const boardName = normalizeBoardName(board.name);
-  if (!boardName) {
-    return undefined;
-  }
-  const boardType = normalizeBoardType(board.type);
-  if (boardType === 'sector') {
-    return signalMaps.sectors.get(boardName);
-  }
-  if (boardType === 'concept') {
-    return signalMaps.concepts.get(boardName);
-  }
-  const sectorSignal = signalMaps.sectors.get(boardName);
-  const conceptSignal = signalMaps.concepts.get(boardName);
-  if (sectorSignal && !conceptSignal) {
-    return sectorSignal;
-  }
-  if (conceptSignal && !sectorSignal) {
-    return conceptSignal;
-  }
-  return undefined;
-};
-
-const buildPreparedRelatedBoards = (
-  boards: ReportDetailsType['belongBoards'],
-  signalMaps: BoardSignalMaps,
-): PreparedBoard[] => {
-  if (!Array.isArray(boards)) {
-    return [];
-  }
-
-  return boards.reduce<PreparedBoard[]>((preparedBoards, board, index) => {
-    const boardName = normalizeBoardName(board?.name);
-    if (!boardName) {
-      return preparedBoards;
-    }
-    preparedBoards.push({
-      key: `${boardName}-${board?.code || index}`,
-      name: boardName,
-      signal: resolveBoardSignal(board, signalMaps),
-    });
-    return preparedBoards;
-  }, []);
-};
-
 /**
  * Report overview section - terminal style
  */
@@ -177,10 +40,6 @@ export const ReportOverview: React.FC<ReportOverviewProps> = ({
   const partialBarLabel = meta.marketPhaseSummary?.isPartialBar === true
     ? getPartialBarLabel(reportLanguage)
     : null;
-  const relatedBoards = (Array.isArray(details?.belongBoards) ? details.belongBoards : [])
-    .filter((board) => normalizeBoardName(board?.name).length > 0);
-  const boardSignals = buildBoardSignalMaps(details);
-  const preparedRelatedBoards = buildPreparedRelatedBoards(relatedBoards, boardSignals);
 
   const getPriceChangeStyle = (changePct: number | undefined): React.CSSProperties | undefined => {
     if (changePct === undefined || changePct === null) {
@@ -203,47 +62,6 @@ export const ReportOverview: React.FC<ReportOverviewProps> = ({
     const sign = changePct > 0 ? '+' : '';
     return `${sign}${changePct.toFixed(2)}%`;
   };
-
-  const getBoardStatusLabel = (status: BoardStatus): string => {
-    if (status === 'leading') {
-      return text.leadingBoard;
-    }
-    return text.laggingBoard;
-  };
-
-  const getBoardStatusVariant = (status: BoardStatus): 'success' | 'danger' => {
-    if (status === 'leading') {
-      return 'success';
-    }
-    return 'danger';
-  };
-
-  const renderBoardChip = (board: PreparedBoard) => (
-    <div
-      key={board.key}
-      className="inline-flex shrink-0 items-center gap-2 text-sm"
-    >
-      <span className="home-accent-chip px-2 py-0.5 text-xs font-medium">
-        {board.name}
-      </span>
-      {board.signal && (
-        <Badge
-          variant={getBoardStatusVariant(board.signal.status)}
-          className="home-board-status-badge shadow-none"
-        >
-          {getBoardStatusLabel(board.signal.status)}
-        </Badge>
-      )}
-      {board.signal && board.signal.changePct !== undefined && board.signal.changePct !== null && (
-        <span
-          className="text-xs font-mono"
-          style={getPriceChangeStyle(board.signal.changePct)}
-        >
-          {formatChangePct(board.signal.changePct)}
-        </span>
-      )}
-    </div>
-  );
 
   return (
     <div className="space-y-5">
@@ -365,20 +183,6 @@ export const ReportOverview: React.FC<ReportOverviewProps> = ({
             </Card>
           </div>
 
-          {preparedRelatedBoards.length > 0 && (
-            <Card variant="bordered" padding="sm" className="home-panel-card min-w-0 max-w-full text-left">
-              <section aria-label={text.relatedBoards} className="min-w-0 max-w-full">
-                <div className="mb-3 flex min-w-0 items-baseline gap-2">
-                  <span className="label-uppercase">{text.boardLinkage}</span>
-                  <h3 className="mt-0.5 text-base font-semibold text-foreground">{text.relatedBoards}</h3>
-                </div>
-
-                <div className="home-related-board-list flex min-h-6 w-full min-w-0 max-w-full flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain touch-pan-x pb-1">
-                  {preparedRelatedBoards.map(renderBoardChip)}
-                </div>
-              </section>
-            </Card>
-          )}
         </div>
 
         {/* Right: sentiment gauge / watchlist actions */}

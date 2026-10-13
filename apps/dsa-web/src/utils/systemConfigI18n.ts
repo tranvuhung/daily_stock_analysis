@@ -60,10 +60,9 @@ const fieldOptionLabelMap: Record<string, Record<string, string>> = {
     brief: 'Brief',
   },
   REPORT_LANGUAGE: {
-    zh: 'Chinese',
+    vi: 'Vietnamese',
     en: 'English',
-    ko: 'Korean',
-    chinese: 'Chinese',
+    vietnamese: 'Vietnamese',
     english: 'English',
   },
   NOTIFICATION_MIN_SEVERITY: {

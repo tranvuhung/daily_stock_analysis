@@ -6,51 +6,51 @@ import { markdownToPlainText } from '../markdown';
  * Tests real-world stock analysis report scenarios
  */
 describe('markdownToPlainText - Stock Report Scenarios', () => {
-  it('handles typical Chinese stock report with tables and indicators', () => {
-    const stockReport = `# 贵州茅台 (600519) 分析报告
+  it('handles typical Vietnamese stock report with tables and indicators', () => {
+    const stockReport = `# Hoa Phat (HPG) báo cáo phân tích
 
-## 技术分析
+## Phân tích kỹ thuật
 
-| 指标 | 当前值 | 信号 |
+| Chỉ báo | Giá trị hiện tại | Tín hiệu |
 |------|--------|------|
 | MA5 | 1680.50 | 🟢 |
 | MA10 | 1675.30 | 🟢 |
 | MA20 | 1665.80 | 🟢 |
 
-**MACD**: 金叉信号，买入参考
-**RSI**: 56.8，处于中性区域
+**MACD**: Tín hiệu giao cắt vàng, tham khảo mua
+**RSI**: 56.8, ở vùng trung tính
 
-## 基本面分析
+## Phân tích cơ bản
 
-- **市盈率**: 28.5
-- **市净率**: 8.2
-- **营收增长**: +15.3% YoY
+- **P/E**: 28.5
+- **P/B**: 8.2
+- **Tăng trưởng doanh thu**: +15.3% YoY
 
-> 风险提示：短期波动加大，建议控制仓位
+> Cảnh báo rủi ro: biến động ngắn hạn tăng, nên kiểm soát tỷ trọng
 
-## 操作建议
+## Khuyến nghị giao dịch
 
 \`\`\`python
-# 推荐买入区间
+# Vùng mua khuyến nghị
 entry_zone = [1650, 1680]
 stop_loss = 1620
 target = 1750
 \`\`\`
 
-[查看详细数据](https://example.com/stock/600519)`;
+[Xem dữ liệu chi tiết](https://example.com/stock/HPG)`;
 
     const result = markdownToPlainText(stockReport);
 
     // Verify key content is preserved
-    expect(result).toContain('贵州茅台');
-    expect(result).toContain('600519');
-    expect(result).toContain('技术分析');
+    expect(result).toContain('Hoa Phat');
+    expect(result).toContain('HPG');
+    expect(result).toContain('Phân tích kỹ thuật');
     expect(result).toContain('MACD');
-    expect(result).toContain('金叉信号');
-    expect(result).toContain('市盈率');
-    expect(result).toContain('风险提示');
+    expect(result).toContain('Tín hiệu giao cắt vàng');
+    expect(result).toContain('P/E');
+    expect(result).toContain('Cảnh báo rủi ro');
     expect(result).toContain('entry_zone');
-    expect(result).toContain('查看详细数据');
+    expect(result).toContain('Xem dữ liệu chi tiết');
 
     // Verify markdown symbols are removed
     expect(result).not.toMatch(/^#{1,6}\s+/m);
@@ -59,44 +59,44 @@ target = 1750
     // This is a known limitation - tables remain pipe-separated
   });
 
-  it('handles Hong Kong stock report with English and Chinese mix', () => {
-    const hkReport = `# Tencent (00700.HK) Technical Analysis
+  it('handles FPT stock report with English and Vietnamese mix', () => {
+    const hkReport = `# FPT Corp (FPT) Technical Analysis
 
 ## Key Indicators
 
-* **Current Price**: HKD 368.20
+* **Current Price**: VND 368.20
 * **Change**: +2.5% 📈
 * **Volume**: 18.2M
 
 ## Support & Resistance
 
-1. **Resistance 1**: HKD 375.00
-2. **Resistance 2**: HKD 380.00
-3. **Support 1**: HKD 365.00
+1. **Resistance 1**: VND 375.00
+2. **Resistance 2**: VND 380.00
+3. **Support 1**: VND 365.00
 
-> 建议在回调至 365-368 区间关注
+> Theo dõi khi giá điều chỉnh về vùng 365-368
 
 \`\`\`
-MA5 > MA10 > MA20 (多头排列)
-RSI(14) = 58.3 (中性偏强)
+MA5 > MA10 > MA20 (xếp tăng)
+RSI(14) = 58.3 (trung tính nghiêng tăng)
 \`\`\`
 
-[Click for more details](https://finance.qq.com/q/go.php/vInvestConsult/stock/00700)`;
+[Click for more details](https://example.com/stock/FPT)`;
 
     const result = markdownToPlainText(hkReport);
 
-    expect(result).toContain('Tencent');
-    expect(result).toContain('00700.HK');
+    expect(result).toContain('FPT Corp');
+    expect(result).toContain('FPT');
     expect(result).toContain('368.20');
     expect(result).toContain('Resistance 1');
     expect(result).toContain('Support 1');
-    expect(result).toContain('建议在回调');
+    expect(result).toContain('Theo dõi khi giá điều chỉnh');
     expect(result).toContain('MA5 > MA10');
     expect(result).toContain('Click for more details');
   });
 
-  it('handles US stock report with financial data', () => {
-    const usReport = `# Apple Inc. (AAPL) Analysis Report
+  it('handles English stock report with financial data', () => {
+    const usReport = `# Vietcombank JSC (FPT) Analysis Report
 
 ## Financial Metrics
 
@@ -128,12 +128,12 @@ const riskReward = (targetPrice - entryPrice) / (entryPrice - stopLoss);
 // Risk/Reward ratio: 2.1:1
 \`\`\`
 
-![AAPL Chart](https://example.com/charts/aapl.png)`;
+![FPT Chart](https://example.com/charts/fpt.png)`;
 
     const result = markdownToPlainText(usReport);
 
-    expect(result).toContain('Apple Inc.');
-    expect(result).toContain('AAPL');
+    expect(result).toContain('Vietcombank JSC');
+    expect(result).toContain('FPT');
     expect(result).toContain('178.35');
     expect(result).toContain('2.8T');
     expect(result).toContain('Strong Buy');
@@ -142,58 +142,58 @@ const riskReward = (targetPrice - entryPrice) / (entryPrice - stopLoss);
   });
 
   it('handles market review report with multiple stocks', () => {
-    const marketReview = `# A股市场复盘
+    const marketReview = `# Thị trường Việt Nam điểm lại
 
-## 指数表现
+## Diễn biến chỉ số
 
-| 指数 | 收盘 | 涨跌幅 | 成交额 |
+| Chỉ số | Đóng cửa | Biến động | Giá trị giao dịch |
 |------|------|--------|--------|
-| 上证指数 | 3050.32 | +0.85% | 4285亿 |
-| 深证成指 | 9850.45 | +1.12% | 5250亿 |
-| 创业板指 | 1950.28 | +1.45% | 2180亿 |
+| VN-Index | 3050.32 | +0.85% | 4285 tỷ |
+| HNX-Index | 9850.45 | +1.12% | 5250 tỷ |
+| UPCoM-Index | 1950.28 | +1.45% | 2180 tỷ |
 
-## 热点板块
+## Nhóm ngành nổi bật
 
-1. **人工智能** 🤖
-   - 原因：大模型技术突破
-   - 龙头：科大讯飞、寒武纪
+1. **Trí tuệ nhân tạo** 🤖
+   - Lý do: đột phá công nghệ mô hình lớn
+   - Dẫn dắt: FPT, ELC
 
-2. **新能源汽车** 🚗
-   - 原因：销量数据超预期
-   - 龙头：比亚迪、理想汽车
+2. **Xe năng lượng mới** 🚗
+   - Lý do: doanh số vượt kỳ vọng
+   - Dẫn dắt: VinFast, HHS
 
-3. **半导体** 💾
-   - 原因：国产替代加速
-   - 龙头：中芯国际、北方华创
+3. **Bán dẫn** 💾
+   - Lý do: thay thế nội địa tăng tốc
+   - Dẫn dắt: FPT, CMG
 
-## 资金流向
+## Dòng tiền
 
-- **北向资金**: +85.5亿
-- **融资融券**: +32.8亿
-- **主力资金**: 净流入 156.8亿
+- **Khối ngoại**: +85.5 tỷ
+- **Ký quỹ**: +32.8 tỷ
+- **Dòng tiền lớn**: Dòng tiền vào ròng 156.8 tỷ
 
-## 后市展望
+## Triển vọng
 
-> 预期明日震荡区间：3040-3065
+> Vùng dao động dự kiến ngày mai: 3040-3065
 
-**策略**：关注科技主线，控制仓位`;
+**Chiến lược**: theo dõi nhóm công nghệ, kiểm soát tỷ trọng`;
 
     const result = markdownToPlainText(marketReview);
 
-    expect(result).toContain('A股市场复盘');
-    expect(result).toContain('上证指数');
+    expect(result).toContain('Thị trường Việt Nam điểm lại');
+    expect(result).toContain('VN-Index');
     expect(result).toContain('3050.32');
-    expect(result).toContain('人工智能');
-    expect(result).toContain('科大讯飞');
-    expect(result).toContain('北向资金');
-    expect(result).toContain('85.5亿');
+    expect(result).toContain('Trí tuệ nhân tạo');
+    expect(result).toContain('VinFast');
+    expect(result).toContain('Khối ngoại');
+    expect(result).toContain('85.5 tỷ');
     expect(result).toContain('3040-3065');
   });
 
   it('handles report with special characters and formulas', () => {
-    const report = `# 技术指标计算
+    const report = `# Tính chỉ báo kỹ thuật
 
-## MACD 计算
+## MACD Tính toán
 
 \`\`\`python
 # MACD = EMA(12) - EMA(26)
@@ -208,36 +208,36 @@ def calculate_macd(prices, fast=12, slow=26, signal=9):
     return macd, signal_line
 \`\`\`
 
-## RSI 公式
+## RSI Công thức
 
 $$RSI = 100 - \frac{100}{1 + RS}$$
 
-其中：
-- RS = 平均涨幅 / 平均跌幅
-- 周期：默认 14 天
+Trong đó: 
+- RS = Mức tăng trung bình / Mức giảm trung bình
+- Chu kỳ: mặc định 14 ngày
 
-## 布林带
+## Dải Bollinger
 
-- **中轨** = MA(20)
-- **上轨** = MA(20) + 2 × STD(20)
-- **下轨** = MA(20) - 2 × STD(20)
+- **Dải giữa** = MA(20)
+- **Dải trên** = MA(20) + 2 × STD(20)
+- **Dải dưới** = MA(20) - 2 × STD(20)
 
-> 当前股价在上轨附近，注意回调风险`;
+> Giá hiện tại gần dải trên, chú ý rủi ro điều chỉnh`;
 
     const result = markdownToPlainText(report);
 
-    expect(result).toContain('MACD 计算');
+    expect(result).toContain('MACD Tính toán');
     expect(result).toContain('EMA(12) - EMA(26)');
     expect(result).toContain('RSI');
-    expect(result).toContain('布林带');
+    expect(result).toContain('Dải Bollinger');
     expect(result).toContain('MA(20)');
-    expect(result).toContain('注意回调风险');
+    expect(result).toContain('chú ý rủi ro điều chỉnh');
   });
 
   it('handles report with code snippets in multiple languages', () => {
-    const report = `# 策略回测代码
+    const report = `# Mã backtest chiến lược
 
-## Python 策略
+## Python Chiến lược
 
 \`\`\`python
 import pandas as pd
@@ -256,14 +256,14 @@ def moving_average_strategy(data, short=5, long=20):
     return signals
 \`\`\`
 
-以上代码可直接用于策略回测。`;
+Đoạn mã trên có thể dùng trực tiếp để backtest chiến lược.`;
 
     const result = markdownToPlainText(report);
 
     // Verify key content is preserved
-    expect(result).toContain('策略回测代码');
-    expect(result).toContain('Python 策略');
-    expect(result).toContain('以上代码可直接用于策略回测');
+    expect(result).toContain('Mã backtest chiến lược');
+    expect(result).toContain('Python Chiến lược');
+    expect(result).toContain('Đoạn mã trên có thể dùng trực tiếp để backtest chiến lược');
 
     // Verify code content is preserved
     expect(result).toContain('import pandas');
@@ -271,86 +271,86 @@ def moving_average_strategy(data, short=5, long=20):
   });
 
   it('handles edge case: very long stock code list', () => {
-    const stockList = `# 股票池列表
+    const stockList = `# Danh sách rổ cổ phiếu
 
-## 沪深300成分股（部分）
+## Thành phần VN30 (một phần)
 
-| 代码 | 名称 | 现价 | 涨跌幅 |
+| Mã | Tên | Giá hiện tại | Biến động |
 |------|------|------|--------|
-| 600519 | 贵州茅台 | 1680.50 | +0.85% |
-| 000858 | 五粮液 | 125.30 | +1.20% |
-| 600036 | 招商银行 | 32.50 | -0.25% |
-| 000001 | 平安银行 | 11.85 | +0.42% |
-| 601318 | 中国平安 | 45.20 | +0.15% |
-| 000333 | 美的集团 | 58.80 | +1.80% |
-| 600276 | 恒瑞医药 | 42.50 | +2.10% |
-| 300750 | 宁德时代 | 185.30 | +3.20% |
-| 688981 | 中芯国际 | 52.80 | +4.50% |
-| 601012 | 隆基绿能 | 25.60 | -1.20% |
+| HPG | Hoa Phat | 1680.50 | +0.85% |
+| 000858 | Sabeco | 125.30 | +1.20% |
+| 600036 | Techcombank | 32.50 | -0.25% |
+| VCB | Vietcombank | 11.85 | +0.42% |
+| 601318 | Bảo Việt | 45.20 | +0.15% |
+| 000333 | Điện Quang | 58.80 | +1.80% |
+| 600276 | Dược Hậu Giang | 42.50 | +2.10% |
+| 300750 | Vinamilk | 185.30 | +3.20% |
+| 688981 | CMC Corp | 52.80 | +4.50% |
+| 601012 | PC1 | 25.60 | -1.20% |
 
-## 筛选条件
+## Điều kiện lọc
 
-- **市值**: > 500亿
+- **Vốn hoá**: > 500 tỷ
 - **PE**: 10-50
 - **ROE**: > 15%
-- **负债率**: < 60%`;
+- **Tỷ lệ nợ**: < 60%`;
 
     const result = markdownToPlainText(stockList);
 
     // Verify all stock codes are preserved
-    expect(result).toContain('600519');
+    expect(result).toContain('HPG');
     expect(result).toContain('000858');
     expect(result).toContain('601012');
-    expect(result).toContain('贵州茅台');
-    expect(result).toContain('宁德时代');
-    expect(result).toContain('筛选条件');
+    expect(result).toContain('Hoa Phat');
+    expect(result).toContain('Vinamilk');
+    expect(result).toContain('Điều kiện lọc');
     expect(result).toContain('ROE');
   });
 
-  it('handles mixed Chinese and English punctuation correctly', () => {
-    const text = `# 报告摘要
+  it('handles mixed Vietnamese and English punctuation correctly', () => {
+    const text = `# Tóm tắt báo cáo
 
-**主要观点**：
-1. 短期看涨，目标价 $195.00
-2. 支撑位：$168.50-172.00
-3. 压力位：$180.50-185.00
+**Quan điểm chính**: 
+1. Ngắn hạn tích cực, giá mục tiêu $195.00
+2. Hỗ trợ: $168.50-172.00
+3. Kháng cự: $180.50-185.00
 
 "Risk: Trade war impact"
 
-> 风险提示：中美贸易摩擦可能影响出口
+> Cảnh báo rủi ro: căng thẳng thương mại có thể ảnh hưởng xuất khẩu
 
-*关注点*：AI chip business growth`;
+*Điểm chú ý*: AI chip business growth`;
 
     const result = markdownToPlainText(text);
 
-    expect(result).toContain('主要观点');
-    expect(result).toContain('短期看涨');
+    expect(result).toContain('Quan điểm chính');
+    expect(result).toContain('Ngắn hạn tích cực');
     expect(result).toContain('195.00');
     expect(result).toContain('Risk: Trade war impact');
-    expect(result).toContain('风险提示');
-    expect(result).toContain('关注点');
+    expect(result).toContain('Cảnh báo rủi ro');
+    expect(result).toContain('Điểm chú ý');
     expect(result).toContain('AI chip business');
   });
 
   it('preserves numerical data and percentages accurately', () => {
-    const report = `# 数据报告
+    const report = `# Báo cáo dữ liệu
 
-## 关键指标
+## Chỉ báo chính
 
-- 营收: 1,234.56亿
-- 净利润: +23.45%
-- 市占率: 15.67%
+- Doanh thu: 1,234.56 tỷ
+- Lợi nhuận ròng: +23.45%
+- Thị phần: 15.67%
 - ROE: 18.9%
-- 负债率: 45.2%
+- Tỷ lệ nợ: 45.2%
 
-## 价格区间
+## Vùng giá
 
-| 日期 | 开盘 | 最高 | 最低 | 收盘 |
+| Ngày | Mở cửa | Cao nhất | Thấp nhất | Đóng cửa |
 |------|------|------|------|------|
 | 2024-01-15 | 1680.50 | 1695.30 | 1675.20 | 1688.80 |
 | 2024-01-16 | 1688.80 | 1702.50 | 1685.30 | 1698.20 |
 
-涨跌幅: +1.23% (今日)`;
+Biến động: +1.23% (hôm nay)`;
 
     const result = markdownToPlainText(report);
 

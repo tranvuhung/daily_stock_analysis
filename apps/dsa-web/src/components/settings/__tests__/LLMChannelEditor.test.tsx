@@ -347,7 +347,7 @@ describe('LLMChannelEditor', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     fireEvent.click(await screen.findByRole('button', { name: 'View Runtime capability check configuration help' }));
 
-    expect(screen.getByRole('dialog', { name: 'Runtime capability check' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Runtime Capability Checks' })).toBeInTheDocument();
     expect(screen.getByText('Select capabilities and run the check. It sends real LLM requests.')).toBeInTheDocument();
   });
 
@@ -654,8 +654,8 @@ describe('LLMChannelEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: /my_proxy/i }));
 
     expect(screen.queryByText('Configuration reference')).not.toBeInTheDocument();
-    expect(screen.queryByText(/官方来源/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/能力标签仅用于配置参考/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Official source/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Capability tags are configuration hints only/i)).not.toBeInTheDocument();
   });
 
   it('preserves manually edited base URL and models when switching preset names', async () => {
@@ -767,7 +767,7 @@ describe('LLMChannelEditor', () => {
       reloadTriggered: true,
       updatedKeys: ['LLM_HERMES_API_KEYS', 'LLM_HERMES_EXTRA_HEADERS'],
       warnings: [
-        '检测到已清理 Hermes Phase 3 不支持的配置项：LLM_HERMES_API_KEYS, LLM_HERMES_EXTRA_HEADERS。Hermes reserved channel 只支持单个 LLM_HERMES_API_KEY，不支持多 Key 或额外 Header；如需恢复旧值，请从 .env 备份、Git 历史或桌面端导出备份手动还原，但非空 LLM_HERMES_API_KEYS / LLM_HERMES_EXTRA_HEADERS 仍会被后端校验拒绝。',
+        'Đã dọn cấu hình Hermes Phase 3 không hỗ trợ: LLM_HERMES_API_KEYS, LLM_HERMES_EXTRA_HEADERS. Hermes reserved channel chỉ hỗ trợ một LLM_HERMES_API_KEY, không hỗ trợ nhiều Key hoặc Header bổ sung; để khôi phục giá trị cũ, hãy khôi phục thủ công từ sao lưu .env, lịch sử Git hoặc bản sao lưu desktop, nhưng giá trị không rỗng LLM_HERMES_API_KEYS / LLM_HERMES_EXTRA_HEADERS vẫn sẽ bị backend từ chối khi kiểm tra.',
       ],
     });
 
@@ -803,8 +803,8 @@ describe('LLMChannelEditor', () => {
     expect(updateItemMap.get('LLM_HERMES_API_KEY')).toBe('sk-hermes-test-value');
     expect(updateItemMap.get('LLM_HERMES_API_KEYS')).toBe('');
     expect(updateItemMap.get('LLM_HERMES_EXTRA_HEADERS')).toBe('');
-    expect(await screen.findByText(/已清理 Hermes Phase 3 不支持的配置项/i)).toBeInTheDocument();
-    expect(screen.getByText(/如需恢复旧值，请从 \.env 备份/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Đã dọn cấu hình Hermes Phase 3 không hỗ trợ/i)).toBeInTheDocument();
+    expect(screen.getByText(/để khôi phục giá trị cũ, hãy khôi phục thủ công từ sao lưu \.env/i)).toBeInTheDocument();
   });
 
   it('only persists edited values for runtime-only channel keys', async () => {
@@ -1103,7 +1103,7 @@ describe('LLMChannelEditor', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /^primary/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^▶ primary/i }));
     fireEvent.change(screen.getByLabelText('Base URL'), {
       target: { value: 'https://api.example.com/compatible/v1' },
     });
@@ -1148,7 +1148,7 @@ describe('LLMChannelEditor', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /^primary/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^▶ primary/i }));
     fireEvent.change(screen.getByLabelText('Base URL'), {
       target: { value: 'https://api.example.com/compatible/v1' },
     });
@@ -1198,16 +1198,16 @@ describe('LLMChannelEditor', () => {
       />,
     );
 
-    expect(selectOptionValues('\u4e3b\u6a21\u578b')).toEqual(expect.arrayContaining([
+    expect(selectOptionValues('Primary model')).toEqual(expect.arrayContaining([
       'xai/grok-beta',
       'openai/deepseek-ai/DeepSeek-V3',
     ]));
-    expect(selectOptionValues('\u4e3b\u6a21\u578b')).not.toContain('openai/xai/grok-beta');
+    expect(selectOptionValues('Primary model')).not.toContain('openai/xai/grok-beta');
 
-    fireEvent.change(screen.getByLabelText('\u4e3b\u6a21\u578b'), {
+    fireEvent.change(screen.getByLabelText('Primary model'), {
       target: { value: 'xai/grok-beta' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /\u4fdd\u5b58 AI \u914d\u7f6e/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Save AI configuration/ }));
 
     await waitFor(() => expect(update).toHaveBeenCalled());
     expect(update.mock.calls[0][0].items).toContainEqual({
@@ -1300,7 +1300,7 @@ describe('LLMChannelEditor', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /^primary/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^▶ primary/i }));
     fireEvent.change(screen.getByLabelText('Base URL'), {
       target: { value: 'https://api.example.com/compatible/v1' },
     });
@@ -1328,7 +1328,7 @@ describe('LLMChannelEditor', () => {
       reloadTriggered: true,
       updatedKeys: ['LLM_DEEPSEEK_MODELS', 'LITELLM_MODEL'],
       warnings: [
-        '检测到已同步清理失效的运行时模型引用：主模型 / Agent 主模型 / Vision 模型 / 备选模型中的失效项。如需恢复，请先补回对应渠道模型列表后重新选择；也可用桌面端导出备份或手动 .env 还原之前的 LLM_* / LITELLM_MODEL / AGENT_LITELLM_MODEL / VISION_MODEL / LLM_TEMPERATURE。',
+        'Đã dọn đồng bộ các tham chiếu mô hình runtime không còn hiệu lực: mục hỏng trong mô hình chính / mô hình chính Agent / mô hình Vision / mô hình dự phòng. Để khôi phục, hãy bổ sung lại danh sách mô hình của kênh rồi chọn lại; cũng có thể dùng bản sao lưu xuất từ desktop hoặc khôi phục .env thủ công các giá trị cũ LLM_* / LITELLM_MODEL / AGENT_LITELLM_MODEL / VISION_MODEL / LLM_TEMPERATURE.',
       ],
     });
 
@@ -1359,12 +1359,12 @@ describe('LLMChannelEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save AI configuration' }));
 
     expect(await screen.findByText('After saving')).toBeInTheDocument();
-    expect(screen.getByText(/已同步清理失效的运行时模型引用/i)).toBeInTheDocument();
-    expect(screen.getByText(/桌面端导出备份或手动 \.env 还原/i)).toBeInTheDocument();
+    expect(screen.getByText(/Đã dọn đồng bộ các tham chiếu mô hình runtime không còn hiệu lực/i)).toBeInTheDocument();
+    expect(screen.getByText(/bản sao lưu xuất từ desktop hoặc khôi phục \.env thủ công/i)).toBeInTheDocument();
   });
 
   it('keeps save warnings visible after onSaved-driven refresh', async () => {
-    const warningMessage = '检测到已同步清理失效的运行时模型引用：主模型 / Agent 主模型 / Vision 模型 / 备选模型中的失效项。';
+    const warningMessage = 'Đã dọn đồng bộ các tham chiếu mô hình runtime không còn hiệu lực: mục hỏng trong mô hình chính / mô hình chính Agent / mô hình Vision / mô hình dự phòng.';
     const initialItems = [
       { key: 'LLM_CHANNELS', value: 'deepseek' },
       { key: 'LLM_DEEPSEEK_PROTOCOL', value: 'deepseek' },
@@ -1779,7 +1779,7 @@ describe('LLMChannelEditor', () => {
 
     expect(await screen.findByText(/Chat call · Authentication failed: LLM authentication failed/i)).toBeInTheDocument();
     expect(screen.getByText(/Check that the API key is correct/i)).toBeInTheDocument();
-    expect(screen.queryByText(/调整模型顺序或移除不可用模型/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/reorder the list or remove it and try again/i)).not.toBeInTheDocument();
   });
 
   it('shows tested model and model-availability hints when a model is disabled', async () => {
@@ -1817,11 +1817,11 @@ describe('LLMChannelEditor', () => {
 
     expect(await screen.findByText(/Chat call · Model unavailable: LLM channel test failed/i)).toBeInTheDocument();
     expect(screen.getByText(/Model tested: openai\/deepseek-ai\/DeepSeek-V3/i)).toBeInTheDocument();
-    expect(screen.getByText(/基础连接测试默认使用模型列表首项：deepseek-ai\/DeepSeek-V3/i)).toBeInTheDocument();
-    expect(screen.getByText(/基础连接测试默认只测试模型列表中的第一个模型/i)).toBeInTheDocument();
-    expect(screen.getByText(/调整模型顺序或移除不可用模型/i)).toBeInTheDocument();
-    expect(screen.getByText(/模型是否已开通、账号是否可见/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Base URL、代理、TLS/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/The basic connection test uses the first model in the list: deepseek-ai\/DeepSeek-V3/i)).toBeInTheDocument();
+    expect(screen.getByText(/The basic connection test only tests the first model in the list/i)).toBeInTheDocument();
+    expect(screen.getByText(/reorder the list or remove it and try again/i)).toBeInTheDocument();
+    expect(screen.getByText(/check whether it is enabled, visible to the account/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Check the base URL, proxy, TLS/i)).not.toBeInTheDocument();
     expect(testLLMChannel).toHaveBeenCalledWith(expect.objectContaining({
       models: ['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen3-Coder'],
     }));
@@ -1862,9 +1862,9 @@ describe('LLMChannelEditor', () => {
 
     expect(await screen.findByText(/Chat call · Request blocked/i)).toBeInTheDocument();
     expect(screen.getByText(/Model tested: openai\/gpt-5\.5/i)).toBeInTheDocument();
-    expect(screen.getByText(/账号风控、地域限制、模型权限/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Base URL、代理、TLS/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/调整模型顺序或移除不可用模型/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/account risk controls, regional restrictions, model permissions/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Check the base URL, proxy, TLS/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/reorder the list or remove it and try again/i)).not.toBeInTheDocument();
   });
 
   it('shows focused quota exceeded troubleshooting hints', async () => {
@@ -1894,7 +1894,7 @@ describe('LLMChannelEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
 
     expect(await screen.findByText(/The provider reported the quota is exhausted/i)).toBeInTheDocument();
-    expect(screen.queryByText(/调整模型顺序或移除不可用模型/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/reorder the list or remove it and try again/i)).not.toBeInTheDocument();
   });
 
   it('does not show model-list action hints for network failures', async () => {
@@ -1924,7 +1924,7 @@ describe('LLMChannelEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
 
     expect(await screen.findByText(/DNS resolution failed/i)).toBeInTheDocument();
-    expect(screen.queryByText(/调整模型顺序或移除不可用模型/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/reorder the list or remove it and try again/i)).not.toBeInTheDocument();
   });
 
   it('does not request runtime capabilities during the basic connection test', async () => {
@@ -2006,8 +2006,8 @@ describe('LLMChannelEditor', () => {
 
     expect(await screen.findByText(/Capability check finished: 1 passed \/ 1 failed \/ 0 skipped/i)).toBeInTheDocument();
     expect(screen.getByText('JSON Passed')).toBeInTheDocument();
-    expect(screen.getByText('Tools 失败')).toBeInTheDocument();
-    expect(screen.getByText(/当前模型或兼容层不支持该能力/i)).toBeInTheDocument();
+    expect(screen.getByText('Tools Failed')).toBeInTheDocument();
+    expect(screen.getByText(/The current model or compatibility layer does not support this capability/i)).toBeInTheDocument();
     expect(testLLMChannel).toHaveBeenCalledWith(expect.objectContaining({ capabilityChecks: ['json', 'tools'] }));
   });
 
@@ -2050,7 +2050,7 @@ describe('LLMChannelEditor', () => {
 
     expect(await screen.findByText(/Capability check finished: 0 passed \/ 0 failed \/ 1 skipped/i)).toBeInTheDocument();
     expect(screen.getByText('JSON Skipped')).toBeInTheDocument();
-    expect(screen.getByText(/服务商拒绝了当前 API Key/i)).toBeInTheDocument();
+    expect(screen.getByText(/The provider rejected this API key/i)).toBeInTheDocument();
     expect(screen.getByLabelText('Models (comma-separated)')).toBeEnabled();
   });
 
@@ -2167,7 +2167,7 @@ describe('LLMChannelEditor', () => {
 
     expect(await screen.findByText(/Model discovery · Empty response: No model IDs returned from \/models response/i)).toBeInTheDocument();
     expect(screen.getByText(/The \/models endpoint of this channel returned no usable model IDs/i)).toBeInTheDocument();
-    expect(screen.queryByText(/切换兼容模型、关闭额外响应模式/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/try a compatible model or turn off extra response modes/i)).not.toBeInTheDocument();
   });
 
   it('does not apply stale discovery response after channel list re-sync', async () => {

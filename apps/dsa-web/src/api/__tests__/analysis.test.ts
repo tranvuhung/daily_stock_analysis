@@ -19,16 +19,16 @@ describe('analysisApi.triggerMarketReview', () => {
         status: 'accepted',
         message: 'accepted',
         send_notification: true,
-        region: 'cn,us',
+        region: 'vn',
         task_id: 'market-task-1',
       },
     });
   });
 
-  it('serializes selected markets to a comma-separated request string', async () => {
+  it('serializes the Vietnam market region into the request string', async () => {
     const result = await analysisApi.triggerMarketReview({
       sendNotification: false,
-      regions: ['cn', 'us'],
+      regions: ['vn'],
     });
 
     expect(post).toHaveBeenCalledWith(
@@ -36,11 +36,11 @@ describe('analysisApi.triggerMarketReview', () => {
       {
         send_notification: false,
         report_language: undefined,
-        region: 'cn,us',
+        region: 'vn',
       },
       expect.any(Object),
     );
-    expect(result.region).toBe('cn,us');
+    expect(result.region).toBe('vn');
   });
 
   it('omits region when the caller inherits the server default', async () => {

@@ -37,7 +37,7 @@ import { useStockIndex } from '../hooks/useStockIndex';
 import type { StockIndexItem } from '../types/stockIndex';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
 import type { UiTextKey } from '../i18n/uiText';
-import { getChatStageLabel, getChatToolLabel, localizeChatSkill, localizeLegacyChatNote } from '../locales/chatText';
+import { getChatStageLabel, getChatToolLabel, localizeChatSkill } from '../locales/chatText';
 
 // Quick question examples shown on empty state
 type ActiveStockContext = Pick<ChatFollowUpContext, 'stock_code' | 'stock_name'>;
@@ -59,11 +59,13 @@ const MAX_SELECTED_SKILLS = 3;
 const CONTEXT_COMPRESSION_CONFIG_KEY = 'AGENT_CONTEXT_COMPRESSION_ENABLED';
 // Từ khoá tiếng Việt / tiếng Anh khớp với backend `src/agent/stock_scope.py` (_VI_EN_*).
 // Vietnamese/English intent keywords mirror the backend `_VI_EN_*` patterns.
-const STRONG_COMPARE_STOCK_MESSAGE_RE = /比较|对比|\bvs\b|和[^，。,.!?！？]{0,40}比|so sánh|so với|đối chiếu|\bcompare\b|\bversus\b/i;
-const WEAK_COMPARE_STOCK_MESSAGE_RE = /差异(?!化)|区别|不同|相比|对照|比一比|khác nhau|khác biệt|chênh lệch|\bdifference\b/i;
-const CHOICE_COMPARE_STOCK_MESSAGE_RE = /哪个|哪只|哪一个|谁更|更值得|更适合|怎么选|选哪|二选一|mã nào|con nào|cái nào|nên chọn|\bwhich\b/i;
-const LINKED_COMPARE_STOCK_MESSAGE_RE = /(?:和|与|跟|同)[^，。,.!?！？]{0,40}(?:差异(?!化)|区别|不同|相比|对照|比一比)/;
-const SWITCH_STOCK_MESSAGE_RE = /换成|改看|分析|看看|研究|诊断|phân tích|đánh giá|nghiên cứu|nhận định|chuyển sang|đổi sang|\bxem\b|\bsoi\b|có nên|thế nào|ra sao|\banaly[sz]e\b|\blook at\b|\bswitch to\b/i;
+const STRONG_COMPARE_STOCK_MESSAGE_RE = /\bvs\b|so sánh|so với|đối chiếu|\bcompare\b|\bversus\b/i;
+const WEAK_COMPARE_STOCK_MESSAGE_RE = /khác nhau|khác biệt|chênh lệch|\bdifference\b/i;
+const CHOICE_COMPARE_STOCK_MESSAGE_RE = /mã nào|con nào|cái nào|nên chọn|\bwhich\b/i;
+// "HPG và FPT khác nhau" / "HPG and FPT difference": liên từ nối mã mới với mã hiện tại.
+// Conjunction linking the new stock with the current one.
+const LINKED_COMPARE_STOCK_MESSAGE_RE = /(?:(?:^|\s)(?:và|với)\s|\band\b|\bwith\b)[^,.!?]{0,40}(?:khác nhau|khác biệt|chênh lệch|\bdifference\b)/i;
+const SWITCH_STOCK_MESSAGE_RE = /phân tích|đánh giá|nghiên cứu|nhận định|chuyển sang|đổi sang|\bxem\b|\bsoi\b|có nên|thế nào|ra sao|\banaly[sz]e\b|\blook at\b|\bswitch to\b/i;
 
 type ActiveStockResolution = {
   context: ActiveStockContext;
@@ -83,13 +85,12 @@ const resolveUniqueStockNameContext = (
     const terms = [item.nameZh, item.nameEn, ...(item.aliases || [])]
       .map((term) => term?.trim())
       .filter((term): term is string => Boolean(term))
-      .filter((term) => /[\u3400-\u9fff]/.test(term) ? term.length >= 2 : term.length >= 3);
+      .filter((term) => term.length >= 3);
     if (!terms.some((term) => normalizedMessage.includes(term.toLocaleLowerCase()))) {
       continue;
     }
-    // Index canonical codes (sh000001 / csi930955) must be preserved verbatim —
-    // normalizeStockCode would strip the exchange prefix and collide with a
-    // same-digit stock (sh000001 → 000001 vs Ping An Bank 000001).
+    // Mã chỉ số (VNINDEX / VN30) giữ nguyên dạng canonical.
+    // Index canonical codes (VNINDEX / VN30) are preserved verbatim.
     const stockCode = item.assetType === 'index'
       ? item.canonicalCode
       : normalizeStockCode(item.canonicalCode);
@@ -146,7 +147,7 @@ const isStageDoneSuccessful = (status?: string): boolean => {
 };
 
 // Comparison identity key: registry canonical first (so an index context keeps
-// its lowercase canonical and never normalizes into the bare same-code stock),
+// its registry canonical and never normalizes into the bare same-code stock),
 // then the stock normalization fallback. Never guesses index types from prefixes.
 const resolveComparisonStockKey = (
   code: string | null | undefined,
@@ -200,7 +201,7 @@ const resolveActiveStockContextFromMessage = (
     return null;
   }
 
-  // Registry-first identity keys so an index context (sh000016) is never
+  // Registry-first identity keys so an index context (VNINDEX) is never
   // folded with the bare same-code stock when comparing or switching.
   const currentStockKey = resolveComparisonStockKey(currentContext?.stock_code, index);
   const isCompare = isCompareStockMessage(message, stockCodes, currentStockKey);
@@ -303,7 +304,7 @@ const ChatPage: React.FC = () => {
   const pendingScrollBehaviorRef = useRef<ScrollBehavior>('auto');
   const agentStatusRequestIdRef = useRef(0);
 
-  // Get localized text (default to Chinese)
+  // Get localized text (default to Vietnamese)
   const text = getReportText(language);
 
   // Cleanup timers on unmount
@@ -689,7 +690,7 @@ const ChatPage: React.FC = () => {
     setDeleteConfirmId(null);
   }, [deleteConfirmId, sessionId, loadSessions, handleStartNewChat]);
 
-  // Handle follow-up from report page: ?stock=600519&name=<stock name>&recordId=xxx
+  // Handle follow-up from report page: ?stock=FPT&name=<stock name>&recordId=xxx
   useEffect(() => {
     const rawStockCode = searchParams.get('stock');
     if (!rawStockCode) {
@@ -712,8 +713,8 @@ const ChatPage: React.FC = () => {
       return;
     }
 
-    // Registry canonical first for explicit index follow-ups (sh000016 /
-    // 000016.SH / 930955.CSI / csi930955) so the report-follow-up canonical is
+    // Registry canonical first for explicit index follow-ups (VNINDEX /
+    // VN30) so the report-follow-up canonical is
     // preserved end-to-end; the sanitize contract is untouched and remains the
     // stock fail-open when the registry is unavailable or the code unregistered.
     const registryCanonical = resolveRegisteredIndexCanonical(stockIndex, rawStockCode);
@@ -1475,7 +1476,7 @@ const ChatPage: React.FC = () => {
                         </div>
                         <div className="chat-prose pr-20 sm:pr-24">
                           <Markdown remarkPlugins={[remarkGfm]}>
-                            {localizeLegacyChatNote(msg.content, language)}
+                            {msg.content}
                           </Markdown>
                         </div>
                       </div>

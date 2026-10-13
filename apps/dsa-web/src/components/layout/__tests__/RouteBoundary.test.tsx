@@ -42,7 +42,7 @@ describe('RouteOutletBoundary', () => {
               )}
             >
               <Route path="/chat" element={<BrokenLazyRoute />} />
-              <Route path="/portfolio" element={<div data-testid="portfolio-page">Portfolio</div>} />
+              <Route path="/alerts" element={<div data-testid="alerts-page">Alerts</div>} />
             </Route>
           </Routes>
         </MemoryRouter>,
@@ -53,9 +53,9 @@ describe('RouteOutletBoundary', () => {
       expect(screen.getByRole('button', { name: 'Reload page' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Back home' })).toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole('link', { name: 'Portfolio' }));
+      fireEvent.click(screen.getByRole('link', { name: 'Alerts' }));
 
-      expect(await screen.findByTestId('portfolio-page')).toBeInTheDocument();
+      expect(await screen.findByTestId('alerts-page')).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: 'Page failed to load' })).not.toBeInTheDocument();
     } finally {
       consoleError.mockRestore();

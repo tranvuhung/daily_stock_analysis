@@ -29,9 +29,9 @@ describe('AlertRuleForm', () => {
     onSubmit.mockResolvedValue(undefined);
     getAccounts.mockReset();
     window.localStorage.clear();
-    getAccounts.mockResolvedValue({ accounts: [{ id: 9, name: 'Main', market: 'us', baseCurrency: 'USD', isActive: true }] });
+    getAccounts.mockResolvedValue({ accounts: [{ id: 9, name: 'Main', market: 'vn', baseCurrency: 'VND', isActive: true }] });
     listMarketRegions.mockReset();
-    listMarketRegions.mockResolvedValue({ regions: ['vn', 'cn', 'hk', 'us'], default: 'vn' });
+    listMarketRegions.mockResolvedValue({ regions: ['vn'], default: 'vn' });
   });
 
   function renderEnglishForm() {
@@ -46,16 +46,16 @@ describe('AlertRuleForm', () => {
   it('submits a price_cross rule payload', async () => {
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByLabelText('Rule name'), { target: { value: '茅台价格突破' } });
-    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: '600519' } });
+    fireEvent.change(screen.getByLabelText('Rule name'), { target: { value: 'HPG price breakout' } });
+    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'HPG' } });
     fireEvent.change(screen.getByLabelText('Price threshold'), { target: { value: '1800' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith({
-        name: '茅台价格突破',
+        name: 'HPG price breakout',
         targetScope: 'single_symbol',
-        target: '600519',
+        target: 'HPG',
         alertType: 'price_cross',
         parameters: { direction: 'above', price: 1800 },
         severity: 'warning',
@@ -67,7 +67,7 @@ describe('AlertRuleForm', () => {
   it('submits a price_change_percent rule payload', async () => {
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'aapl' } });
+    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'fpt' } });
     fireEvent.change(screen.getByLabelText('Rule type'), { target: { value: 'price_change_percent' } });
     fireEvent.change(screen.getByLabelText('Direction'), { target: { value: 'down' } });
     fireEvent.change(screen.getByLabelText('Change threshold (%)'), { target: { value: '3.5' } });
@@ -76,7 +76,7 @@ describe('AlertRuleForm', () => {
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-        target: 'AAPL',
+        target: 'FPT',
         alertType: 'price_change_percent',
         parameters: { direction: 'down', changePct: 3.5 },
         severity: 'critical',
@@ -87,7 +87,7 @@ describe('AlertRuleForm', () => {
   it('submits a volume_spike rule payload and supports disabled creation', async () => {
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'msft' } });
+    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'vcb' } });
     fireEvent.change(screen.getByLabelText('Rule type'), { target: { value: 'volume_spike' } });
     fireEvent.change(screen.getByLabelText('Volume multiplier'), { target: { value: '2.5' } });
     fireEvent.click(screen.getByLabelText('Enable immediately'));
@@ -95,7 +95,7 @@ describe('AlertRuleForm', () => {
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-        target: 'MSFT',
+        target: 'VCB',
         alertType: 'volume_spike',
         parameters: { multiplier: 2.5 },
         enabled: false,
@@ -106,7 +106,7 @@ describe('AlertRuleForm', () => {
   it('submits technical indicator rule payloads', async () => {
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: '600519' } });
+    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'HPG' } });
     fireEvent.change(screen.getByLabelText('Rule type'), { target: { value: 'macd_cross' } });
     fireEvent.change(screen.getByLabelText('Cross direction'), { target: { value: 'bearish_cross' } });
     fireEvent.change(screen.getByLabelText('Fast period'), { target: { value: '6' } });
@@ -116,7 +116,7 @@ describe('AlertRuleForm', () => {
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-        target: '600519',
+        target: 'HPG',
         alertType: 'macd_cross',
         parameters: {
           direction: 'bearish_cross',
@@ -131,7 +131,7 @@ describe('AlertRuleForm', () => {
   it('rejects invalid technical indicator boundaries before submit', () => {
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: '600519' } });
+    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'HPG' } });
     fireEvent.change(screen.getByLabelText('Rule type'), { target: { value: 'rsi_threshold' } });
     fireEvent.change(screen.getByLabelText('RSI threshold'), { target: { value: '200' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
@@ -143,7 +143,7 @@ describe('AlertRuleForm', () => {
   it('rejects indicator period combinations that exceed fetchable history', () => {
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: '600519' } });
+    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'HPG' } });
     fireEvent.change(screen.getByLabelText('Rule type'), { target: { value: 'macd_cross' } });
     fireEvent.change(screen.getByLabelText('Fast period'), { target: { value: '2' } });
     fireEvent.change(screen.getByLabelText('Slow period'), { target: { value: '250' } });
@@ -157,7 +157,7 @@ describe('AlertRuleForm', () => {
   it('rejects empty required technical indicator thresholds before submit', () => {
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: '600519' } });
+    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'HPG' } });
     fireEvent.change(screen.getByLabelText('Rule type'), { target: { value: 'rsi_threshold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
 
@@ -167,25 +167,25 @@ describe('AlertRuleForm', () => {
     fireEvent.change(screen.getByLabelText('Rule type'), { target: { value: 'cci_threshold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent('CCI 阈值 is required');
+    expect(screen.getByRole('alert')).toHaveTextContent('CCI threshold is required');
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('rejects invalid numeric thresholds before submit', () => {
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: '600519' } });
+    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'HPG' } });
     fireEvent.change(screen.getByLabelText('Price threshold'), { target: { value: '0' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent('价格阈值 must be a number greater than 0');
+    expect(screen.getByRole('alert')).toHaveTextContent('Price threshold must be a number greater than 0');
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('rejects invalid stock code format before submit', () => {
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'aapl-2026' } });
+    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'fpt-2026' } });
     fireEvent.change(screen.getByLabelText('Price threshold'), { target: { value: '200' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
 
@@ -240,20 +240,17 @@ describe('AlertRuleForm', () => {
     expect(screen.getByRole('option', { name: 'Portfolio drawdown' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Portfolio stop loss' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Info' })).toBeInTheDocument();
-    expect(screen.queryByText('Portfolio drawdown')).not.toBeInTheDocument();
+    expect(screen.queryByText('Mức sụt giảm danh mục')).not.toBeInTheDocument();
   });
 
-  it('defaults market region to Vietnam and only lists regions enabled on the server', async () => {
-    listMarketRegions.mockResolvedValue({ regions: ['vn', 'us'], default: 'vn' });
+  it('defaults market region to Vietnam and only lists the vn region', async () => {
+    listMarketRegions.mockResolvedValue({ regions: ['vn'], default: 'vn' });
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
     fireEvent.change(screen.getByLabelText('Target scope'), { target: { value: 'market' } });
 
     await waitFor(() => expect(listMarketRegions).toHaveBeenCalled());
-    await waitFor(() => expect(screen.queryByRole('option', { name: 'A-shares (cn)' })).not.toBeInTheDocument());
     expect(screen.getByRole('option', { name: 'Vietnam (vn)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'US (us)' })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Hong Kong (hk)' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Market region')).toHaveValue('vn');
 
     fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
@@ -273,7 +270,7 @@ describe('AlertRuleForm', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('falls back to all market regions when the region list fails to load', async () => {
+  it('falls back to the vn market region when the region list fails to load', async () => {
     listMarketRegions.mockRejectedValue(new Error('offline'));
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
@@ -281,7 +278,6 @@ describe('AlertRuleForm', () => {
 
     await waitFor(() => expect(listMarketRegions).toHaveBeenCalled());
     expect(screen.getByRole('option', { name: 'Vietnam (vn)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'A-shares (cn)' })).toBeInTheDocument();
     expect(screen.getByLabelText('Market region')).toHaveValue('vn');
   });
 
@@ -291,41 +287,31 @@ describe('AlertRuleForm', () => {
     fireEvent.change(screen.getByLabelText('Target scope'), { target: { value: 'market' } });
     await waitFor(() => expect(listMarketRegions).toHaveBeenCalled());
     expect(screen.getByRole('option', { name: 'Vietnam (vn)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'A-shares (cn)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Hong Kong (hk)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'US (us)' })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: '日股（jp）' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: '韩股（kr）' })).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Market region'), { target: { value: 'hk' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         targetScope: 'market',
-        target: 'hk',
+        target: 'vn',
         alertType: 'market_light_status',
         parameters: { statuses: ['red', 'yellow'] },
       }));
     });
   });
 
-  it('keeps JP/KR out of market light options in English UI mode', () => {
+  it('lists only the Vietnam market region in English UI mode', () => {
     renderEnglishForm();
 
     fireEvent.change(screen.getByLabelText('Target scope'), { target: { value: 'market' } });
 
-    expect(screen.getByRole('option', { name: 'A-shares (cn)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Hong Kong (hk)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'US (us)' })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Japan (jp)' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Korea (kr)' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Vietnam (vn)' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'US (us)' })).not.toBeInTheDocument();
   });
 
   it('submits a market light score-drop rule payload', async () => {
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
     fireEvent.change(screen.getByLabelText('Target scope'), { target: { value: 'market' } });
-    fireEvent.change(screen.getByLabelText('Market region'), { target: { value: 'us' } });
     fireEvent.change(screen.getByLabelText('Rule type'), { target: { value: 'market_light_score_drop' } });
     fireEvent.change(screen.getByLabelText('Score drop threshold'), { target: { value: '12' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
@@ -333,7 +319,7 @@ describe('AlertRuleForm', () => {
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         targetScope: 'market',
-        target: 'us',
+        target: 'vn',
         alertType: 'market_light_score_drop',
         parameters: { minDrop: 12 },
       }));
@@ -353,12 +339,12 @@ describe('AlertRuleForm', () => {
     onSubmit.mockResolvedValueOnce(false);
     render(<AlertRuleForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'aapl' } });
+    fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'fpt' } });
     fireEvent.change(screen.getByLabelText('Price threshold'), { target: { value: '200' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(screen.getByLabelText('Symbol')).toHaveValue('aapl');
+    expect(screen.getByLabelText('Symbol')).toHaveValue('fpt');
     expect(screen.getByLabelText('Price threshold')).toHaveValue(200);
   });
 });

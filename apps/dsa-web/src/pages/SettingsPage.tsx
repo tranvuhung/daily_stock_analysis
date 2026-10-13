@@ -6,7 +6,6 @@ import { useAuth, useDesktopUpdate, useSystemConfig } from '../hooks';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
 import { createParsedApiError, getParsedApiError, type ParsedApiError } from '../api/error';
 import { analysisApi } from '../api/analysis';
-import { screeningApi, notifyScreeningConfigChanged, notifySystemConfigChanged } from '../api/screening';
 import { systemConfigApi } from '../api/systemConfig';
 import { ApiErrorAlert, Button, ConfirmDialog, EmptyState } from '../components/common';
 import {
@@ -38,30 +37,18 @@ import type {
 } from '../types/systemConfig';
 import type { UiLanguage, UiTextKey } from '../i18n/uiText';
 
-// Ẩn các kênh không dùng tại VN (WeChat/WeCom, Feishu, DingTalk, PushPlus, Pushover, ntfy, Gotify, ServerChan3, AstrBot)
-// khỏi trang Thông báo; backend và giá trị .env giữ nguyên.
-// Hide channels unused in Vietnam from the notification page; backend and .env values are untouched.
+// Ẩn các kênh ít dùng tại VN (Pushover, ntfy, Gotify) khỏi trang Thông báo; backend và giá trị .env giữ nguyên.
+// Các kênh Trung Quốc (WeChat, Feishu, DingTalk, PushPlus, ServerChan3, AstrBot) đã bị xoá ở backend.
+// Hide channels rarely used in Vietnam from the notification page; backend and .env values are untouched.
 const NOTIFICATION_HIDDEN_KEY_PREFIXES = [
-  'WECHAT_',
-  'FEISHU_',
-  'DINGTALK_',
-  'PUSHPLUS_',
   'PUSHOVER_',
   'NTFY_',
   'GOTIFY_',
-  'SERVERCHAN',
-  'ASTRBOT_',
 ];
 const NOTIFICATION_HIDDEN_CHANNEL_OPTIONS = new Set([
-  'wechat',
-  'feishu',
-  'dingtalk',
-  'pushplus',
   'pushover',
   'ntfy',
   'gotify',
-  'serverchan3',
-  'astrbot',
 ]);
 
 function filterNotificationItems(items: SystemConfigItem[]): SystemConfigItem[] {
@@ -434,7 +421,7 @@ function formatSchedulerTimestamp(value: string | null | undefined, language: Ui
     return value;
   }
 
-  return new Intl.DateTimeFormat(language === 'en' ? 'en-US' : 'zh-CN', {
+  return new Intl.DateTimeFormat(language === 'en' ? 'en-US' : 'vi-VN', {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -728,11 +715,8 @@ const SettingsPage: React.FC = () => {
   const { language: uiLanguage, t } = useUiLanguage();
   const [envBackupActionError, setEnvBackupActionError] = useState<ParsedApiError | null>(null);
   const [envBackupActionSuccess, setEnvBackupActionSuccess] = useState<string>('');
-  const [screeningActionError, setScreeningActionError] = useState<ParsedApiError | null>(null);
-  const [screeningActionSuccess, setScreeningActionSuccess] = useState<string>('');
   const [isExportingEnv, setIsExportingEnv] = useState(false);
   const [isImportingEnv, setIsImportingEnv] = useState(false);
-  const [isUpdatingScreening, setIsUpdatingScreening] = useState(false);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [schedulerStatusRefreshToken, setSchedulerStatusRefreshToken] = useState(0);
   const [schedulerRuntimeEnabled, setSchedulerRuntimeEnabled] = useState<boolean | null>(null);
@@ -885,10 +869,7 @@ const SettingsPage: React.FC = () => {
   const rawActiveItems = itemsByCategory[activeCategory] || [];
   const rawActiveItemMap = new Map(rawActiveItems.map((item) => [item.key, String(item.value ?? '')]));
   const firstSetupStockCode = parseSetupStockList(getConfigItem(itemsByCategory.base || [], 'STOCK_LIST')?.value)[0] || '';
-  const screeningItem = (itemsByCategory.base || []).find((item) => item.key === 'SCREENING_ENABLED');
-  const screeningEnabled = String(screeningItem?.value ?? '').trim().toLowerCase() === 'true';
   const shouldShowFirstRunSetup = activeCategory === 'base';
-  const shouldShowScreeningSettings = activeCategory === 'base' && Boolean(screeningItem);
   const hasConfiguredChannels = Boolean((rawActiveItemMap.get('LLM_CHANNELS') || '').trim());
   const hasLitellmConfig = Boolean((rawActiveItemMap.get('LITELLM_CONFIG') || '').trim());
   const hasRuntimeSchedulerMismatch =
@@ -943,14 +924,9 @@ const SettingsPage: React.FC = () => {
     'ADMIN_AUTH_ENABLED',
     ...SCHEDULER_SETTING_KEYS,
   ]);
-  const BASE_HIDDEN_KEYS = new Set([
-    'SCREENING_ENABLED',
-  ]);
   const AGENT_HIDDEN_KEYS = new Set(['AGENT_GENERATION_BACKEND']);
   const activeItems =
-    activeCategory === 'base'
-      ? rawActiveItems.filter((item) => !BASE_HIDDEN_KEYS.has(item.key))
-    : activeCategory === 'ai_model'
+    activeCategory === 'ai_model'
       ? rawActiveItems.filter((item) => {
         if (hasConfiguredChannels && LLM_CHANNEL_KEY_RE.test(item.key)) {
           return false;
@@ -1041,42 +1017,12 @@ const SettingsPage: React.FC = () => {
       if (importResult.updatedKeys.some((key) => SCHEDULER_SETTING_KEYS.has(key))) {
         setSchedulerStatusRefreshToken((current) => current + 1);
       }
-      notifySystemConfigChanged();
       void refreshSetupStatus();
       setEnvBackupActionSuccess(t('settings.envImported'));
     } catch (error: unknown) {
       setEnvBackupActionError(getParsedApiError(error));
     } finally {
       setIsImportingEnv(false);
-    }
-  };
-
-  const updateScreeningEnabled = async (nextEnabled: boolean) => {
-    setScreeningActionError(null);
-    setScreeningActionSuccess('');
-    setIsUpdatingScreening(true);
-    try {
-      if (nextEnabled) {
-        await screeningApi.enable();
-        await refreshAfterExternalSave(['SCREENING_ENABLED']);
-        setScreeningActionSuccess(t('settings.enabledScreeningSuccess'));
-        return;
-      }
-
-      await systemConfigApi.update({
-        configVersion,
-        maskToken,
-        reloadNow: true,
-        items: [{ key: 'SCREENING_ENABLED', value: 'false' }],
-      });
-      notifyScreeningConfigChanged();
-      await refreshAfterExternalSave(['SCREENING_ENABLED']);
-      setScreeningActionSuccess(t('settings.disabledScreeningSuccess'));
-    } catch (error: unknown) {
-      setScreeningActionError(getParsedApiError(error));
-      await refreshAfterExternalSave(['SCREENING_ENABLED']);
-    } finally {
-      setIsUpdatingScreening(false);
     }
   };
 
@@ -1091,38 +1037,15 @@ const SettingsPage: React.FC = () => {
       ? [{ key: 'SCHEDULE_ENABLED', value: schedulerOverrideFromUi ? 'true' : 'false' }]
       : [];
     const changedItemsToSave = [...changedItems, ...schedulerSyncItem];
-    const changedScreeningItem = changedItems.find((item) => item.key === 'SCREENING_ENABLED');
     const changedSchedulerSettings = changedItemsToSave.some((item) => SCHEDULER_SETTING_KEYS.has(item.key));
     const result = await save(changedItemsToSave);
     if (!result.success) {
       return;
     }
-    notifySystemConfigChanged();
     if (changedSchedulerSettings) {
       setSchedulerStatusRefreshToken((current) => current + 1);
     }
     void refreshSetupStatus();
-    if (!changedScreeningItem) {
-      return;
-    }
-
-    setScreeningActionError(null);
-    setScreeningActionSuccess('');
-    try {
-      const isScreeningEnabled = changedScreeningItem.value.trim().toLowerCase() === 'true';
-      if (isScreeningEnabled) {
-        await screeningApi.enable();
-        await refreshAfterExternalSave(['SCREENING_ENABLED']);
-        setScreeningActionSuccess(t('settings.enabledScreeningSuccess'));
-        return;
-      }
-
-      notifyScreeningConfigChanged();
-      setScreeningActionSuccess(t('settings.disabledScreeningSuccess'));
-    } catch (error: unknown) {
-      setScreeningActionError(getParsedApiError(error));
-      await refreshAfterExternalSave(['SCREENING_ENABLED']);
-    }
   };
 
   const handleRunSetupSmoke = async () => {
@@ -1345,48 +1268,6 @@ const SettingsPage: React.FC = () => {
                 listSeparator=", "
                 t={t}
               />
-            ) : null}
-            {shouldShowScreeningSettings ? (
-              <SettingsSectionCard
-                title={t('settings.screening')}
-                description={t('settings.screeningDescription')}
-              >
-                <div className="flex flex-col gap-4 rounded-2xl border settings-border bg-background/35 px-4 py-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {screeningEnabled ? t('settings.screeningEnabled') : t('settings.screeningDisabled')}
-                    </p>
-                    <p className="mt-1 text-xs leading-6 text-muted-text">
-                      {t('settings.screeningSummary')}
-                    </p>
-                    <p className="mt-2 text-xs leading-6 text-amber-700 dark:text-amber-300">
-                      {t('settings.screeningRisk')}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      variant={screeningEnabled ? 'settings-secondary' : 'settings-primary'}
-                      onClick={() => void updateScreeningEnabled(!screeningEnabled)}
-                      disabled={isSaving || isLoading || isUpdatingScreening}
-                      isLoading={isUpdatingScreening}
-                      loadingText={screeningEnabled ? t('settings.disablingScreening') : t('settings.enablingScreening')}
-                    >
-                      {screeningEnabled ? t('settings.disableScreening') : t('settings.enableScreening')}
-                    </Button>
-                  </div>
-                </div>
-                {screeningActionError ? (
-                  <div className="mt-3">
-                    <ApiErrorAlert error={screeningActionError} />
-                  </div>
-                ) : null}
-                {!screeningActionError && screeningActionSuccess ? (
-                  <div className="mt-3">
-                    <SettingsAlert title={t('settings.actionSuccess')} message={screeningActionSuccess} variant="success" />
-                  </div>
-                ) : null}
-              </SettingsSectionCard>
             ) : null}
             {activeCategory === 'system' ? <AuthSettingsCard /> : null}
             {activeCategory === 'system' ? (

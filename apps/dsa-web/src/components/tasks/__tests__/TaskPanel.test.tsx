@@ -5,11 +5,11 @@ import type { TaskInfo } from '../../../types/analysis';
 
 const baseTask: TaskInfo = {
   taskId: 'task-1',
-  stockCode: '600519',
-  stockName: '贵州茅台',
+  stockCode: 'FPT',
+  stockName: 'FPT Corp',
   status: 'processing',
   progress: 40,
-  message: '正在抓取最新行情',
+  message: 'Fetching latest quotes',
   reportType: 'detailed',
   createdAt: '2026-03-21T08:00:00Z',
 };
@@ -26,8 +26,8 @@ describe('TaskPanel', () => {
           {
             ...baseTask,
             taskId: 'task-2',
-            stockCode: 'AAPL',
-            stockName: 'Apple',
+            stockCode: 'VCB',
+            stockName: 'Vietcombank',
             status: 'pending',
             analysisPhase: 'auto',
           },
@@ -35,8 +35,8 @@ describe('TaskPanel', () => {
       />,
     );
 
-    expect(screen.getByLabelText('请求阶段: 盘中')).toBeInTheDocument();
-    expect(screen.getByLabelText('请求阶段: 自动阶段')).toBeInTheDocument();
+    expect(screen.getByLabelText('Requested phase: Intraday')).toBeInTheDocument();
+    expect(screen.getByLabelText('Requested phase: Auto')).toBeInTheDocument();
   });
 
   it('renders active tasks with preserved dashboard panel styling', () => {
@@ -50,10 +50,10 @@ describe('TaskPanel', () => {
           {
             ...baseTask,
             taskId: 'task-2',
-            stockCode: 'AAPL',
-            stockName: 'Apple',
+            stockCode: 'VCB',
+            stockName: 'Vietcombank',
             status: 'pending',
-            message: '等待分析队列',
+            message: 'Waiting in analysis queue',
           },
         ]}
       />,
@@ -62,12 +62,12 @@ describe('TaskPanel', () => {
     expect(screen.getByText('Analysis tasks')).toBeInTheDocument();
     expect(screen.getByText('1 processing')).toBeInTheDocument();
     expect(screen.getByText('1 pending')).toBeInTheDocument();
-    expect(screen.getByText('贵州茅台')).toBeInTheDocument();
-    expect(screen.getByText('AAPL')).toBeInTheDocument();
-    expect(screen.getByLabelText('Task 状态：分析中')).toBeInTheDocument();
-    expect(screen.getByText('运行诊断')).toBeInTheDocument();
+    expect(screen.getByText('FPT Corp')).toBeInTheDocument();
+    expect(screen.getByText('VCB')).toBeInTheDocument();
+    expect(screen.getByLabelText('Task status: Processing')).toBeInTheDocument();
+    expect(screen.getByText('Diagnostics')).toBeInTheDocument();
     expect(screen.getAllByText('trace-task-1')).toHaveLength(2);
-    expect(screen.queryByText(/请求阶段:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Requested phase:/)).not.toBeInTheDocument();
     expect(container.querySelector('.home-panel-card')).toBeTruthy();
     expect(container.querySelector('.home-subpanel')).toBeTruthy();
   });
@@ -83,8 +83,8 @@ describe('TaskPanel', () => {
           {
             ...baseTask,
             taskId: 'task-2',
-            stockCode: 'AAPL',
-            stockName: 'Apple',
+            stockCode: 'VCB',
+            stockName: 'Vietcombank',
             status: 'pending',
             progress: 0,
           },
@@ -116,10 +116,10 @@ describe('TaskPanel', () => {
         tasks={[
           {
             ...baseTask,
-            stockCode: '601869.SH',
-            stockName: '长飞光纤',
+            stockCode: 'HPG',
+            stockName: 'Hoa Phat Group',
             progress: 32,
-            message: '长飞光纤: 请求阶段: 自动阶段',
+            message: 'Hoa Phat Group: Requested phase: Auto',
             analysisPhase: 'auto',
             traceId: 'c5b9665a64e3b9f42ad9f',
           },
@@ -131,15 +131,15 @@ describe('TaskPanel', () => {
     const item = screen.getByTestId('task-panel-item');
     expect(item).toHaveClass('grid');
     expect(item).not.toHaveClass('flex');
-    expect(screen.getByText('长飞光纤')).toHaveClass('truncate');
-    expect(screen.getByText('601869.SH')).toHaveClass('shrink-0');
+    expect(screen.getByText('Hoa Phat Group')).toHaveClass('truncate');
+    expect(screen.getByText('HPG')).toHaveClass('shrink-0');
     expect(screen.getByText('32%')).toBeInTheDocument();
 
     const diagnosticsSummary = screen.getByTestId('task-panel-diagnostics-summary');
     expect(diagnosticsSummary).toHaveClass('grid-cols-[auto_minmax(0,1fr)_auto]');
-    expect(screen.getByText('运行诊断')).toHaveClass('whitespace-nowrap');
+    expect(screen.getByText('Diagnostics')).toHaveClass('whitespace-nowrap');
     expect(screen.getByText('c5b9665a64...')).toHaveClass('truncate');
-    expect(screen.getByRole('button', { name: 'View 长飞光纤 run flow' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View Hoa Phat Group run flow' })).toBeInTheDocument();
   });
 
   it('opens the run-flow view from an active task icon button', () => {
@@ -151,7 +151,7 @@ describe('TaskPanel', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'View 贵州茅台 run flow' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View FPT Corp run flow' }));
 
     expect(onOpenRunFlow).toHaveBeenCalledWith(baseTask);
   });
@@ -163,15 +163,15 @@ describe('TaskPanel', () => {
           {
             ...baseTask,
             status: 'cancel_requested',
-            message: '正在请求取消',
+            message: 'Requesting cancellation',
           },
         ]}
       />,
     );
 
-    expect(screen.getByText('贵州茅台')).toBeInTheDocument();
-    expect(screen.getByLabelText('Task 状态：请求取消')).toBeInTheDocument();
-    expect(screen.queryByText('失败')).not.toBeInTheDocument();
+    expect(screen.getByText('FPT Corp')).toBeInTheDocument();
+    expect(screen.getByLabelText('Task status: Cancel requested')).toBeInTheDocument();
+    expect(screen.queryByText('Failed')).not.toBeInTheDocument();
   });
 
   it('does not keep cancelled terminal tasks in the active task panel', () => {

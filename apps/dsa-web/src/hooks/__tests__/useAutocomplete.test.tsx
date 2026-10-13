@@ -15,13 +15,13 @@ vi.mock('../../utils/searchStocks', () => ({
 
 const mockIndex: StockIndexItem[] = [
   {
-    canonicalCode: '600519.SH',
-    displayCode: '600519',
-    nameZh: '贵州茅台',
-    pinyinFull: 'guizhoumaotai',
-    pinyinAbbr: 'gzmt',
-    aliases: ['茅台'],
-    market: 'CN',
+    canonicalCode: 'HPG',
+    displayCode: 'HPG',
+    nameZh: 'Hoa Phat',
+    pinyinFull: 'hoaphat',
+    pinyinAbbr: 'hp',
+    aliases: ['Hoa Phat'],
+    market: 'VN',
     assetType: 'stock',
     active: true,
     popularity: 100,
@@ -46,7 +46,7 @@ describe('useAutocomplete', () => {
     const { result } = renderHook(() => useAutocomplete(mockIndex, { debounceMs: 10 }));
 
     act(() => {
-      result.current.setQuery('600519');
+      result.current.setQuery('HPG');
     });
 
     act(() => {
@@ -62,10 +62,10 @@ describe('useAutocomplete', () => {
   it('keeps suggestions open without auto-highlighting the first result', () => {
     searchStocksMock.mockReturnValue([
       {
-        canonicalCode: '600519.SH',
-        displayCode: '600519',
-        nameZh: '贵州茅台',
-        market: 'CN',
+        canonicalCode: 'HPG',
+        displayCode: 'HPG',
+        nameZh: 'Hoa Phat',
+        market: 'VN',
         matchType: 'exact',
         matchField: 'code',
         score: 100,
@@ -75,7 +75,7 @@ describe('useAutocomplete', () => {
     const { result } = renderHook(() => useAutocomplete(mockIndex, { debounceMs: 10 }));
 
     act(() => {
-      result.current.setQuery('600519');
+      result.current.setQuery('HPG');
     });
 
     act(() => {

@@ -5,7 +5,7 @@ import { RunFlowEventList } from '../RunFlowEventList';
 
 // Fixture bám sát hợp đồng thật của backend (`src/services/run_flow.py`): sự kiện dự phòng
 // là `provider_run` kèm `fallbackFrom`/`fallbackTo`, KHÔNG phải một `type` riêng. Bản cũ
-// dùng `type: 'provider_fallback'` không tồn tại, và chỉ lọt vì bộ lọc cũ khớp chuỗi "降级"
+// dùng `type: 'provider_fallback'` không tồn tại, và chỉ lọt vì bộ lọc cũ khớp chuỗi "Suy giảm"
 // trong tiêu đề — tức là test xanh nhờ so khớp văn bản chứ không nhờ đúng hợp đồng.
 // Fixtures follow the real backend contract: a fallback is a `provider_run` carrying
 // `fallbackFrom`/`fallbackTo`, not a dedicated event type.
@@ -68,7 +68,7 @@ describe('RunFlowEventList', () => {
   });
 
   it('keeps the fallback filter working when no title or message is in English', () => {
-    // Hồi quy: bộ lọc cũ dùng regex `/fallback|retry|降级|重试/` trên tiêu đề và message,
+    // Hồi quy: bộ lọc cũ dùng regex `/fallback|retry|Suy giảm|Thử lại/` trên tiêu đề và message,
     // nên chỉ cần đổi ngôn ngữ nhãn là hỏng âm thầm. Ca này giữ cho lỗi đó không quay lại.
     // Regression guard for the old text-matching filter.
     const vietnameseOnly: RunFlowEvent[] = [

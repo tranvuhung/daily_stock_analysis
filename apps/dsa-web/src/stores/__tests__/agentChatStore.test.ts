@@ -142,7 +142,7 @@ describe('agentChatStore.startStream', () => {
 
     const streamPromise = useAgentChatStore.getState().startStream(
       {
-        message: 'Analyze AAPL',
+        message: 'Analyze FPT',
         session_id: 'session-test',
         request_id: 'request-live-codex',
       },
@@ -176,7 +176,7 @@ describe('agentChatStore.startStream', () => {
     ));
 
     const streamPromise = useAgentChatStore.getState().startStream({
-      message: '立即停止',
+      message: 'Dừng ngay',
       session_id: 'session-test',
       request_id: 'request-before-accepted',
     });
@@ -207,7 +207,7 @@ describe('agentChatStore.startStream', () => {
 
     const streamPromise = useAgentChatStore.getState().startStream(
       {
-        message: 'Analyze AAPL',
+        message: 'Analyze FPT',
         session_id: 'session-test',
         request_id: 'request-old-session',
       },
@@ -218,8 +218,8 @@ describe('agentChatStore.startStream', () => {
 
     streamController.enqueue(encoder.encode([
       accepted('request-old-session', 'session-test'),
-      'data: {"type":"thinking","message":"旧请求处理中"}',
-      'data: {"type":"error","message":"旧请求失败"}',
+      'data: {"type":"thinking","message":"Yêu cầu cũ đang xử lý"}',
+      'data: {"type":"error","message":"Yêu cầu cũ thất bại"}',
     ].join('\n')));
     streamController.close();
     await streamPromise;
@@ -248,7 +248,7 @@ describe('agentChatStore.startStream', () => {
 
     const streamPromise = useAgentChatStore.getState().startStream(
       {
-        message: 'Analyze AAPL',
+        message: 'Analyze FPT',
         session_id: 'session-test',
         request_id: 'request-old-chat',
       },
@@ -260,8 +260,8 @@ describe('agentChatStore.startStream', () => {
 
     streamController.enqueue(encoder.encode([
       accepted('request-old-chat', 'session-test'),
-      'data: {"type":"thinking","message":"旧请求处理中"}',
-      'data: {"type":"done","success":true,"content":"旧请求结果"}',
+      'data: {"type":"thinking","message":"Yêu cầu cũ đang xử lý"}',
+      'data: {"type":"done","success":true,"content":"Kết quả yêu cầu cũ"}',
     ].join('\n')));
     streamController.close();
     await streamPromise;
@@ -281,19 +281,19 @@ describe('agentChatStore.startStream', () => {
     vi.mocked(agentApi.chatStream).mockResolvedValue(
       createStreamResponse([
         accepted('request-success', 'session-test', 'codex_app_server'),
-        'data: {"type":"thinking","step":1,"message":"分析中"}',
-        'data: {"type":"tool_done","tool":"quote","display_name":"行情","success":true,"duration":0.3}',
-        'data: {"type":"done","success":true,"content":"最终分析结果","backend":"codex_app_server"}',
+        'data: {"type":"thinking","step":1,"message":"Đang phân tích"}',
+        'data: {"type":"tool_done","tool":"quote","display_name":"Giá","success":true,"duration":0.3}',
+        'data: {"type":"done","success":true,"content":"Kết quả phân tích cuối","backend":"codex_app_server"}',
       ]),
     );
 
     await useAgentChatStore.getState().startStream(
       {
-        message: '分析茅台',
+        message: 'Phân tích HPG',
         session_id: 'session-test',
         request_id: 'request-success',
       },
-      { skillName: '趋势技能', onAccepted },
+      { skillName: 'Kỹ năng xu hướng', onAccepted },
     );
 
     const state = useAgentChatStore.getState();
@@ -307,14 +307,14 @@ describe('agentChatStore.startStream', () => {
     expect(state.messages).toHaveLength(2);
     expect(state.messages[0]).toMatchObject({
       role: 'user',
-      content: '分析茅台',
-      skillName: '趋势技能',
+      content: 'Phân tích HPG',
+      skillName: 'Kỹ năng xu hướng',
       backend: 'codex_app_server',
     });
     expect(state.messages[1]).toMatchObject({
       role: 'assistant',
-      content: '最终分析结果',
-      skillName: '趋势技能',
+      content: 'Kết quả phân tích cuối',
+      skillName: 'Kỹ năng xu hướng',
       backend: 'codex_app_server',
     });
     expect(state.messages[1].thinkingSteps).toHaveLength(2);
@@ -326,12 +326,12 @@ describe('agentChatStore.startStream', () => {
     vi.mocked(agentApi.chatStream).mockResolvedValue(
       createStreamResponse([
         accepted('request-store-session', 'session-from-store'),
-        'data: {"type":"done","success":true,"content":"分析完成"}',
+        'data: {"type":"done","success":true,"content":"Phân tích xong"}',
       ]),
     );
 
     await useAgentChatStore.getState().startStream({
-      message: '分析茅台',
+      message: 'Phân tích HPG',
       request_id: 'request-store-session',
     });
 
@@ -354,7 +354,7 @@ describe('agentChatStore.startStream', () => {
     );
 
     await useAgentChatStore.getState().startStream({
-      message: '分析茅台',
+      message: 'Phân tích HPG',
       session_id: 'session-test',
       request_id: 'request-duplicate',
     });
@@ -375,7 +375,7 @@ describe('agentChatStore.startStream', () => {
     );
 
     await useAgentChatStore.getState().startStream({
-      message: '分析茅台',
+      message: 'Phân tích HPG',
       session_id: 'session-test',
       request_id: 'request-not-accepted',
     });
@@ -393,12 +393,12 @@ describe('agentChatStore.startStream', () => {
     vi.mocked(agentApi.chatStream).mockResolvedValue(
       createStreamResponse([
         accepted('request-cancelled', 'session-test', 'codex_app_server'),
-        'data: {"type":"done","success":false,"content":"","error":"本次 Codex Agent 问股已取消。","backend":"codex_app_server","error_code":"cancelled"}',
+        'data: {"type":"done","success":false,"content":"","error":"Lượt hỏi đáp Codex Agent đã bị hủy.","backend":"codex_app_server","error_code":"cancelled"}',
       ]),
     );
 
     await useAgentChatStore.getState().startStream({
-      message: '分析茅台',
+      message: 'Phân tích HPG',
       session_id: 'session-test',
       request_id: 'request-cancelled',
     });
@@ -413,18 +413,18 @@ describe('agentChatStore.startStream', () => {
     vi.mocked(agentApi.chatStream).mockResolvedValue(
       createStreamResponse([
         accepted('request-skills'),
-        'data: {"type":"done","success":true,"content":"多策略分析结果"}',
+        'data: {"type":"done","success":true,"content":"Kết quả phân tích đa chiến lược"}',
       ]),
     );
 
     await useAgentChatStore.getState().startStream(
       {
-        message: '分析茅台',
+        message: 'Phân tích HPG',
         session_id: 'session-test',
         request_id: 'request-skills',
         skills: ['bull_trend', 'ma_golden_cross'],
       },
-      { skillNames: ['趋势分析', '均线金叉'] },
+      { skillNames: ['Phân tích xu hướng', 'Giao cắt MA'] },
     );
 
     const state = useAgentChatStore.getState();
@@ -433,16 +433,16 @@ describe('agentChatStore.startStream', () => {
       role: 'user',
       skills: ['bull_trend', 'ma_golden_cross'],
       skill: 'bull_trend',
-      skillNames: ['趋势分析', '均线金叉'],
-      skillName: '趋势分析、均线金叉',
+      skillNames: ['Phân tích xu hướng', 'Giao cắt MA'],
+      skillName: 'Phân tích xu hướng, Giao cắt MA',
     });
     expect(state.messages[1]).toMatchObject({
       role: 'assistant',
-      content: '多策略分析结果',
+      content: 'Kết quả phân tích đa chiến lược',
       skills: ['bull_trend', 'ma_golden_cross'],
       skill: 'bull_trend',
-      skillNames: ['趋势分析', '均线金叉'],
-      skillName: '趋势分析、均线金叉',
+      skillNames: ['Phân tích xu hướng', 'Giao cắt MA'],
+      skillName: 'Phân tích xu hướng, Giao cắt MA',
     });
   });
 
@@ -450,12 +450,12 @@ describe('agentChatStore.startStream', () => {
     vi.mocked(agentApi.chatStream).mockResolvedValue(
       createStreamResponse([
         accepted('request-interrupted'),
-        'data: {"type":"thinking","step":1,"message":"分析中"}',
+        'data: {"type":"thinking","step":1,"message":"Đang phân tích"}',
       ]),
     );
 
     await useAgentChatStore.getState().startStream({
-      message: '分析茅台',
+      message: 'Phân tích HPG',
       session_id: 'session-test',
       request_id: 'request-interrupted',
     });
@@ -478,7 +478,7 @@ describe('agentChatStore.startStream', () => {
     );
 
     await useAgentChatStore.getState().startStream({
-      message: '分析茅台',
+      message: 'Phân tích HPG',
       session_id: 'session-test',
       request_id: 'request-failure',
     });
@@ -499,7 +499,7 @@ describe('agentChatStore.startStream', () => {
     );
 
     await useAgentChatStore.getState().startStream({
-      message: '分析茅台',
+      message: 'Phân tích HPG',
       session_id: 'session-test',
       request_id: 'request-timeout',
     });
@@ -520,13 +520,13 @@ describe('agentChatStore.startStream', () => {
     );
 
     await useAgentChatStore.getState().startStream({
-      message: '分析茅台',
+      message: 'Phân tích HPG',
       session_id: 'session-test',
       request_id: 'request-codex-error',
     });
 
     const error = useAgentChatStore.getState().chatError;
-    expect(error?.message).toContain('Codex Agent');
+    expect(error?.message).toContain('Codex agent');
     expect(error?.message).toContain('Agent settings');
     expect(error?.message).not.toContain('API Key');
   });
@@ -538,19 +538,19 @@ describe('agentChatStore.switchSession', () => {
     vi.mocked(agentApi.getChatSessionMessages).mockResolvedValue({
       session_id: 'session-2',
       messages: [
-        { id: 'msg-2', role: 'assistant', content: '历史回复', created_at: null },
+        { id: 'msg-2', role: 'assistant', content: 'Phản hồi lịch sử', created_at: null },
       ],
       session_state: { selected_skill_ids: ['risk'] },
     });
     useAgentChatStore.setState({
       loading: true,
-      progressSteps: [{ type: 'thinking', message: '正在制定分析路径...' }],
+      progressSteps: [{ type: 'thinking', message: 'Đang lập lộ trình phân tích...' }],
       abortController: ac,
       chatError: {
         title: 'Request failed',
-        message: '旧错误',
+        message: 'Lỗi cũ',
         category: 'unknown',
-        rawMessage: '旧错误',
+        rawMessage: 'Lỗi cũ',
       },
     });
 
@@ -564,7 +564,7 @@ describe('agentChatStore.switchSession', () => {
     expect(state.abortController).toBeNull();
     expect(state.chatError).toBeNull();
     expect(state.messages).toEqual([
-      { id: 'msg-2', role: 'assistant', content: '历史回复' },
+      { id: 'msg-2', role: 'assistant', content: 'Phản hồi lịch sử' },
     ]);
     expect(state.selectedSkillIds).toEqual(['risk']);
   });
@@ -587,14 +587,14 @@ describe('agentChatStore.switchSession', () => {
 
     sessionB.resolve({
       session_id: 'session-b',
-      messages: [{ id: 'msg-b', role: 'assistant', content: 'B 回复', created_at: null }],
+      messages: [{ id: 'msg-b', role: 'assistant', content: 'Phản hồi B', created_at: null }],
       session_state: { selected_skill_ids: ['risk'] },
     });
     await switchToB;
 
     sessionA.resolve({
       session_id: 'session-a',
-      messages: [{ id: 'msg-a', role: 'assistant', content: 'A 回复', created_at: null }],
+      messages: [{ id: 'msg-a', role: 'assistant', content: 'Phản hồi A', created_at: null }],
       session_state: { selected_skill_ids: ['technical'] },
     });
     await switchToA;
@@ -602,7 +602,7 @@ describe('agentChatStore.switchSession', () => {
     const state = useAgentChatStore.getState();
     expect(state.sessionId).toBe('session-b');
     expect(state.messages).toEqual([
-      { id: 'msg-b', role: 'assistant', content: 'B 回复' },
+      { id: 'msg-b', role: 'assistant', content: 'Phản hồi B' },
     ]);
     expect(state.selectedSkillIds).toEqual(['risk']);
   });
@@ -624,7 +624,7 @@ describe('agentChatStore session Skill state', () => {
     vi.mocked(agentApi.getChatSessionMessages).mockResolvedValue({
       session_id: 'saved-session',
       messages: [
-        { id: 'msg-1', role: 'user', content: 'Analyze AAPL', created_at: null },
+        { id: 'msg-1', role: 'user', content: 'Analyze FPT', created_at: null },
       ],
       session_state: { selected_skill_ids: ['technical', 'risk'] },
     });
@@ -652,7 +652,7 @@ describe('agentChatStore session Skill state', () => {
     vi.mocked(agentApi.getChatSessionMessages).mockResolvedValue({
       session_id: 'legacy-session',
       messages: [
-        { id: 'msg-1', role: 'user', content: 'Analyze AAPL', created_at: null },
+        { id: 'msg-1', role: 'user', content: 'Analyze FPT', created_at: null },
       ],
       session_state: { selected_skill_ids: null },
     });

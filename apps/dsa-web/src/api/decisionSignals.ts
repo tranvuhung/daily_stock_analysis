@@ -307,7 +307,7 @@ function toSnakeFeedbackPayload(payload: DecisionSignalFeedbackRequest): Record<
 function toLatestStockCodePath(stockCode: string): string {
   if (stockCode.includes('/')) {
     throw new Error(
-      'DecisionSignal latest stockCode cannot contain "/" because the backend route accepts a single path segment; use 00700, HK00700, or 00700.HK.',
+      'DecisionSignal latest stockCode cannot contain "/" because the backend route accepts a single path segment; use a plain ticker such as FPT or FPT.VN.',
     );
   }
   return encodeURIComponent(stockCode);

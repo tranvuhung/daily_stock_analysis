@@ -1,20 +1,20 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { ReportOverview } from '../ReportOverview';
 
 const baseMeta = {
   queryId: 'q-1',
-  stockCode: '600519',
-  stockName: '贵州茅台',
+  stockCode: 'FPT',
+  stockName: 'FPT Corp',
   reportType: 'detailed' as const,
   reportLanguage: 'vi' as const,
   createdAt: '2026-03-21T08:00:00Z',
 };
 
 const baseSummary = {
-  analysisSummary: '趋势维持强势',
-  operationAdvice: '继续观察买点',
-  trendPrediction: '短线震荡偏强',
+  analysisSummary: 'Xu hướng duy trì tích cực',
+  operationAdvice: 'Tiếp tục theo dõi điểm mua',
+  trendPrediction: 'Ngắn hạn dao động tích cực',
   sentimentScore: 78,
 };
 
@@ -25,9 +25,9 @@ describe('ReportOverview', () => {
         meta={{
           ...baseMeta,
           marketPhaseSummary: {
-            market: 'cn',
+            market: 'vn',
             phase: 'intraday',
-            marketLocalTime: '2026-03-21T10:30:00+08:00',
+            marketLocalTime: '2026-03-21T10:30:00+07:00',
             sessionDate: '2026-03-21',
             effectiveDailyBarDate: '2026-03-20',
             isTradingDay: true,
@@ -44,9 +44,9 @@ describe('ReportOverview', () => {
       />,
     );
 
-    expect(screen.getByLabelText('市场阶段: CN · 盘中')).toBeInTheDocument();
-    expect(screen.getByText('市场阶段: CN · 盘中')).toBeVisible();
-    expect(screen.getByLabelText('Partial bar')).toBeInTheDocument();
+    expect(screen.getByLabelText('Giai đoạn thị trường: VN · Trong phiên')).toBeInTheDocument();
+    expect(screen.getByText('Giai đoạn thị trường: VN · Trong phiên')).toBeVisible();
+    expect(screen.getByLabelText('Nến chưa hoàn chỉnh')).toBeInTheDocument();
   });
 
   it('renders English final market phase and partial-bar labels', () => {
@@ -56,9 +56,9 @@ describe('ReportOverview', () => {
           ...baseMeta,
           reportLanguage: 'en',
           marketPhaseSummary: {
-            market: 'us',
+            market: 'vn',
             phase: 'postmarket',
-            marketLocalTime: '2026-03-21T16:30:00-04:00',
+            marketLocalTime: '2026-03-21T15:30:00+07:00',
             sessionDate: '2026-03-21',
             effectiveDailyBarDate: '2026-03-21',
             isTradingDay: true,
@@ -75,7 +75,7 @@ describe('ReportOverview', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Market phase: US · Post-market')).toBeInTheDocument();
+    expect(screen.getByLabelText('Market phase: VN · Post-market')).toBeInTheDocument();
     expect(screen.getByLabelText('Partial bar')).toBeInTheDocument();
   });
 
@@ -104,188 +104,15 @@ describe('ReportOverview', () => {
       />,
     );
 
-    expect(screen.getByText('市场阶段: 阶段未知')).toBeVisible();
-    expect(screen.queryByText('Partial bar')).not.toBeInTheDocument();
+    expect(screen.getByText('Giai đoạn thị trường: Không rõ giai đoạn')).toBeVisible();
+    expect(screen.queryByText('Nến chưa hoàn chỉnh')).not.toBeInTheDocument();
   });
 
   it('does not render a market phase placeholder for legacy reports', () => {
     render(<ReportOverview meta={baseMeta} summary={baseSummary} />);
 
-    expect(screen.queryByText(/Market phase/)).not.toBeInTheDocument();
-    expect(screen.queryByText('Partial bar')).not.toBeInTheDocument();
-  });
-
-  it('renders related boards with leading and lagging markers', () => {
-    render(
-      <ReportOverview
-        meta={baseMeta}
-        summary={baseSummary}
-        details={{
-          belongBoards: [
-            { name: ' 白酒 ', type: '行业' },
-            { name: '消费', type: '概念' },
-            { name: '新能源' },
-          ],
-          sectorRankings: {
-            top: [{ name: '白酒', changePct: 2.31 }],
-            bottom: [{ name: '新能源', changePct: -1.2 }],
-          },
-          conceptRankings: {
-            top: [{ name: '消费', changePct: 4.56 }],
-            bottom: [],
-          },
-        }}
-      />,
-    );
-
-    expect(screen.getByText('Nhóm ngành liên quan')).toBeInTheDocument();
-    expect(screen.getByText('白酒')).toBeInTheDocument();
-    expect(screen.getAllByText('Dẫn dắt')).toHaveLength(2);
-    expect(screen.getByText('+2.31%')).toBeInTheDocument();
-    expect(screen.getByText('+4.56%')).toBeInTheDocument();
-    expect(screen.getByText('Suy yếu')).toBeInTheDocument();
-    expect(screen.getByText('-1.20%')).toBeInTheDocument();
-    expect(screen.queryByText('Trung tính')).not.toBeInTheDocument();
-  });
-
-  it('does not apply industry ranking to a concept board with the same name', () => {
-    render(
-      <ReportOverview
-        meta={baseMeta}
-        summary={baseSummary}
-        details={{
-          belongBoards: [{ name: '白酒', type: '概念' }],
-          sectorRankings: {
-            top: [{ name: '白酒', changePct: 2.31 }],
-            bottom: [],
-          },
-          conceptRankings: {
-            top: [],
-            bottom: [{ name: '白酒', changePct: -3.2 }],
-          },
-        }}
-      />,
-    );
-
-    expect(screen.getByText('白酒')).toBeInTheDocument();
-    expect(screen.getByText('Nhóm ngành liên quan')).toBeInTheDocument();
-    expect(screen.getByText('Suy yếu')).toBeInTheDocument();
-    expect(screen.getByText('-3.20%')).toBeInTheDocument();
-    expect(screen.queryByText('+2.31%')).not.toBeInTheDocument();
-  });
-
-  it('renders untyped boards in a single related-board row with ranking matches', () => {
-    const conceptRankingBoard = '榜单样例甲';
-    const fallbackConceptBoard = '未标注板块';
-    const sectorRankingBoard = '榜单样例乙';
-
-    render(
-      <ReportOverview
-        meta={baseMeta}
-        summary={baseSummary}
-        details={{
-          belongBoards: [
-            { name: conceptRankingBoard },
-            { name: fallbackConceptBoard },
-            { name: sectorRankingBoard },
-          ],
-          sectorRankings: {
-            top: [{ name: sectorRankingBoard, changePct: 1.11 }],
-            bottom: [],
-          },
-          conceptRankings: {
-            top: [{ name: conceptRankingBoard, changePct: 3.21 }],
-            bottom: [],
-          },
-        }}
-      />,
-    );
-
-    const relatedBoardsRegion = screen.getByRole('region', { name: 'Nhóm ngành liên quan' });
-
-    expect(within(relatedBoardsRegion).getByText(sectorRankingBoard)).toBeInTheDocument();
-    expect(within(relatedBoardsRegion).getByText(conceptRankingBoard)).toBeInTheDocument();
-    expect(within(relatedBoardsRegion).getByText(fallbackConceptBoard)).toBeInTheDocument();
-    expect(within(relatedBoardsRegion).getByText('+3.21%')).toBeInTheDocument();
-  });
-
-  it('places related boards below action advice in one horizontal row', () => {
-    const { container } = render(
-      <ReportOverview
-        meta={baseMeta}
-        summary={baseSummary}
-        details={{
-          belongBoards: [
-            { name: '白酒', type: '行业' },
-            { name: '消费', type: '概念' },
-            { name: '高端制造' },
-            { name: '沪股通' },
-          ],
-        }}
-      />,
-    );
-
-    const actionAdviceTitle = screen.getByText('Khuyến nghị hành động');
-    const relatedBoardsRegion = screen.getByRole('region', { name: 'Nhóm ngành liên quan' });
-    const boardLists = container.querySelectorAll('.home-related-board-list');
-
-    expect(actionAdviceTitle.compareDocumentPosition(relatedBoardsRegion) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText('Nhóm ngành liên quan')).toBeInTheDocument();
-    expect(screen.getByText('沪股通')).toBeInTheDocument();
-    expect(boardLists[0]).toHaveClass(
-      'flex-nowrap',
-      'overflow-x-auto',
-      'w-full',
-      'min-w-0',
-      'max-w-full',
-      'touch-pan-x',
-    );
-  });
-
-  it('shows board list when rankings are unavailable', () => {
-    render(
-      <ReportOverview
-        meta={baseMeta}
-        summary={baseSummary}
-        details={{
-          belongBoards: [{ name: '半导体', type: '行业' }],
-        }}
-      />,
-    );
-
-    expect(screen.getByText('Nhóm ngành liên quan')).toBeInTheDocument();
-    expect(screen.getByText('半导体')).toBeInTheDocument();
-    expect(screen.queryByText('Trung tính')).not.toBeInTheDocument();
-    expect(screen.queryByText('Dẫn dắt')).not.toBeInTheDocument();
-    expect(screen.queryByText('Suy yếu')).not.toBeInTheDocument();
-  });
-
-  it('shows only the board when a matching ranking has no change percent', () => {
-    render(
-      <ReportOverview
-        meta={baseMeta}
-        summary={baseSummary}
-        details={{
-          belongBoards: [{ name: '白酒', type: '行业' }],
-          sectorRankings: {
-            top: [{ name: '白酒' }],
-            bottom: [],
-          },
-        }}
-      />,
-    );
-
-    expect(screen.getByText('Nhóm ngành liên quan')).toBeInTheDocument();
-    expect(screen.getByText('白酒')).toBeInTheDocument();
-    expect(screen.queryByText('行业')).not.toBeInTheDocument();
-    expect(screen.queryByText('Dẫn dắt')).not.toBeInTheDocument();
-    expect(screen.queryByText('Suy yếu')).not.toBeInTheDocument();
-  });
-
-  it('hides related boards section when no boards are available', () => {
-    render(<ReportOverview meta={baseMeta} summary={baseSummary} details={{ belongBoards: [] }} />);
-
-    expect(screen.queryByText('LIÊN THÔNG NHÓM NGÀNH')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Giai đoạn thị trường/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Nến chưa hoàn chỉnh')).not.toBeInTheDocument();
   });
 
   it('renders the persisted empty-news disclosure beside the core conclusion', () => {
@@ -294,40 +121,19 @@ describe('ReportOverview', () => {
         meta={baseMeta}
         summary={baseSummary}
         details={{
-          emptyNewsDisclosure: '⚠️ 未配置搜索渠道，本次分析未纳入新闻面证据。',
+          emptyNewsDisclosure: '⚠️ Chưa cấu hình kênh tìm kiếm, lượt phân tích này không có bằng chứng tin tức.',
         }}
       />,
     );
 
-    expect(screen.getByRole('note')).toHaveTextContent('未配置搜索渠道');
-    expect(screen.getByRole('note')).toHaveTextContent('未纳入新闻面证据');
-  });
-
-  it('fails open on malformed ranking payloads', () => {
-    render(
-      <ReportOverview
-        meta={baseMeta}
-        summary={baseSummary}
-        details={{
-          belongBoards: [{ name: ' 白酒 ' }],
-          sectorRankings: {
-            top: {} as unknown as never[],
-            bottom: [{ name: '白酒', changePct: '-2.5%' as unknown as number }],
-          },
-        }}
-      />,
-    );
-
-    expect(screen.getByText('Nhóm ngành liên quan')).toBeInTheDocument();
-    expect(screen.getByText('白酒')).toBeInTheDocument();
-    expect(screen.getByText('Suy yếu')).toBeInTheDocument();
-    expect(screen.getByText('-2.50%')).toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent('Chưa cấu hình kênh tìm kiếm');
+    expect(screen.getByRole('note')).toHaveTextContent('không có bằng chứng tin tức');
   });
 
   it('hides the stock-only watchlist card for index reports', () => {
     render(
       <ReportOverview
-        meta={{ ...baseMeta, stockCode: 'sh000016', assetType: 'index' }}
+        meta={{ ...baseMeta, stockCode: 'VNINDEX', assetType: 'index' }}
         summary={baseSummary}
         watchlist={{
           isInWatchlist: () => false,
@@ -345,7 +151,7 @@ describe('ReportOverview', () => {
   it('keeps the stock-only watchlist card for stock reports', () => {
     render(
       <ReportOverview
-        meta={{ ...baseMeta, stockCode: '600519', assetType: 'stock' }}
+        meta={{ ...baseMeta, stockCode: 'FPT', assetType: 'stock' }}
         summary={baseSummary}
         watchlist={{
           isInWatchlist: () => false,
@@ -363,7 +169,7 @@ describe('ReportOverview', () => {
   it('keeps the stock-only watchlist card when assetType is absent (legacy)', () => {
     render(
       <ReportOverview
-        meta={{ ...baseMeta, stockCode: '600519' }}
+        meta={{ ...baseMeta, stockCode: 'FPT' }}
         summary={baseSummary}
         watchlist={{
           isInWatchlist: () => false,

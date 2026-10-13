@@ -86,8 +86,8 @@ describe('run-flow label localization', () => {
   });
 
   it('accepts both camelCase and snake_case metadata keys', () => {
-    const snake = providerNode({ metadata: { data_type: 'chip' } });
-    expect(getRunFlowNodeLabel(snake, en)).toBe('Chip structure');
+    const snake = providerNode({ metadata: { data_type: 'realtime_quote' } });
+    expect(getRunFlowNodeLabel(snake, en)).toBe('Realtime quote');
   });
 });
 
@@ -169,7 +169,7 @@ describe('run-flow event filters', () => {
 describe('run-flow provider_run messages', () => {
   const failed = (metadata: Record<string, unknown>) => event({
     severity: 'danger',
-    message: 'News Tavily failed: 过滤后无有效新闻',
+    message: 'News Tavily failed: Không còn tin hợp lệ sau khi lọc',
     metadata: { provider: 'Tavily', dataType: 'news_search', ...metadata },
   });
 
@@ -204,7 +204,7 @@ describe('run-flow provider_run messages', () => {
     const node = providerNode({
       status: 'failed',
       provider: 'Tavily',
-      message: 'News Tavily failed: 过滤后无有效新闻',
+      message: 'News Tavily failed: Không còn tin hợp lệ sau khi lọc',
       metadata: { provider: 'Tavily', dataType: 'news_search', errorType: 'NoUsableNews' },
     });
     expect(getRunFlowNodeMessage(node, vi)).toBe('Tin tức Tavily thất bại: không còn tin hợp lệ sau khi lọc');

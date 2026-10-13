@@ -343,36 +343,6 @@ export function parseApiError(error: unknown): ParsedApiError {
     });
   }
 
-  if (errorCode === 'screening_unavailable' || includesAny(matchText, ['screening initialization failed'])) {
-    return createParsedApiError({
-      title: 'Screening is not ready',
-      message: 'Screening is temporarily unavailable; check the strategy configuration, data dependencies and service logs.',
-      rawMessage,
-      status,
-      category: 'http_error',
-    });
-  }
-
-  if (errorCode === 'screening_screen_task_not_found') {
-    return createParsedApiError({
-      title: 'Screening task cannot be restored',
-      message: 'The server could not find this screening task — the backend may have restarted or the task record was cleared. Run the screening again.',
-      rawMessage,
-      status,
-      category: 'http_error',
-    });
-  }
-
-  if (errorCode === 'screening_screen_failed') {
-    return createParsedApiError({
-      title: 'Screening failed',
-      message: 'Screening failed to reach the quote, snapshot or model service. Try again later, or check your network and proxy settings.',
-      rawMessage,
-      status,
-      category: 'upstream_network',
-    });
-  }
-
   const noConfiguredLlm = (
     includesAny(matchText, ['all llm models failed']) && includesAny(matchText, ['last error: none'])
   ) || includesAny(matchText, [

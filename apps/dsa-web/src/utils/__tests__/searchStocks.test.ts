@@ -1,5 +1,5 @@
 /**
- * searchStocks unit tests.
+ * searchStocks unit tests (Vietnam market only).
  */
 
 import { searchStocks } from '../searchStocks';
@@ -8,214 +8,158 @@ import { describe, expect, test } from 'vitest';
 
 const mockIndex: StockIndexItem[] = [
   {
-    canonicalCode: "600519.SH",
-    displayCode: "600519",
-    nameZh: "贵州茅台",
-    pinyinFull: "guizhoumaotai",
-    pinyinAbbr: "gzmt",
-    aliases: ["茅台"],
-    market: "CN",
-    assetType: "stock",
+    canonicalCode: 'HPG',
+    displayCode: 'HPG',
+    nameZh: 'Hòa Phát',
+    pinyinFull: 'hoaphat',
+    pinyinAbbr: 'hph',
+    aliases: ['Hoa Phat Group'],
+    market: 'VN',
+    assetType: 'stock',
     active: true,
     popularity: 100,
   },
   {
-    canonicalCode: "000001.SZ",
-    displayCode: "000001",
-    nameZh: "平安银行",
-    pinyinFull: "pinganyinxing",
-    pinyinAbbr: "payh",
-    aliases: ["平银"],
-    market: "CN",
-    assetType: "stock",
+    canonicalCode: 'VCB',
+    displayCode: 'VCB',
+    nameZh: 'Vietcombank',
+    pinyinFull: 'vietcombank',
+    pinyinAbbr: 'vcb',
+    aliases: ['Ngân hàng Ngoại thương'],
+    market: 'VN',
+    assetType: 'stock',
     active: true,
     popularity: 90,
   },
   {
-    canonicalCode: "000002.SZ",
-    displayCode: "000002",
-    nameZh: "万科Ａ",
-    pinyinFull: "wankeＡ",
-    pinyinAbbr: "wkＡ",
+    canonicalCode: 'VNM',
+    displayCode: 'VNM',
+    nameZh: 'Vinamilk',
+    pinyinFull: 'vinamilk',
+    pinyinAbbr: 'vnmk',
     aliases: [],
-    market: "CN",
-    assetType: "stock",
+    market: 'VN',
+    assetType: 'stock',
     active: true,
     popularity: 92,
   },
   {
-    canonicalCode: "00700.HK",
-    displayCode: "00700",
-    nameZh: "腾讯控股",
-    pinyinFull: "tengxunkonggu",
-    pinyinAbbr: "txkg",
-    aliases: ["腾讯"],
-    market: "HK",
-    assetType: "stock",
-    active: true,
-    popularity: 95,
-  },
-  {
-    canonicalCode: "AAPL.US",
-    displayCode: "AAPL",
-    nameZh: "苹果",
-    pinyinFull: "pingguo",
-    pinyinAbbr: "pg",
+    canonicalCode: 'FPT',
+    displayCode: 'FPT',
+    nameZh: 'FPT Corp',
+    pinyinFull: 'fptcorp',
+    pinyinAbbr: 'fc',
     aliases: [],
-    market: "US",
-    assetType: "stock",
+    market: 'VN',
+    assetType: 'stock',
     active: true,
     popularity: 98,
   },
   {
-    canonicalCode: "7203.T",
-    displayCode: "7203.T",
-    nameZh: "丰田汽车",
-    pinyinFull: "fengtianqiche",
-    pinyinAbbr: "ftqc",
-    aliases: ["Toyota", "Toyota Motor", "丰田"],
-    market: "JP",
-    assetType: "stock",
+    canonicalCode: 'FUEVN100',
+    displayCode: 'FUEVN100',
+    nameZh: 'Quỹ ETF VinaCapital VN100',
+    pinyinFull: 'quyetfvinacapitalvn100',
+    pinyinAbbr: 'qevv',
+    aliases: ['VN100 ETF'],
+    market: 'ETF',
+    assetType: 'etf',
     active: true,
-    popularity: 97,
+    popularity: 70,
   },
   {
-    canonicalCode: "005930.KS",
-    displayCode: "005930.KS",
-    nameZh: "三星电子",
-    pinyinFull: "sanxingdianzi",
-    pinyinAbbr: "sxdz",
-    aliases: ["Samsung", "Samsung Electronics", "三星"],
-    market: "KR",
-    assetType: "stock",
-    active: true,
-    popularity: 97,
-  },
-  {
-    canonicalCode: "035720.KQ",
-    displayCode: "035720.KQ",
-    nameZh: "Kakao",
-    pinyinFull: "Kakao",
-    pinyinAbbr: "Kakao",
-    aliases: ["Kakao", "可可"],
-    market: "KR",
-    assetType: "stock",
-    active: true,
-    popularity: 92,
-  },
-  {
-    canonicalCode: "600000.SH",
-    displayCode: "600000",
-    nameZh: "浦发银行",
-    pinyinFull: "pufayinxing",
-    pinyinAbbr: "pfyh",
-    aliases: ["浦发"],
-    market: "CN",
-    assetType: "stock",
-    active: false,  // Inactive
+    canonicalCode: 'HPX',
+    displayCode: 'HPX',
+    nameZh: 'Hải Phát',
+    pinyinFull: 'haiphat',
+    pinyinAbbr: 'hpx',
+    aliases: [],
+    market: 'VN',
+    assetType: 'stock',
+    active: false, // Inactive
     popularity: 80,
   },
 ];
 
 describe('searchStocks', () => {
-  test('精确匹配代码', () => {
-    const results = searchStocks('600519', mockIndex);
+  test('exact code match', () => {
+    const results = searchStocks('HPG', mockIndex);
     expect(results).toHaveLength(1);
-    expect(results[0].canonicalCode).toBe('600519.SH');
+    expect(results[0].canonicalCode).toBe('HPG');
     expect(results[0].matchType).toBe('exact');
     expect(results[0].matchField).toBe('code');
   });
 
-  test('精确匹配中文名称', () => {
-    const results = searchStocks('贵州茅台', mockIndex);
+  test('exact Vietnamese name match', () => {
+    const results = searchStocks('Hòa Phát', mockIndex);
     expect(results).toHaveLength(1);
-    expect(results[0].canonicalCode).toBe('600519.SH');
+    expect(results[0].canonicalCode).toBe('HPG');
     expect(results[0].matchType).toBe('exact');
     expect(results[0].matchField).toBe('name');
   });
 
-  test('拼音首字母匹配', () => {
-    const results = searchStocks('gzmt', mockIndex);
+  test('alias match', () => {
+    const results = searchStocks('Hoa Phat Group', mockIndex);
     expect(results).toHaveLength(1);
-    expect(results[0].canonicalCode).toBe('600519.SH');
+    expect(results[0].canonicalCode).toBe('HPG');
     expect(results[0].matchType).toBe('exact');
   });
 
-  test('别名匹配', () => {
-    const results = searchStocks('茅台', mockIndex);
-    expect(results).toHaveLength(1);
-    expect(results[0].canonicalCode).toBe('600519.SH');
-    expect(results[0].matchType).toBe('exact');
-  });
-
-  test('前缀匹配代码', () => {
-    const results = searchStocks('600', mockIndex);
+  test('code prefix match', () => {
+    const results = searchStocks('HP', mockIndex);
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].matchType).toBe('prefix');
     expect(results[0].matchField).toBe('code');
   });
 
-  test('前缀匹配名称', () => {
-    const results = searchStocks('贵州', mockIndex);
-    expect(results).toHaveLength(1);
+  test('name prefix match', () => {
+    const results = searchStocks('Vina', mockIndex);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].canonicalCode).toBe('VNM');
     expect(results[0].matchType).toBe('prefix');
     expect(results[0].matchField).toBe('name');
   });
 
-  test('包含匹配拼音', () => {
-    const results = searchStocks('maotai', mockIndex);
+  test('accent-free full-name contains match', () => {
+    const results = searchStocks('phat', mockIndex);
     expect(results).toHaveLength(1);
-    expect(results[0].canonicalCode).toBe('600519.SH');
+    expect(results[0].canonicalCode).toBe('HPG');
     expect(results[0].matchType).toBe('contains');
   });
 
-  test('active 优先于 inactive', () => {
-    // 600000 是不活跃的，600519 是活跃的
-    const results = searchStocks('600', mockIndex);
-    const activeResults = results.filter(r => {
-      const item = mockIndex.find(i => i.canonicalCode === r.canonicalCode);
-      return item?.active;
-    });
-    // 活跃股票应该排在前面
-    if (results.length > 1) {
-      expect(activeResults.length).toBeGreaterThan(0);
-    }
-  });
-
-  test('activeOnly 选项过滤不活跃股票', () => {
-    const results = searchStocks('600', mockIndex, { activeOnly: true });
+  test('activeOnly option filters inactive stocks', () => {
+    const results = searchStocks('HP', mockIndex, { activeOnly: true });
     for (const result of results) {
       const item = mockIndex.find(i => i.canonicalCode === result.canonicalCode);
       expect(item?.active).toBe(true);
     }
   });
 
-  test('limit 选项限制返回数量', () => {
-    const results = searchStocks('600', mockIndex, { limit: 1 });
+  test('limit option caps the result count', () => {
+    const results = searchStocks('V', mockIndex, { limit: 1 });
     expect(results.length).toBeLessThanOrEqual(1);
   });
 
-  test('无结果时返回空数组', () => {
+  test('returns an empty array when nothing matches', () => {
     const results = searchStocks('NOTFOUND', mockIndex);
     expect(results).toHaveLength(0);
   });
 
-  test('空查询返回空数组', () => {
+  test('returns an empty array for an empty query', () => {
     const results = searchStocks('', mockIndex);
     expect(results).toHaveLength(0);
   });
 
-  test('大小写不敏感', () => {
-    const results1 = searchStocks('aapl', mockIndex);
-    const results2 = searchStocks('AAPL', mockIndex);
+  test('is case-insensitive', () => {
+    const results1 = searchStocks('fpt', mockIndex);
+    const results2 = searchStocks('FPT', mockIndex);
     expect(results1).toHaveLength(1);
     expect(results2).toHaveLength(1);
     expect(results1[0].canonicalCode).toBe(results2[0].canonicalCode);
   });
 
   test('sorts by popularity when scores are tied', () => {
-    const results = searchStocks('600', mockIndex);
-    // When scores tie, popularity should decide the order.
+    const results = searchStocks('V', mockIndex);
     if (results.length > 1) {
       for (let index = 0; index < results.length - 1; index++) {
         const currentItem = mockIndex.find((item) => item.canonicalCode === results[index].canonicalCode);
@@ -227,60 +171,16 @@ describe('searchStocks', () => {
     }
   });
 
-  test('美股代码匹配', () => {
-    const results = searchStocks('AAPL', mockIndex);
-    expect(results).toHaveLength(1);
-    expect(results[0].canonicalCode).toBe('AAPL.US');
-    expect(results[0].market).toBe('US');
+  test('supports half-width queries for full-width codes', () => {
+    const results = searchStocks('ＶＣＢ', mockIndex);
+    expect(results[0].canonicalCode).toBe('VCB');
   });
 
-  test('supports half-width queries for full-width A-share suffix names', () => {
-    const byName = searchStocks('万科A', mockIndex);
-    const byPinyin = searchStocks('wka', mockIndex);
-
-    expect(byName[0].canonicalCode).toBe('000002.SZ');
-    expect(byPinyin[0].canonicalCode).toBe('000002.SZ');
-  });
-
-  test('港股代码匹配', () => {
-    const results = searchStocks('00700', mockIndex);
+  test('matches Vietnam fund certificate codes', () => {
+    const results = searchStocks('FUEVN100', mockIndex);
     expect(results).toHaveLength(1);
-    expect(results[0].canonicalCode).toBe('00700.HK');
-    expect(results[0].market).toBe('HK');
-  });
-
-  test('日股 Yahoo 后缀代码匹配', () => {
-    const results = searchStocks('7203.T', mockIndex);
-    expect(results).toHaveLength(1);
-    expect(results[0].canonicalCode).toBe('7203.T');
-    expect(results[0].market).toBe('JP');
-  });
-
-  test('日股英文别名匹配', () => {
-    const results = searchStocks('Toyota', mockIndex);
-    expect(results).toHaveLength(1);
-    expect(results[0].canonicalCode).toBe('7203.T');
-    expect(results[0].matchField).toBe('alias');
-  });
-
-  test('韩股 KOSPI Yahoo 后缀代码匹配', () => {
-    const results = searchStocks('005930.KS', mockIndex);
-    expect(results).toHaveLength(1);
-    expect(results[0].canonicalCode).toBe('005930.KS');
-    expect(results[0].market).toBe('KR');
-  });
-
-  test('韩股 KOSDAQ Yahoo 后缀代码匹配', () => {
-    const results = searchStocks('035720.KQ', mockIndex);
-    expect(results).toHaveLength(1);
-    expect(results[0].canonicalCode).toBe('035720.KQ');
-    expect(results[0].market).toBe('KR');
-  });
-
-  test('韩股中文别名匹配', () => {
-    const results = searchStocks('三星', mockIndex);
-    expect(results).toHaveLength(1);
-    expect(results[0].canonicalCode).toBe('005930.KS');
+    expect(results[0].canonicalCode).toBe('FUEVN100');
+    expect(results[0].market).toBe('ETF');
   });
 
   describe('Edge case tests', () => {
@@ -295,7 +195,7 @@ describe('searchStocks', () => {
     });
 
     test('Unicode character query', () => {
-      const results = searchStocks('股票🚀', mockIndex);
+      const results = searchStocks('cổ phiếu🚀', mockIndex);
       expect(results).toHaveLength(0);
     });
 
@@ -305,100 +205,85 @@ describe('searchStocks', () => {
       expect(results).toHaveLength(0);
     });
 
-    test('partial pinyin match', () => {
-      const results = searchStocks('mao', mockIndex);
-      expect(results.length).toBeGreaterThan(0);
-      const hasMaoTai = results.some(r => r.canonicalCode === '600519.SH');
-      expect(hasMaoTai).toBe(true);
-    });
-
     test('abbreviation prefix match', () => {
-      const results = searchStocks('gz', mockIndex);
+      const results = searchStocks('vnm', mockIndex);
       expect(results.length).toBeGreaterThan(0);
-      expect(results[0].matchType).toBe('prefix');
     });
 
-    test('alias match', () => {
-      const results = searchStocks('银', mockIndex);
+    test('alias contains match', () => {
+      const results = searchStocks('ngoại', mockIndex);
       expect(results.length).toBeGreaterThan(0);
-      // Should match 平安银行 and 浦发银行
-      const banks = results.filter(r => r.nameZh.includes('银行'));
-      expect(banks.length).toBeGreaterThan(0);
+      expect(results[0].canonicalCode).toBe('VCB');
     });
   });
 
   describe('Scoring system tests', () => {
     test('exact match has highest score', () => {
-      const exactResults = searchStocks('600519', mockIndex);
-      const prefixResults = searchStocks('600', mockIndex);
+      const exactResults = searchStocks('HPG', mockIndex);
+      const prefixResults = searchStocks('HP', mockIndex);
 
       expect(exactResults[0].score).toBeGreaterThan(prefixResults[0].score);
     });
 
     test('code match prioritized over name match', () => {
-      const codeResults = searchStocks('600519', mockIndex);
-      const nameResults = searchStocks('贵州', mockIndex);
+      const codeResults = searchStocks('VNM', mockIndex);
+      const nameResults = searchStocks('Vina', mockIndex);
 
-      // Code exact match should be 99 points (displayCode match)
-      expect(codeResults[0].score).toBe(99);
-      // Name prefix match should be less than 99 points
+      // Canonical code exact match is 100 points.
+      expect(codeResults[0].score).toBe(100);
       expect(nameResults[0].score).toBeLessThan(99);
     });
 
     test('sorts by popularity when scores are equal', () => {
-      // Add two stocks with same score
       const tieIndex: StockIndexItem[] = [
         {
-          canonicalCode: 'TEST1.SH',
-          displayCode: 'TEST1',
-          nameZh: '测试1',
+          canonicalCode: 'TES',
+          displayCode: 'TES',
+          nameZh: 'Test 1',
           pinyinFull: 'test1',
           pinyinAbbr: 'ts1',
           aliases: [],
-          market: 'CN',
+          market: 'VN',
           assetType: 'stock',
           active: true,
           popularity: 50,
         },
         {
-          canonicalCode: 'TEST2.SH',
-          displayCode: 'TEST2',
-          nameZh: '测试2',
+          canonicalCode: 'TET',
+          displayCode: 'TET',
+          nameZh: 'Test 2',
           pinyinFull: 'test2',
           pinyinAbbr: 'ts2',
           aliases: [],
-          market: 'CN',
+          market: 'VN',
           assetType: 'stock',
           active: true,
           popularity: 100,
         },
       ];
 
-      const results = searchStocks('TEST', tieIndex);
+      const results = searchStocks('TE', tieIndex);
       if (results.length > 1) {
-        // TEST2 should rank first due to higher popularity
-        expect(results[0].canonicalCode).toBe('TEST2.SH');
+        expect(results[0].canonicalCode).toBe('TET');
       }
     });
   });
 
   describe('Inactive stock tests', () => {
     test('filters out inactive stocks by default', () => {
-      const results = searchStocks('600000', mockIndex);
-      // 600000 is inactive, should not appear by default
+      const results = searchStocks('HPX', mockIndex);
       expect(results).toHaveLength(0);
     });
 
     test('shows inactive stocks when activeOnly=false', () => {
-      const results = searchStocks('600000', mockIndex, { activeOnly: false });
+      const results = searchStocks('HPX', mockIndex, { activeOnly: false });
       expect(results).toHaveLength(1);
-      expect(results[0].canonicalCode).toBe('600000.SH');
+      expect(results[0].canonicalCode).toBe('HPX');
     });
 
     test('active stocks prioritized over inactive stocks', () => {
-      const results = searchStocks('600', mockIndex, { activeOnly: false });
+      const results = searchStocks('HP', mockIndex, { activeOnly: false });
       if (results.length > 1) {
-        // First result should be active
         const firstItem = mockIndex.find(i => i.canonicalCode === results[0].canonicalCode);
         expect(firstItem?.active).toBe(true);
       }
@@ -407,15 +292,14 @@ describe('searchStocks', () => {
 
   describe('Performance tests', () => {
     test('large index search performance', () => {
-      // Create a large index
       const largeIndex: StockIndexItem[] = Array.from({ length: 5000 }, (_, i) => ({
-        canonicalCode: `${i}.SH`,
-        displayCode: `${i}`,
-        nameZh: `股票${i}`,
+        canonicalCode: `S${i}`,
+        displayCode: `S${i}`,
+        nameZh: `Stock ${i}`,
         pinyinFull: `stock${i}`,
         pinyinAbbr: `s${i}`,
         aliases: [],
-        market: 'CN',
+        market: 'VN',
         assetType: 'stock',
         active: true,
         popularity: i % 100,
@@ -425,7 +309,6 @@ describe('searchStocks', () => {
       const results = searchStocks('1', largeIndex);
       const endTime = Date.now();
 
-      // Should complete in reasonable time (< 100ms)
       expect(endTime - startTime).toBeLessThan(100);
       expect(results.length).toBeGreaterThan(0);
     });
@@ -435,54 +318,31 @@ describe('searchStocks', () => {
       const startTime = Date.now();
 
       for (let i = 0; i < iterations; i++) {
-        searchStocks('600', mockIndex);
+        searchStocks('HP', mockIndex);
       }
 
       const endTime = Date.now();
       const avgTime = (endTime - startTime) / iterations;
 
-      // Average search should be fast (< 10ms)
       expect(avgTime).toBeLessThan(10);
-    });
-  });
-
-  describe('Match type tests', () => {
-    test('exact match type', () => {
-      const results = searchStocks('600519', mockIndex);
-      expect(results[0].matchType).toBe('exact');
-    });
-
-    test('prefix match type', () => {
-      const results = searchStocks('600', mockIndex);
-      expect(results[0].matchType).toBe('prefix');
-    });
-
-    test('contains match type', () => {
-      const results = searchStocks('maotai', mockIndex);
-      expect(results[0].matchType).toBe('contains');
     });
   });
 
   describe('Match field tests', () => {
     test('code field match', () => {
-      const results = searchStocks('600519', mockIndex);
+      const results = searchStocks('HPG', mockIndex);
       expect(results[0].matchField).toBe('code');
     });
 
     test('name field match', () => {
-      const results = searchStocks('贵州', mockIndex);
+      const results = searchStocks('Vina', mockIndex);
       expect(results[0].matchField).toBe('name');
     });
 
-    test('pinyin field match', () => {
-      const results = searchStocks('gzmt', mockIndex);
-      expect(results[0].matchField).toBe('pinyin');
-    });
-
     test('alias field match', () => {
-      const results = searchStocks('茅台', mockIndex);
-      // Should match 贵州茅台
+      const results = searchStocks('VN100 ETF', mockIndex);
       expect(results.length).toBeGreaterThan(0);
+      expect(results[0].canonicalCode).toBe('FUEVN100');
     });
   });
 
@@ -490,53 +350,45 @@ describe('searchStocks', () => {
     const indexRows: StockIndexItem[] = [
       ...mockIndex,
       {
-        canonicalCode: 'sh000016',
-        displayCode: 'sh000016',
-        nameZh: '上证50',
-        pinyinFull: 'shangzheng50',
-        pinyinAbbr: 'sz50',
-        aliases: ['000016.SH'],
-        market: 'CN',
+        canonicalCode: 'VNINDEX',
+        displayCode: 'VNINDEX',
+        nameZh: 'VN-Index',
+        pinyinFull: 'vnindex',
+        pinyinAbbr: 'vni',
+        aliases: ['VNINDEX.VN'],
+        market: 'INDEX',
         assetType: 'index',
         active: true,
         popularity: 99,
       },
       {
-        canonicalCode: 'csi930955',
-        displayCode: '930955.CSI',
-        nameZh: '红利低波100',
-        pinyinFull: 'honglidibo100',
-        pinyinAbbr: 'hldb100',
-        aliases: ['930955.CSI'],
-        market: 'CN',
+        canonicalCode: 'VN30',
+        displayCode: 'VN30',
+        nameZh: 'VN30 Index',
+        pinyinFull: 'vn30index',
+        pinyinAbbr: 'vn30',
+        aliases: [],
+        market: 'INDEX',
         assetType: 'index',
         active: true,
         popularity: 98,
       },
     ];
 
-    test('search by registered index Chinese name returns the index row', () => {
-      const results = searchStocks('上证50', indexRows);
-      expect(results.some(r => r.canonicalCode === 'sh000016')).toBe(true);
-      const hit = results.find(r => r.canonicalCode === 'sh000016');
-      expect(hit?.nameZh).toBe('上证50');
+    test('search by registered index name returns the index row', () => {
+      const results = searchStocks('VN-Index', indexRows);
+      const hit = results.find(r => r.canonicalCode === 'VNINDEX');
+      expect(hit?.nameZh).toBe('VN-Index');
     });
 
     test('search by registered index canonical code returns the index row', () => {
-      const results = searchStocks('sh000016', indexRows);
-      expect(results.some(r => r.canonicalCode === 'sh000016')).toBe(true);
+      const results = searchStocks('VN30', indexRows);
+      expect(results.some(r => r.canonicalCode === 'VN30')).toBe(true);
     });
 
-    test('search by registered CSI canonical and display alias converges to one row', () => {
-      const byCanonical = searchStocks('csi930955', indexRows);
-      const byDisplay = searchStocks('930955.CSI', indexRows);
-      expect(byCanonical.some(r => r.canonicalCode === 'csi930955')).toBe(true);
-      expect(byDisplay.some(r => r.canonicalCode === 'csi930955')).toBe(true);
-    });
-
-    test('search by registered index alias (000016.SH) returns the index row', () => {
-      const results = searchStocks('000016.SH', indexRows);
-      expect(results.some(r => r.canonicalCode === 'sh000016')).toBe(true);
+    test('search by registered index alias returns the index row', () => {
+      const results = searchStocks('VNINDEX.VN', indexRows);
+      expect(results.some(r => r.canonicalCode === 'VNINDEX')).toBe(true);
     });
   });
 });

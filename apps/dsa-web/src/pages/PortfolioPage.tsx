@@ -5,15 +5,12 @@ import { decisionSignalsApi } from '../api/decisionSignals';
 import { portfolioApi } from '../api/portfolio';
 import type { ParsedApiError } from '../api/error';
 import { getParsedApiError } from '../api/error';
-import { ApiErrorAlert, Card, Badge, ConfirmDialog, EmptyState, InlineAlert } from '../components/common';
+import { ApiErrorAlert, Card, ConfirmDialog, EmptyState, InlineAlert } from '../components/common';
 import { PortfolioSignalSummary } from '../components/decision-signals/DecisionSignalDisplay';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
 import { formatUiText } from '../i18n/uiText';
 import { PORTFOLIO_TEXT } from '../locales/featureText';
-import type { FxRefreshFeedback } from '../utils/portfolioFormat';
 import {
-  buildFxRefreshFeedback,
-  formatBrokerLabel,
   formatCashDirectionLabel,
   formatCorporateActionLabel,
   formatMoney,
@@ -22,9 +19,6 @@ import {
   formatPositionPrice,
   formatSideLabel,
   formatSignedPct,
-  getCsvCommitVariant,
-  getCsvParseVariant,
-  getFxRefreshFeedbackVariant,
   getPositionPriceLabel,
   getTodayIso,
   hasPositionPrice,
@@ -40,9 +34,6 @@ import type {
   PortfolioCorporateActionListItem,
   PortfolioCorporateActionType,
   PortfolioCostMethod,
-  PortfolioImportBrokerItem,
-  PortfolioImportCommitResponse,
-  PortfolioImportParseResponse,
   PortfolioPositionItem,
   PortfolioRiskResponse,
   PortfolioSide,
@@ -56,11 +47,6 @@ import { buildDecisionActionLabelMap, getDecisionActionLabel } from '../utils/de
 const PIE_COLORS = ['#00d4ff', '#00ff88', '#ffaa00', '#ff7a45', '#7f8cff', '#ff4466'];
 const DEFAULT_PAGE_SIZE = 20;
 const PORTFOLIO_SIGNAL_LOOKUP_CONCURRENCY = 6;
-const FALLBACK_BROKERS: PortfolioImportBrokerItem[] = [
-  { broker: 'huatai', aliases: [], displayName: 'Huatai' },
-  { broker: 'citic', aliases: ['zhongxin'], displayName: 'CITIC' },
-  { broker: 'cmb', aliases: ['cmbchina', 'zhaoshang'], displayName: 'CMB' },
-];
 
 type AccountOption = 'all' | number;
 type EventType = 'trade' | 'cash' | 'corporate';
@@ -88,8 +74,8 @@ const PORTFOLIO_LIMITATION_LABELS: Record<string, Record<PortfolioPageLanguage, 
     en: 'Realtime quotes are best-effort',
   },
   fx_and_cost_basis_partial: {
-    vi: 'FX and cost basis are partial',
-    en: 'FX and cost basis are partial',
+    vi: 'Giá vốn chưa đầy đủ',
+    en: 'Cost basis is partial',
   },
   sector_and_risk_metrics_limited: {
     vi: 'Sector and risk metrics are limited',
@@ -107,16 +93,9 @@ type PendingAccountDelete = {
   accountName: string;
 };
 
-type FxRefreshContext = {
-  viewKey: string;
-  requestId: number;
-};
-
 const PORTFOLIO_INPUT_CLASS =
   'input-surface input-focus-glow h-11 w-full rounded-xl border bg-transparent px-4 text-sm transition-all focus:outline-none disabled:cursor-not-allowed disabled:opacity-60';
 const PORTFOLIO_SELECT_CLASS = `${PORTFOLIO_INPUT_CLASS} appearance-none pr-10`;
-const PORTFOLIO_FILE_PICKER_CLASS =
-  'input-surface input-focus-glow flex h-11 w-full cursor-pointer items-center justify-center rounded-xl border bg-transparent px-4 text-sm transition-all focus:outline-none disabled:cursor-not-allowed disabled:opacity-60';
 
 function getSignalTime(item: DecisionSignalItem): number {
   return parseDecisionSignalDate(item.createdAt)?.getTime()
@@ -133,8 +112,10 @@ function formatPortfolioLimitation(limitation: string, language: PortfolioPageLa
   return PORTFOLIO_LIMITATION_LABELS[limitation]?.[language] ?? limitation;
 }
 
-const DECISION_SIGNAL_MARKETS = new Set<DecisionSignalMarket>(['cn', 'hk', 'us', 'jp', 'kr', 'tw']);
-type PortfolioAccountMarket = 'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'tw';
+// Chỉ còn thị trường Việt Nam (tiền tệ VND). / Vietnam-only market (VND currency).
+const DECISION_SIGNAL_MARKETS = new Set<DecisionSignalMarket>(['vn']);
+const PORTFOLIO_MARKET = 'vn' as const;
+const PORTFOLIO_CURRENCY = 'VND';
 
 function toDecisionSignalMarket(value: string | null | undefined): DecisionSignalMarket | undefined {
   const normalized = String(value || '').toLowerCase();
@@ -198,15 +179,11 @@ const PortfolioPage: React.FC = () => {
   const [accountForm, setAccountForm] = useState({
     name: '',
     broker: 'Demo',
-    market: 'cn' as PortfolioAccountMarket,
-    baseCurrency: 'CNY',
   });
   const [costMethod, setCostMethod] = useState<PortfolioCostMethod>('fifo');
   const [snapshot, setSnapshot] = useState<PortfolioSnapshotResponse | null>(null);
   const [risk, setRisk] = useState<PortfolioRiskResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [fxRefreshing, setFxRefreshing] = useState(false);
-  const [fxRefreshFeedback, setFxRefreshFeedback] = useState<FxRefreshFeedback | null>(null);
   const [error, setError] = useState<ParsedApiError | null>(null);
   const [riskWarning, setRiskWarning] = useState<string | null>(null);
   const [writeWarning, setWriteWarning] = useState<string | null>(null);
@@ -217,16 +194,6 @@ const PortfolioPage: React.FC = () => {
   const portfolioSignalsRequestRef = useRef(0);
   const [positionAnalysisLoadingKey, setPositionAnalysisLoadingKey] = useState<string | null>(null);
   const [positionAnalysisMessage, setPositionAnalysisMessage] = useState<string | null>(null);
-
-  const [brokers, setBrokers] = useState<PortfolioImportBrokerItem[]>([]);
-  const [selectedBroker, setSelectedBroker] = useState('huatai');
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvDryRun, setCsvDryRun] = useState(true);
-  const [csvParsing, setCsvParsing] = useState(false);
-  const [csvCommitting, setCsvCommitting] = useState(false);
-  const [csvParseResult, setCsvParseResult] = useState<PortfolioImportParseResponse | null>(null);
-  const [csvCommitResult, setCsvCommitResult] = useState<PortfolioImportCommitResponse | null>(null);
-  const [brokerLoadWarning, setBrokerLoadWarning] = useState<string | null>(null);
 
   const [eventType, setEventType] = useState<EventType>('trade');
   const [eventDateFrom, setEventDateFrom] = useState('');
@@ -274,26 +241,17 @@ const PortfolioPage: React.FC = () => {
   });
 
   const queryAccountId = selectedAccount === 'all' ? undefined : selectedAccount;
-  const refreshViewKey = `${selectedAccount === 'all' ? 'all' : `account:${selectedAccount}`}:cost:${costMethod}`;
-  const refreshContextRef = useRef<FxRefreshContext>({ viewKey: refreshViewKey, requestId: 0 });
   const hasAccounts = accounts.length > 0;
   const writableAccount = selectedAccount === 'all' ? undefined : accounts.find((item) => item.id === selectedAccount);
   const writableAccountId = writableAccount?.id;
   const writeBlocked = !writableAccountId;
-  const canDeleteSelectedAccount = Boolean(writableAccountId) && !isLoading && !fxRefreshing && !accountDeleteLoading;
+  const canDeleteSelectedAccount = Boolean(writableAccountId) && !isLoading && !accountDeleteLoading;
   const totalEventPages = Math.max(1, Math.ceil(eventTotal / DEFAULT_PAGE_SIZE));
   const currentEventCount = eventType === 'trade'
     ? tradeEvents.length
     : eventType === 'cash'
       ? cashEvents.length
       : corporateEvents.length;
-
-  const isActiveRefreshContext = (requestedViewKey: string, requestedRequestId: number) => {
-    return (
-      refreshContextRef.current.viewKey === requestedViewKey
-      && refreshContextRef.current.requestId === requestedRequestId
-    );
-  };
 
   const loadAccounts = useCallback(async () => {
     try {
@@ -310,32 +268,6 @@ const PortfolioPage: React.FC = () => {
       setError(getParsedApiError(err));
     }
   }, []);
-
-  const loadBrokers = useCallback(async () => {
-    try {
-      const response = await portfolioApi.listImportBrokers();
-      const brokerItems = response.brokers || [];
-      if (brokerItems.length === 0) {
-        setBrokers(FALLBACK_BROKERS);
-        setBrokerLoadWarning('The broker list API returned nothing; falling back to the built-in broker list (Huatai / CITIC / CMB).');
-        if (!FALLBACK_BROKERS.some((item) => item.broker === selectedBroker)) {
-          setSelectedBroker(FALLBACK_BROKERS[0].broker);
-        }
-        return;
-      }
-      setBrokers(brokerItems);
-      setBrokerLoadWarning(null);
-      if (!brokerItems.some((item) => item.broker === selectedBroker)) {
-        setSelectedBroker(brokerItems[0].broker);
-      }
-    } catch {
-      setBrokers(FALLBACK_BROKERS);
-      setBrokerLoadWarning('The broker list API is unavailable; falling back to the built-in broker list (Huatai / CITIC / CMB).');
-      if (!FALLBACK_BROKERS.some((item) => item.broker === selectedBroker)) {
-        setSelectedBroker(FALLBACK_BROKERS[0].broker);
-      }
-    }
-  }, [selectedBroker]);
 
   const loadSnapshotAndRisk = useCallback(async () => {
     setIsLoading(true);
@@ -435,8 +367,7 @@ const PortfolioPage: React.FC = () => {
 
   useEffect(() => {
     void loadAccounts();
-    void loadBrokers();
-  }, [loadAccounts, loadBrokers]);
+  }, [loadAccounts]);
 
   useEffect(() => {
     void loadSnapshotAndRisk();
@@ -445,15 +376,6 @@ const PortfolioPage: React.FC = () => {
   useEffect(() => {
     void loadEvents();
   }, [loadEvents]);
-
-  useEffect(() => {
-    refreshContextRef.current = {
-      viewKey: refreshViewKey,
-      requestId: refreshContextRef.current.requestId + 1,
-    };
-    setFxRefreshing(false);
-    setFxRefreshFeedback(null);
-  }, [refreshViewKey]);
 
   useEffect(() => {
     setEventPage(1);
@@ -692,41 +614,6 @@ const PortfolioPage: React.FC = () => {
     }
   };
 
-  const handleParseCsv = async () => {
-    if (!csvFile) return;
-    try {
-      setCsvParsing(true);
-      const parsed = await portfolioApi.parseCsvImport(selectedBroker, csvFile);
-      setCsvParseResult(parsed);
-      setCsvCommitResult(null);
-    } catch (err) {
-      setError(getParsedApiError(err));
-    } finally {
-      setCsvParsing(false);
-    }
-  };
-
-  const handleCommitCsv = async () => {
-    if (!csvFile) return;
-    if (!writableAccountId) {
-      setWriteWarning('Select a specific account in the top right before entering or importing data.');
-      return;
-    }
-    try {
-      setWriteWarning(null);
-      setCsvCommitting(true);
-      const committed = await portfolioApi.commitCsvImport(writableAccountId, selectedBroker, csvFile, csvDryRun);
-      setCsvCommitResult(committed);
-      if (!csvDryRun) {
-        await refreshPortfolioData();
-      }
-    } catch (err) {
-      setError(getParsedApiError(err));
-    } finally {
-      setCsvCommitting(false);
-    }
-  };
-
   const openDeleteDialog = (item: PendingDelete) => {
     if (!writableAccountId) {
       setWriteWarning('Select a specific account in the top right before deleting or correcting entries.');
@@ -812,8 +699,8 @@ const PortfolioPage: React.FC = () => {
       const created = await portfolioApi.createAccount({
         name,
         broker: accountForm.broker.trim() || undefined,
-        market: accountForm.market,
-        baseCurrency: accountForm.baseCurrency.trim() || 'CNY',
+        market: PORTFOLIO_MARKET,
+        baseCurrency: PORTFOLIO_CURRENCY,
       });
       await loadAccounts();
       setSelectedAccount(created.id);
@@ -822,8 +709,6 @@ const PortfolioPage: React.FC = () => {
       setAccountForm({
         name: '',
         broker: 'Demo',
-        market: accountForm.market,
-        baseCurrency: accountForm.baseCurrency,
       });
       setAccountCreateSuccess('Account created; switched to it automatically.');
     } catch (err) {
@@ -836,108 +721,8 @@ const PortfolioPage: React.FC = () => {
   };
 
   const handleRefresh = async () => {
-    await Promise.all([loadAccounts(), loadSnapshotAndRisk(), loadEvents(), loadBrokers()]);
+    await Promise.all([loadAccounts(), loadSnapshotAndRisk(), loadEvents()]);
     setPortfolioSignalsRefreshKey((current) => current + 1);
-  };
-
-  const reloadSnapshotAndRiskForScope = useCallback(async (
-    requestedViewKey: string,
-    requestedRequestId: number,
-    requestedAccountId: number | undefined,
-    requestedCostMethod: PortfolioCostMethod,
-  ): Promise<boolean> => {
-    if (!isActiveRefreshContext(requestedViewKey, requestedRequestId)) {
-      return false;
-    }
-
-    setRiskWarning(null);
-
-    try {
-      const snapshotData = await portfolioApi.getSnapshot({
-        accountId: requestedAccountId,
-        costMethod: requestedCostMethod,
-        includeRealtime: false,
-      });
-      if (!isActiveRefreshContext(requestedViewKey, requestedRequestId)) {
-        return false;
-      }
-      setSnapshot(snapshotData);
-      setError(null);
-
-      try {
-        const riskData = await portfolioApi.getRisk({
-          accountId: requestedAccountId,
-          costMethod: requestedCostMethod,
-          includeRealtime: false,
-        });
-        if (!isActiveRefreshContext(requestedViewKey, requestedRequestId)) {
-          return false;
-        }
-        setRisk(riskData);
-        setRiskWarning(null);
-      } catch (riskErr) {
-        if (!isActiveRefreshContext(requestedViewKey, requestedRequestId)) {
-          return false;
-        }
-        setRisk(null);
-        const parsed = getParsedApiError(riskErr);
-        setRiskWarning(parsed.message || 'Failed to load risk data; showing snapshot data only.');
-      }
-      return true;
-    } catch (err) {
-      if (!isActiveRefreshContext(requestedViewKey, requestedRequestId)) {
-        return false;
-      }
-      setSnapshot(null);
-      setRisk(null);
-      setError(getParsedApiError(err));
-      return false;
-    }
-  }, []);
-
-  const handleRefreshFx = async () => {
-    if (!hasAccounts || isLoading || fxRefreshing) {
-      return;
-    }
-
-    const requestedViewKey = refreshViewKey;
-    const requestedAccountId = queryAccountId;
-    const requestedCostMethod = costMethod;
-    const requestedRequestId = refreshContextRef.current.requestId + 1;
-    refreshContextRef.current = {
-      viewKey: requestedViewKey,
-      requestId: requestedRequestId,
-    };
-
-    try {
-      setFxRefreshing(true);
-      setFxRefreshFeedback(null);
-      const result = await portfolioApi.refreshFx({
-        accountId: requestedAccountId,
-      });
-      if (!isActiveRefreshContext(requestedViewKey, requestedRequestId)) {
-        return;
-      }
-      const reloaded = await reloadSnapshotAndRiskForScope(
-        requestedViewKey,
-        requestedRequestId,
-        requestedAccountId,
-        requestedCostMethod,
-      );
-      if (!reloaded || !isActiveRefreshContext(requestedViewKey, requestedRequestId)) {
-        return;
-      }
-      setFxRefreshFeedback(buildFxRefreshFeedback(result));
-    } catch (err) {
-      if (!isActiveRefreshContext(requestedViewKey, requestedRequestId)) {
-        return;
-      }
-      setError(getParsedApiError(err));
-    } finally {
-      if (isActiveRefreshContext(requestedViewKey, requestedRequestId)) {
-        setFxRefreshing(false);
-      }
-    }
   };
 
   const decisionSignalRiskPreviewItems = (risk?.decisionSignalRisk?.items ?? []).slice(0, 3);
@@ -1009,7 +794,7 @@ const PortfolioPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void handleRefresh()}
-                  disabled={isLoading || fxRefreshing}
+                  disabled={isLoading}
                   className="btn-secondary text-sm flex-1"
                 >
                   {isLoading ? text.refreshing : text.refreshData}
@@ -1102,28 +887,10 @@ const PortfolioPage: React.FC = () => {
             />
             <input
               className={PORTFOLIO_INPUT_CLASS}
-              placeholder="Broker (optional, e.g. Demo / Huatai)"
+              placeholder="Broker (optional, e.g. Demo / SSI / VPS)"
               value={accountForm.broker}
               onChange={(e) => setAccountForm((prev) => ({ ...prev, broker: e.target.value }))}
             />
-            <input
-              className={PORTFOLIO_INPUT_CLASS}
-              placeholder="Base currency (e.g. CNY / USD / HKD)"
-              value={accountForm.baseCurrency}
-              onChange={(e) => setAccountForm((prev) => ({ ...prev, baseCurrency: e.target.value.toUpperCase() }))}
-            />
-            <select
-              className={PORTFOLIO_SELECT_CLASS}
-              value={accountForm.market}
-              onChange={(e) => setAccountForm((prev) => ({ ...prev, market: e.target.value as PortfolioAccountMarket }))}
-            >
-              <option value="cn">Market: A-share (cn)</option>
-              <option value="hk">Market: Hong Kong (hk)</option>
-              <option value="us">Market: US (us)</option>
-              <option value="jp">Market: Japan (jp)</option>
-              <option value="kr">Market: Korea (kr)</option>
-              <option value="tw">Market: Taiwan (tw)</option>
-            </select>
             <button type="submit" className="btn-secondary text-sm" disabled={accountCreating}>
               {accountCreating ? 'Creating...' : 'Create account'}
             </button>
@@ -1140,40 +907,18 @@ const PortfolioPage: React.FC = () => {
         />
       ) : null}
 
-      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Card variant="gradient" padding="md">
           <p className="text-xs text-secondary">{text.totalEquity}</p>
-          <p className="mt-1 text-xl font-semibold text-foreground">{formatMoney(snapshot?.totalEquity, snapshot?.currency || 'CNY')}</p>
+          <p className="mt-1 text-xl font-semibold text-foreground">{formatMoney(snapshot?.totalEquity, snapshot?.currency || PORTFOLIO_CURRENCY)}</p>
         </Card>
         <Card variant="gradient" padding="md">
           <p className="text-xs text-secondary">{text.totalMarketValue}</p>
-          <p className="mt-1 text-xl font-semibold text-foreground">{formatMoney(snapshot?.totalMarketValue, snapshot?.currency || 'CNY')}</p>
+          <p className="mt-1 text-xl font-semibold text-foreground">{formatMoney(snapshot?.totalMarketValue, snapshot?.currency || PORTFOLIO_CURRENCY)}</p>
         </Card>
         <Card variant="gradient" padding="md">
           <p className="text-xs text-secondary">{text.totalCash}</p>
-          <p className="mt-1 text-xl font-semibold text-foreground">{formatMoney(snapshot?.totalCash, snapshot?.currency || 'CNY')}</p>
-        </Card>
-        <Card variant="gradient" padding="md">
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-xs text-secondary">{text.fxStatus}</p>
-            <button
-              type="button"
-              className="btn-secondary !px-3 !py-1 !text-xs shrink-0"
-              onClick={() => void handleRefreshFx()}
-              disabled={!hasAccounts || isLoading || fxRefreshing}
-            >
-              {fxRefreshing ? text.refreshing : text.refreshFx}
-            </button>
-          </div>
-          <div className="mt-2">{snapshot?.fxStale ? <Badge variant="warning">{text.stale}</Badge> : <Badge variant="success">{text.latest}</Badge>}</div>
-          {fxRefreshFeedback ? (
-            <InlineAlert
-              variant={getFxRefreshFeedbackVariant(fxRefreshFeedback.tone)}
-              title={text.fxRefreshResult}
-              message={fxRefreshFeedback.text}
-              className="mt-3 rounded-xl px-3 py-2 text-xs shadow-none"
-            />
-          ) : null}
+          <p className="mt-1 text-xl font-semibold text-foreground">{formatMoney(snapshot?.totalCash, snapshot?.currency || PORTFOLIO_CURRENCY)}</p>
         </Card>
       </section>
 
@@ -1338,7 +1083,7 @@ const PortfolioPage: React.FC = () => {
           <h3 className="text-sm font-semibold text-foreground mb-2">{text.scope}</h3>
           <div className="text-xs text-secondary space-y-1">
             <div>{text.accountCount}: {snapshot?.accountCount ?? 0}</div>
-            <div>{text.currency}: {snapshot?.currency || 'CNY'}</div>
+            <div>{text.currency}: {snapshot?.currency || PORTFOLIO_CURRENCY}</div>
             <div>{text.costMethodShort}: {(snapshot?.costMethod || costMethod).toUpperCase()}</div>
           </div>
         </Card>
@@ -1374,7 +1119,7 @@ const PortfolioPage: React.FC = () => {
         <Card padding="md">
           <h3 className="text-sm font-semibold text-foreground mb-3">Manual entry: trade</h3>
           <form className="space-y-2" onSubmit={handleTradeSubmit}>
-            <input className={PORTFOLIO_INPUT_CLASS} placeholder="Stock code (e.g. 600519)" value={tradeForm.symbol}
+            <input className={PORTFOLIO_INPUT_CLASS} placeholder="Stock code (e.g. HPG)" value={tradeForm.symbol}
               onChange={(e) => setTradeForm((prev) => ({ ...prev, symbol: e.target.value }))} required />
             <div className="grid grid-cols-2 gap-2">
               <input className={PORTFOLIO_INPUT_CLASS} type="date" value={tradeForm.tradeDate}
@@ -1450,63 +1195,7 @@ const PortfolioPage: React.FC = () => {
         </Card>
       </section>
 
-      <section className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-        <Card padding="md">
-          <h3 className="text-sm font-semibold text-foreground mb-3">Broker CSV import</h3>
-          <div className="space-y-2">
-            {brokerLoadWarning ? (
-              <InlineAlert
-                variant="warning"
-                className="rounded-lg px-2 py-1 text-xs shadow-none"
-                message={brokerLoadWarning}
-              />
-            ) : null}
-            <div className="grid grid-cols-2 gap-2">
-              <select className={PORTFOLIO_SELECT_CLASS} value={selectedBroker} onChange={(e) => setSelectedBroker(e.target.value)}>
-                {brokers.length > 0 ? (
-                  brokers.map((item) => <option key={item.broker} value={item.broker}>{formatBrokerLabel(item.broker, item.displayName)}</option>)
-                ) : (
-                  <option value="huatai">huatai (Huatai)</option>
-                )}
-              </select>
-              <label className={PORTFOLIO_FILE_PICKER_CLASS}>
-                Choose CSV
-                <input type="file" accept=".csv" className="hidden"
-                  onChange={(e) => setCsvFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
-              </label>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-secondary">
-              <input id="csv-dry-run" type="checkbox" checked={csvDryRun} onChange={(e) => setCsvDryRun(e.target.checked)} />
-              <label htmlFor="csv-dry-run">Dry run only (no writes)</label>
-            </div>
-            <div className="flex gap-2">
-              <button type="button" className="btn-secondary flex-1" disabled={!csvFile || csvParsing} onClick={() => void handleParseCsv()}>
-                {csvParsing ? 'Parsing...' : 'Parse file'}
-              </button>
-              <button type="button" className="btn-secondary flex-1"
-                disabled={!csvFile || !writableAccountId || csvCommitting} onClick={() => void handleCommitCsv()}>
-                {csvCommitting ? 'Submitting...' : 'Submit import'}
-              </button>
-            </div>
-            {csvParseResult ? (
-              <InlineAlert
-                variant={getCsvParseVariant(csvParseResult)}
-                title="CSV parse result"
-                message={`${csvParseResult.recordCount} valid, ${csvParseResult.skippedCount} skipped, ${csvParseResult.errorCount} with errors.`}
-                className="rounded-lg px-3 py-2 text-xs shadow-none"
-              />
-            ) : null}
-            {csvCommitResult ? (
-              <InlineAlert
-                variant={getCsvCommitVariant(csvCommitResult, csvDryRun)}
-                title={csvDryRun ? 'CSV dry-run result' : 'CSV import result'}
-                message={`${csvDryRun ? 'Dry run' : 'Written'}: ${csvCommitResult.insertedCount} inserted, ${csvCommitResult.duplicateCount} duplicate, ${csvCommitResult.failedCount} failed.`}
-                className="rounded-lg px-3 py-2 text-xs shadow-none"
-              />
-            ) : null}
-          </div>
-        </Card>
-
+      <section className="grid grid-cols-1 gap-3">
         <Card padding="md">
           <h3 className="text-sm font-semibold text-foreground mb-3">Event log</h3>
           <div className="space-y-2">

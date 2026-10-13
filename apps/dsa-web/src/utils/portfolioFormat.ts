@@ -1,18 +1,10 @@
 import type {
   PortfolioCashDirection,
   PortfolioCorporateActionType,
-  PortfolioFxRefreshResponse,
-  PortfolioImportCommitResponse,
-  PortfolioImportParseResponse,
   PortfolioPositionItem,
   PortfolioSide,
 } from '../types/portfolio';
 import { toDateInputValue } from './format';
-
-export type FxRefreshFeedback = {
-  tone: 'neutral' | 'success' | 'warning';
-  text: string;
-};
 
 export type PortfolioAlertVariant = 'info' | 'success' | 'warning' | 'danger';
 
@@ -20,9 +12,10 @@ export function getTodayIso(): string {
   return toDateInputValue(new Date());
 }
 
-export function formatMoney(value: number | undefined | null, currency = 'CNY'): string {
+// Mặc định tiền tệ VND (chỉ còn thị trường Việt Nam). / Defaults to VND (Vietnam-only).
+export function formatMoney(value: number | undefined | null, currency = 'VND'): string {
   if (value == null || Number.isNaN(value)) return '--';
-  return `${currency} ${Number(value).toLocaleString('zh-CN', {
+  return `${currency} ${Number(value).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -74,63 +67,4 @@ export function formatCashDirectionLabel(value: PortfolioCashDirection): string 
 
 export function formatCorporateActionLabel(value: PortfolioCorporateActionType): string {
   return value === 'cash_dividend' ? 'Cash dividend' : 'Split/merge adjustment';
-}
-
-export function formatBrokerLabel(value: string, displayName?: string): string {
-  if (displayName && displayName.trim()) return `${value} (${displayName.trim()})`;
-  if (value === 'huatai') return 'huatai (Huatai)';
-  if (value === 'citic') return 'citic (CITIC)';
-  if (value === 'cmb') return 'cmb (CMB)';
-  return value;
-}
-
-export function buildFxRefreshFeedback(data: PortfolioFxRefreshResponse): FxRefreshFeedback {
-  if (data.refreshEnabled === false) {
-    return {
-      tone: 'neutral',
-      text: 'Online FX-rate refresh is disabled.',
-    };
-  }
-
-  if (data.pairCount === 0) {
-    return {
-      tone: 'neutral',
-      text: 'No FX pair in the current scope needs refreshing.',
-    };
-  }
-
-  if (data.updatedCount > 0 && data.staleCount === 0 && data.errorCount === 0) {
-    return {
-      tone: 'success',
-      text: `FX rates refreshed; ${data.updatedCount} pair(s) updated.`,
-    };
-  }
-
-  const summary = `${data.updatedCount} pair(s) updated, ${data.staleCount} still stale, ${data.errorCount} failed.`;
-  if (data.staleCount > 0) {
-    return {
-      tone: 'warning',
-      text: `Refresh attempted, but some currency pairs still use stale/fallback rates. ${summary}`,
-    };
-  }
-
-  return {
-    tone: 'warning',
-    text: `Online refresh did not fully succeed. ${summary}`,
-  };
-}
-
-export function getFxRefreshFeedbackVariant(tone: FxRefreshFeedback['tone']): PortfolioAlertVariant {
-  if (tone === 'success') return 'success';
-  if (tone === 'warning') return 'warning';
-  return 'info';
-}
-
-export function getCsvParseVariant(result: PortfolioImportParseResponse): PortfolioAlertVariant {
-  return result.errorCount > 0 || result.skippedCount > 0 ? 'warning' : 'info';
-}
-
-export function getCsvCommitVariant(result: PortfolioImportCommitResponse, isDryRun: boolean): PortfolioAlertVariant {
-  if (isDryRun) return 'info';
-  return result.failedCount > 0 || result.duplicateCount > 0 ? 'warning' : 'success';
 }

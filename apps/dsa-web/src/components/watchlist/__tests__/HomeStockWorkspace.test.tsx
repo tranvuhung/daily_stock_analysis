@@ -84,14 +84,14 @@ describe('HomeStockWorkspace', () => {
   it('opens the latest watchlist detail from a native button and keeps the row selected', () => {
     const { onHistoryItemClick } = renderWorkspace({
       watchlistRows: [{
-        code: '600519',
+        code: 'FPT',
         analyzedToday: true,
         latestItem: {
           id: 21,
-          stockCode: '600519',
-          stockName: '贵州茅台',
+          stockCode: 'FPT',
+          stockName: 'FPT Corp',
           sentimentScore: 88,
-          operationAdvice: '买入',
+          operationAdvice: 'Buy',
           analysisCount: 1,
           lastAnalysisTime: '2026-03-19T09:00:00+08:00',
         },
@@ -99,7 +99,7 @@ describe('HomeStockWorkspace', () => {
       selectedRecordId: 21,
     });
 
-    const row = screen.getByRole('button', { name: 'Open the latest analysis details for 600519' });
+    const row = screen.getByRole('button', { name: 'Open the latest analysis details for FPT' });
     fireEvent.click(row);
 
     expect(onHistoryItemClick).toHaveBeenCalledWith(21);
@@ -110,12 +110,12 @@ describe('HomeStockWorkspace', () => {
   it('shows an explicit notice when a watchlist row has no detail yet', async () => {
     const { onHistoryItemClick } = renderWorkspace({
       watchlistRows: [{
-        code: 'AAPL',
+        code: 'VCB',
         analyzedToday: false,
       }],
     });
 
-    const row = screen.getByRole('button', { name: 'No analysis details for AAPL yet. Run an analysis first.' });
+    const row = screen.getByRole('button', { name: 'No analysis details for VCB yet. Run an analysis first.' });
     fireEvent.click(row);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No analysis details yet. Run an analysis first.');
@@ -125,13 +125,13 @@ describe('HomeStockWorkspace', () => {
   it('shows loading feedback instead of no-detail copy while latest detail lookup is still pending', async () => {
     const { onHistoryItemClick } = renderWorkspace({
       watchlistRows: [{
-        code: 'AAPL',
+        code: 'VCB',
         analyzedToday: false,
         isTodayStatusLoading: true,
       }],
     });
 
-    const row = screen.getByRole('button', { name: 'Looking up the latest analysis details for AAPL' });
+    const row = screen.getByRole('button', { name: 'Looking up the latest analysis details for VCB' });
     fireEvent.click(row);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Looking up the latest analysis details. Please wait.');
@@ -142,13 +142,13 @@ describe('HomeStockWorkspace', () => {
   it('shows retry feedback instead of no-detail copy when the latest detail lookup failed', async () => {
     const { onHistoryItemClick } = renderWorkspace({
       watchlistRows: [{
-        code: 'AAPL',
+        code: 'VCB',
         analyzedToday: false,
         isTodayStatusUnknown: true,
       }],
     });
 
-    const row = screen.getByRole('button', { name: 'The latest analysis details for AAPL could not be confirmed. Please try again later.' });
+    const row = screen.getByRole('button', { name: 'The latest analysis details for VCB could not be confirmed. Please try again later.' });
     fireEvent.click(row);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('The latest analysis details could not be confirmed. Please try again later.');
@@ -160,8 +160,8 @@ describe('HomeStockWorkspace', () => {
   it('does not expose a cached detail while the current row status is unsettled', async () => {
     const cachedItem = {
       id: 24,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
+      stockCode: 'VCB',
+      stockName: 'Vietcombank',
       sentimentScore: 68,
       operationAdvice: 'neutral',
       analysisCount: 1,
@@ -169,26 +169,26 @@ describe('HomeStockWorkspace', () => {
     };
     const { onHistoryItemClick, rerenderWatchlistRows } = renderWorkspace({
       watchlistRows: [{
-        code: 'AAPL',
+        code: 'VCB',
         analyzedToday: false,
         latestItem: cachedItem,
         isTodayStatusLoading: true,
       }],
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '\u6b63\u5728\u67e5\u627e AAPL \u7684\u6700\u65b0\u5206\u6790\u8be6\u60c5' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('\u6b63\u5728\u67e5\u627e\u6700\u65b0\u5206\u6790\u8be6\u60c5\uff0c\u8bf7\u7a0d\u5019\u3002');
+    fireEvent.click(screen.getByRole('button', { name: 'Looking up the latest analysis details for VCB' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Looking up the latest analysis details. Please wait.');
     expect(onHistoryItemClick).not.toHaveBeenCalled();
 
     rerenderWatchlistRows([{
-      code: 'AAPL',
+      code: 'VCB',
       analyzedToday: false,
       latestItem: cachedItem,
       isTodayStatusUnknown: true,
     }]);
-    fireEvent.click(screen.getByRole('button', { name: 'AAPL \u7684\u6700\u65b0\u5206\u6790\u8be6\u60c5\u6682\u65f6\u65e0\u6cd5\u786e\u8ba4\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5' }));
+    fireEvent.click(screen.getByRole('button', { name: 'The latest analysis details for VCB could not be confirmed. Please try again later.' }));
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('\u6700\u65b0\u5206\u6790\u8be6\u60c5\u6682\u65f6\u65e0\u6cd5\u786e\u8ba4\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002');
+      expect(screen.getByRole('alert')).toHaveTextContent('The latest analysis details could not be confirmed. Please try again later.');
     });
     expect(onHistoryItemClick).not.toHaveBeenCalled();
   });
@@ -196,23 +196,23 @@ describe('HomeStockWorkspace', () => {
   it('clears a loading notice when the same row detail lookup settles', async () => {
     const { rerenderWatchlistRows } = renderWorkspace({
       watchlistRows: [{
-        code: 'AAPL',
+        code: 'VCB',
         analyzedToday: false,
         isTodayStatusLoading: true,
       }],
     });
 
-    const row = screen.getByTestId('watchlist-row-AAPL');
+    const row = screen.getByTestId('watchlist-row-VCB');
     fireEvent.click(row.querySelector('button[aria-pressed]') as HTMLButtonElement);
     expect(await screen.findByRole('alert')).toBeInTheDocument();
 
     rerenderWatchlistRows([{
-      code: 'AAPL',
+      code: 'VCB',
       analyzedToday: false,
       latestItem: {
         id: 22,
-        stockCode: 'AAPL',
-        stockName: 'Apple',
+        stockCode: 'VCB',
+        stockName: 'Vietcombank',
         sentimentScore: 72,
         operationAdvice: 'neutral',
         analysisCount: 1,
@@ -227,21 +227,21 @@ describe('HomeStockWorkspace', () => {
   it('clears a no-detail notice when the matching row receives a detail', async () => {
     const { rerenderWatchlistRows } = renderWorkspace({
       watchlistRows: [{
-        code: 'AAPL',
+        code: 'VCB',
         analyzedToday: false,
       }],
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'No analysis details for AAPL yet. Run an analysis first.' }));
+    fireEvent.click(screen.getByRole('button', { name: 'No analysis details for VCB yet. Run an analysis first.' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('No analysis details yet. Run an analysis first.');
 
     rerenderWatchlistRows([{
-      code: 'AAPL',
+      code: 'VCB',
       analyzedToday: true,
       latestItem: {
         id: 23,
-        stockCode: 'AAPL',
-        stockName: 'Apple',
+        stockCode: 'VCB',
+        stockName: 'Vietcombank',
         sentimentScore: 80,
         operationAdvice: 'buy',
         analysisCount: 1,
@@ -250,125 +250,125 @@ describe('HomeStockWorkspace', () => {
     }]);
 
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'Open the latest analysis details for AAPL' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open the latest analysis details for VCB' })).toBeInTheDocument();
   });
 
   it('derives an opened notice from the latest row state instead of retaining stale copy', async () => {
     const { rerenderWatchlistRows } = renderWorkspace({
       watchlistRows: [{
-        code: 'AAPL',
+        code: 'VCB',
         analyzedToday: false,
       }],
     });
 
-    const row = screen.getByTestId('watchlist-row-AAPL');
+    const row = screen.getByTestId('watchlist-row-VCB');
     fireEvent.click(row.querySelector('button[aria-pressed]') as HTMLButtonElement);
-    expect(await screen.findByRole('alert')).toHaveTextContent('\u6682\u65e0\u5206\u6790\u8be6\u60c5\uff0c\u53ef\u5148\u5206\u6790\u3002');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No analysis details yet. Run an analysis first.');
 
     rerenderWatchlistRows([{
-      code: 'AAPL',
+      code: 'VCB',
       analyzedToday: false,
       isTodayStatusLoading: true,
     }]);
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('\u6b63\u5728\u67e5\u627e\u6700\u65b0\u5206\u6790\u8be6\u60c5\uff0c\u8bf7\u7a0d\u5019\u3002');
+      expect(screen.getByRole('alert')).toHaveTextContent('Looking up the latest analysis details. Please wait.');
     });
 
     rerenderWatchlistRows([{
-      code: 'AAPL',
+      code: 'VCB',
       analyzedToday: false,
       isTodayStatusUnknown: true,
     }]);
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('\u6700\u65b0\u5206\u6790\u8be6\u60c5\u6682\u65f6\u65e0\u6cd5\u786e\u8ba4\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002');
+      expect(screen.getByRole('alert')).toHaveTextContent('The latest analysis details could not be confirmed. Please try again later.');
     });
   });
 
   it('does not bubble delete clicks into detail opening', async () => {
     const { onHistoryItemClick, onRemoveFromWatchlist } = renderWorkspace({
       watchlistRows: [{
-        code: '600519',
+        code: 'FPT',
         analyzedToday: true,
         latestItem: {
           id: 21,
-          stockCode: '600519',
-          stockName: '贵州茅台',
+          stockCode: 'FPT',
+          stockName: 'FPT Corp',
           sentimentScore: 88,
-          operationAdvice: '买入',
+          operationAdvice: 'Buy',
           analysisCount: 1,
           lastAnalysisTime: '2026-03-19T09:00:00+08:00',
         },
       }],
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove 600519 from watchlist' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove FPT from watchlist' }));
 
-    expect(onRemoveFromWatchlist).toHaveBeenCalledWith('600519');
+    expect(onRemoveFromWatchlist).toHaveBeenCalledWith('FPT');
     expect(onHistoryItemClick).not.toHaveBeenCalled();
   });
 
   it('keeps the watchlist row selected for equivalent stock-code formats', () => {
     renderWorkspace({
       watchlistRows: [{
-        code: 'HK700',
+        code: 'HPG.VN',
         analyzedToday: true,
         latestItem: {
           id: 88,
-          stockCode: '00700',
-          stockName: '腾讯控股',
+          stockCode: 'HPG',
+          stockName: 'Hoa Phat Group',
           sentimentScore: 91,
-          operationAdvice: '买入',
+          operationAdvice: 'Buy',
           analysisCount: 1,
           lastAnalysisTime: '2026-03-19T09:00:00+08:00',
         },
       }],
-      selectedStockCode: '00700.HK',
+      selectedStockCode: 'vnHPG',
     });
 
-    expect(screen.getByRole('button', { name: 'Open the latest analysis details for HK700' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Open the latest analysis details for HPG.VN' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('keeps a same-code stock row selected without selecting the index row', () => {
     renderWorkspace({
       watchlistRows: [
         {
-          code: 'sh000016',
+          code: 'vnindex',
           assetType: 'index',
           analyzedToday: true,
           latestItem: {
             id: 31,
-            stockCode: 'sh000016',
-            stockName: '上证50',
+            stockCode: 'vnindex',
+            stockName: 'VN-Index',
             sentimentScore: 66,
-            operationAdvice: '观望',
+            operationAdvice: 'Watch',
             analysisCount: 1,
             lastAnalysisTime: '2026-03-19T09:00:00+08:00',
             assetType: 'index',
           },
         },
         {
-          code: '000016',
+          code: 'VNINDEX',
           assetType: 'stock',
           analyzedToday: true,
           latestItem: {
             id: 32,
-            stockCode: '000016',
-            stockName: '深康佳A',
+            stockCode: 'VNINDEX',
+            stockName: 'Same-code stock',
             sentimentScore: 71,
-            operationAdvice: '买入',
+            operationAdvice: 'Buy',
             analysisCount: 1,
             lastAnalysisTime: '2026-03-19T09:00:00+08:00',
             assetType: 'stock',
           },
         },
       ],
-      selectedStockCode: '000016',
+      selectedStockCode: 'VNINDEX',
       selectedAssetType: 'stock',
       selectedRecordId: 32,
     });
 
-    const stockRowButton = screen.getByTestId('watchlist-row-000016').querySelector('button[aria-pressed]');
-    const indexRowButton = screen.getByTestId('watchlist-row-sh000016').querySelector('button[aria-pressed]');
+    const stockRowButton = screen.getByTestId('watchlist-row-VNINDEX').querySelector('button[aria-pressed]');
+    const indexRowButton = screen.getByTestId('watchlist-row-vnindex').querySelector('button[aria-pressed]');
     expect(stockRowButton).toHaveAttribute('aria-pressed', 'true');
     expect(indexRowButton).toHaveAttribute('aria-pressed', 'false');
   });
@@ -377,43 +377,43 @@ describe('HomeStockWorkspace', () => {
     renderWorkspace({
       watchlistRows: [
         {
-          code: 'sh000016',
+          code: 'vnindex',
           assetType: 'index',
           analyzedToday: true,
           latestItem: {
             id: 41,
-            stockCode: 'SH000016',
-            stockName: '上证50',
+            stockCode: 'VNINDEX',
+            stockName: 'VN-Index',
             sentimentScore: 66,
-            operationAdvice: '观望',
+            operationAdvice: 'Watch',
             analysisCount: 2,
             lastAnalysisTime: '2026-03-19T09:00:00+08:00',
             assetType: 'index',
           },
         },
         {
-          code: '000016',
+          code: 'VNINDEX',
           assetType: 'stock',
           analyzedToday: true,
           latestItem: {
             id: 42,
-            stockCode: '000016',
-            stockName: '深康佳A',
+            stockCode: 'VNINDEX',
+            stockName: 'Same-code stock',
             sentimentScore: 71,
-            operationAdvice: '买入',
+            operationAdvice: 'Buy',
             analysisCount: 1,
             lastAnalysisTime: '2026-03-19T09:00:00+08:00',
             assetType: 'stock',
           },
         },
       ],
-      selectedStockCode: 'sh000016',
+      selectedStockCode: 'vnindex',
       selectedAssetType: 'index',
       selectedRecordId: 41,
     });
 
-    const indexRowButton = screen.getByTestId('watchlist-row-sh000016').querySelector('button[aria-pressed]');
-    const stockRowButton = screen.getByTestId('watchlist-row-000016').querySelector('button[aria-pressed]');
+    const indexRowButton = screen.getByTestId('watchlist-row-vnindex').querySelector('button[aria-pressed]');
+    const stockRowButton = screen.getByTestId('watchlist-row-VNINDEX').querySelector('button[aria-pressed]');
     expect(indexRowButton).toHaveAttribute('aria-pressed', 'true');
     expect(stockRowButton).toHaveAttribute('aria-pressed', 'false');
   });
@@ -422,27 +422,27 @@ describe('HomeStockWorkspace', () => {
     renderWorkspace({
       watchlistRows: [
         {
-          code: '000016.SH',
+          code: 'VNINDEX.VN',
           assetType: 'index',
-          identityKey: 'sh000016',
+          identityKey: 'vnindex',
           analyzedToday: true,
         },
         {
-          code: '000016',
+          code: 'VNINDEX',
           assetType: 'stock',
           analyzedToday: true,
         },
       ],
-      selectedStockCode: 'sh000016',
+      selectedStockCode: 'vnindex',
       selectedAssetType: 'index',
     });
 
     // No `selectedRecordId` and no latest detail on either row, so selection
     // must come from the identity comparison: the canonical report pairs with
     // the alias row through `identityKey` (HomePage's registry resolution) and
-    // never with the bare `000016` stock row.
-    const aliasRowButton = screen.getByTestId('watchlist-row-000016.SH').querySelector('button[aria-pressed]');
-    const stockRowButton = screen.getByTestId('watchlist-row-000016').querySelector('button[aria-pressed]');
+    // never with the same-code `VNINDEX` stock row.
+    const aliasRowButton = screen.getByTestId('watchlist-row-VNINDEX.VN').querySelector('button[aria-pressed]');
+    const stockRowButton = screen.getByTestId('watchlist-row-VNINDEX').querySelector('button[aria-pressed]');
     expect(aliasRowButton).toHaveAttribute('aria-pressed', 'true');
     expect(stockRowButton).toHaveAttribute('aria-pressed', 'false');
   });
@@ -451,34 +451,33 @@ describe('HomeStockWorkspace', () => {
     const { onHistoryItemClick } = renderWorkspace({
       watchlistRows: [
         {
-          code: '000016',
+          code: 'VNINDEX',
           assetType: 'stock',
           analyzedToday: true,
           latestItem: {
             id: 99,
-            stockCode: '000016',
-            stockName: '深康佳A',
+            stockCode: 'VNINDEX',
+            stockName: 'Same-code stock',
             sentimentScore: 70,
-            operationAdvice: '买入',
+            operationAdvice: 'Buy',
             analysisCount: 1,
             lastAnalysisTime: '2026-03-19T09:00:00+08:00',
             assetType: 'stock',
           },
         },
         {
-          code: '000016.SH',
+          code: 'VNINDEX.VN',
           assetType: 'index',
           analyzedToday: false,
         },
       ],
     });
 
-    fireEvent.click(screen.getByTestId('watchlist-row-000016.SH').querySelector('button[aria-pressed]') as HTMLButtonElement);
+    fireEvent.click(screen.getByTestId('watchlist-row-VNINDEX.VN').querySelector('button[aria-pressed]') as HTMLButtonElement);
 
     // The index row has no detail yet. The notice carries the triggering row's
-    // own code+assetType (000016.SH / index); without that, the shared stock
-    // normalization would fold 000016.SH to 000016 and the notice would be
-    // swallowed by the stock row (which HAS a detail).
+    // own code+assetType (VNINDEX.VN / index); without that, the notice could
+    // be swallowed by the same-code stock row (which HAS a detail).
     expect(await screen.findByRole('alert')).toHaveTextContent('No analysis details yet. Run an analysis first.');
     expect(onHistoryItemClick).not.toHaveBeenCalled();
   });

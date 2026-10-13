@@ -33,8 +33,8 @@ export interface HomeWatchlistRow {
   assetType?: AssetAwareAssetType;
   /**
    * Asset-aware identity key already resolved by HomePage from the stock index
-   * registry (canonical for registered indices, e.g. `sh000016` for a raw
-   * watchlist string `000016.SH`). Row-selection compares against this key
+   * registry (canonical for registered indices, e.g. `vnindex` for a raw
+   * watchlist string `VNINDEX`). Row-selection compares against this key
    * FIRST instead of re-parsing the raw alias, so a canonical selected report
    * always selects its own alias-form row and never a same-code stock row.
    */
@@ -93,9 +93,9 @@ function rowHasSelectedIdentity(
   selectedAssetType: AssetAwareAssetType | null | undefined,
 ): boolean {
   // The registry-derived canonical identity (HomePage) wins: an alias-form raw
-  // watchlist code (e.g. `000016.SH`) whose identityKey is `sh000016` must
-  // match the canonical selected report without re-parsing the raw alias, and
-  // must never fold with the bare `000016` stock row.
+  // watchlist code (e.g. `VN30`) whose identityKey is `vn30` must match the
+  // canonical selected report without re-parsing the raw alias, and must never
+  // fold with a same-code stock row.
   if (row.identityKey) {
     return toAssetAwareCodeKey(selectedStockCode, selectedAssetType) === row.identityKey;
   }
@@ -294,9 +294,8 @@ export const HomeStockWorkspace: React.FC<HomeStockWorkspaceProps> = ({
   const [draftCode, setDraftCode] = useState('');
   // PR #2312: the notice carries the *triggering row's own* identity
   // (code + assetType). Reusing the candidate row's assetType for the notice
-  // code would let an index row and a same-code stock row cross-match (e.g.
-  // notice code ``000016.SH`` classified with the stock row's asset type folds
-  // to stock ``000016`` and attaches to the wrong row).
+  // code would let an index row and a same-code stock row cross-match and
+  // attach the notice to the wrong row.
   const [workspaceNotice, setWorkspaceNotice] = useState<{ code: string; assetType: AssetAwareAssetType } | null>(null);
   const pendingWatchlistCount = watchlistRows
     .filter((row) => !row.analyzedToday && !row.isTodayStatusLoading && !row.isTodayStatusUnknown)

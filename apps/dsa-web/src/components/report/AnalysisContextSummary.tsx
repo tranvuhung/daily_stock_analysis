@@ -42,7 +42,6 @@ const BLOCK_LABELS: Record<ReportLanguage, Record<string, string>> = {
     technical: 'kỹ thuật',
     news: 'tin tức',
     fundamentals: 'cơ bản',
-    chip: 'phân bổ cổ phiếu',
   },
   en: {
     quote: 'quote',
@@ -50,7 +49,6 @@ const BLOCK_LABELS: Record<ReportLanguage, Record<string, string>> = {
     technical: 'technical',
     news: 'news',
     fundamentals: 'fundamentals',
-    chip: 'chip',
   },
 };
 
@@ -142,10 +140,6 @@ const MISSING_REASON_LABELS: Record<ReportLanguage, Record<string, string>> = {
       'Dữ liệu độ phủ cơ bản không đi vào lượt phân tích này nên kết luận có thể thiếu một phần thông tin tài chính; hãy kiểm tra phạm vi phủ của nguồn rồi phân tích lại',
     fundamental_source_chain_missing:
       'Không ghi nhận metadata chuỗi nguồn của dữ liệu cơ bản; việc dữ liệu cơ bản có đi vào lượt này hay không lấy theo trạng thái hiện tại, hãy đối chiếu nguồn và cảnh báo để xác minh xuất xứ',
-    chip_distribution_missing:
-      'Dữ liệu phân bổ cổ phiếu không đi vào lượt phân tích này nên kết luận không dùng phân bổ; hãy xác nhận mức hỗ trợ dữ liệu của thị trường hoặc mã hiện tại',
-    chip_not_supported:
-      'Thị trường hoặc mã hiện tại không hỗ trợ dữ liệu phân bổ cổ phiếu nên lượt phân tích này không dùng chỉ báo đó; hãy kết hợp các chỉ báo khác',
     today_missing:
       'Dữ liệu hôm nay không đi vào lượt phân tích này nên đánh giá trong phiên có thể bị hạn chế; hãy đối chiếu giá thời gian thực rồi phân tích lại',
     yesterday_missing:
@@ -161,8 +155,6 @@ const MISSING_REASON_LABELS: Record<ReportLanguage, Record<string, string>> = {
     fundamentals_not_supported: 'Fundamental data is not supported for this market or symbol and was not used; cross-check other indicators',
     fundamental_coverage_missing: 'Fundamental coverage was not included, so some financial context may be missing; check source coverage and rerun',
     fundamental_source_chain_missing: 'Fundamental source-chain metadata was not recorded; use the current status to determine whether fundamentals were included, and review the source and warnings for provenance',
-    chip_distribution_missing: 'Chip distribution was not included and was not used in the conclusion; confirm support for this market or symbol',
-    chip_not_supported: 'Chip data is not supported for this market or symbol and was not used; cross-check other indicators',
     today_missing: 'Today\'s data was not included, so intraday conclusions may be limited; cross-check real-time quotes and rerun',
     yesterday_missing: 'Yesterday\'s data was not included, so daily comparisons may be incomplete; wait for the source to update and rerun',
   },

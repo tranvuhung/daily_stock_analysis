@@ -2,10 +2,8 @@ import { validateStockCode } from './validation';
 import { normalizeStockCode, resolveRegisteredIndexCanonical } from './stockCode';
 import type { StockIndexItem } from '../types/stockIndex';
 
-const EXCHANGE_PREFIXES = new Set(['SH', 'SZ', 'BJ', 'HK', 'US', 'SS']);
-const LOWERCASE_TICKER_CONTEXT_RE = /换成|改看|分析|看看|研究|诊断|比较|对比|\bvs\b|和[^，。,.!?！？]{0,40}比|差异(?!化)|区别|不同|相比|对照|比一比|哪个|哪只|哪一个|谁更|更值得|更适合|怎么选|选哪|二选一/i;
 const CONTEXTUAL_INDICATOR_TOKENS = new Set(['MA']);
-const INDICATOR_CONTEXT_RE = /指标|均线|移动平均|排列|多头|空头|金叉|死叉|支撑|压力|MA\d|SMA|EMA/i;
+const INDICATOR_CONTEXT_RE = /chỉ báo|đường trung bình|hỗ trợ|kháng cự|indicator|moving average|support|resistance|MA\d|SMA|EMA/i;
 
 // Mirrors backend _COMMON_WORDS for #1596 free-text extraction only.
 // Explicit validation via validateStockCode() intentionally keeps its original contract.
@@ -26,7 +24,7 @@ const FREE_TEXT_TICKER_DENYLIST = new Set([
   'WOULD', 'BEING', 'STILL', 'WHERE',
   'BUY', 'SELL', 'HOLD', 'LONG', 'PUT', 'CALL',
   'ETF', 'IPO', 'RSI', 'EPS', 'PEG', 'ROE', 'ROA',
-  'USA', 'USD', 'CNY', 'HKD', 'EUR', 'GBP',
+  'USA', 'USD', 'VND', 'EUR', 'GBP',
   'STOCK', 'TRADE', 'PRICE', 'INDEX', 'FUND',
   'HIGH', 'LOW', 'OPEN', 'CLOSE', 'STOP', 'LOSS',
   'TREND', 'BULL', 'BEAR', 'RISK', 'CASH', 'BOND',
@@ -58,28 +56,16 @@ export function extractStockCodesFromMessage(
   message: string,
   index?: ReadonlyArray<StockIndexItem>,
 ): string[] {
-  // Explicit dotted CSI/SH/SZ and csi-prefixed forms MUST precede the fallbacks so
-  // a registered alias is captured as one token; the registry hit suppresses its
-  // inner bare digits (a registry miss leaves the baseline patterns untouched).
+  // Mã VN: chứng chỉ quỹ (FUEVN100 / E1VFVN30), mã có hậu tố .VN, chỉ số VN, mã 3 ký tự.
+  // Vietnam patterns: fund certificates, .VN suffixed codes, VN indices, 3-char tickers.
   const patterns = [
-    /\b(\d{6}\.(?:CSI|SH|SZ))\b/gi,
-    /\b(CSI\d{6})\b/gi,
-    /\b(30\d{4}\.SZ)\b/gi,
-    /\b(68\d{4}\.SH)\b/gi,
-    /\b(00\d{4}\.SZ)\b/gi,
-    /\b(60\d{4}\.SH)\b/gi,
-    /\b(SH\d{6})\b/gi,
-    /\b(SZ\d{6})\b/gi,
-    /\b(BJ\d{6})\b/gi,
-    /\b(hk\d{4,5})\b/gi,
-    /\b(\d{1,5}\.HK)\b/gi,
-    /\b(\d{5,6})\b/g,
-    /\b([A-Z]{2,5}\.[A-Z]{1,2})\b/g,
-    /\b([A-Z]{2,5})\b/g,
+    /\b((?:FU[A-Z0-9]{6}|E1VF[A-Z0-9]{4})(?:\.VN)?)\b/g,
+    /\b([A-Z][A-Z0-9]{2}\.VN)\b/g,
+    /\b(VNINDEX|VN30|VN100|HNXINDEX|HNX30|HNXUPCOMINDEX|UPCOMINDEX)\b/g,
+    /\b([A-Z][A-Z0-9]{2})\b/g,
   ];
-  if (LOWERCASE_TICKER_CONTEXT_RE.test(message)) {
-    patterns.push(/\b([a-z]{2,5}(?:\.[a-z]{1,2})?)\b/g);
-  }
+  // Không nhận mã viết thường: tiếng Việt có nhiều từ 3 chữ cái (mua, xem, nen...).
+  // Lower-case tickers are not extracted: many Vietnamese words are 3 letters long.
 
   const matches: Array<{ value: string; index: number; priority: number; end: number }> = [];
   patterns.forEach((pattern, priority) => {
@@ -88,7 +74,7 @@ export function extractStockCodesFromMessage(
       const value = match[1] ?? match[0];
       const start = match.index ?? 0;
       const end = start + value.length;
-      if (/^[A-Z]{2,5}$/.test(value) && (message[start - 1] === '.' || message[end] === '.')) {
+      if (/^[A-Z][A-Z0-9]{2}$/.test(value) && (message[start - 1] === '.' || message[end] === '.')) {
         continue;
       }
       matches.push({
@@ -105,13 +91,10 @@ export function extractStockCodesFromMessage(
   const stockCodes: string[] = [];
   const seen = new Set<string>();
   // Spans of already-accepted tokens suppress strictly-inner matches so a
-  // dotted index alias never leaks its inner bare digits as a separate stock.
+  // suffixed code (HPG.VN) never leaks its inner parts as a separate stock.
   const acceptedSpans: Array<{ start: number; end: number }> = [];
   for (const match of matches) {
     if (acceptedSpans.some((span) => match.index >= span.start && match.end <= span.end)) {
-      continue;
-    }
-    if (EXCHANGE_PREFIXES.has(match.value.toUpperCase())) {
       continue;
     }
     if (isDeniedTickerCandidate(match.value, message)) {
@@ -128,12 +111,6 @@ export function extractStockCodesFromMessage(
         seen.add(registeredCanonical);
         stockCodes.push(registeredCanonical);
       }
-      continue;
-    }
-    // Priority 0-1 forms are REGISTRY-ONLY: on a miss, drop the whole token
-    // (no accepted span) so the legacy patterns beneath keep the no-registry
-    // baseline (930955.CSI → ['930955'], csi930955 → []).
-    if (match.priority <= 1) {
       continue;
     }
     const { valid, normalized } = validateStockCode(match.value);

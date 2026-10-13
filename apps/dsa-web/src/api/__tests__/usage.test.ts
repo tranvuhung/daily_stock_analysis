@@ -47,7 +47,7 @@ describe('usageApi', () => {
             called_at: '2026-06-14T09:30:00',
             call_type: 'analysis',
             model: 'minimax/MiniMax-M3',
-            stock_code: '600519',
+            stock_code: 'HPG',
             prompt_tokens: 10,
             completion_tokens: 40,
             total_tokens: 50,
@@ -66,7 +66,7 @@ describe('usageApi', () => {
     expect(result.byCallType[0].callType).toBe('analysis');
     expect(result.byModel[0].maxTotalTokens).toBe(50);
     expect(result.recentCalls[0].calledAt).toBe('2026-06-14T09:30:00');
-    expect(result.recentCalls[0].stockCode).toBe('600519');
+    expect(result.recentCalls[0].stockCode).toBe('HPG');
   });
 
   it('uses month and 50 as default dashboard query params', async () => {

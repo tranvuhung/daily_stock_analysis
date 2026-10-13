@@ -48,9 +48,9 @@ vi.mock('recharts', () => ({
 
 const baseSignal: DecisionSignalItem = {
   id: 1,
-  stockCode: '600519',
-  stockName: '贵州茅台',
-  market: 'cn',
+  stockCode: 'FPT',
+  stockName: 'FPT Corp',
+  market: 'vn',
   sourceType: 'analysis',
   sourceReportId: 3001,
   triggerSource: 'web',
@@ -72,7 +72,7 @@ function makeSignal(overrides: Partial<DecisionSignalItem>): DecisionSignalItem 
 }
 
 function renderTimeline(props: Partial<React.ComponentProps<typeof DecisionSignalTimeline>> = {}) {
-  window.localStorage.setItem('dsa.uiLanguage', 'zh');
+  window.localStorage.setItem('dsa.uiLanguage', 'en');
   const onSelect = props.onSelect ?? vi.fn();
   render(
     <UiLanguageProvider>
@@ -186,7 +186,7 @@ describe('DecisionSignalTimeline', () => {
       </UiLanguageProvider>,
     );
 
-    expect(screen.getByText('风格: 进取')).toBeInTheDocument();
+    expect(screen.getByText('Profile: Aggressive')).toBeInTheDocument();
   });
 
   it('renders explicit null profile as unknown instead of falling back to metadata', () => {
@@ -208,6 +208,6 @@ describe('DecisionSignalTimeline', () => {
       </UiLanguageProvider>,
     );
 
-    expect(screen.getByText('风格: 未知')).toBeInTheDocument();
+    expect(screen.getByText('Profile: Unknown')).toBeInTheDocument();
   });
 });

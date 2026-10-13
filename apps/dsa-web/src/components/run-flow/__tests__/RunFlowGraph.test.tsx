@@ -6,7 +6,7 @@ import { RunFlowGraph } from '../RunFlowGraph';
 const lanes: RunFlowLane[] = [
   { id: 'entry', label: 'Entry', order: 1 },
   { id: 'data_source', label: 'Data source', order: 2 },
-  { id: 'analysis', label: '分析引擎', order: 3 },
+  { id: 'analysis', label: 'Bộ máy phân tích', order: 3 },
 ];
 
 const nodes: RunFlowNode[] = [
@@ -14,7 +14,7 @@ const nodes: RunFlowNode[] = [
     id: 'request',
     lane: 'entry',
     kind: 'entry',
-    label: '用户请求',
+    label: 'Yêu cầu người dùng',
     status: 'success',
   },
   {
@@ -36,7 +36,7 @@ const edges: RunFlowEdge[] = [
     to: 'news',
     kind: 'fallback',
     status: 'fallback',
-    label: '降级输入',
+    label: 'Đầu vào suy giảm',
   },
 ];
 
@@ -100,14 +100,14 @@ describe('RunFlowGraph', () => {
         id: 'llm',
         lane: 'analysis',
         kind: 'model',
-        label: 'LLM 生成',
+        label: 'LLM Tạo',
         status: 'success',
       },
       {
         id: 'artifact',
         lane: 'analysis',
         kind: 'artifact',
-        label: '报告产物',
+        label: 'Sản phẩm báo cáo',
         status: 'success',
       },
     ];
@@ -118,7 +118,7 @@ describe('RunFlowGraph', () => {
         to: 'news',
         kind: 'control',
         status: 'success',
-        label: '调度输入',
+        label: 'Đầu vào điều phối',
       },
       {
         id: 'llm-artifact',
@@ -126,7 +126,7 @@ describe('RunFlowGraph', () => {
         to: 'artifact',
         kind: 'data',
         status: 'success',
-        label: '报告输出',
+        label: 'Đầu ra báo cáo',
       },
       {
         id: 'llm-artifact-fallback',
@@ -134,7 +134,7 @@ describe('RunFlowGraph', () => {
         to: 'artifact',
         kind: 'fallback',
         status: 'fallback',
-        label: '降级输出',
+        label: 'Đầu ra suy giảm',
       },
     ];
 
@@ -164,28 +164,28 @@ describe('RunFlowGraph', () => {
         id: 'request',
         lane: 'entry',
         kind: 'entry',
-        label: '用户请求',
+        label: 'Yêu cầu người dùng',
         status: 'success',
       },
       {
         id: 'daily',
         lane: 'data_source',
         kind: 'data_source',
-        label: '日线K线',
+        label: 'Nến ngày',
         status: 'success',
       },
       {
         id: 'quote',
         lane: 'data_source',
         kind: 'data_source',
-        label: '实时行情',
+        label: 'Báo giá thời gian thực',
         status: 'success',
       },
       {
         id: 'llm',
         lane: 'analysis',
         kind: 'model',
-        label: 'LLM 生成',
+        label: 'LLM Tạo',
         status: 'success',
       },
     ];
@@ -247,14 +247,14 @@ describe('RunFlowGraph', () => {
             id: 'request',
             lane: 'entry',
             kind: 'entry',
-            label: '用户请求',
+            label: 'Yêu cầu người dùng',
             status: 'success',
           },
           {
             id: 'task_queue',
             lane: 'entry',
             kind: 'queue',
-            label: 'Task 队列',
+            label: 'Task Hàng đợi',
             status: 'success',
           },
         ]}
@@ -274,14 +274,14 @@ describe('RunFlowGraph', () => {
         id: 'daily',
         lane: 'data_source',
         kind: 'data_source',
-        label: '日线K线',
+        label: 'Nến ngày',
         status: 'success',
       },
       {
         id: 'quote',
         lane: 'data_source',
         kind: 'data_source',
-        label: '实时行情',
+        label: 'Báo giá thời gian thực',
         status: 'success',
       },
     ];
@@ -331,14 +331,14 @@ describe('RunFlowGraph', () => {
         id: 'request',
         lane: 'entry',
         kind: 'entry',
-        label: '用户请求',
+        label: 'Yêu cầu người dùng',
         status: 'success',
       },
       {
         id: 'llm',
         lane: 'analysis',
         kind: 'model',
-        label: 'LLM 生成',
+        label: 'LLM Tạo',
         status: 'success',
       },
     ];
@@ -349,7 +349,7 @@ describe('RunFlowGraph', () => {
         to: 'llm',
         kind: 'data',
         status: 'success',
-        label: '跨泳道',
+        label: 'Liên làn',
       },
     ];
     const { container } = render(
@@ -389,7 +389,7 @@ describe('RunFlowGraph', () => {
         id: 'late-news',
         lane: 'data_source',
         kind: 'data_source',
-        label: '新闻舆情',
+        label: 'Tin tức dư luận',
         status: 'success',
         startedAt: '2026-06-08T10:00:05',
       },
@@ -397,7 +397,7 @@ describe('RunFlowGraph', () => {
         id: 'early-quote',
         lane: 'data_source',
         kind: 'data_source',
-        label: '实时行情',
+        label: 'Báo giá thời gian thực',
         status: 'success',
         startedAt: '2026-06-08T10:00:01',
       },
@@ -405,7 +405,7 @@ describe('RunFlowGraph', () => {
         id: 'middle-daily',
         lane: 'data_source',
         kind: 'data_source',
-        label: '日线K线',
+        label: 'Nến ngày',
         status: 'success',
         endedAt: '2026-06-08T10:00:03',
       },
@@ -433,14 +433,14 @@ describe('RunFlowGraph', () => {
         id: 'request',
         lane: 'entry',
         kind: 'entry',
-        label: '用户请求',
+        label: 'Yêu cầu người dùng',
         status: 'success',
       },
       {
         id: 'news',
         lane: 'data_source',
         kind: 'data_source',
-        label: '新闻舆情',
+        label: 'Tin tức dư luận',
         status: 'success',
         provider: 'TushareFetcher -> AkshareFetcher -> TushareFetcher -> AkshareFetcher',
       },
@@ -448,14 +448,14 @@ describe('RunFlowGraph', () => {
         id: 'save',
         lane: 'artifact',
         kind: 'artifact',
-        label: '保存报告',
+        label: 'Lưu báo cáo',
         status: 'success',
       },
       {
         id: 'notification',
         lane: 'artifact',
         kind: 'notification',
-        label: '推送通知 · report',
+        label: 'Gửi thông báo · report',
         status: 'skipped',
       },
     ];
@@ -490,7 +490,7 @@ describe('RunFlowGraph', () => {
             id: 'topology_data_news_search',
             lane: 'data_source',
             kind: 'data_source',
-            label: '新闻舆情',
+            label: 'Tin tức dư luận',
             status: 'fallback',
             metadata: { topologyGroup: 'provider_attempts' },
           },
@@ -501,7 +501,7 @@ describe('RunFlowGraph', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand 新闻舆情 attempts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Tin tức dư luận attempts' }));
 
     expect(screen.getByTestId('run-flow-node-topology_data_news_search')).toHaveClass('pb-8');
     expect(onToggleExpanded).toHaveBeenCalledWith('topology_data_news_search');
@@ -542,14 +542,14 @@ describe('RunFlowGraph', () => {
             id: 'task_queue',
             lane: 'entry',
             kind: 'queue',
-            label: 'Task 队列',
+            label: 'Task Hàng đợi',
             status: 'success',
           },
           {
             id: 'topology_data_realtime_quote',
             lane: 'data_source',
             kind: 'data_source',
-            label: '实时行情',
+            label: 'Báo giá thời gian thực',
             status: 'fallback',
             metadata: { topologyGroup: 'provider_attempts', data_type: 'realtime_quote', expanded: true },
           },
@@ -557,7 +557,7 @@ describe('RunFlowGraph', () => {
             id: 'provider_realtime_tushare_1',
             lane: 'data_source',
             kind: 'data_source',
-            label: '实时行情 · TushareFetcher',
+            label: 'Báo giá thời gian thực · TushareFetcher',
             provider: 'TushareFetcher',
             status: 'success',
             metadata: { data_type: 'realtime_quote' },
@@ -566,7 +566,7 @@ describe('RunFlowGraph', () => {
             id: 'provider_realtime_akshare_2',
             lane: 'data_source',
             kind: 'data_source',
-            label: '实时行情 · AkshareFetcher',
+            label: 'Báo giá thời gian thực · AkshareFetcher',
             provider: 'AkshareFetcher',
             status: 'success',
             metadata: { data_type: 'realtime_quote' },
@@ -575,14 +575,14 @@ describe('RunFlowGraph', () => {
             id: 'daily',
             lane: 'data_source',
             kind: 'data_source',
-            label: '日线K线',
+            label: 'Nến ngày',
             status: 'success',
           },
           {
             id: 'llm',
             lane: 'analysis',
             kind: 'model',
-            label: 'LLM 生成',
+            label: 'LLM Tạo',
             status: 'success',
           },
         ]}
@@ -641,7 +641,7 @@ describe('RunFlowGraph', () => {
             id: 'topology_data_realtime_quote',
             lane: 'data_source',
             kind: 'data_source',
-            label: '实时行情',
+            label: 'Báo giá thời gian thực',
             status: 'fallback',
             startedAt: '2026-06-08T10:00:00',
             metadata: { topologyGroup: 'provider_attempts', data_type: 'realtime_quote', expanded: true },
@@ -650,7 +650,7 @@ describe('RunFlowGraph', () => {
             id: 'daily',
             lane: 'data_source',
             kind: 'data_source',
-            label: '日线K线',
+            label: 'Nến ngày',
             status: 'success',
             startedAt: '2026-06-08T10:00:01',
           },
@@ -658,7 +658,7 @@ describe('RunFlowGraph', () => {
             id: 'provider_realtime_tushare_1',
             lane: 'data_source',
             kind: 'data_source',
-            label: '实时行情 · TushareFetcher',
+            label: 'Báo giá thời gian thực · TushareFetcher',
             provider: 'TushareFetcher',
             status: 'success',
             startedAt: '2026-06-08T10:00:02',
@@ -668,7 +668,7 @@ describe('RunFlowGraph', () => {
             id: 'provider_realtime_akshare_2',
             lane: 'data_source',
             kind: 'data_source',
-            label: '实时行情 · AkshareFetcher',
+            label: 'Báo giá thời gian thực · AkshareFetcher',
             provider: 'AkshareFetcher',
             status: 'success',
             startedAt: '2026-06-08T10:00:03',
@@ -733,7 +733,7 @@ describe('RunFlowGraph', () => {
             id: 'topology_data_realtime_quote',
             lane: 'data_source',
             kind: 'data_source',
-            label: '实时行情',
+            label: 'Báo giá thời gian thực',
             status: 'fallback',
             startedAt: '2026-06-08T10:00:00',
             metadata: {
@@ -747,7 +747,7 @@ describe('RunFlowGraph', () => {
             id: 'topology_data_news_search',
             lane: 'data_source',
             kind: 'data_source',
-            label: '新闻舆情',
+            label: 'Tin tức dư luận',
             status: 'fallback',
             startedAt: '2026-06-08T10:00:01',
             metadata: {
@@ -761,7 +761,7 @@ describe('RunFlowGraph', () => {
             id: 'daily',
             lane: 'data_source',
             kind: 'data_source',
-            label: '日线K线',
+            label: 'Nến ngày',
             status: 'success',
             startedAt: '2026-06-08T10:00:02',
           },
@@ -769,7 +769,7 @@ describe('RunFlowGraph', () => {
             id: 'provider_realtime_tushare_1',
             lane: 'data_source',
             kind: 'data_source',
-            label: '实时行情 · TushareFetcher',
+            label: 'Báo giá thời gian thực · TushareFetcher',
             status: 'success',
             startedAt: '2026-06-08T10:00:03',
             metadata: {
@@ -783,7 +783,7 @@ describe('RunFlowGraph', () => {
             id: 'provider_news_tavily_1',
             lane: 'data_source',
             kind: 'data_source',
-            label: '新闻舆情 · Tavily',
+            label: 'Tin tức dư luận · Tavily',
             status: 'success',
             startedAt: '2026-06-08T10:00:04',
             metadata: {
@@ -797,7 +797,7 @@ describe('RunFlowGraph', () => {
             id: 'provider_realtime_akshare_2',
             lane: 'data_source',
             kind: 'data_source',
-            label: '实时行情 · AkshareFetcher',
+            label: 'Báo giá thời gian thực · AkshareFetcher',
             status: 'success',
             startedAt: '2026-06-08T10:00:05',
             metadata: {
@@ -811,7 +811,7 @@ describe('RunFlowGraph', () => {
             id: 'provider_news_searxng_2',
             lane: 'data_source',
             kind: 'data_source',
-            label: '新闻舆情 · SearXNG',
+            label: 'Tin tức dư luận · SearXNG',
             status: 'failed',
             startedAt: '2026-06-08T10:00:06',
             metadata: {

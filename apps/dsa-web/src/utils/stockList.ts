@@ -1,4 +1,4 @@
-const STOCK_LIST_SEPARATOR_RE = /[\s,;\uFF0C\u3001\uFF1B]+/;
+const STOCK_LIST_SEPARATOR_RE = /[\s,;]+/;
 
 export function parseStockListValue(value: string): string[] {
   return String(value ?? '')

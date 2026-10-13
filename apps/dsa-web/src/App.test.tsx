@@ -93,7 +93,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   chatPageShouldThrow.value = false;
   window.history.pushState({}, '', '/');
-  localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'zh');
+  localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'en');
   vi.mocked(AuthContext.useAuth).mockReturnValue(makeAuthState());
 });
 
@@ -180,9 +180,9 @@ describe('App routing behavior', () => {
       expect(screen.getByRole('button', { name: 'Back home' })).toBeInTheDocument();
 
       chatPageShouldThrow.value = false;
-      fireEvent.click(screen.getByRole('link', { name: 'Usage' }));
+      fireEvent.click(screen.getByRole('link', { name: 'Alerts' }));
 
-      expect(await screen.findByTestId('token-usage-page')).toBeInTheDocument();
+      expect(await screen.findByTestId('alerts-page')).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: 'Page failed to load' })).not.toBeInTheDocument();
     } finally {
       consoleError.mockRestore();

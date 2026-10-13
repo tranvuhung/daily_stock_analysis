@@ -16,9 +16,6 @@ const {
   importEnv,
   runSchedulerNow,
   updateSystemConfig,
-  screeningEnable,
-  notifyScreeningConfigChanged,
-  notifySystemConfigChanged,
   desktopCheckForUpdates,
   desktopGetUpdateState,
   desktopInstallDownloadedUpdate,
@@ -46,9 +43,6 @@ const {
   importEnv: vi.fn(),
   runSchedulerNow: vi.fn(),
   updateSystemConfig: vi.fn(),
-  screeningEnable: vi.fn(),
-  notifyScreeningConfigChanged: vi.fn(),
-  notifySystemConfigChanged: vi.fn(),
   desktopCheckForUpdates: vi.fn(),
   desktopGetUpdateState: vi.fn(),
   desktopInstallDownloadedUpdate: vi.fn(),
@@ -105,14 +99,6 @@ vi.mock('../../api/analysis', () => ({
   },
 }));
 
-vi.mock('../../api/screening', () => ({
-  screeningApi: {
-    enable: (...args: unknown[]) => screeningEnable(...args),
-  },
-  notifyScreeningConfigChanged: (...args: unknown[]) => notifyScreeningConfigChanged(...args),
-  notifySystemConfigChanged: (...args: unknown[]) => notifySystemConfigChanged(...args),
-}));
-
 vi.mock('../../utils/constants', async () => {
   const actual = await vi.importActual<typeof import('../../utils/constants')>('../../utils/constants');
   return {
@@ -122,10 +108,10 @@ vi.mock('../../utils/constants', async () => {
 });
 
 vi.mock('../../components/settings', () => ({
-  AuthSettingsCard: () => <div>认证与登录保护</div>,
-  ChangePasswordCard: () => <div>修改密码</div>,
+  AuthSettingsCard: () => <div>Authentication and login protection</div>,
+  ChangePasswordCard: () => <div>Change password</div>,
   IntelligentImport: ({ onMerged }: { onMerged: (value: string) => void }) => (
-    <button type="button" onClick={() => onMerged('SZ000001,SZ000002')}>
+    <button type="button" onClick={() => onMerged('VCB,SZ000002')}>
       merge stock list
     </button>
   ),
@@ -180,11 +166,11 @@ vi.mock('../../components/settings', () => ({
         {items.map((item) => `${item.key}=${item.value}`).join('|')}
       </span>
       <span>{selectedBackend}:{agentArch}</span>
-      <button type="button" onClick={onUseSingleAgent}>切换为单 Agent</button>
+      <button type="button" onClick={onUseSingleAgent}>Switch to Single Agent</button>
     </div>
   ),
   NotificationTestPanel: ({ items }: { items: Array<{ key: string; value: string }> }) => (
-    <div>通知测试面板:{items.map((item) => item.key).join(',')}</div>
+    <div>Notification test panel:{items.map((item) => item.key).join(',')}</div>
   ),
   SettingsAlert: ({
     title,
@@ -306,10 +292,10 @@ function createDesktopRuntime(overrides: Record<string, unknown> = {}) {
 
 const baseCategories = [
   { category: 'system', title: 'System', description: 'System settings', displayOrder: 1, fields: [] },
-  { category: 'base', title: 'Base', description: '基础配置', displayOrder: 2, fields: [] },
-  { category: 'ai_model', title: 'AI', description: '模型配置', displayOrder: 3, fields: [] },
-  { category: 'notification', title: 'Notification', description: '通知配置', displayOrder: 4, fields: [] },
-  { category: 'agent', title: 'Agent', description: 'Agent 配置', displayOrder: 5, fields: [] },
+  { category: 'base', title: 'Base', description: 'Base settings', displayOrder: 2, fields: [] },
+  { category: 'ai_model', title: 'AI', description: 'Model settings', displayOrder: 3, fields: [] },
+  { category: 'notification', title: 'Notification', description: 'Notification settings', displayOrder: 4, fields: [] },
+  { category: 'agent', title: 'Agent', description: 'Agent settings', displayOrder: 5, fields: [] },
 ];
 
 type ConfigState = {
@@ -445,12 +431,12 @@ function buildSystemConfigState(overrides: ConfigOverride = {}) {
           },
         },
         {
-          key: 'WECHAT_WEBHOOK_URL',
-          value: 'https://qyapi.example.com/hook',
+          key: 'DISCORD_WEBHOOK_URL',
+          value: 'https://discord.example.com/api/webhooks/hook',
           rawValueExists: true,
           isMasked: false,
           schema: {
-            key: 'WECHAT_WEBHOOK_URL',
+            key: 'DISCORD_WEBHOOK_URL',
             category: 'notification',
             dataType: 'string',
             uiControl: 'password',
@@ -575,7 +561,7 @@ describe('SettingsPage', () => {
     });
     load.mockResolvedValue(true);
     exportEnv.mockResolvedValue({
-      content: 'STOCK_LIST=600519\n',
+      content: 'STOCK_LIST=HPG\n',
       configVersion: 'v1',
       updatedAt: '2026-03-21T00:00:00Z',
     });
@@ -600,16 +586,16 @@ describe('SettingsPage', () => {
           category: 'base',
           required: true,
           status: 'configured',
-          message: '已配置自选股。',
+          message: 'Watchlist configured.',
           nextStep: null,
         },
         {
           key: 'llm_channels',
-          title: '模型渠道',
+          title: 'Model channel',
           category: 'ai_model',
           required: true,
           status: 'configured',
-          message: '已配置模型渠道。',
+          message: 'Model channel configured.',
           nextStep: null,
         },
         {
@@ -618,7 +604,7 @@ describe('SettingsPage', () => {
           category: 'notification',
           required: false,
           status: 'optional',
-          message: '通知可选。',
+          message: 'Notifications are optional.',
           nextStep: null,
         },
       ],
@@ -644,10 +630,9 @@ describe('SettingsPage', () => {
     updateSystemConfig.mockResolvedValue({
       success: true,
       configVersion: 'v2',
-      updatedKeys: ['SCREENING_ENABLED'],
+      updatedKeys: ['STOCK_LIST'],
       reloadTriggered: true,
     });
-    screeningEnable.mockResolvedValue(undefined);
     desktopGetUpdateState.mockResolvedValue({
       status: 'idle',
       currentVersion: '3.12.0',
@@ -764,11 +749,11 @@ describe('SettingsPage', () => {
       checks: [
         {
           key: 'initial-status',
-          title: '初始状态',
+          title: 'Initial status',
           category: 'base',
           required: true,
           status: 'configured',
-          message: '初始配置状态。',
+          message: 'Initial config status.',
           nextStep: null,
         },
       ],
@@ -781,12 +766,12 @@ describe('SettingsPage', () => {
       checks: [
         {
           key: 'stale-status',
-          title: '过期状态',
+          title: 'Stale status',
           category: 'ai_model',
           required: true,
           status: 'needs_action',
-          message: '过期的配置状态。',
-          nextStep: '这条旧响应不应覆盖最新状态。',
+          message: 'Stale config status.',
+          nextStep: 'This stale response must not override the latest status.',
         },
       ],
     };
@@ -798,11 +783,11 @@ describe('SettingsPage', () => {
       checks: [
         {
           key: 'latest-status',
-          title: '最新状态',
+          title: 'Latest status',
           category: 'base',
           required: true,
           status: 'configured',
-          message: '最新配置状态。',
+          message: 'Latest config status.',
           nextStep: null,
         },
       ],
@@ -816,7 +801,7 @@ describe('SettingsPage', () => {
 
     renderSettingsPage();
 
-    expect(await screen.findByText('初始状态')).toBeInTheDocument();
+    expect(await screen.findByText('Initial status')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh check' }));
     fireEvent.click(screen.getByRole('button', { name: 'merge stock list' }));
@@ -828,16 +813,16 @@ describe('SettingsPage', () => {
       await latestRefresh.promise;
     });
 
-    expect(await screen.findByText('最新状态')).toBeInTheDocument();
-    expect(screen.queryByText('过期状态')).not.toBeInTheDocument();
+    expect(await screen.findByText('Latest status')).toBeInTheDocument();
+    expect(screen.queryByText('Stale status')).not.toBeInTheDocument();
 
     await act(async () => {
       staleRefresh.resolve(staleStatus);
       await staleRefresh.promise;
     });
 
-    await waitFor(() => expect(screen.getByText('最新状态')).toBeInTheDocument());
-    expect(screen.queryByText('过期状态')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Latest status')).toBeInTheDocument());
+    expect(screen.queryByText('Stale status')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Brief smoke run' })).toBeEnabled();
   });
 
@@ -870,21 +855,21 @@ describe('SettingsPage', () => {
       checks: [
         {
           key: 'llm_primary',
-          title: 'LLM 主渠道',
+          title: 'Primary LLM channel',
           category: 'ai_model',
           required: true,
           status: 'configured',
-          message: '已启用 Claude Code CLI 本地生成 Backend（experimental/limited）。',
+          message: 'Claude Code CLI local generation backend enabled (experimental/limited).',
           nextStep: null,
         },
         {
           key: 'llm_agent',
-          title: 'Agent 渠道',
+          title: 'Agent channel',
           category: 'agent',
           required: true,
           status: 'needs_action',
-          message: 'Agent 工具调用需要 LiteLLM 模型配置；local CLI 主生成方式不会被自动继承。',
-          nextStep: '如需使用 Ask-Stock Agent，请配置 LiteLLM 模型。',
+          message: 'Agent tool calls require a LiteLLM model config; the local CLI generation mode is not inherited.',
+          nextStep: 'Configure a LiteLLM model to use the Ask-Stock Agent.',
         },
         {
           key: 'stock_list',
@@ -892,7 +877,7 @@ describe('SettingsPage', () => {
           category: 'base',
           required: true,
           status: 'configured',
-          message: '已配置 1 只股票。',
+          message: '1 stock configured.',
           nextStep: null,
         },
       ],
@@ -900,7 +885,7 @@ describe('SettingsPage', () => {
 
     renderSettingsPage();
 
-    await screen.findByText('1 item(s) still need action: Agent 渠道');
+    await screen.findByText('1 item(s) still need action: Agent channel');
     expect(screen.getByRole('button', { name: 'Brief smoke run' })).toBeEnabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Brief smoke run' }));
@@ -924,12 +909,12 @@ describe('SettingsPage', () => {
       checks: [
         {
           key: 'llm_channels',
-          title: '模型渠道',
+          title: 'Model channel',
           category: 'ai_model',
           required: true,
           status: 'needs_action',
-          message: '还没有配置模型渠道。',
-          nextStep: '请先配置模型渠道。',
+          message: 'No model channel configured yet.',
+          nextStep: 'Configure a model channel first.',
         },
       ],
     });
@@ -938,7 +923,7 @@ describe('SettingsPage', () => {
     renderSettingsPage();
 
     expect(await screen.findByText('Some base setup still needs attention')).toBeInTheDocument();
-    expect(screen.getByText('1 item(s) still need action: 模型渠道')).toBeInTheDocument();
+    expect(screen.getByText('1 item(s) still need action: Model channel')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Brief smoke run' })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide for now' }));
@@ -1043,7 +1028,7 @@ describe('SettingsPage', () => {
     renderSettingsPage();
 
     expect(await screen.findByRole('heading', { name: 'Version info' })).toBeInTheDocument();
-    expect(screen.getByText(/当前构建未提供发布版本/)).toBeInTheDocument();
+    expect(screen.getByText(/This build has no release version/)).toBeInTheDocument();
     expect(screen.getByText('development')).toBeInTheDocument();
     expect(screen.getByText('abc123def456')).toBeInTheDocument();
   });
@@ -1197,9 +1182,9 @@ describe('SettingsPage', () => {
               isRequired: false,
               isEditable: true,
               options: [
-                { label: '成本优先', value: 'cost' },
-                { label: '均衡推荐', value: 'balanced' },
-                { label: '长上下文原文优先', value: 'long_context_raw_first' },
+                { label: 'Cost first', value: 'cost' },
+                { label: 'Balanced (recommended)', value: 'balanced' },
+                { label: 'Long-context raw first', value: 'long_context_raw_first' },
               ],
               validation: {
                 enum: ['cost', 'balanced', 'long_context_raw_first'],
@@ -1223,7 +1208,7 @@ describe('SettingsPage', () => {
               options: [],
               validation: { min: 1000 },
               displayOrder: 73,
-              description: '估算历史 token 超过该值时触发摘要；留空则跟随当前上下文压缩策略 profile 默认值。',
+              description: 'Summarize when estimated history tokens exceed this value; leave empty to follow the compression profile default.',
             },
           },
           {
@@ -1242,7 +1227,7 @@ describe('SettingsPage', () => {
               options: [],
               validation: { min: 1 },
               displayOrder: 74,
-              description: '压缩时最近 N 个用户轮次及其后的回复保持原文；留空则跟随当前上下文压缩策略 profile 默认值。',
+              description: 'Keep the latest N user turns and replies verbatim when compressing; leave empty to follow the compression profile default.',
             },
           },
         ],
@@ -1252,11 +1237,11 @@ describe('SettingsPage', () => {
     renderSettingsPage();
 
     expect(screen.getByText('AGENT_CONTEXT_COMPRESSION_PROFILE')).toBeInTheDocument();
-    expect(screen.getByText('成本优先')).toBeInTheDocument();
-    expect(screen.getByText('均衡推荐')).toBeInTheDocument();
-    expect(screen.getByText('长上下文原文优先')).toBeInTheDocument();
-    expect(screen.getByText(/估算历史 token 超过该值时触发摘要/)).toHaveTextContent('留空则跟随当前上下文压缩策略 profile 默认值');
-    expect(screen.getByText(/压缩时最近 N 个用户轮次及其后的回复保持原文/)).toHaveTextContent('留空则跟随当前上下文压缩策略 profile 默认值');
+    expect(screen.getByText('Cost first')).toBeInTheDocument();
+    expect(screen.getByText('Balanced (recommended)')).toBeInTheDocument();
+    expect(screen.getByText('Long-context raw first')).toBeInTheDocument();
+    expect(screen.getByText(/Summarize when estimated history tokens exceed this value/)).toHaveTextContent('leave empty to follow the compression profile default');
+    expect(screen.getByText(/Keep the latest N user turns and replies verbatim/)).toHaveTextContent('leave empty to follow the compression profile default');
   });
 
   it('reset button semantic: discards local changes without network request', () => {
@@ -1314,7 +1299,7 @@ describe('SettingsPage', () => {
         { key: 'OPENAI_MODEL', value: 'gpt-draft' },
         { key: 'GEMINI_MODEL', value: 'gemini-draft' },
         { key: 'OLLAMA_API_BASE', value: 'http://localhost:11434' },
-        { key: 'WECHAT_WEBHOOK_URL', value: 'not-a-url' },
+        { key: 'DISCORD_WEBHOOK_URL', value: 'not-a-url' },
       ],
     }));
 
@@ -1332,7 +1317,7 @@ describe('SettingsPage', () => {
       expect(statusItems).toHaveTextContent('GEMINI_MODEL=gemini-draft');
       expect(statusItems).toHaveTextContent('OLLAMA_API_BASE=http://localhost:11434');
       expect(statusItems).not.toHaveTextContent('GENERATION_BACKEND=codex_cli');
-      expect(statusItems).not.toHaveTextContent('WECHAT_WEBHOOK_URL=not-a-url');
+      expect(statusItems).not.toHaveTextContent('DISCORD_WEBHOOK_URL=not-a-url');
     });
   });
 
@@ -1416,209 +1401,6 @@ describe('SettingsPage', () => {
       'settings-field-LLM_PROMPT_CACHE_HINTS_ENABLED',
       'settings-field-LLM_PROMPT_CACHE_DIAGNOSTICS_LEVEL',
     ]);
-  });
-
-  it('notifies screening status after generic save when SCREENING_ENABLED is set false', async () => {
-    save.mockResolvedValue({ success: true });
-    getChangedItems.mockReturnValue([{ key: 'SCREENING_ENABLED', value: 'false' }]);
-
-    useSystemConfigMock.mockReturnValue(buildSystemConfigState({
-      hasDirty: true,
-      dirtyCount: 1,
-      getChangedItems: () => [{ key: 'SCREENING_ENABLED', value: 'false' }],
-    }));
-
-    renderSettingsPage();
-
-    fireEvent.click(screen.getByRole('button', { name: /Save configuration/ }));
-
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(notifyScreeningConfigChanged).toHaveBeenCalledTimes(1);
-    expect(notifySystemConfigChanged).toHaveBeenCalledTimes(1);
-    expect(screeningEnable).not.toHaveBeenCalled();
-  });
-
-  it('runs the Screening enable flow after generic save when SCREENING_ENABLED is set true', async () => {
-    save.mockResolvedValue({ success: true });
-    getChangedItems.mockReturnValue([{ key: 'SCREENING_ENABLED', value: 'true' }]);
-
-    useSystemConfigMock.mockReturnValue(buildSystemConfigState({
-      hasDirty: true,
-      dirtyCount: 1,
-      getChangedItems: () => [{ key: 'SCREENING_ENABLED', value: 'true' }],
-    }));
-
-    renderSettingsPage();
-
-    fireEvent.click(screen.getByRole('button', { name: /Save configuration/ }));
-
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(notifySystemConfigChanged).toHaveBeenCalledTimes(1);
-    expect(screeningEnable).toHaveBeenCalledTimes(1);
-    expect(refreshAfterExternalSave).toHaveBeenCalledWith(['SCREENING_ENABLED']);
-  });
-
-  it('does not notify screening status when generic save updates other fields', async () => {
-    save.mockResolvedValue({ success: true });
-    useSystemConfigMock.mockReturnValue(buildSystemConfigState({
-      hasDirty: true,
-      dirtyCount: 1,
-      getChangedItems: () => [{ key: 'LLM_CHANNELS', value: 'primary,backup' }],
-    }));
-
-    renderSettingsPage();
-
-    fireEvent.click(screen.getByRole('button', { name: /Save configuration/ }));
-
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(notifySystemConfigChanged).toHaveBeenCalledTimes(1);
-    expect(notifyScreeningConfigChanged).not.toHaveBeenCalled();
-  });
-
-  it('runs Screening enable flow from the settings card', async () => {
-    const configState = buildSystemConfigState();
-    useSystemConfigMock.mockReturnValue(buildSystemConfigState({
-      activeCategory: 'base',
-      itemsByCategory: {
-        ...configState.itemsByCategory,
-        base: [
-          ...configState.itemsByCategory.base,
-          {
-            key: 'SCREENING_ENABLED',
-            value: 'false',
-            rawValueExists: true,
-            isMasked: false,
-            schema: {
-              key: 'SCREENING_ENABLED',
-              category: 'base',
-              dataType: 'boolean',
-              uiControl: 'switch',
-              isSensitive: false,
-              isRequired: false,
-              isEditable: true,
-              options: [],
-              validation: {},
-              displayOrder: 16,
-            },
-          },
-        ],
-      },
-    }));
-
-    renderSettingsPage();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Enable screening' }));
-
-    await waitFor(() => expect(screeningEnable).toHaveBeenCalledTimes(1));
-    expect(updateSystemConfig).not.toHaveBeenCalled();
-    expect(refreshAfterExternalSave).toHaveBeenCalledWith(['SCREENING_ENABLED']);
-  });
-
-  it('maps SCREENING_ENABLED to the built-in screening card instead of a generic field', () => {
-    const configState = buildSystemConfigState();
-    useSystemConfigMock.mockReturnValue(buildSystemConfigState({
-      activeCategory: 'base',
-      itemsByCategory: {
-        ...configState.itemsByCategory,
-        base: [
-          ...configState.itemsByCategory.base,
-          {
-            key: 'SCREENING_ENABLED',
-            value: 'false',
-            rawValueExists: true,
-            isMasked: false,
-            schema: {
-              key: 'SCREENING_ENABLED',
-              category: 'base',
-              dataType: 'boolean',
-              uiControl: 'switch',
-              isSensitive: false,
-              isRequired: false,
-              isEditable: true,
-              options: [],
-              validation: {},
-              displayOrder: 16,
-            },
-          },
-        ],
-      },
-    }));
-
-    renderSettingsPage();
-
-    expect(screen.getByRole('button', { name: 'Enable screening' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'View fields' })).not.toBeInTheDocument();
-    expect(screen.queryByTestId('settings-field-SCREENING_ENABLED')).not.toBeInTheDocument();
-  });
-
-  it('shows the Screening control only on the base settings page', async () => {
-    const configState = buildSystemConfigState();
-    const baseItems = [
-      ...configState.itemsByCategory.base,
-      {
-        key: 'SCREENING_ENABLED',
-        value: 'false',
-        rawValueExists: true,
-        isMasked: false,
-        schema: {
-          key: 'SCREENING_ENABLED',
-          category: 'base',
-          dataType: 'boolean',
-          uiControl: 'switch',
-          isSensitive: false,
-          isRequired: false,
-          isEditable: true,
-          options: [],
-          validation: {},
-          displayOrder: 16,
-        },
-      },
-    ];
-
-    useSystemConfigMock.mockReturnValue(buildSystemConfigState({
-      activeCategory: 'base',
-      itemsByCategory: {
-        ...configState.itemsByCategory,
-        base: baseItems,
-      },
-    }));
-
-    const { rerender } = renderSettingsPage();
-
-    expect(await screen.findByRole('heading', { name: 'First-run setup check' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Screening' })).toBeInTheDocument();
-
-    useSystemConfigMock.mockReturnValue(buildSystemConfigState({
-      activeCategory: 'ai_model',
-      itemsByCategory: {
-        ...configState.itemsByCategory,
-        base: baseItems,
-      },
-    }));
-    rerender(
-      <MemoryRouter initialEntries={['/settings']}>
-        <SettingsPage />
-      </MemoryRouter>,
-    );
-
-    expect(screen.queryByRole('heading', { name: 'First-run setup check' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Screening' })).not.toBeInTheDocument();
-
-    useSystemConfigMock.mockReturnValue(buildSystemConfigState({
-      activeCategory: 'data_source',
-      itemsByCategory: {
-        ...configState.itemsByCategory,
-        base: baseItems,
-      },
-    }));
-    rerender(
-      <MemoryRouter initialEntries={['/settings']}>
-        <SettingsPage />
-      </MemoryRouter>,
-    );
-
-    expect(screen.queryByRole('heading', { name: 'Screening' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'First-run setup check' })).not.toBeInTheDocument();
   });
 
   it('maps schedule settings to the scheduler card instead of generic raw fields', async () => {
@@ -2229,46 +2011,6 @@ describe('SettingsPage', () => {
     expect(await screen.findByText('Enabled')).toBeInTheDocument();
   });
 
-  it('refreshes Screening state when the enable flow fails', async () => {
-    const configState = buildSystemConfigState();
-    screeningEnable.mockRejectedValueOnce(new Error('config update failed'));
-    useSystemConfigMock.mockReturnValue(buildSystemConfigState({
-      activeCategory: 'base',
-      itemsByCategory: {
-        ...configState.itemsByCategory,
-        base: [
-          ...configState.itemsByCategory.base,
-          {
-            key: 'SCREENING_ENABLED',
-            value: 'false',
-            rawValueExists: true,
-            isMasked: false,
-            schema: {
-              key: 'SCREENING_ENABLED',
-              category: 'base',
-              dataType: 'boolean',
-              uiControl: 'switch',
-              isSensitive: false,
-              isRequired: false,
-              isEditable: true,
-              options: [],
-              validation: {},
-              displayOrder: 16,
-            },
-          },
-        ],
-      },
-    }));
-
-    renderSettingsPage();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Enable screening' }));
-
-    await waitFor(() => expect(screeningEnable).toHaveBeenCalledTimes(1));
-    expect(updateSystemConfig).not.toHaveBeenCalled();
-    expect(refreshAfterExternalSave).toHaveBeenCalledWith(['SCREENING_ENABLED']);
-  });
-
   it('passes LLM channel support keys to the channel editor without rendering them as generic fields', async () => {
     useSystemConfigMock.mockReturnValue(buildSystemConfigState({
       activeCategory: 'ai_model',
@@ -2408,7 +2150,7 @@ describe('SettingsPage', () => {
 
     renderSettingsPage();
 
-    expect(screen.getByText('通知测试面板:TELEGRAM_BOT_TOKEN,WECHAT_WEBHOOK_URL')).toBeInTheDocument();
+    expect(screen.getByText('Notification test panel:TELEGRAM_BOT_TOKEN,DISCORD_WEBHOOK_URL')).toBeInTheDocument();
     expect(screen.getByTestId('settings-field-TELEGRAM_BOT_TOKEN')).toBeInTheDocument();
     expect(settingsPanelErrorBoundary).toHaveBeenCalledWith('Notification test');
     expect(settingsPanelErrorBoundary).toHaveBeenCalledWith('Notification settings');
@@ -2437,37 +2179,25 @@ describe('SettingsPage', () => {
       activeCategory: 'notification',
       itemsByCategory: {
         notification: [
-          buildItem('WECHAT_WEBHOOK_URL', 'https://qyapi.example.com/hook'),
-          buildItem('FEISHU_WEBHOOK_URL', 'https://open.feishu.cn/hook'),
-          buildItem('FEISHU_APP_ID', 'cli_x'),
-          buildItem('DINGTALK_WEBHOOK_URL', 'https://oapi.dingtalk.com/robot/send'),
-          buildItem('PUSHPLUS_TOKEN', 'pp'),
           buildItem('PUSHOVER_USER_KEY', 'po'),
           buildItem('NTFY_URL', 'https://ntfy.sh/topic'),
           buildItem('GOTIFY_URL', 'https://gotify.example.com'),
-          buildItem('SERVERCHAN3_SENDKEY', 'sc'),
-          buildItem('ASTRBOT_URL', 'https://astrbot.example.com'),
           buildItem('TELEGRAM_BOT_TOKEN', '123:abc'),
-          buildItem('NOTIFICATION_REPORT_CHANNELS', 'telegram', ['wechat', 'feishu', 'dingtalk', 'pushplus', 'pushover', 'ntfy', 'gotify', 'serverchan3', 'astrbot', 'telegram', 'email']),
+          buildItem('NOTIFICATION_REPORT_CHANNELS', 'telegram', ['pushover', 'ntfy', 'gotify', 'telegram', 'email']),
         ],
       },
     }));
 
     renderSettingsPage();
 
-    expect(screen.queryByTestId('settings-field-WECHAT_WEBHOOK_URL')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('settings-field-FEISHU_WEBHOOK_URL')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('settings-field-FEISHU_APP_ID')).not.toBeInTheDocument();
-    for (const key of ['DINGTALK_WEBHOOK_URL', 'PUSHPLUS_TOKEN', 'PUSHOVER_USER_KEY', 'NTFY_URL', 'GOTIFY_URL', 'SERVERCHAN3_SENDKEY', 'ASTRBOT_URL']) {
+    for (const key of ['PUSHOVER_USER_KEY', 'NTFY_URL', 'GOTIFY_URL']) {
       expect(screen.queryByTestId(`settings-field-${key}`)).not.toBeInTheDocument();
     }
     expect(screen.getByTestId('settings-field-TELEGRAM_BOT_TOKEN')).toBeInTheDocument();
     const routingField = screen.getByTestId('settings-field-NOTIFICATION_REPORT_CHANNELS');
     expect(routingField).toHaveTextContent('telegram');
     expect(routingField).toHaveTextContent('email');
-    expect(routingField).not.toHaveTextContent('wechat');
-    expect(routingField).not.toHaveTextContent('feishu');
-    for (const channel of ['dingtalk', 'pushplus', 'pushover', 'ntfy', 'gotify', 'serverchan3', 'astrbot']) {
+    for (const channel of ['pushover', 'ntfy', 'gotify']) {
       expect(routingField).not.toHaveTextContent(channel);
     }
   });
@@ -2477,7 +2207,7 @@ describe('SettingsPage', () => {
 
     renderSettingsPage();
 
-    expect(screen.getAllByText(/浏览器开发者工具控制台与后端日志/)).toHaveLength(2);
+    expect(screen.getAllByText(/browser developer console and backend logs/)).toHaveLength(2);
     expect(screen.queryByText('desktop.log')).not.toBeInTheDocument();
   });
 
@@ -2488,7 +2218,7 @@ describe('SettingsPage', () => {
     renderSettingsPage();
 
     expect(screen.getAllByText('desktop.log')).toHaveLength(2);
-    expect(screen.queryByText(/浏览器开发者工具控制台与后端日志/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/browser developer console and backend logs/)).not.toBeInTheDocument();
   });
 
   it('renders env backup actions outside desktop runtime', () => {
@@ -2497,7 +2227,7 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('heading', { name: 'Configuration backup' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export .env' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Import .env' })).toBeInTheDocument();
-    expect(screen.getByText(/Docker 部署中/)).toHaveTextContent('ENV_FILE');
+    expect(screen.getByText(/In Docker deployments/)).toHaveTextContent('ENV_FILE');
   });
 
   it('disables env backup actions when web auth is not enabled', () => {
@@ -2509,7 +2239,7 @@ describe('SettingsPage', () => {
 
     renderSettingsPage();
 
-    expect(screen.getByText(/当前 Web 端未开启管理员鉴权/)).toBeInTheDocument();
+    expect(screen.getByText(/not protected by admin authentication/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export .env' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Import .env' })).toBeDisabled();
   });
@@ -2532,7 +2262,7 @@ describe('SettingsPage', () => {
 
     renderSettingsPage();
 
-    expect(screen.queryByText(/当前 Web 端未开启管理员鉴权/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not protected by admin authentication/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export .env' })).not.toBeDisabled();
     expect(screen.getByRole('button', { name: 'Import .env' })).not.toBeDisabled();
   });
@@ -2715,13 +2445,13 @@ describe('SettingsPage', () => {
       currentVersion: '3.12.0',
       latestVersion: '3.13.0',
       releaseUrl: 'https://github.com/ZhuLinsen/daily_stock_analysis/releases/tag/v3.13.0',
-      message: '发现新版本 3.13.0，可前往 GitHub Releases 下载更新。',
+      message: 'Version 3.13.0 is available on GitHub Releases.',
     });
     (window as { dsaDesktop?: unknown }).dsaDesktop = createDesktopRuntime();
 
     renderSettingsPage();
 
-    expect(await screen.findByText(/发现新版本:当前 3\.12\.0，最新 3\.13\.0/)).toBeInTheDocument();
+    expect(await screen.findByText(/New version available:Current 3\.12\.0, latest 3\.13\.0/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open release' })).toBeInTheDocument();
   });
 
@@ -2733,7 +2463,7 @@ describe('SettingsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Check for updates' }));
 
     await waitFor(() => expect(desktopCheckForUpdates).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText('已是最新版本:当前桌面端已是最新版本。')).toBeInTheDocument();
+    expect(await screen.findByText('Up to date:The desktop app is already up to date.')).toBeInTheDocument();
   });
 
   it('opens GitHub release page from desktop update notice', async () => {
@@ -2742,7 +2472,7 @@ describe('SettingsPage', () => {
       currentVersion: '3.12.0',
       latestVersion: '3.13.0',
       releaseUrl: 'https://github.com/ZhuLinsen/daily_stock_analysis/releases/tag/v3.13.0',
-      message: '发现新版本 3.13.0，可前往 GitHub Releases 下载更新。',
+      message: 'Version 3.13.0 is available on GitHub Releases.',
     });
     (window as { dsaDesktop?: unknown }).dsaDesktop = createDesktopRuntime();
 
@@ -2764,14 +2494,14 @@ describe('SettingsPage', () => {
       currentVersion: '3.12.0',
       latestVersion: '3.13.0',
       releaseUrl: 'https://github.com/ZhuLinsen/daily_stock_analysis/releases/tag/v3.13.0',
-      message: '新版本 3.13.0 已下载，可重启应用完成安装。',
+      message: 'Version 3.13.0 has been downloaded. Restart the app to install it.',
       downloadPercent: 100,
     });
     (window as { dsaDesktop?: unknown }).dsaDesktop = createDesktopRuntime();
 
     renderSettingsPage();
 
-    expect(await screen.findByText('更新已下载:新版本 3.13.0 已下载，可重启应用完成安装。')).toBeInTheDocument();
+    expect(await screen.findByText('Update downloaded:Version 3.13.0 has been downloaded. Restart the app to install it.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Restart to install' }));
 
@@ -2784,9 +2514,9 @@ describe('SettingsPage', () => {
 
     renderDesktopUpdateEntries();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Desktop update' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Desktop updates' }));
     fireEvent.click(
-      within(screen.getByRole('dialog', { name: 'Desktop update' })).getByRole('button', { name: 'Check for updates' }),
+      within(screen.getByRole('dialog', { name: 'Desktop updates' })).getByRole('button', { name: 'Check for updates' }),
     );
 
     await waitFor(() => expect(desktopCheckForUpdates).toHaveBeenCalledTimes(1));
@@ -2826,7 +2556,7 @@ describe('SettingsPage', () => {
     await waitFor(() => expect(desktopCheckForUpdates).toHaveBeenCalledTimes(1));
     expect(within(settingsCard).getByRole('button', { name: 'Checking...' })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Desktop update' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Desktop updates' }));
     expect(screen.queryByRole('button', { name: 'Check for updates' })).not.toBeInTheDocument();
     fireEvent.click(within(settingsCard).getByRole('button', { name: 'Checking...' }));
     expect(desktopCheckForUpdates).toHaveBeenCalledTimes(1);
@@ -2849,9 +2579,9 @@ describe('SettingsPage', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Desktop update' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Desktop updates' }));
     fireEvent.click(
-      within(screen.getByRole('dialog', { name: 'Desktop update' })).getByRole('button', { name: 'Check for updates' }),
+      within(screen.getByRole('dialog', { name: 'Desktop updates' })).getByRole('button', { name: 'Check for updates' }),
     );
     await waitFor(() => expect(desktopCheckForUpdates).toHaveBeenCalledTimes(1));
 

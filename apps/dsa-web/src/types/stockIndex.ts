@@ -4,26 +4,28 @@
  * Stock data index for autocomplete functionality
  */
 
-export type Market = 'VN' | 'CN' | 'HK' | 'US' | 'JP' | 'KR' | 'INDEX' | 'ETF' | 'BSE';
+// Chỉ thị trường Việt Nam: mã cổ phiếu VN, chỉ số VN và chứng chỉ quỹ/ETF VN.
+// Vietnam-only: VN stocks, VN indices and VN fund certificates / ETFs.
+export type Market = 'VN' | 'INDEX' | 'ETF';
 export type AssetType = 'stock' | 'index' | 'etf';
 
 /**
  * Stock index item (full format)
  */
 export interface StockIndexItem {
-  /** Canonical code: 600519.SH */
+  /** Canonical code: FPT */
   canonicalCode: string;
-  /** Display code: 600519 */
+  /** Display code: FPT */
   displayCode: string;
-  /** Chinese name: 贵州茅台 */
+  /** Primary (Vietnamese) name: Công ty Cổ phần FPT */
   nameZh: string;
-  /** English name: Kweichow Moutai */
+  /** English name: FPT Corporation */
   nameEn?: string;
-  /** Pinyin full: guizhoumaotai */
+  /** Accent-free full name: congtycophanfpt */
   pinyinFull?: string;
-  /** Pinyin abbreviation: gzmt */
+  /** Accent-free abbreviation: ctcpf */
   pinyinAbbr?: string;
-  /** Aliases: ["茅台"] */
+  /** Aliases: ["FPT Corp"] */
   aliases?: string[];
   /** Market */
   market: Market;
@@ -43,7 +45,7 @@ export interface StockSuggestion {
   canonicalCode: string;
   /** Display code */
   displayCode: string;
-  /** Chinese name */
+  /** Primary name */
   nameZh: string;
   /** Market */
   market: Market;

@@ -26,11 +26,11 @@ describe('Input', () => {
       <Input
         label="Password"
         name="password"
-        trailingAction={<button type="button">显示</button>}
+        trailingAction={<button type="button">Hiển thị</button>}
       />
     );
 
-    expect(screen.getByRole('button', { name: '显示' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hiển thị' })).toBeInTheDocument();
   });
 
   it('renders a key icon and applies leading padding', () => {
@@ -41,9 +41,9 @@ describe('Input', () => {
   });
 
   it('toggles password visibility in uncontrolled mode', () => {
-    render(<Input label="密码" type="password" allowTogglePassword />);
+    render(<Input label="Mật khẩu" type="password" allowTogglePassword />);
 
-    const input = screen.getByLabelText('密码');
+    const input = screen.getByLabelText('Mật khẩu');
     expect(input).toHaveAttribute('type', 'password');
 
     fireEvent.click(screen.getByRole('button', { name: 'Show content' }));

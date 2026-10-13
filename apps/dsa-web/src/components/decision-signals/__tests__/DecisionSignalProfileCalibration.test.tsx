@@ -106,14 +106,14 @@ function renderCalibration(value = calibration) {
 describe('DecisionSignalProfileCalibration', () => {
   beforeEach(() => {
     window.localStorage.clear();
-    window.localStorage.setItem('dsa.uiLanguage', 'zh');
+    window.localStorage.setItem('dsa.uiLanguage', 'en');
   });
 
   it('keeps profile and child sample gates independent and distinguishes zero from no result', () => {
     renderCalibration();
 
     expect(screen.getByRole('heading', { name: 'Decision profile history' })).toBeInTheDocument();
-    const balancedButton = screen.getByRole('button', { name: /均衡.*已完成 30/ });
+    const balancedButton = screen.getByRole('button', { name: /Balanced.*30 completed/ });
     expect(balancedButton).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getAllByText('0%').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('No calculable result').length).toBeGreaterThanOrEqual(1);
@@ -124,8 +124,8 @@ describe('DecisionSignalProfileCalibration', () => {
     expect(within(horizonCard as HTMLElement).getByText('Insufficient sample size; for observation only.')).toBeInTheDocument();
     expect(within(horizonCard as HTMLElement).queryByText('Hit rate')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /保守.*已完成 29/ }));
-    expect(screen.getByRole('button', { name: /保守.*已完成 29/ })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /Conservative.*29 completed/ }));
+    expect(screen.getByRole('button', { name: /Conservative.*29 completed/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('Insufficient sample size; for observation only.')).toBeInTheDocument();
     expect(screen.getByText('No breakdown samples are available to observe yet.')).toBeInTheDocument();
   });
@@ -139,7 +139,7 @@ describe('DecisionSignalProfileCalibration', () => {
     fireEvent.click(actionButton);
 
     expect(actionButton).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('heading', { name: '买入' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Buy' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '3 days' })).not.toBeInTheDocument();
   });
 

@@ -23,12 +23,12 @@ describe('alertsApi', () => {
   });
 
   it('lists market regions enabled for market alerts', async () => {
-    get.mockResolvedValueOnce({ data: { regions: ['vn', 'us'], default: 'vn' } });
+    get.mockResolvedValueOnce({ data: { regions: ['vn'], default: 'vn' } });
 
     const result = await alertsApi.listMarketRegions();
 
     expect(get).toHaveBeenCalledWith('/api/v1/alerts/market-regions');
-    expect(result).toEqual({ regions: ['vn', 'us'], default: 'vn' });
+    expect(result).toEqual({ regions: ['vn'], default: 'vn' });
   });
 
   it('lists rules with snake_case query params and camelCase response fields', async () => {
@@ -39,7 +39,7 @@ describe('alertsApi', () => {
             id: 1,
             name: 'price rule',
             target_scope: 'single_symbol',
-            target: '600519',
+            target: 'HPG',
             alert_type: 'price_cross',
             parameters: { direction: 'above', price: 1800 },
             severity: 'warning',
@@ -89,7 +89,7 @@ describe('alertsApi', () => {
         id: 2,
         name: 'change rule',
         target_scope: 'single_symbol',
-        target: 'AAPL',
+        target: 'FPT',
         alert_type: 'price_change_percent',
         parameters: { direction: 'down', change_pct: 3 },
         severity: 'critical',
@@ -101,7 +101,7 @@ describe('alertsApi', () => {
     const created = await alertsApi.createRule({
       name: 'change rule',
       targetScope: 'single_symbol',
-      target: 'AAPL',
+      target: 'FPT',
       alertType: 'price_change_percent',
       parameters: { direction: 'down', changePct: 3 },
       severity: 'critical',
@@ -111,7 +111,7 @@ describe('alertsApi', () => {
     expect(post).toHaveBeenCalledWith('/api/v1/alerts/rules', {
       name: 'change rule',
       target_scope: 'single_symbol',
-      target: 'AAPL',
+      target: 'FPT',
       alert_type: 'price_change_percent',
       parameters: { direction: 'down', change_pct: 3 },
       severity: 'critical',
@@ -126,7 +126,7 @@ describe('alertsApi', () => {
         id: 4,
         name: 'macd rule',
         target_scope: 'single_symbol',
-        target: '600519',
+        target: 'HPG',
         alert_type: 'macd_cross',
         parameters: {
           direction: 'bullish_cross',
@@ -143,7 +143,7 @@ describe('alertsApi', () => {
     await alertsApi.createRule({
       name: 'macd rule',
       targetScope: 'single_symbol',
-      target: '600519',
+      target: 'HPG',
       alertType: 'macd_cross',
       parameters: {
         direction: 'bullish_cross',
@@ -158,7 +158,7 @@ describe('alertsApi', () => {
     expect(post).toHaveBeenCalledWith('/api/v1/alerts/rules', {
       name: 'macd rule',
       target_scope: 'single_symbol',
-      target: '600519',
+      target: 'HPG',
       alert_type: 'macd_cross',
       parameters: {
         direction: 'bullish_cross',
@@ -178,7 +178,7 @@ describe('alertsApi', () => {
           id: 6,
           name: 'market status',
           target_scope: 'market',
-          target: 'cn',
+          target: 'vn',
           alert_type: 'market_light_status',
           parameters: { statuses: ['red', 'yellow'] },
           severity: 'critical',
@@ -191,7 +191,7 @@ describe('alertsApi', () => {
           id: 7,
           name: 'market score drop',
           target_scope: 'market',
-          target: 'us',
+          target: 'vn',
           alert_type: 'market_light_score_drop',
           parameters: { min_drop: 12 },
           severity: 'warning',
@@ -203,7 +203,7 @@ describe('alertsApi', () => {
     const statusRule = await alertsApi.createRule({
       name: 'market status',
       targetScope: 'market',
-      target: 'cn',
+      target: 'vn',
       alertType: 'market_light_status',
       parameters: { statuses: ['red', 'yellow'] },
       severity: 'critical',
@@ -212,7 +212,7 @@ describe('alertsApi', () => {
     const scoreDropRule = await alertsApi.createRule({
       name: 'market score drop',
       targetScope: 'market',
-      target: 'us',
+      target: 'vn',
       alertType: 'market_light_score_drop',
       parameters: { minDrop: 12 },
       severity: 'warning',
@@ -222,7 +222,7 @@ describe('alertsApi', () => {
     expect(post).toHaveBeenNthCalledWith(1, '/api/v1/alerts/rules', {
       name: 'market status',
       target_scope: 'market',
-      target: 'cn',
+      target: 'vn',
       alert_type: 'market_light_status',
       parameters: { statuses: ['red', 'yellow'] },
       severity: 'critical',
@@ -231,7 +231,7 @@ describe('alertsApi', () => {
     expect(post).toHaveBeenNthCalledWith(2, '/api/v1/alerts/rules', {
       name: 'market score drop',
       target_scope: 'market',
-      target: 'us',
+      target: 'vn',
       alert_type: 'market_light_score_drop',
       parameters: { min_drop: 12 },
       severity: 'warning',
@@ -271,8 +271,8 @@ describe('alertsApi', () => {
           skipped_count: 0,
           target_results: [
             {
-              target: '600519',
-              display_target: '自选股 - 600519',
+              target: 'HPG',
+              display_target: 'Danh mục theo dõi - HPG',
               status: 'triggered',
               record_status: 'triggered',
               triggered: true,
@@ -307,7 +307,7 @@ describe('alertsApi', () => {
     expect(created.parameters.mode).toBe('breach');
     expect(dryRun.evaluatedCount).toBe(2);
     expect(dryRun.degradedCount).toBe(1);
-    expect(dryRun.targetResults?.[0].displayTarget).toBe('自选股 - 600519');
+    expect(dryRun.targetResults?.[0].displayTarget).toBe('Danh mục theo dõi - HPG');
   });
 
   it('deletes, toggles, tests, and lists history endpoints', async () => {
@@ -318,7 +318,7 @@ describe('alertsApi', () => {
       .mockResolvedValueOnce({ data: { rule_id: 3, status: 'not_triggered', triggered: false, observed_value: 1.2, message: 'not triggered' } });
     get
       .mockResolvedValueOnce({ data: { items: [{ id: 10, rule_id: 3, target: 'MSFT', status: 'skipped', observed_value: null, triggered_at: '2026-05-18T10:00:00' }], total: 1, page: 1, page_size: 20 } })
-      .mockResolvedValueOnce({ data: { items: [{ id: 11, trigger_id: 10, channel: 'wechat', attempt: 1, success: false, retryable: true, error_code: 'timeout', latency_ms: null }], total: 1, page: 1, page_size: 20 } });
+      .mockResolvedValueOnce({ data: { items: [{ id: 11, trigger_id: 10, channel: 'telegram', attempt: 1, success: false, retryable: true, error_code: 'timeout', latency_ms: null }], total: 1, page: 1, page_size: 20 } });
 
     await expect(alertsApi.deleteRule(3)).resolves.toEqual({ deleted: 1 });
     await alertsApi.enableRule(3);

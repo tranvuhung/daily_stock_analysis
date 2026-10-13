@@ -50,7 +50,7 @@ const localCliStatus: GenerationBackendStatusResponse = {
 const smokePassed: TestGenerationBackendResponse = {
   success: true,
   mode: 'json',
-  message: '生成后端冒烟测试通过',
+  message: 'Generation backend smoke test passed',
   status: localCliStatus.primary,
 };
 
@@ -99,7 +99,7 @@ describe('GenerationBackendStatusPanel', () => {
     expect(previewGenerationBackendStatus).not.toHaveBeenCalled();
     expect(await screen.findByText('codex_cli')).toBeInTheDocument();
     expect(screen.getByText('Generation only')).toBeInTheDocument();
-    expect(screen.getByText(/本地 CLI 只用于报告和文本生成/)).toBeInTheDocument();
+    expect(screen.getByText(/Local CLI is only used for reports and text generation/)).toBeInTheDocument();
   });
 
   it('previews unsaved draft generation backend status', async () => {

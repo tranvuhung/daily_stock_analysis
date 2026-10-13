@@ -12,10 +12,6 @@ import type {
   PortfolioCostMethod,
   PortfolioDeleteResponse,
   PortfolioEventCreatedResponse,
-  PortfolioFxRefreshResponse,
-  PortfolioImportBrokerListResponse,
-  PortfolioImportCommitResponse,
-  PortfolioImportParseResponse,
   PortfolioPositionAnalysisRequest,
   PortfolioRiskResponse,
   PortfolioSnapshotResponse,
@@ -28,11 +24,6 @@ type SnapshotQuery = {
   asOf?: string;
   costMethod?: PortfolioCostMethod;
   includeRealtime?: boolean;
-};
-
-type FxRefreshQuery = {
-  accountId?: number;
-  asOf?: string;
 };
 
 type EventQuery = {
@@ -70,17 +61,6 @@ function buildSnapshotParams(query: SnapshotQuery): Record<string, string | numb
   }
   if (query.includeRealtime !== undefined) {
     params.include_realtime = query.includeRealtime ? 'true' : 'false';
-  }
-  return params;
-}
-
-function buildFxRefreshParams(query: FxRefreshQuery): Record<string, string | number> {
-  const params: Record<string, string | number> = {};
-  if (query.accountId != null) {
-    params.account_id = query.accountId;
-  }
-  if (query.asOf) {
-    params.as_of = query.asOf;
   }
   return params;
 }
@@ -153,13 +133,6 @@ export const portfolioApi = {
       params: buildSnapshotParams(query),
     });
     return toCamelCase<PortfolioRiskResponse>(response.data);
-  },
-
-  async refreshFx(query: FxRefreshQuery = {}): Promise<PortfolioFxRefreshResponse> {
-    const response = await apiClient.post<Record<string, unknown>>('/api/v1/portfolio/fx/refresh', undefined, {
-      params: buildFxRefreshParams(query),
-    });
-    return toCamelCase<PortfolioFxRefreshResponse>(response.data);
   },
 
   async createTrade(payload: PortfolioTradeCreateRequest): Promise<PortfolioEventCreatedResponse> {
@@ -253,37 +226,5 @@ export const portfolioApi = {
     }
     const response = await apiClient.get<Record<string, unknown>>('/api/v1/portfolio/corporate-actions', { params });
     return toCamelCase<PortfolioCorporateActionListResponse>(response.data);
-  },
-
-  async listImportBrokers(): Promise<PortfolioImportBrokerListResponse> {
-    const response = await apiClient.get<Record<string, unknown>>('/api/v1/portfolio/imports/csv/brokers');
-    return toCamelCase<PortfolioImportBrokerListResponse>(response.data);
-  },
-
-  async parseCsvImport(broker: string, file: File): Promise<PortfolioImportParseResponse> {
-    const formData = new FormData();
-    formData.append('broker', broker);
-    formData.append('file', file);
-    const response = await apiClient.post<Record<string, unknown>>('/api/v1/portfolio/imports/csv/parse', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return toCamelCase<PortfolioImportParseResponse>(response.data);
-  },
-
-  async commitCsvImport(
-    accountId: number,
-    broker: string,
-    file: File,
-    dryRun = false,
-  ): Promise<PortfolioImportCommitResponse> {
-    const formData = new FormData();
-    formData.append('account_id', String(accountId));
-    formData.append('broker', broker);
-    formData.append('dry_run', dryRun ? 'true' : 'false');
-    formData.append('file', file);
-    const response = await apiClient.post<Record<string, unknown>>('/api/v1/portfolio/imports/csv/commit', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return toCamelCase<PortfolioImportCommitResponse>(response.data);
   },
 };

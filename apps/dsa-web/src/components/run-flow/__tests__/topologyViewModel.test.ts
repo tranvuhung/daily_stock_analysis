@@ -5,7 +5,7 @@ import { buildRunFlowTopologyModel } from '../topologyViewModel';
 const baseSnapshot: RunFlowSnapshot = {
   taskId: 'task-1',
   traceId: 'trace-1',
-  stockCode: '600519',
+  stockCode: 'HPG',
   status: 'fallback',
   generatedAt: '2026-06-08T10:00:20',
   summary: {
@@ -17,21 +17,21 @@ const baseSnapshot: RunFlowSnapshot = {
   lanes: [
     { id: 'entry', label: 'Entry', order: 1 },
     { id: 'data_source', label: 'Data source', order: 2 },
-    { id: 'analysis', label: '分析引擎', order: 3 },
+    { id: 'analysis', label: 'Bộ máy phân tích', order: 3 },
   ],
   nodes: [
     {
       id: 'task_queue',
       lane: 'entry',
       kind: 'queue',
-      label: 'Task 队列',
+      label: 'Task Hàng đợi',
       status: 'success',
     },
     {
       id: 'provider_news_search_tavily_1',
       lane: 'data_source',
       kind: 'data_source',
-      label: '新闻舆情 · Tavily',
+      label: 'Tin tức dư luận · Tavily',
       status: 'failed',
       provider: 'Tavily',
       startedAt: '2026-06-08T10:00:01',
@@ -43,7 +43,7 @@ const baseSnapshot: RunFlowSnapshot = {
       id: 'provider_news_search_searxng_2',
       lane: 'data_source',
       kind: 'data_source',
-      label: '新闻舆情 · SearXNG',
+      label: 'Tin tức dư luận · SearXNG',
       status: 'success',
       provider: 'SearXNG',
       startedAt: '2026-06-08T10:00:03',
@@ -56,7 +56,7 @@ const baseSnapshot: RunFlowSnapshot = {
       id: 'context_block_news',
       lane: 'data_source',
       kind: 'data_source',
-      label: '新闻',
+      label: 'Tin tức',
       status: 'success',
       recordCount: 6,
       metadata: { block_key: 'news' },
@@ -65,7 +65,7 @@ const baseSnapshot: RunFlowSnapshot = {
       id: 'context_block_fundamental',
       lane: 'data_source',
       kind: 'data_source',
-      label: '基本面',
+      label: 'Cơ bản',
       status: 'degraded',
       metadata: { block_key: 'fundamental' },
     },
@@ -114,7 +114,7 @@ const baseSnapshot: RunFlowSnapshot = {
       severity: 'warning',
       type: 'provider_run',
       nodeId: 'provider_news_search_tavily_1',
-      title: '新闻舆情失败',
+      title: 'Tin tức dư luận thất bại',
     },
     {
       id: 'evt-block',
@@ -122,7 +122,7 @@ const baseSnapshot: RunFlowSnapshot = {
       severity: 'warning',
       type: 'context_block_status',
       nodeId: 'context_block_fundamental',
-      title: '基本面输入状态',
+      title: 'Trạng thái đầu vào cơ bản',
     },
   ],
 };
@@ -136,7 +136,7 @@ describe('buildRunFlowTopologyModel', () => {
 
     const newsGroup = model.nodes.find((node) => node.id === 'topology_data_news_search');
     expect(newsGroup).toMatchObject({
-      label: '新闻舆情',
+      label: 'Tin tức dư luận',
       status: 'fallback',
       provider: 'Tavily -> SearXNG',
       attempts: 2,
@@ -161,7 +161,7 @@ describe('buildRunFlowTopologyModel', () => {
           id: 'provider_compatible_alpha_1',
           lane: 'data_source',
           kind: 'data_source',
-          label: '兼容行情 · Alpha',
+          label: 'Báo giá tương thích · Alpha',
           status: 'failed',
           provider: 'Alpha',
           metadata: { dataType: 'compatible_live_quote', attempt: 1 },
@@ -170,7 +170,7 @@ describe('buildRunFlowTopologyModel', () => {
           id: 'provider_compatible_beta_2',
           lane: 'data_source',
           kind: 'data_source',
-          label: '兼容行情 · Beta',
+          label: 'Báo giá tương thích · Beta',
           status: 'success',
           provider: 'Beta',
           metadata: { dataType: 'compatible_live_quote', attempt: 2 },
@@ -179,7 +179,7 @@ describe('buildRunFlowTopologyModel', () => {
           id: 'api_normalized_context_news',
           lane: 'data_source',
           kind: 'data_source',
-          label: '新闻',
+          label: 'Tin tức',
           status: 'success',
           recordCount: 3,
           metadata: { blockKey: 'news' },
@@ -215,7 +215,7 @@ describe('buildRunFlowTopologyModel', () => {
           severity: 'warning',
           type: 'provider_run',
           nodeId: 'provider_compatible_alpha_1',
-          title: '兼容行情失败',
+          title: 'Báo giá tương thích thất bại',
         },
         {
           id: 'evt-normalized-block',
@@ -223,7 +223,7 @@ describe('buildRunFlowTopologyModel', () => {
           severity: 'success',
           type: 'context_block_status',
           nodeId: 'api_normalized_context_news',
-          title: '新闻输入状态',
+          title: 'Trạng thái đầu vào tin tức',
         },
       ],
     };
@@ -256,7 +256,7 @@ describe('buildRunFlowTopologyModel', () => {
           id: 'provider_realtime_quote_tickflowfetcher_1',
           lane: 'data_source',
           kind: 'data_source',
-          label: '实时行情 · TickFlowFetcher',
+          label: 'Báo giá thời gian thực · TickFlowFetcher',
           status: 'failed',
           provider: 'TickFlowFetcher',
           durationMs: 892,
@@ -266,7 +266,7 @@ describe('buildRunFlowTopologyModel', () => {
           id: 'provider_realtime_quote_aksharefetcher_2',
           lane: 'data_source',
           kind: 'data_source',
-          label: '实时行情 · AkshareFetcher',
+          label: 'Báo giá thời gian thực · AkshareFetcher',
           status: 'success',
           provider: 'AkshareFetcher',
           durationMs: 8700,
@@ -297,7 +297,7 @@ describe('buildRunFlowTopologyModel', () => {
     const quoteGroup = collapsed.nodes.find((node) => node.id === 'topology_data_realtime_quote');
 
     expect(quoteGroup).toMatchObject({
-      label: '实时行情',
+      label: 'Báo giá thời gian thực',
       status: 'fallback',
       provider: 'TickFlowFetcher -> AkshareFetcher',
       attempts: 2,
@@ -316,7 +316,7 @@ describe('buildRunFlowTopologyModel', () => {
     expect(expanded.nodes.map((node) => node.id)).toContain('provider_realtime_quote_tickflowfetcher_1');
     expect(expanded.nodes.map((node) => node.id)).toContain('provider_realtime_quote_aksharefetcher_2');
     expect(expanded.nodes.find((node) => node.id === 'provider_realtime_quote_tickflowfetcher_1')).toMatchObject({
-      label: '实时行情 · TickFlowFetcher',
+      label: 'Báo giá thời gian thực · TickFlowFetcher',
       provider: 'TickFlowFetcher',
       metadata: expect.objectContaining({
         topologyRole: 'provider_attempt',

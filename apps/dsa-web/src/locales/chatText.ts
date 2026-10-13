@@ -1,7 +1,7 @@
 import type { UiLanguage } from '../i18n/uiText';
 
 // Tên/mô tả chiến lược theo ngôn ngữ UI, khoá theo skill id (`strategies/*.yaml` → `name`).
-// Backend chỉ có display_name tiếng Trung; id không khớp thì dùng lại tên từ backend.
+// Id không khớp thì dùng lại tên từ backend.
 // Localized strategy names/descriptions keyed by skill id; unknown ids fall back to the backend name.
 type SkillText = { name: string; description: string };
 
@@ -48,7 +48,6 @@ export const CHAT_TOOL_LABELS: Record<UiLanguage, Record<string, string>> = {
   vi: {
     get_realtime_quote: 'Lấy giá thời gian thực',
     get_daily_history: 'Lấy dữ liệu nến lịch sử',
-    get_chip_distribution: 'Phân tích phân bổ cổ phiếu nắm giữ',
     get_analysis_context: 'Lấy ngữ cảnh phân tích',
     get_stock_info: 'Lấy thông tin cơ bản',
     search_stock_news: 'Tìm tin tức cổ phiếu',
@@ -58,17 +57,14 @@ export const CHAT_TOOL_LABELS: Record<UiLanguage, Record<string, string>> = {
     get_volume_analysis: 'Phân tích khối lượng',
     analyze_pattern: 'Nhận diện mô hình nến',
     get_market_indices: 'Lấy chỉ số thị trường',
-    get_sector_rankings: 'Phân tích ngành',
     get_skill_backtest_summary: 'Lấy tổng quan backtest chiến lược',
     get_strategy_backtest_summary: 'Lấy tổng quan backtest chiến lược',
     get_stock_backtest_summary: 'Lấy dữ liệu backtest theo mã',
     get_portfolio_snapshot: 'Lấy ảnh chụp danh mục',
-    get_capital_flow: 'Lấy dòng tiền',
   },
   en: {
     get_realtime_quote: 'Get realtime quote',
     get_daily_history: 'Get historical K-lines',
-    get_chip_distribution: 'Analyze chip distribution',
     get_analysis_context: 'Get analysis context',
     get_stock_info: 'Get stock fundamentals',
     search_stock_news: 'Search stock news',
@@ -78,42 +74,21 @@ export const CHAT_TOOL_LABELS: Record<UiLanguage, Record<string, string>> = {
     get_volume_analysis: 'Analyze volume changes',
     analyze_pattern: 'Identify candlestick patterns',
     get_market_indices: 'Get market indices',
-    get_sector_rankings: 'Analyze industry sectors',
     get_skill_backtest_summary: 'Get skill backtest overview',
     get_strategy_backtest_summary: 'Get strategy backtest overview',
     get_stock_backtest_summary: 'Get per-stock backtest data',
     get_portfolio_snapshot: 'Get portfolio snapshot',
-    get_capital_flow: 'Get capital flow',
   },
-};
-
-// display_name gốc trong `strategies/*.yaml`. Chỉ dịch khi tên backend còn khớp,
-// để chiến lược người dùng tự đổi tên (hoặc skill tuỳ biến cùng id) giữ nguyên tên của họ.
-// Original YAML display names; only translate when the backend name still matches.
-const BUILTIN_SKILL_DISPLAY_NAMES: Record<string, string> = {
-  bull_trend: '默认多头趋势',
-  ma_golden_cross: '均线金叉',
-  volume_breakout: '放量突破',
-  hot_theme: '热点题材',
-  shrink_pullback: '缩量回踩',
-  event_driven: '事件驱动',
-  box_oscillation: '箱体震荡',
-  growth_quality: '成长质量',
-  bottom_volume: '底部放量',
-  expectation_repricing: '预期重估',
-  chan_theory: '缠论',
-  wave_theory: '波浪理论',
-  dragon_head: '龙头策略',
-  emotion_cycle: '情绪周期',
-  one_yang_three_yin: '一阳夹三阴',
 };
 
 export function localizeChatSkill<T extends { id: string; name: string; description?: string }>(
   skill: T,
   language: UiLanguage,
 ): T {
+  // Dịch theo skill id của chiến lược dựng sẵn; id lạ giữ nguyên tên từ backend.
+  // Localize built-in strategies by skill id; unknown ids keep the backend name.
   const text = CHAT_SKILL_TEXT[language][skill.id];
-  if (!text || BUILTIN_SKILL_DISPLAY_NAMES[skill.id] !== skill.name) return skill;
+  if (!text) return skill;
   return { ...skill, name: text.name, description: text.description };
 }
 
@@ -136,32 +111,4 @@ const CHAT_STAGE_LABELS: Record<UiLanguage, Record<string, string>> = {
 export function getChatStageLabel(stage: string | undefined, language: UiLanguage): string {
   const key = stage || 'pipeline';
   return CHAT_STAGE_LABELS[language][key] || key;
-}
-
-// Ghi chú thất bại cũ (tiếng Trung) đã lưu trong DB trước khi backend ghi theo ngôn ngữ báo cáo.
-// Legacy Chinese failure notes persisted before the backend localized them.
-const LEGACY_FAILURE_NOTES: Record<UiLanguage, { failed: string; cancelled: string; timeout: string; unknownError: string }> = {
-  vi: {
-    failed: '[Phân tích thất bại]',
-    cancelled: '[Đã dừng] Lượt phân tích này đã được người dùng dừng.',
-    timeout: '[Quá thời gian] Lượt phân tích này đã kết thúc do vượt giới hạn thời gian.',
-    unknownError: 'Lỗi không xác định',
-  },
-  en: {
-    failed: '[Analysis failed]',
-    cancelled: '[Stopped] This analysis was stopped by the user.',
-    timeout: '[Timed out] This analysis ended at the time limit.',
-    unknownError: 'Unknown error',
-  },
-};
-
-export function localizeLegacyChatNote(content: string, language: UiLanguage): string {
-  const notes = LEGACY_FAILURE_NOTES[language];
-  if (content === '[已停止] 本次分析已由用户停止。') return notes.cancelled;
-  if (content === '[已超时] 本次分析已在时间限制内结束。') return notes.timeout;
-  if (content.startsWith('[分析失败] ')) {
-    const detail = content.slice('[分析失败] '.length);
-    return `${notes.failed} ${detail === '未知错误' ? notes.unknownError : detail}`;
-  }
-  return content;
 }

@@ -9,7 +9,6 @@ import { UiLanguageProvider } from '../../contexts/UiLanguageContext';
 import { useTaskStream } from '../../hooks/useTaskStream';
 import { useStockPoolStore } from '../../stores';
 import type { RunFlowSnapshot } from '../../types/runFlow';
-import { getReportText, normalizeReportLanguage } from '../../utils/reportLanguage';
 import { UI_LANGUAGE_STORAGE_KEY } from '../../utils/uiLanguage';
 import HomePage from '../HomePage';
 
@@ -93,10 +92,10 @@ vi.mock('../../hooks/useStockIndex', () => ({
 const historyItem = {
   id: 1,
   queryId: 'q-1',
-  stockCode: '600519',
-  stockName: '贵州茅台',
+  stockCode: 'HPG',
+  stockName: 'Hoa Phat',
   sentimentScore: 82,
-  operationAdvice: '买入',
+  operationAdvice: 'Buy',
   createdAt: '2026-03-18T08:00:00Z',
 };
 
@@ -104,16 +103,16 @@ const historyReport = {
   meta: {
     id: 1,
     queryId: 'q-1',
-    stockCode: '600519',
-    stockName: '贵州茅台',
+    stockCode: 'HPG',
+    stockName: 'Hoa Phat',
     reportType: 'detailed' as const,
     reportLanguage: 'vi' as const,
     createdAt: '2026-03-18T08:00:00Z',
   },
   summary: {
-    analysisSummary: '趋势维持强势',
-    operationAdvice: '继续观察买点',
-    trendPrediction: '短线震荡偏强',
+    analysisSummary: 'Strong trend persists',
+    operationAdvice: 'Keep watching entry points',
+    trendPrediction: 'Short-term mildly bullish',
     sentimentScore: 78,
   },
 };
@@ -147,7 +146,7 @@ const marketReviewHistoryItem = {
   id: 2,
   queryId: 'market-review-q-1',
   stockCode: 'MARKET',
-  stockName: '大盘复盘',
+  stockName: 'Market recap',
   reportType: 'market_review' as const,
   createdAt: '2026-03-18T08:00:00Z',
 };
@@ -157,15 +156,15 @@ const marketReviewHistoryReport = {
     id: 2,
     queryId: 'market-review-q-1',
     stockCode: 'MARKET',
-    stockName: '大盘复盘',
+    stockName: 'Market recap',
     reportType: 'market_review' as const,
     reportLanguage: 'vi' as const,
     createdAt: '2026-03-18T08:00:00Z',
   },
   summary: {
-    analysisSummary: '大盘复盘摘要',
-    operationAdvice: '查看复盘',
-    trendPrediction: '大盘复盘',
+    analysisSummary: 'Market recap summary',
+    operationAdvice: 'View review',
+    trendPrediction: 'Market recap',
     sentimentScore: 50,
   },
 };
@@ -173,8 +172,8 @@ const marketReviewHistoryReport = {
 const runFlowSnapshot: RunFlowSnapshot = {
   taskId: 'task-1',
   traceId: 'trace-1',
-  stockCode: '600519',
-  stockName: '贵州茅台',
+  stockCode: 'HPG',
+  stockName: 'Hoa Phat',
   status: 'running',
   generatedAt: '2026-06-08T08:00:00Z',
   summary: {
@@ -186,21 +185,21 @@ const runFlowSnapshot: RunFlowSnapshot = {
   },
   lanes: [
     { id: 'entry', label: 'Entry', order: 1 },
-    { id: 'analysis', label: '分析引擎', order: 2 },
+    { id: 'analysis', label: 'Analysis engine', order: 2 },
   ],
   nodes: [
     {
       id: 'request',
       lane: 'entry',
       kind: 'entry',
-      label: '用户请求',
+      label: 'User request',
       status: 'success',
     },
     {
       id: 'analysis',
       lane: 'analysis',
       kind: 'analysis',
-      label: '分析流程',
+      label: 'Analysis flow',
       status: 'running',
     },
   ],
@@ -211,7 +210,7 @@ const runFlowSnapshot: RunFlowSnapshot = {
       to: 'analysis',
       kind: 'control',
       status: 'running',
-      label: '调度',
+      label: 'Dispatch',
     },
   ],
   events: [
@@ -221,7 +220,7 @@ const runFlowSnapshot: RunFlowSnapshot = {
       severity: 'info',
       type: 'task_started',
       nodeId: 'analysis',
-      title: 'Task 开始',
+      title: 'Task started',
     },
   ],
 };
@@ -236,7 +235,7 @@ describe('HomePage', () => {
     stockIndexLoaded = true;
     window.localStorage.clear();
     window.sessionStorage.clear();
-    window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'zh');
+    window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'en');
     useStockPoolStore.getState().resetDashboardState();
     vi.mocked(analysisApi.getTasks).mockResolvedValue({
       total: 0,
@@ -249,7 +248,7 @@ describe('HomePage', () => {
     vi.mocked(historyApi.getDiagnostics).mockResolvedValue({
       status: 'unknown',
       statusLabel: 'Không rõ',
-      reason: '旧报告或诊断证据不足，无法判断本次运行状态',
+      reason: 'Legacy report or insufficient diagnostics; run status cannot be determined',
       components: {},
       copyText: 'data_status: unknown',
     });
@@ -286,15 +285,15 @@ describe('HomePage', () => {
     const dashboard = await screen.findByTestId('home-dashboard');
     expect(dashboard).toBeInTheDocument();
     expect(dashboard.className).toContain('h-[calc(100vh-5rem)]');
-    expect(dashboard.className).toContain('lg:h-[calc(100vh-2rem)]');
+    expect(dashboard.className).toContain('lg:h-[calc(100vh-5.5rem)]');
     expect(dashboard.firstElementChild?.className).toContain('min-h-0');
     expect(dashboard.querySelector('.flex-1.flex.min-h-0.overflow-hidden')).toBeTruthy();
     expect(screen.getByTestId('home-dashboard-scroll')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Enter a stock code, name, or company')).toBeInTheDocument();
-    expect(await screen.findByText('趋势维持强势')).toBeInTheDocument();
+    expect(await screen.findByText('Strong trend persists')).toBeInTheDocument();
     expect(
       screen.getByRole('button', {
-        name: getReportText(normalizeReportLanguage(historyReport.meta.reportLanguage)).fullReport,
+        name: 'Full analysis report',
       }),
     ).toBeInTheDocument();
     expect(historyApi.getMarkdown).not.toHaveBeenCalled();
@@ -317,7 +316,7 @@ describe('HomePage', () => {
     );
 
     const fullReportButton = await screen.findByRole('button', {
-      name: getReportText(normalizeReportLanguage(historyReport.meta.reportLanguage)).fullReport,
+      name: 'Full analysis report',
     });
     expect(historyApi.getMarkdown).not.toHaveBeenCalled();
 
@@ -364,8 +363,8 @@ describe('HomePage', () => {
         {
           taskId: 'task-1',
           traceId: 'trace-1',
-          stockCode: '600519',
-          stockName: '贵州茅台',
+          stockCode: 'HPG',
+          stockName: 'Hoa Phat',
           status: 'processing',
           progress: 35,
           message: 'Processing',
@@ -381,13 +380,13 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View 贵州茅台 run flow' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View Hoa Phat run flow' }));
 
     await waitFor(() => {
       expect(analysisApi.getTaskFlow).toHaveBeenCalledWith('task-1');
     });
     expect(await screen.findByTestId('run-flow-panel')).toBeInTheDocument();
-    expect(screen.getByText('贵州茅台 run flow')).toBeInTheDocument();
+    expect(screen.getByText('Hoa Phat run flow')).toBeInTheDocument();
   });
 
   it('opens the run-flow drawer from completed report diagnostics', async () => {
@@ -412,7 +411,7 @@ describe('HomePage', () => {
       expect(historyApi.getRecordFlow).toHaveBeenCalledWith(1);
     });
     expect(await screen.findByTestId('run-flow-panel')).toBeInTheDocument();
-    expect(screen.getByText('贵州茅台 history run flow')).toBeInTheDocument();
+    expect(screen.getByText('Hoa Phat history run flow')).toBeInTheDocument();
   });
 
   it('shows market review history in the stock bar', async () => {
@@ -420,7 +419,7 @@ describe('HomePage', () => {
       total: 1,
       items: [{
         id: 11,
-        stockCode: 'AAPL',
+        stockCode: 'FPT',
         stockName: 'Apple',
         reportType: 'detailed',
         sentimentScore: 72,
@@ -454,7 +453,7 @@ describe('HomePage', () => {
     );
 
     expect(await screen.findByRole('button', { name: /MARKET/ })).toBeInTheDocument();
-    const newerStockButton = await screen.findByRole('button', { name: /AAPL/ });
+    const newerStockButton = await screen.findByRole('button', { name: /FPT/ });
     const marketButton = await screen.findByRole('button', { name: /MARKET/ });
     expect(newerStockButton.compareDocumentPosition(marketButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText('Market review history')).not.toBeInTheDocument();
@@ -467,18 +466,18 @@ describe('HomePage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /MARKET/ }));
 
-    expect(await screen.findByText('大盘复盘摘要')).toBeInTheDocument();
+    expect(await screen.findByText('Market recap summary')).toBeInTheDocument();
   });
 
   it('treats timezone-less stock-bar timestamps as Shanghai local time for watchlist pending state', async () => {
     const todayInShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['600519']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['HPG']);
     vi.mocked(historyApi.getStockBarList).mockResolvedValue({
       total: 1,
       items: [{
         id: 11,
-        stockCode: '600519',
-        stockName: '贵州茅台',
+        stockCode: 'HPG',
+        stockName: 'Hoa Phat',
         reportType: 'detailed',
         sentimentScore: 72,
         operationAdvice: 'Watch',
@@ -507,16 +506,16 @@ describe('HomePage', () => {
   });
 
   it('opens the latest report when clicking a watchlist row and marks it selected', async () => {
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['600519']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['HPG']);
     vi.mocked(historyApi.getStockBarList).mockResolvedValue({
       total: 1,
       items: [{
         id: 21,
-        stockCode: '600519',
-        stockName: '贵州茅台',
+        stockCode: 'HPG',
+        stockName: 'Hoa Phat',
         reportType: 'detailed',
         sentimentScore: 88,
-        operationAdvice: '买入',
+        operationAdvice: 'Buy',
         analysisCount: 1,
         lastAnalysisTime: '2026-03-19T09:00:00+08:00',
       }],
@@ -535,7 +534,7 @@ describe('HomePage', () => {
       },
       summary: {
         ...historyReport.summary,
-        analysisSummary: '自选股详情已打开',
+        analysisSummary: 'Watchlist details opened',
       },
     });
 
@@ -547,32 +546,32 @@ describe('HomePage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Watchlist' }));
 
-    const rowButton = await screen.findByRole('button', { name: 'Open the latest analysis details for 600519' });
+    const rowButton = await screen.findByRole('button', { name: 'Open the latest analysis details for HPG' });
     fireEvent.click(rowButton);
 
     await waitFor(() => {
       expect(historyApi.getDetail).toHaveBeenCalledWith(21);
     });
-    expect(await screen.findByText('自选股详情已打开')).toBeInTheDocument();
+    expect(await screen.findByText('Watchlist details opened')).toBeInTheDocument();
     expect(rowButton).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('keeps index and same-code stock watchlist rows independent when stock-bar and active tasks coexist (PR #2312)', async () => {
     stockIndexItems = [
-      { canonicalCode: 'sh000016', displayCode: 'sh000016', aliases: ['000016.SH'], assetType: 'index' },
+      { canonicalCode: 'VN30', displayCode: 'VN30', aliases: ['VN30.VN'], assetType: 'index' },
     ];
-    // The index watchlist input is the raw ALIAS form (`000016.SH`) while the
+    // The index watchlist input is the raw ALIAS form (`VN30.VN`) while the
     // stock-bar items and active tasks stay on the parser canonical
-    // (`sh000016`) — the registry-resolved identity must bridge them without
-    // crossing into the bare `000016` stock row.
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['000016.SH', '000016']);
+    // (`VN30`) — the registry-resolved identity must bridge them without
+    // crossing into the separate VNM stock row.
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['VN30.VN', 'VNM']);
     vi.mocked(historyApi.getStockBarList).mockResolvedValue({
       total: 2,
       items: [
         {
           id: 61,
-          stockCode: 'sh000016',
-          stockName: '上证50',
+          stockCode: 'VN30',
+          stockName: 'VN30 Index',
           reportType: 'detailed',
           sentimentScore: 70,
           operationAdvice: 'Watch',
@@ -582,11 +581,11 @@ describe('HomePage', () => {
         },
         {
           id: 62,
-          stockCode: '000016',
-          stockName: '深康佳A',
+          stockCode: 'VNM',
+          stockName: 'Vinamilk',
           reportType: 'detailed',
           sentimentScore: 75,
-          operationAdvice: '买入',
+          operationAdvice: 'Buy',
           analysisCount: 1,
           lastAnalysisTime: '2026-03-19T09:00:00+08:00',
           assetType: 'stock',
@@ -606,8 +605,8 @@ describe('HomePage', () => {
       tasks: [
         {
           taskId: 'task-index',
-          stockCode: 'sh000016',
-          stockName: '上证50',
+          stockCode: 'VN30',
+          stockName: 'VN30 Index',
           status: 'processing',
           progress: 40,
           reportType: 'detailed',
@@ -616,8 +615,8 @@ describe('HomePage', () => {
         },
         {
           taskId: 'task-stock',
-          stockCode: '000016',
-          stockName: '深康佳A',
+          stockCode: 'VNM',
+          stockName: 'Vinamilk',
           status: 'pending',
           progress: 0,
           reportType: 'detailed',
@@ -635,31 +634,31 @@ describe('HomePage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Watchlist' }));
 
-    // The alias-form watchlist row (`000016.SH`) must pair with the INDEX
+    // The alias-form watchlist row (`VN30.VN`) must pair with the INDEX
     // stock-bar row and the INDEX task through the registry-resolved identity;
-    // the bare `000016` row must pair with the STOCK row/task. Before the fix
+    // the VNM row must pair with the STOCK row/task. Before the fix
     // the shared stock-normalization key folded both rows to the stock identity.
-    const indexRow = await screen.findByTestId('watchlist-row-000016.SH');
-    const stockRow = screen.getByTestId('watchlist-row-000016');
+    const indexRow = await screen.findByTestId('watchlist-row-VN30.VN');
+    const stockRow = screen.getByTestId('watchlist-row-VNM');
 
-    expect(indexRow).toHaveTextContent('上证50');
-    expect(indexRow).not.toHaveTextContent('深康佳A');
-    await waitFor(() => expect(indexRow).toHaveTextContent('Task 分析中'));
-    expect(indexRow).not.toHaveTextContent('Task pending');
+    expect(indexRow).toHaveTextContent('VN30 Index');
+    expect(indexRow).not.toHaveTextContent('Vinamilk');
+    await waitFor(() => expect(indexRow).toHaveTextContent('Task Processing'));
+    expect(indexRow).not.toHaveTextContent('Task Pending');
 
-    expect(stockRow).toHaveTextContent('深康佳A');
-    expect(stockRow).not.toHaveTextContent('上证50');
-    expect(stockRow).toHaveTextContent('Task pending');
-    expect(stockRow).not.toHaveTextContent('Task 分析中');
+    expect(stockRow).toHaveTextContent('Vinamilk');
+    expect(stockRow).not.toHaveTextContent('VN30 Index');
+    expect(stockRow).toHaveTextContent('Task Pending');
+    expect(stockRow).not.toHaveTextContent('Task Processing');
   });
 
   it('keeps the watchlist workspace loading and defers history lookup until the index registry is ready (PR #2312)', async () => {
     stockIndexItems = [
-      { canonicalCode: 'sh000016', displayCode: 'sh000016', aliases: ['000016.SH'], assetType: 'index' },
+      { canonicalCode: 'VN30', displayCode: 'VN30', aliases: ['VN30.VN'], assetType: 'index' },
     ];
     stockIndexLoading = true;
     stockIndexLoaded = false;
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['000016.SH']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['VN30.VN']);
     vi.mocked(historyApi.getStockBarList).mockResolvedValue({ total: 0, items: [] });
     vi.mocked(historyApi.getList).mockResolvedValue({
       total: 0,
@@ -681,7 +680,7 @@ describe('HomePage', () => {
     // fallback stock bucketing inside the load window.
     expect(screen.getByTestId('home-stock-workspace')).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.queryByTestId('watchlist-row-000016.SH')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('watchlist-row-VN30.VN')).not.toBeInTheDocument();
     });
     const analyzeAllButton = screen.getByRole('button', { name: 'Analyze all' });
     expect(analyzeAllButton).toBeDisabled();
@@ -700,9 +699,9 @@ describe('HomePage', () => {
     // identity, and the deferred missing-history lookup now runs for the raw
     // watchlist code (the backend resolves the alias to the index record and
     // the result is keyed by the canonical identity).
-    await waitFor(() => expect(screen.getByTestId('watchlist-row-000016.SH')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('watchlist-row-VN30.VN')).toBeInTheDocument());
     expect(historyApi.getList).toHaveBeenCalledWith(
-      expect.objectContaining({ stockCode: '000016.SH', limit: 1 }),
+      expect.objectContaining({ stockCode: 'VN30.VN', limit: 1 }),
       expect.anything(),
     );
   });
@@ -712,16 +711,16 @@ describe('HomePage', () => {
     stockIndexLoading = false;
     stockIndexLoaded = false;
     stockIndexFallback = true;
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['000016.SH']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['FPT.VN']);
     vi.mocked(historyApi.getStockBarList).mockResolvedValue({
       total: 1,
       items: [{
         id: 63,
-        stockCode: '000016',
-        stockName: '深康佳A',
+        stockCode: 'FPT',
+        stockName: 'FPT Corp',
         reportType: 'detailed',
         sentimentScore: 75,
-        operationAdvice: '买入',
+        operationAdvice: 'Buy',
         analysisCount: 1,
         lastAnalysisTime: '2026-03-19T09:00:00+08:00',
         assetType: 'stock',
@@ -742,22 +741,22 @@ describe('HomePage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Watchlist' }));
 
-    const row = await screen.findByTestId('watchlist-row-000016.SH');
-    expect(row).toHaveTextContent('深康佳A');
+    const row = await screen.findByTestId('watchlist-row-FPT.VN');
+    expect(row).toHaveTextContent('FPT Corp');
     expect(screen.getByRole('button', { name: 'Analyze all' })).toBeEnabled();
   });
 
   it('does not open details when removing a watchlist row', async () => {
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['600519']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['HPG']);
     vi.mocked(historyApi.getStockBarList).mockResolvedValue({
       total: 1,
       items: [{
         id: 21,
-        stockCode: '600519',
-        stockName: '贵州茅台',
+        stockCode: 'HPG',
+        stockName: 'Hoa Phat',
         reportType: 'detailed',
         sentimentScore: 88,
-        operationAdvice: '买入',
+        operationAdvice: 'Buy',
         analysisCount: 1,
         lastAnalysisTime: '2026-03-19T09:00:00+08:00',
       }],
@@ -777,22 +776,22 @@ describe('HomePage', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Watchlist' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Remove 600519 from watchlist' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove HPG from watchlist' }));
 
     await waitFor(() => {
-      expect(systemConfigApi.removeFromWatchlist).toHaveBeenCalledWith('600519');
+      expect(systemConfigApi.removeFromWatchlist).toHaveBeenCalledWith('HPG');
     });
     expect(historyApi.getDetail).not.toHaveBeenCalled();
   });
 
   it('shows explicit feedback when a watchlist row has no report details yet', async () => {
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['AAPL']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['FPT']);
     vi.mocked(historyApi.getStockBarList).mockResolvedValue({
       total: 0,
       items: [],
     });
     vi.mocked(historyApi.getList).mockImplementation((params: { stockCode?: string; limit?: number } = {}) => {
-      if (params.stockCode === 'AAPL' && params.limit === 1) {
+      if (params.stockCode === 'FPT' && params.limit === 1) {
         return Promise.resolve({
           total: 0,
           page: 1,
@@ -816,7 +815,7 @@ describe('HomePage', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Watchlist' }));
-    const rowButton = await screen.findByRole('button', { name: 'No analysis details for AAPL yet. Run an analysis first.' });
+    const rowButton = await screen.findByRole('button', { name: 'No analysis details for FPT yet. Run an analysis first.' });
     fireEvent.click(rowButton);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No analysis details yet. Run an analysis first.');
@@ -825,14 +824,14 @@ describe('HomePage', () => {
 
   it('blocks pending watchlist submission when the stock-bar refresh after completion fails', async () => {
     const todayInShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['600519']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['HPG']);
     vi.mocked(historyApi.getStockBarList)
       .mockResolvedValueOnce({
         total: 1,
         items: [{
           id: 11,
-          stockCode: '600519',
-          stockName: '贵州茅台',
+          stockCode: 'HPG',
+          stockName: 'Hoa Phat',
           reportType: 'detailed',
           sentimentScore: 72,
           operationAdvice: 'Watch',
@@ -845,8 +844,8 @@ describe('HomePage', () => {
         total: 1,
         items: [{
           id: 13,
-          stockCode: '600519',
-          stockName: '贵州茅台',
+          stockCode: 'HPG',
+          stockName: 'Hoa Phat',
           reportType: 'detailed',
           sentimentScore: 80,
           operationAdvice: 'Watch',
@@ -874,9 +873,9 @@ describe('HomePage', () => {
     const taskStreamOptions = vi.mocked(useTaskStream).mock.calls.at(-1)?.[0];
     act(() => {
       taskStreamOptions?.onTaskCompleted?.({
-        taskId: 'task-600519',
-        stockCode: '600519',
-        stockName: '贵州茅台',
+        taskId: 'task-HPG',
+        stockCode: 'HPG',
+        stockName: 'Hoa Phat',
         status: 'completed',
         progress: 100,
         reportType: 'detailed',
@@ -901,14 +900,14 @@ describe('HomePage', () => {
     const completionStockBarPromise = new Promise<Awaited<ReturnType<typeof historyApi.getStockBarList>>>((_, reject) => {
       rejectCompletionStockBar = reject;
     });
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['AAPL']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['FPT']);
     vi.mocked(historyApi.getStockBarList)
       .mockResolvedValueOnce({
         total: 1,
         items: [{
           id: 11,
-          stockCode: '600519',
-          stockName: '贵州茅台',
+          stockCode: 'HPG',
+          stockName: 'Hoa Phat',
           reportType: 'detailed',
           sentimentScore: 72,
           operationAdvice: 'Watch',
@@ -918,15 +917,15 @@ describe('HomePage', () => {
       })
       .mockReturnValueOnce(completionStockBarPromise);
     vi.mocked(historyApi.getList).mockImplementation((params: { stockCode?: string; limit?: number } = {}) => {
-      if (params.stockCode === 'AAPL') {
+      if (params.stockCode === 'FPT') {
         return Promise.resolve({
           total: 1,
           page: 1,
           limit: 1,
           items: [{
             id: 12,
-            queryId: 'q-aapl-old',
-            stockCode: 'AAPL',
+            queryId: 'q-fpt-old',
+            stockCode: 'FPT',
             stockName: 'Apple',
             reportType: 'detailed' as const,
             sentimentScore: 68,
@@ -956,8 +955,8 @@ describe('HomePage', () => {
     const taskStreamOptions = vi.mocked(useTaskStream).mock.calls.at(-1)?.[0];
     act(() => {
       taskStreamOptions?.onTaskCompleted?.({
-        taskId: 'task-aapl',
-        stockCode: 'AAPL',
+        taskId: 'task-fpt',
+        stockCode: 'FPT',
         stockName: 'Apple',
         status: 'completed',
         progress: 100,
@@ -967,7 +966,7 @@ describe('HomePage', () => {
     });
 
     expect(await screen.findByLabelText('Checking today status')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open the latest analysis details for AAPL' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open the latest analysis details for FPT' })).not.toBeInTheDocument();
 
     await act(async () => {
       rejectCompletionStockBar(new Error('temporary stock-bar failure'));
@@ -977,9 +976,9 @@ describe('HomePage', () => {
 
     expect(await screen.findByLabelText('Today status unknown')).toBeInTheDocument();
     const unavailableDetailButton = screen.getByRole('button', {
-      name: 'The latest analysis details for AAPL could not be confirmed. Please try again later.',
+      name: 'The latest analysis details for FPT could not be confirmed. Please try again later.',
     });
-    expect(screen.queryByRole('button', { name: 'Open the latest analysis details for AAPL' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open the latest analysis details for FPT' })).not.toBeInTheDocument();
     fireEvent.click(unavailableDetailButton);
     expect(await screen.findByRole('alert')).toHaveTextContent('The latest analysis details could not be confirmed. Please try again later.');
     expect(historyApi.getDetail).not.toHaveBeenCalled();
@@ -996,15 +995,15 @@ describe('HomePage', () => {
     });
     const staleStockBarItem = {
       id: 11,
-      stockCode: '600519',
-      stockName: '贵州茅台',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
       reportType: 'detailed' as const,
       sentimentScore: 72,
       operationAdvice: 'Watch',
       analysisCount: 1,
       lastAnalysisTime: '2026-01-01T09:00:00+08:00',
     };
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['600519']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['HPG']);
     vi.mocked(historyApi.getStockBarList)
       .mockResolvedValueOnce({ total: 1, items: [staleStockBarItem] })
       .mockReturnValueOnce(stockBarRefreshPromise);
@@ -1022,12 +1021,12 @@ describe('HomePage', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Watchlist' }));
-    expect(await screen.findByRole('button', { name: 'Open the latest analysis details for 600519' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Open the latest analysis details for HPG' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh watchlist items' }));
 
     expect(await screen.findByLabelText('Checking today status')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open the latest analysis details for 600519' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open the latest analysis details for HPG' })).not.toBeInTheDocument();
     expect(historyApi.getDetail).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -1038,7 +1037,7 @@ describe('HomePage', () => {
       await stockBarRefreshPromise;
     });
 
-    expect(await screen.findByRole('button', { name: 'Open the latest analysis details for 600519' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Open the latest analysis details for HPG' })).toBeInTheDocument();
   });
 
   it('stays unsettled when a completion refresh is superseded by a manual refresh', async () => {
@@ -1052,25 +1051,25 @@ describe('HomePage', () => {
     });
     const oldFallbackItem = {
       id: 12,
-      queryId: 'q-aapl-old',
-      stockCode: 'AAPL',
+      queryId: 'q-fpt-old',
+      stockCode: 'FPT',
       stockName: 'Apple',
       reportType: 'detailed' as const,
       sentimentScore: 68,
       operationAdvice: 'Trung tính',
       createdAt: '2026-01-01T09:20:00+08:00',
     };
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['AAPL']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['FPT']);
     vi.mocked(historyApi.getStockBarList)
       .mockResolvedValueOnce({ total: 0, items: [] })
       .mockReturnValueOnce(completionRefreshPromise)
       .mockReturnValueOnce(manualRefreshPromise);
     vi.mocked(historyApi.getList).mockImplementation((params: { stockCode?: string; limit?: number } = {}) => (
       Promise.resolve({
-        total: params.stockCode === 'AAPL' ? 1 : 0,
+        total: params.stockCode === 'FPT' ? 1 : 0,
         page: 1,
         limit: params.limit ?? 20,
-        items: params.stockCode === 'AAPL' ? [oldFallbackItem] : [],
+        items: params.stockCode === 'FPT' ? [oldFallbackItem] : [],
       })
     ));
 
@@ -1081,13 +1080,13 @@ describe('HomePage', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Watchlist' }));
-    expect(await screen.findByRole('button', { name: 'Open the latest analysis details for AAPL' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Open the latest analysis details for FPT' })).toBeInTheDocument();
 
     const taskStreamOptions = vi.mocked(useTaskStream).mock.calls.at(-1)?.[0];
     act(() => {
       taskStreamOptions?.onTaskCompleted?.({
-        taskId: 'task-aapl-overlap',
-        stockCode: 'AAPL',
+        taskId: 'task-fpt-overlap',
+        stockCode: 'FPT',
         stockName: 'Apple',
         status: 'completed',
         progress: 100,
@@ -1106,14 +1105,14 @@ describe('HomePage', () => {
     });
 
     expect(screen.getByLabelText('Checking today status')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open the latest analysis details for AAPL' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open the latest analysis details for FPT' })).not.toBeInTheDocument();
 
     await act(async () => {
       resolveManualRefresh({
         total: 1,
         items: [{
           id: 13,
-          stockCode: 'AAPL',
+          stockCode: 'FPT',
           stockName: 'Apple',
           reportType: 'detailed',
           sentimentScore: 80,
@@ -1125,18 +1124,18 @@ describe('HomePage', () => {
       await manualRefreshPromise;
     });
 
-    expect(await screen.findByRole('button', { name: 'Open the latest analysis details for AAPL' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Open the latest analysis details for FPT' })).toBeInTheDocument();
   });
 
   it('falls back to watchlist history lookup when watchlist code is outside stock-bar window', async () => {
     const todayInShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['AAPL']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['FPT']);
     vi.mocked(historyApi.getStockBarList).mockResolvedValue({
       total: 1,
       items: [{
         id: 11,
-        stockCode: '600519',
-        stockName: '贵州茅台',
+        stockCode: 'HPG',
+        stockName: 'Hoa Phat',
         reportType: 'detailed',
         sentimentScore: 72,
         operationAdvice: 'Watch',
@@ -1145,15 +1144,15 @@ describe('HomePage', () => {
       }],
     });
     vi.mocked(historyApi.getList).mockImplementation((params: { stockCode?: string } = {}) => {
-      if (params.stockCode === 'AAPL') {
+      if (params.stockCode === 'FPT') {
         return Promise.resolve({
           total: 1,
           page: 1,
           limit: 1,
           items: [{
             id: 12,
-            queryId: 'q-aapl',
-            stockCode: 'AAPL',
+            queryId: 'q-fpt',
+            stockCode: 'FPT',
             stockName: 'Apple',
             reportType: 'detailed' as const,
             sentimentScore: 68,
@@ -1177,8 +1176,8 @@ describe('HomePage', () => {
           limit: 100,
           items: [{
             id: 12,
-            queryId: 'q-aapl',
-            stockCode: 'AAPL',
+            queryId: 'q-fpt',
+            stockCode: 'FPT',
             stockName: 'Apple',
             reportType: 'detailed' as const,
             sentimentScore: 68,
@@ -1294,13 +1293,13 @@ describe('HomePage', () => {
       resolveAaplHistory = resolve;
     });
 
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['AAPL']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['FPT']);
     vi.mocked(historyApi.getStockBarList).mockResolvedValue({
       total: 1,
       items: [{
         id: 11,
-        stockCode: '600519',
-        stockName: '贵州茅台',
+        stockCode: 'HPG',
+        stockName: 'Hoa Phat',
         reportType: 'detailed',
         sentimentScore: 72,
         operationAdvice: 'Watch',
@@ -1309,7 +1308,7 @@ describe('HomePage', () => {
       }],
     });
     vi.mocked(historyApi.getList).mockImplementation((params: { stockCode?: string; limit?: number } = {}) => {
-      if (params.stockCode === 'AAPL') {
+      if (params.stockCode === 'FPT') {
         return aaplHistoryPromise;
       }
 
@@ -1331,7 +1330,7 @@ describe('HomePage', () => {
 
     await waitFor(() => {
       expect(historyApi.getList).toHaveBeenCalledWith(
-        { stockCode: 'AAPL', limit: 1 },
+        { stockCode: 'FPT', limit: 1 },
         { signal: expect.any(AbortSignal) },
       );
     });
@@ -1349,8 +1348,8 @@ describe('HomePage', () => {
         limit: 1,
         items: [{
           id: 12,
-          queryId: 'q-aapl',
-          stockCode: 'AAPL',
+          queryId: 'q-fpt',
+          stockCode: 'FPT',
           stockName: 'Apple',
           reportType: 'detailed',
           sentimentScore: 68,
@@ -1370,13 +1369,13 @@ describe('HomePage', () => {
       resolveAaplHistory = resolve;
     });
 
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['AAPL']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['FPT']);
     vi.mocked(historyApi.getStockBarList).mockResolvedValue({
       total: 1,
       items: [{
         id: 11,
-        stockCode: '600519',
-        stockName: '贵州茅台',
+        stockCode: 'HPG',
+        stockName: 'Hoa Phat',
         reportType: 'detailed',
         sentimentScore: 72,
         operationAdvice: 'Watch',
@@ -1385,7 +1384,7 @@ describe('HomePage', () => {
       }],
     });
     vi.mocked(historyApi.getList).mockImplementation((params: { stockCode?: string; limit?: number } = {}) => {
-      if (params.stockCode === 'AAPL') {
+      if (params.stockCode === 'FPT') {
         return aaplHistoryPromise;
       }
 
@@ -1399,17 +1398,17 @@ describe('HomePage', () => {
     vi.mocked(historyApi.getDetail).mockResolvedValue({
       meta: {
         id: 12,
-        queryId: 'q-aapl',
-        stockCode: 'AAPL',
+        queryId: 'q-fpt',
+        stockCode: 'FPT',
         stockName: 'Apple',
         reportType: 'detailed',
         reportLanguage: 'vi',
         createdAt: `${todayInShanghai}T09:20:00`,
       },
       summary: {
-        analysisSummary: 'Apple 分析摘要',
-        operationAdvice: '继续观察',
-        trendPrediction: '短线震荡',
+        analysisSummary: 'FPT analysis summary',
+        operationAdvice: 'Keep watching',
+        trendPrediction: 'Short-term range',
         sentimentScore: 68,
       },
     });
@@ -1423,12 +1422,12 @@ describe('HomePage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Watchlist' }));
     await waitFor(() => {
       expect(historyApi.getList).toHaveBeenCalledWith(
-        { stockCode: 'AAPL', limit: 1 },
+        { stockCode: 'FPT', limit: 1 },
         { signal: expect.any(AbortSignal) },
       );
     });
 
-    const loadingRow = await screen.findByRole('button', { name: 'Looking up the latest analysis details for AAPL' });
+    const loadingRow = await screen.findByRole('button', { name: 'Looking up the latest analysis details for FPT' });
     fireEvent.click(loadingRow);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Looking up the latest analysis details. Please wait.');
@@ -1442,8 +1441,8 @@ describe('HomePage', () => {
         limit: 1,
         items: [{
           id: 12,
-          queryId: 'q-aapl',
-          stockCode: 'AAPL',
+          queryId: 'q-fpt',
+          stockCode: 'FPT',
           stockName: 'Apple',
           reportType: 'detailed',
           sentimentScore: 68,
@@ -1454,7 +1453,7 @@ describe('HomePage', () => {
       await aaplHistoryPromise;
     });
 
-    const readyRow = await screen.findByRole('button', { name: 'Open the latest analysis details for AAPL' });
+    const readyRow = await screen.findByRole('button', { name: 'Open the latest analysis details for FPT' });
     fireEvent.click(readyRow);
     await waitFor(() => {
       expect(historyApi.getDetail).toHaveBeenCalledWith(12);
@@ -1467,10 +1466,10 @@ describe('HomePage', () => {
       resolveAaplHistory = resolve;
     });
 
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['AAPL']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['FPT']);
     vi.mocked(historyApi.getStockBarList).mockRejectedValue(new Error('stock-bar unavailable'));
     vi.mocked(historyApi.getList).mockImplementation((params: { stockCode?: string; limit?: number } = {}) => {
-      if (params.stockCode === 'AAPL') {
+      if (params.stockCode === 'FPT') {
         return aaplHistoryPromise;
       }
 
@@ -1492,12 +1491,12 @@ describe('HomePage', () => {
 
     await waitFor(() => {
       expect(historyApi.getList).toHaveBeenCalledWith(
-        { stockCode: 'AAPL', limit: 1 },
+        { stockCode: 'FPT', limit: 1 },
         { signal: expect.any(AbortSignal) },
       );
     });
 
-    const loadingRow = await screen.findByRole('button', { name: 'Looking up the latest analysis details for AAPL' });
+    const loadingRow = await screen.findByRole('button', { name: 'Looking up the latest analysis details for FPT' });
     expect(screen.getByLabelText('Checking today status')).toBeInTheDocument();
     fireEvent.click(loadingRow);
 
@@ -1525,10 +1524,10 @@ describe('HomePage', () => {
       resolveAaplHistory = resolve;
     });
 
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['AAPL']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['FPT']);
     vi.mocked(historyApi.getStockBarList).mockRejectedValue(new Error('stock-bar unavailable'));
     vi.mocked(historyApi.getList).mockImplementation((params: { stockCode?: string; limit?: number } = {}) => {
-      if (params.stockCode === 'AAPL') {
+      if (params.stockCode === 'FPT') {
         return aaplHistoryPromise;
       }
 
@@ -1542,17 +1541,17 @@ describe('HomePage', () => {
     vi.mocked(historyApi.getDetail).mockResolvedValue({
       meta: {
         id: 12,
-        queryId: 'q-aapl',
-        stockCode: 'AAPL',
+        queryId: 'q-fpt',
+        stockCode: 'FPT',
         stockName: 'Apple',
         reportType: 'detailed',
         reportLanguage: 'vi',
         createdAt: `${todayInShanghai}T09:20:00`,
       },
       summary: {
-        analysisSummary: 'Apple 分析摘要',
-        operationAdvice: '继续观察',
-        trendPrediction: '短线震荡',
+        analysisSummary: 'FPT analysis summary',
+        operationAdvice: 'Keep watching',
+        trendPrediction: 'Short-term range',
         sentimentScore: 68,
       },
     });
@@ -1566,12 +1565,12 @@ describe('HomePage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Watchlist' }));
     await waitFor(() => {
       expect(historyApi.getList).toHaveBeenCalledWith(
-        { stockCode: 'AAPL', limit: 1 },
+        { stockCode: 'FPT', limit: 1 },
         { signal: expect.any(AbortSignal) },
       );
     });
 
-    const loadingRow = await screen.findByRole('button', { name: 'Looking up the latest analysis details for AAPL' });
+    const loadingRow = await screen.findByRole('button', { name: 'Looking up the latest analysis details for FPT' });
     fireEvent.click(loadingRow);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Looking up the latest analysis details. Please wait.');
@@ -1584,8 +1583,8 @@ describe('HomePage', () => {
         limit: 1,
         items: [{
           id: 12,
-          queryId: 'q-aapl',
-          stockCode: 'AAPL',
+          queryId: 'q-fpt',
+          stockCode: 'FPT',
           stockName: 'Apple',
           reportType: 'detailed',
           sentimentScore: 68,
@@ -1597,9 +1596,9 @@ describe('HomePage', () => {
     });
 
     expect(await screen.findByRole('button', {
-      name: 'The latest analysis details for AAPL could not be confirmed. Please try again later.',
+      name: 'The latest analysis details for FPT could not be confirmed. Please try again later.',
     })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open the latest analysis details for AAPL' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open the latest analysis details for FPT' })).not.toBeInTheDocument();
     expect(historyApi.getDetail).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Today status unknown')).toBeInTheDocument();
   });
@@ -1607,11 +1606,11 @@ describe('HomePage', () => {
   it('retries a failed per-code lookup but keeps detail blocked while upstream state is unknown', async () => {
     let aaplLookupCount = 0;
     vi.mocked(systemConfigApi.getWatchlist)
-      .mockResolvedValueOnce(['AAPL'])
+      .mockResolvedValueOnce(['FPT'])
       .mockRejectedValue(new Error('watchlist unavailable'));
     vi.mocked(historyApi.getStockBarList).mockRejectedValue(new Error('stock-bar unavailable'));
     vi.mocked(historyApi.getList).mockImplementation((params: { stockCode?: string; limit?: number } = {}) => {
-      if (params.stockCode === 'AAPL') {
+      if (params.stockCode === 'FPT') {
         aaplLookupCount += 1;
         if (aaplLookupCount === 1) {
           return Promise.reject(new Error('detail unavailable'));
@@ -1622,8 +1621,8 @@ describe('HomePage', () => {
           limit: 1,
           items: [{
             id: 12,
-            queryId: 'q-aapl-recovered',
-            stockCode: 'AAPL',
+            queryId: 'q-fpt-recovered',
+            stockCode: 'FPT',
             stockName: 'Apple',
             reportType: 'detailed' as const,
             sentimentScore: 68,
@@ -1647,15 +1646,15 @@ describe('HomePage', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Watchlist' }));
-    expect(await screen.findByRole('button', { name: 'The latest analysis details for AAPL could not be confirmed. Please try again later.' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'The latest analysis details for FPT could not be confirmed. Please try again later.' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh watchlist items' }));
 
     await waitFor(() => expect(aaplLookupCount).toBe(2));
     expect(await screen.findByRole('button', {
-      name: 'The latest analysis details for AAPL could not be confirmed. Please try again later.',
+      name: 'The latest analysis details for FPT could not be confirmed. Please try again later.',
     })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open the latest analysis details for AAPL' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open the latest analysis details for FPT' })).not.toBeInTheDocument();
   });
 
   it('waits for stock-bar load before launching watchlist fallback lookups', async () => {
@@ -1664,7 +1663,7 @@ describe('HomePage', () => {
       resolveStockBar = resolve;
     });
 
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['AAPL']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['FPT']);
     vi.mocked(historyApi.getStockBarList).mockReturnValue(stockBarPromise);
     vi.mocked(historyApi.getList).mockResolvedValue({
       total: 0,
@@ -1683,7 +1682,7 @@ describe('HomePage', () => {
 
     expect(await screen.findByLabelText('Checking today status')).toBeInTheDocument();
     expect(
-      vi.mocked(historyApi.getList).mock.calls.some(([params]) => params?.stockCode === 'AAPL'),
+      vi.mocked(historyApi.getList).mock.calls.some(([params]) => params?.stockCode === 'FPT'),
     ).toBe(false);
 
     await act(async () => {
@@ -1696,20 +1695,20 @@ describe('HomePage', () => {
 
     await waitFor(() => {
       expect(historyApi.getList).toHaveBeenCalledWith(
-        { stockCode: 'AAPL', limit: 1 },
+        { stockCode: 'FPT', limit: 1 },
         { signal: expect.any(AbortSignal) },
       );
     });
   });
 
   it('keeps failed fallback history lookups out of pending submission', async () => {
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['AAPL']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['FPT']);
     vi.mocked(historyApi.getStockBarList).mockResolvedValue({
       total: 1,
       items: [{
         id: 11,
-        stockCode: '600519',
-        stockName: '贵州茅台',
+        stockCode: 'HPG',
+        stockName: 'Hoa Phat',
         reportType: 'detailed',
         sentimentScore: 72,
         operationAdvice: 'Watch',
@@ -1718,7 +1717,7 @@ describe('HomePage', () => {
       }],
     });
     vi.mocked(historyApi.getList).mockImplementation((params: { stockCode?: string; limit?: number } = {}) => {
-      if (params.stockCode === 'AAPL') {
+      if (params.stockCode === 'FPT') {
         return Promise.reject(new Error('temporary history failure'));
       }
 
@@ -1757,8 +1756,8 @@ describe('HomePage', () => {
       total: 1,
       items: [{
         id: 11,
-        stockCode: '600519',
-        stockName: '贵州茅台',
+        stockCode: 'HPG',
+        stockName: 'Hoa Phat',
         reportType: 'detailed',
         sentimentScore: 72,
         operationAdvice: 'Watch',
@@ -1782,7 +1781,7 @@ describe('HomePage', () => {
             items: Array.from({ length: 100 }, (_, index) => ({
               id: 31 + index,
               queryId: `q-today-${index}`,
-              stockCode: index === 0 ? 'AAPL' : `T${index.toString().padStart(3, '0')}`,
+              stockCode: index === 0 ? 'FPT' : `T${index.toString().padStart(3, '0')}`,
               stockName: index === 0 ? 'Apple' : `Stock ${index}`,
               reportType: 'detailed' as const,
               sentimentScore: index === 0 ? 61 : 50,
@@ -1803,7 +1802,7 @@ describe('HomePage', () => {
             stockName: 'NVIDIA',
             reportType: 'detailed' as const,
             sentimentScore: 93,
-            operationAdvice: '买入',
+            operationAdvice: 'Buy',
             createdAt: `${todayInShanghai}T11:00:00`,
           }],
         });
@@ -1858,8 +1857,8 @@ describe('HomePage', () => {
         {
           taskId: 'task-1',
           traceId: 'trace-1',
-          stockCode: '600519',
-          stockName: '贵州茅台',
+          stockCode: 'HPG',
+          stockName: 'Hoa Phat',
           status: 'processing',
           progress: 35,
           message: 'Processing',
@@ -1868,7 +1867,7 @@ describe('HomePage', () => {
         },
         {
           taskId: 'task-2',
-          stockCode: 'AAPL',
+          stockCode: 'FPT',
           stockName: 'Apple',
           status: 'pending',
           progress: 0,
@@ -1896,11 +1895,11 @@ describe('HomePage', () => {
       taskStreamOptions?.onTaskProgress?.({
         taskId: 'task-1',
         traceId: 'trace-1',
-        stockCode: '600519',
-        stockName: '贵州茅台',
+        stockCode: 'HPG',
+        stockName: 'Hoa Phat',
         status: 'processing',
         progress: 72,
-        message: '分析进度更新',
+        message: 'Analysis progress update',
         reportType: 'detailed',
         createdAt: '2026-06-08T08:00:00Z',
       });
@@ -1940,8 +1939,8 @@ describe('HomePage', () => {
           {
             taskId: 'task-1',
             traceId: 'trace-1',
-            stockCode: '600519',
-            stockName: '贵州茅台',
+            stockCode: 'HPG',
+            stockName: 'Hoa Phat',
             status: 'processing',
             progress: 35,
             message: 'Processing',
@@ -1950,7 +1949,7 @@ describe('HomePage', () => {
           },
           {
             taskId: 'task-2',
-            stockCode: 'AAPL',
+            stockCode: 'FPT',
             stockName: 'Apple',
             status: 'pending',
             progress: 0,
@@ -2002,11 +2001,11 @@ describe('HomePage', () => {
           items: [{
             id: 71,
             queryId: 'q-shanghai-boundary',
-            stockCode: 'AAPL',
+            stockCode: 'FPT',
             stockName: 'Apple',
             reportType: 'detailed' as const,
             sentimentScore: 88,
-            operationAdvice: '买入',
+            operationAdvice: 'Buy',
             createdAt: `${startDate}T16:30:00Z`,
           }],
         });
@@ -2043,7 +2042,7 @@ describe('HomePage', () => {
       total: 1,
       items: [{
         id: 11,
-        stockCode: 'AAPL',
+        stockCode: 'FPT',
         stockName: 'Apple',
         reportType: 'detailed',
         sentimentScore: 72,
@@ -2090,11 +2089,11 @@ describe('HomePage', () => {
       total: 1,
       items: [{
         id: taskCompleted ? 12 : 11,
-        stockCode: taskCompleted ? 'NVDA' : 'AAPL',
+        stockCode: taskCompleted ? 'NVDA' : 'FPT',
         stockName: taskCompleted ? 'NVIDIA' : 'Apple',
         reportType: 'detailed',
         sentimentScore: taskCompleted ? 93 : 72,
-        operationAdvice: taskCompleted ? '买入' : 'Watch',
+        operationAdvice: taskCompleted ? 'Buy' : 'Watch',
         analysisCount: 1,
         lastAnalysisTime: `${todayInShanghai}T${taskCompleted ? '11' : '10'}:00:00`,
       }],
@@ -2112,12 +2111,12 @@ describe('HomePage', () => {
           limit: 100,
           items: [{
             id: taskCompleted ? 12 : 11,
-            queryId: taskCompleted ? 'q-nvda-today' : 'q-aapl-today',
-            stockCode: taskCompleted ? 'NVDA' : 'AAPL',
+            queryId: taskCompleted ? 'q-nvda-today' : 'q-fpt-today',
+            stockCode: taskCompleted ? 'NVDA' : 'FPT',
             stockName: taskCompleted ? 'NVIDIA' : 'Apple',
             reportType: 'detailed' as const,
             sentimentScore: taskCompleted ? 93 : 72,
-            operationAdvice: taskCompleted ? '买入' : 'Watch',
+            operationAdvice: taskCompleted ? 'Buy' : 'Watch',
             createdAt: `${todayInShanghai}T${taskCompleted ? '11' : '10'}:00:00`,
           }],
         });
@@ -2171,12 +2170,12 @@ describe('HomePage', () => {
           limit: 100,
           items: [{
             id: refreshed ? 42 : 41,
-            queryId: refreshed ? 'q-nvda-visible' : 'q-aapl-visible',
-            stockCode: refreshed ? 'NVDA' : 'AAPL',
+            queryId: refreshed ? 'q-nvda-visible' : 'q-fpt-visible',
+            stockCode: refreshed ? 'NVDA' : 'FPT',
             stockName: refreshed ? 'NVIDIA' : 'Apple',
             reportType: 'detailed' as const,
             sentimentScore: refreshed ? 93 : 72,
-            operationAdvice: refreshed ? '买入' : 'Watch',
+            operationAdvice: refreshed ? 'Buy' : 'Watch',
             createdAt: `${todayInShanghai}T10:00:00`,
           }],
         });
@@ -2238,16 +2237,16 @@ describe('HomePage', () => {
 
   it('deduplicates index aliases while keeping the same-code stock in analyze-all (PR #2312)', async () => {
     stockIndexItems = [
-      { canonicalCode: 'sh000016', displayCode: 'sh000016', aliases: ['000016.SH'], assetType: 'index' },
+      { canonicalCode: 'VN30', displayCode: 'VN30', aliases: ['VN30.VN'], assetType: 'index' },
     ];
-    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['000016.SH', 'sh000016', '000016']);
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['VN30.VN', 'VN30', 'VNM']);
     vi.mocked(historyApi.getStockBarList).mockResolvedValue({
       total: 2,
       items: [
         {
           id: 71,
-          stockCode: 'sh000016',
-          stockName: '上证50',
+          stockCode: 'VN30',
+          stockName: 'VN30 Index',
           reportType: 'detailed',
           sentimentScore: 70,
           operationAdvice: 'Watch',
@@ -2257,11 +2256,11 @@ describe('HomePage', () => {
         },
         {
           id: 72,
-          stockCode: '000016',
-          stockName: '深康佳A',
+          stockCode: 'VNM',
+          stockName: 'Vinamilk',
           reportType: 'detailed',
           sentimentScore: 75,
-          operationAdvice: '买入',
+          operationAdvice: 'Buy',
           analysisCount: 1,
           lastAnalysisTime: '2026-03-19T09:00:00+08:00',
           assetType: 'stock',
@@ -2295,8 +2294,8 @@ describe('HomePage', () => {
 
     await waitFor(() => expect(analysisApi.analyzeAsync).toHaveBeenCalledTimes(1));
     expect(vi.mocked(analysisApi.analyzeAsync).mock.calls[0]?.[0].stockCodes).toEqual([
-      '000016.SH',
-      '000016',
+      'VN30.VN',
+      'VNM',
     ]);
   });
 
@@ -2328,9 +2327,9 @@ describe('HomePage', () => {
     const taskRefreshCallsBeforeSubmit = vi.mocked(analysisApi.getTasks).mock.calls.length;
     fireEvent.click(screen.getByRole('button', { name: 'Analyze all' }));
 
-    const status = await screen.findByText(/已确认提交 45 个任务，5 个正在运行；另有 1 只未确认/);
-    expect(status).toHaveTextContent('已停止后续提交并刷新任务列表');
-    expect(status).toHaveTextContent('服务端访问外部依赖时超时');
+    const status = await screen.findByText(/Confirmed 45 submitted task\(s\) and 5 already running; 1 stock\(s\) remain unconfirmed/);
+    expect(status).toHaveTextContent('Further submission stopped and the task list was refreshed');
+    expect(status).toHaveTextContent('The server timed out reaching an external dependency');
     expect(analysisApi.analyzeAsync).toHaveBeenCalledTimes(2);
     expect(vi.mocked(analysisApi.getTasks).mock.calls.length).toBeGreaterThan(taskRefreshCallsBeforeSubmit);
   });
@@ -2357,8 +2356,8 @@ describe('HomePage', () => {
     const taskRefreshCallsBeforeSubmit = vi.mocked(analysisApi.getTasks).mock.calls.length;
     fireEvent.click(screen.getByRole('button', { name: 'Analyze all' }));
 
-    const status = await screen.findByText(/已确认提交 40 个任务，0 个正在运行；另有 11 只未确认/);
-    expect(status).toHaveTextContent('本组请求 50 只，仅确认 40 ');
+    const status = await screen.findByText(/Confirmed 40 submitted task\(s\) and 0 already running; 11 stock\(s\) remain unconfirmed/);
+    expect(status).toHaveTextContent('received 50 stock(s) in this chunk but confirmed only 40');
     expect(analysisApi.analyzeAsync).toHaveBeenCalledTimes(1);
     expect(vi.mocked(analysisApi.getTasks).mock.calls.length).toBeGreaterThan(taskRefreshCallsBeforeSubmit);
   });
@@ -2377,8 +2376,8 @@ describe('HomePage', () => {
     const taskRefreshCallsBeforeSubmit = vi.mocked(analysisApi.getTasks).mock.calls.length;
     fireEvent.click(screen.getByRole('button', { name: 'Analyze all' }));
 
-    expect(await screen.findByText(/服务端访问外部依赖时超时/)).toBeInTheDocument();
-    expect(screen.queryByText(/已确认提交/)).not.toBeInTheDocument();
+    expect(await screen.findByText(/The server timed out reaching an external dependency/)).toBeInTheDocument();
+    expect(screen.queryByText(/Confirmed \d+ submitted/)).not.toBeInTheDocument();
     expect(analysisApi.analyzeAsync).toHaveBeenCalledTimes(1);
     expect(vi.mocked(analysisApi.getTasks).mock.calls.length).toBeGreaterThan(taskRefreshCallsBeforeSubmit);
   });
@@ -2444,7 +2443,7 @@ describe('HomePage', () => {
 
     // 40 accepted + 5 duplicates + 5 rejected = 50 = full chunk, so the next
     // chunk is submitted (2 analyzeAsync calls), not reported as incomplete.
-    expect(await screen.findByText(/已提交 41 个任务，5 个正在运行，5 个被拒绝/)).toBeInTheDocument();
+    expect(await screen.findByText(/Submitted 41 task\(s\), 5 already running, 5 rejected/)).toBeInTheDocument();
     expect(analysisApi.analyzeAsync).toHaveBeenCalledTimes(2);
     expect(vi.mocked(analysisApi.getTasks).mock.calls.length).toBeGreaterThan(taskRefreshCallsBeforeSubmit);
   });
@@ -2484,7 +2483,7 @@ describe('HomePage', () => {
 
     expect(await screen.findByRole('button', { name: /MARKET/ })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete 大盘复盘 history record' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Market recap history record' }));
 
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /MARKET/ })).not.toBeInTheDocument();
@@ -2500,7 +2499,7 @@ describe('HomePage', () => {
       items: [],
     });
     vi.mocked(analysisApi.analyzeAsync).mockRejectedValue(
-      new DuplicateTaskError('600519', 'task-1', 'Stock 600519 is already being analyzed'),
+      new DuplicateTaskError('HPG', 'task-1', 'Stock HPG is already being analyzed'),
     );
 
     render(
@@ -2510,13 +2509,13 @@ describe('HomePage', () => {
     );
 
     const input = await screen.findByPlaceholderText('Enter a stock code, name, or company');
-    fireEvent.change(input, { target: { value: '600519' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.change(input, { target: { value: 'HPG' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Stock 600519 is already being analyzed/)).toBeInTheDocument();
+      expect(screen.getByText(/Stock HPG is already being analyzed/)).toBeInTheDocument();
     });
-    expect(screen.getByText(/Stock 600519 is already being analyzed/).closest('[role="alert"]')).toBeInTheDocument();
+    expect(screen.getByText(/Stock HPG is already being analyzed/).closest('[role="alert"]')).toBeInTheDocument();
   });
 
   it('dismisses the duplicate task banner when its close button is clicked', async () => {
@@ -2536,14 +2535,14 @@ describe('HomePage', () => {
     await screen.findByPlaceholderText('Enter a stock code, name, or company');
 
     act(() => {
-      useStockPoolStore.setState({ duplicateError: 'Stock 600519 is already being analyzed, please wait' });
+      useStockPoolStore.setState({ duplicateError: 'Stock HPG is already being analyzed, please wait' });
     });
 
-    expect(screen.getByText(/Stock 600519 is already being analyzed/)).toBeInTheDocument();
+    expect(screen.getByText(/Stock HPG is already being analyzed/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
-    expect(screen.queryByText(/Stock 600519 is already being analyzed/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Stock HPG is already being analyzed/)).not.toBeInTheDocument();
   });
 
   it('auto-dismisses the duplicate task banner after 5 seconds', async () => {
@@ -2567,20 +2566,20 @@ describe('HomePage', () => {
       });
 
       act(() => {
-        useStockPoolStore.setState({ duplicateError: 'Stock 600519 is already being analyzed, please wait' });
+        useStockPoolStore.setState({ duplicateError: 'Stock HPG is already being analyzed, please wait' });
       });
 
-      expect(screen.getByText(/Stock 600519 is already being analyzed/)).toBeInTheDocument();
+      expect(screen.getByText(/Stock HPG is already being analyzed/)).toBeInTheDocument();
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(4999);
       });
-      expect(screen.getByText(/Stock 600519 is already being analyzed/)).toBeInTheDocument();
+      expect(screen.getByText(/Stock HPG is already being analyzed/)).toBeInTheDocument();
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1);
       });
-      expect(screen.queryByText(/Stock 600519 is already being analyzed/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Stock HPG is already being analyzed/)).not.toBeInTheDocument();
     } finally {
       vi.runOnlyPendingTimers();
       vi.useRealTimers();
@@ -2608,33 +2607,33 @@ describe('HomePage', () => {
       });
 
       act(() => {
-        useStockPoolStore.setState({ duplicateError: 'Stock 600519 is already being analyzed, please wait' });
+        useStockPoolStore.setState({ duplicateError: 'Stock HPG is already being analyzed, please wait' });
       });
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(4000);
       });
-      expect(screen.getByText(/Stock 600519 is already being analyzed/)).toBeInTheDocument();
+      expect(screen.getByText(/Stock HPG is already being analyzed/)).toBeInTheDocument();
 
       // Trigger the duplicate prompt again (the store clears then re-sets the message).
       act(() => {
         useStockPoolStore.setState({ duplicateError: null });
       });
       act(() => {
-        useStockPoolStore.setState({ duplicateError: 'Stock 600519 is already being analyzed, please wait' });
+        useStockPoolStore.setState({ duplicateError: 'Stock HPG is already being analyzed, please wait' });
       });
 
       // 4s after the restart: still within the fresh 5s window because the countdown reset.
       await act(async () => {
         await vi.advanceTimersByTimeAsync(4000);
       });
-      expect(screen.getByText(/Stock 600519 is already being analyzed/)).toBeInTheDocument();
+      expect(screen.getByText(/Stock HPG is already being analyzed/)).toBeInTheDocument();
 
       // Crossing the fresh 5s threshold finally closes the banner.
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1000);
       });
-      expect(screen.queryByText(/Stock 600519 is already being analyzed/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Stock HPG is already being analyzed/)).not.toBeInTheDocument();
     } finally {
       vi.runOnlyPendingTimers();
       vi.useRealTimers();
@@ -2651,14 +2650,14 @@ describe('HomePage', () => {
     vi.mocked(analysisApi.triggerMarketReview).mockResolvedValue({
       status: 'accepted',
       sendNotification: true,
-      message: '大盘复盘任务已提交',
-      region: 'cn',
+      message: 'Market review task submitted',
+      region: 'vn',
       taskId: 'task-1',
     });
     vi.mocked(analysisApi.getStatus).mockResolvedValue({
       taskId: 'task-1',
       status: 'completed',
-      marketReviewReport: '市场复盘报告示例文本',
+      marketReviewReport: 'Sample market review report text',
     });
 
     render(
@@ -2667,63 +2666,20 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
-    const regionSelector = await screen.findByRole('button', { name: 'Select market review regions' });
-    expect(regionSelector).toHaveTextContent('Server default');
-    expect(regionSelector).not.toHaveTextContent('A-share');
+    expect(screen.queryByRole('button', { name: 'Select market review regions' })).not.toBeInTheDocument();
     expect(systemConfigApi.getConfig).not.toHaveBeenCalled();
 
-    fireEvent.click(await screen.findByRole('button', { name: '大盘复盘' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Market review' }));
 
     await waitFor(() => {
       expect(analysisApi.triggerMarketReview).toHaveBeenCalledWith({
         sendNotification: true,
-        regions: undefined,
+        regions: ['vn'],
       });
     });
     expect(await screen.findByText('Market review completed')).toBeInTheDocument();
-    expect(await screen.findByText('市场复盘报告示例文本')).toBeInTheDocument();
+    expect(await screen.findByText('Sample market review report text')).toBeInTheDocument();
     expect(analysisApi.getStatus).toHaveBeenCalledWith('task-1');
-  });
-
-  it('submits a one-time multi-market override without saving system config', async () => {
-    vi.mocked(historyApi.getList).mockResolvedValue({
-      total: 0,
-      page: 1,
-      limit: 20,
-      items: [],
-    });
-    vi.mocked(analysisApi.triggerMarketReview).mockResolvedValue({
-      status: 'accepted',
-      sendNotification: true,
-      message: '大盘复盘任务已提交',
-      region: 'cn,us',
-      taskId: 'task-region',
-    });
-    vi.mocked(analysisApi.getStatus).mockResolvedValue({
-      taskId: 'task-region',
-      status: 'completed',
-      marketReviewReport: '多市场复盘',
-      marketReviewPayload: { kind: 'market_review', region: 'cn,us', sections: [] },
-    });
-
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Select market review regions' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /A-share/ }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /US/ }));
-    fireEvent.click(screen.getByRole('button', { name: '大盘复盘' }));
-
-    await waitFor(() => {
-      expect(analysisApi.triggerMarketReview).toHaveBeenCalledWith({
-        sendNotification: true,
-        regions: ['cn', 'us'],
-      });
-    });
-    expect(systemConfigApi.getConfig).not.toHaveBeenCalled();
   });
 
   it('keeps report language unset when only the UI language is English', async () => {
@@ -2742,7 +2698,7 @@ describe('HomePage', () => {
       status: 'accepted',
       sendNotification: true,
       message: 'Market review task submitted',
-      region: 'us',
+      region: 'vn',
       taskId: 'market-task-1',
     });
     vi.mocked(analysisApi.getStatus).mockResolvedValue({
@@ -2766,7 +2722,7 @@ describe('HomePage', () => {
     );
 
     fireEvent.change(await screen.findByPlaceholderText('Enter a stock code, name, or company'), {
-      target: { value: 'AAPL' },
+      target: { value: 'FPT' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
     fireEvent.click(screen.getByRole('button', { name: 'Market review' }));
@@ -2775,7 +2731,7 @@ describe('HomePage', () => {
       expect(analysisApi.analyzeAsync).toHaveBeenCalled();
       expect(analysisApi.triggerMarketReview).toHaveBeenCalledWith({
         sendNotification: true,
-        regions: undefined,
+        regions: ['vn'],
       });
     });
     expect(vi.mocked(analysisApi.analyzeAsync).mock.calls[0]?.[0]).not.toHaveProperty('reportLanguage');
@@ -2792,7 +2748,7 @@ describe('HomePage', () => {
       status: 'accepted',
       sendNotification: true,
       message: 'Market review task submitted',
-      region: 'us',
+      region: 'vn',
       taskId: 'task-1',
     });
     vi.mocked(analysisApi.getStatus).mockResolvedValue({
@@ -2801,7 +2757,7 @@ describe('HomePage', () => {
       marketReviewReport: '# US Market Recap\n\n## Summary\n\nUS market review body',
       marketReviewPayload: {
         kind: 'market_review',
-        region: 'us',
+        region: 'vn',
         language: 'en',
         title: 'US Market Recap',
         sections: [
@@ -2820,7 +2776,7 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: '大盘复盘' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Market review' }));
 
     expect(await screen.findByRole('button', { name: 'Copy Markdown Source' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy Plain Text' })).toBeInTheDocument();
@@ -2838,14 +2794,14 @@ describe('HomePage', () => {
     vi.mocked(analysisApi.triggerMarketReview).mockResolvedValue({
       status: 'accepted',
       sendNotification: true,
-      message: '大盘复盘任务已提交',
-      region: 'cn',
+      message: 'Market review task submitted',
+      region: 'vn',
       taskId: 'task-1',
     });
     vi.mocked(analysisApi.getStatus).mockResolvedValue({
       taskId: 'task-1',
       status: 'completed',
-      marketReviewReport: '市场复盘报告示例文本',
+      marketReviewReport: 'Sample market review report text',
     });
 
     render(
@@ -2854,7 +2810,7 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
-    await screen.findByText('趋势维持强势');
+    await screen.findByText('Strong trend persists');
     const dashboardScroll = screen.getByTestId('home-dashboard-scroll');
     const scrollToMock = vi.fn(function scrollTo(this: HTMLElement, options?: ScrollToOptions) {
       if (typeof options?.top === 'number') {
@@ -2867,7 +2823,7 @@ describe('HomePage', () => {
     });
     dashboardScroll.scrollTop = 480;
 
-    fireEvent.click(screen.getByRole('button', { name: '大盘复盘' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Market review' }));
 
     await waitFor(() => {
       expect(scrollToMock).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
@@ -2886,44 +2842,44 @@ describe('HomePage', () => {
     vi.mocked(analysisApi.triggerMarketReview).mockResolvedValue({
       status: 'accepted',
       sendNotification: true,
-      message: '大盘复盘任务已提交',
-      region: 'cn',
+      message: 'Market review task submitted',
+      region: 'vn',
       taskId: 'task-1',
     });
     vi.mocked(analysisApi.getStatus).mockResolvedValue({
       taskId: 'task-1',
       status: 'completed',
       marketReviewReport: [
-        '# A股市场复盘',
+        '# Vietnam market review',
         '',
-        '> 市场情绪修复',
+        '> Market sentiment recovering',
         '',
-        '## 指数概览',
+        '## Index overview',
         '',
-        '| 指数 | 表现 |',
+        '| Index | Performance |',
         '| --- | --- |',
-        '| 上证指数 | 震荡走强 |',
+        '| VN-Index | Grinding higher |',
         '',
-        '## 风险提示',
+        '## Risk warnings',
         '',
-        '- 资金回流核心资产',
+        '- Capital returns to blue chips',
       ].join('\n'),
       marketReviewPayload: {
         kind: 'market_review',
-        region: 'cn',
-        title: 'A股市场复盘',
+        region: 'vn',
+        title: 'Vietnam market review',
         breadth: {
           upCount: 3200,
           downCount: 1700,
           limitUpCount: 60,
           limitDownCount: 8,
           totalAmount: 9800,
-          turnoverUnit: '亿',
+          turnoverUnit: 'tỷ',
         },
         indices: [
           {
-            code: '000001',
-            name: '上证指数',
+            code: 'VNINDEX',
+            name: 'VN-Index',
             current: 3150.2,
             changePct: 0.62,
             high: 3168.4,
@@ -2933,13 +2889,13 @@ describe('HomePage', () => {
         sections: [
           {
             key: 'index_overview',
-            title: '指数概览',
-            markdown: '| 指数 | 表现 |\n| --- | --- |\n| 上证指数 | 震荡走强 |',
+            title: 'Index overview',
+            markdown: '| Index | Performance |\n| --- | --- |\n| VN-Index | Grinding higher |',
           },
           {
             key: 'risk',
-            title: '风险提示',
-            markdown: '- 资金回流核心资产',
+            title: 'Risk warnings',
+            markdown: '- Capital returns to blue chips',
           },
         ],
       },
@@ -2951,7 +2907,7 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: '大盘复盘' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Market review' }));
 
     const dashboardScroll = screen.getByTestId('home-dashboard-scroll');
     const marketReviewReport = await screen.findByTestId('market-review-report');
@@ -2961,11 +2917,11 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { name: 'Dữ liệu thị trường có cấu trúc' })).toBeInTheDocument();
     expect(screen.getByText('3200')).toBeInTheDocument();
     expect(screen.getByText('3150.20')).toBeInTheDocument();
-    expect(marketReviewReport.querySelector('h2, h3')?.textContent).not.toBe('A股市场复盘');
-    expect(screen.getByRole('heading', { name: '指数概览' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '风险提示' })).toBeInTheDocument();
+    expect(marketReviewReport.querySelector('h2, h3')?.textContent).not.toBe('Vietnam market review');
+    expect(screen.getByRole('heading', { name: 'Index overview' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Risk warnings' })).toBeInTheDocument();
     expect(screen.getAllByRole('table').length).toBeGreaterThanOrEqual(2);
-    expect(screen.queryByText('# A股市场复盘')).not.toBeInTheDocument();
+    expect(screen.queryByText('# Vietnam market review')).not.toBeInTheDocument();
     expect(screen.queryByText('Start analysis')).not.toBeInTheDocument();
   });
 
@@ -2984,11 +2940,11 @@ describe('HomePage', () => {
       checks: [
         {
           key: 'llm_primary',
-          title: 'LLM 主渠道',
+          title: 'Primary LLM channel',
           category: 'ai_model',
           required: true,
           status: 'needs_action',
-          message: '缺少主模型配置',
+          message: 'Primary model config missing',
         },
         {
           key: 'stock_list',
@@ -2996,7 +2952,7 @@ describe('HomePage', () => {
           category: 'base',
           required: true,
           status: 'needs_action',
-          message: '缺少自选股',
+          message: 'Watchlist missing',
         },
       ],
     });
@@ -3008,7 +2964,7 @@ describe('HomePage', () => {
     );
 
     expect(await screen.findByText('Base configuration incomplete')).toBeInTheDocument();
-    expect(screen.getByText(/LLM 主渠道、自选股/)).toBeInTheDocument();
+    expect(screen.getByText(/Primary LLM channel, Watchlist/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Configure' }));
     expect(navigateMock).toHaveBeenCalledWith('/settings');
   });
@@ -3032,7 +2988,7 @@ describe('HomePage', () => {
     fireEvent.click(followUpButton);
 
     expect(navigateMock).toHaveBeenCalledWith(
-      '/chat?stock=600519&name=%E8%B4%B5%E5%B7%9E%E8%8C%85%E5%8F%B0&recordId=1',
+      '/chat?stock=HPG&name=Hoa%20Phat&recordId=1',
     );
   });
 
@@ -3050,7 +3006,7 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
-    const trigger = await screen.findByRole('button', { name: 'History' });
+    const [trigger] = await screen.findAllByRole('button', { name: 'History' });
     fireEvent.click(trigger);
 
     expect(container.querySelector('.page-drawer-overlay')).toBeTruthy();
@@ -3077,11 +3033,11 @@ describe('HomePage', () => {
       items: [
         {
           id: 1,
-          stockCode: '600519',
-          stockName: '贵州茅台',
+          stockCode: 'HPG',
+          stockName: 'Hoa Phat',
           reportType: 'detailed',
           sentimentScore: 58,
-          operationAdvice: '继续观察买点',
+          operationAdvice: 'Keep watching entry points',
           analysisCount: 2,
           lastAnalysisTime: '2026-03-21T08:00:00Z',
         },
@@ -3129,10 +3085,10 @@ describe('HomePage', () => {
     await waitFor(() => {
       expect(screen.queryByText('No more same-stock history')).not.toBeInTheDocument();
     });
-    expect(screen.getAllByRole('button', { name: /贵州茅台/ }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByRole('button', { name: /Hoa Phat/ }).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/2 runs/)).toBeInTheDocument();
 
-    const historyCalls = vi.mocked(historyApi.getList).mock.calls.filter((call) => call[0]?.stockCode === '600519');
+    const historyCalls = vi.mocked(historyApi.getList).mock.calls.filter((call) => call[0]?.stockCode === 'HPG');
     expect(historyCalls).toHaveLength(3);
     expect(historyCalls[1][0]).toHaveProperty('startDate');
     expect(historyCalls[2][0]).not.toHaveProperty('startDate');
@@ -3141,11 +3097,11 @@ describe('HomePage', () => {
   it('renders active task panel content from dashboard state', async () => {
     const activeTask = {
       taskId: 'task-1',
-      stockCode: '600519',
-      stockName: '贵州茅台',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
       status: 'processing' as const,
       progress: 45,
-      message: '正在抓取最新行情',
+      message: 'Fetching latest quotes',
       reportType: 'detailed',
       createdAt: '2026-03-18T08:00:00Z',
     };
@@ -3173,7 +3129,7 @@ describe('HomePage', () => {
     );
 
     expect(await screen.findByText('Analysis tasks')).toBeInTheDocument();
-    expect(screen.getByText('正在抓取最新行情')).toBeInTheDocument();
+    expect(screen.getByText('Fetching latest quotes')).toBeInTheDocument();
   });
 
   it('triggers reanalyze for the current report even if the search input has other text', async () => {
@@ -3196,20 +3152,20 @@ describe('HomePage', () => {
     );
 
     // Wait for the report to load
-    await screen.findByText('趋势维持强势');
+    await screen.findByText('Strong trend persists');
 
     // Type something else in the search box
     const input = screen.getByPlaceholderText('Enter a stock code, name, or company');
-    fireEvent.change(input, { target: { value: 'AAPL' } });
+    fireEvent.change(input, { target: { value: 'FPT' } });
 
     // Click "Reanalyze"
-    const reanalyzeButton = screen.getByRole('button', { name: 'Phân tích lại' });
+    const reanalyzeButton = screen.getByRole('button', { name: 'Reanalyze' });
     fireEvent.click(reanalyzeButton);
 
     // Verify that analyzeAsync is called with the report's stock code, not the search box text
     expect(analysisApi.analyzeAsync).toHaveBeenCalledWith(expect.objectContaining({
-      stockCode: '600519',
-      originalQuery: '600519',
+      stockCode: 'HPG',
+      originalQuery: 'HPG',
       forceRefresh: true,
     }));
     expect(vi.mocked(analysisApi.analyzeAsync).mock.calls[0]?.[0]).not.toHaveProperty('reportLanguage');
@@ -3219,8 +3175,8 @@ describe('HomePage', () => {
     vi.mocked(agentApi.getSkills).mockResolvedValue({
       default_skill_id: 'bull_trend',
       skills: [
-        { id: 'bull_trend', name: '默认多头趋势', description: '趋势分析' },
-        { id: 'growth_quality', name: '成长质量', description: '成长股分析' },
+        { id: 'bull_trend', name: 'Default bull trend', description: 'Trend analysis' },
+        { id: 'growth_quality', name: 'Growth quality', description: 'Growth stock analysis' },
       ],
     });
     vi.mocked(historyApi.getList).mockResolvedValue({
@@ -3241,15 +3197,15 @@ describe('HomePage', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Strategy' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: /成长质量/ }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Growth quality/ }));
 
     const input = screen.getByPlaceholderText('Enter a stock code, name, or company');
-    fireEvent.change(input, { target: { value: '600519' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.change(input, { target: { value: 'HPG' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
 
     await waitFor(() => {
       expect(analysisApi.analyzeAsync).toHaveBeenCalledWith(expect.objectContaining({
-        stockCode: '600519',
+        stockCode: 'HPG',
         skills: ['growth_quality'],
       }));
     });
@@ -3259,8 +3215,8 @@ describe('HomePage', () => {
     vi.mocked(agentApi.getSkills).mockResolvedValue({
       default_skill_id: 'bull_trend',
       skills: [
-        { id: 'bull_trend', name: '默认多头趋势', description: '趋势分析' },
-        { id: 'growth_quality', name: '成长质量', description: '成长股分析' },
+        { id: 'bull_trend', name: 'Default bull trend', description: 'Trend analysis' },
+        { id: 'growth_quality', name: 'Growth quality', description: 'Growth stock analysis' },
       ],
     });
     vi.mocked(historyApi.getList).mockResolvedValue({
@@ -3286,10 +3242,10 @@ describe('HomePage', () => {
 
     const menu = screen.getByRole('menu');
     fireEvent.keyDown(menu, { key: 'ArrowDown' });
-    expect(screen.getByRole('menuitemradio', { name: /默认多头趋势/ })).toHaveFocus();
+    expect(screen.getByRole('menuitemradio', { name: /Default bull trend/ })).toHaveFocus();
 
     fireEvent.keyDown(menu, { key: 'End' });
-    expect(screen.getByRole('menuitemradio', { name: /成长质量/ })).toHaveFocus();
+    expect(screen.getByRole('menuitemradio', { name: /Growth quality/ })).toHaveFocus();
 
     fireEvent.keyDown(menu, { key: 'Escape' });
     await waitFor(() => {
@@ -3307,17 +3263,17 @@ describe('HomePage', () => {
     });
     vi.mocked(historyApi.getDetail).mockResolvedValue(marketReviewHistoryReport);
     vi.mocked(historyApi.getMarkdown).mockResolvedValue([
-      '# 大盘复盘详情',
+      '# Điểm lại thị trường chi tiết',
       '',
-      '## 市场情绪与赚钱效应',
+      '## Market sentiment and profit effect',
       '',
-      '**赚钱效应** 改善',
+      '**Profit effect** improving',
       '',
-      '## 行业/主题轮动',
+      '## Sector rotation',
       '',
-      '| 方向 | 状态 |',
+      '| Direction | Status |',
       '| --- | --- |',
-      '| 半导体 | 轮动增强 |',
+      '| Banking | Rotation strengthening |',
     ].join('\n'));
 
     render(
@@ -3326,13 +3282,13 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
-    await screen.findByText('大盘复盘摘要');
-    expect(screen.queryByRole('heading', { name: '大盘复盘详情' })).not.toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: '市场情绪与赚钱效应' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '行业/主题轮动' })).toBeInTheDocument();
-    expect(screen.getByText('赚钱效应')).toBeInTheDocument();
+    await screen.findByText('Market recap summary');
+    expect(screen.queryByRole('heading', { name: 'Điểm lại thị trường chi tiết' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Market sentiment and profit effect' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Sector rotation' })).toBeInTheDocument();
+    expect(screen.getByText('Profit effect')).toBeInTheDocument();
     expect(screen.getByRole('table')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Phân tích lại' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reanalyze' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ask AI' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Rerun market review' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'History trend' })).toBeInTheDocument();
@@ -3364,10 +3320,10 @@ describe('HomePage', () => {
       items: [
         {
           id: 1,
-          stockCode: '600519',
-          stockName: '贵州茅台',
+          stockCode: 'HPG',
+          stockName: 'Hoa Phat',
           sentimentScore: 82,
-          operationAdvice: '买入',
+          operationAdvice: 'Buy',
           analysisCount: 1,
           lastAnalysisTime: '2026-03-18T08:00:00Z',
           reportType: 'detailed',
@@ -3381,29 +3337,29 @@ describe('HomePage', () => {
       return Promise.resolve(historyReport);
     });
     vi.mocked(historyApi.getMarkdown).mockResolvedValue([
-      '# 大盘复盘详情',
+      '# Điểm lại thị trường chi tiết',
       '',
-      '## 市场情绪与赚钱效应',
+      '## Market sentiment and profit effect',
       '',
-      '**赚钱效应** 改善',
+      '**Profit effect** improving',
       '',
-      '## 行业/主题轮动',
+      '## Sector rotation',
       '',
-      '| 方向 | 状态 |',
+      '| Direction | Status |',
       '| --- | --- |',
-      '| 半导体 | 轮动增强 |',
+      '| Banking | Rotation strengthening |',
     ].join('\n'));
     vi.mocked(analysisApi.triggerMarketReview).mockResolvedValue({
       status: 'accepted',
       sendNotification: true,
-      message: '大盘复盘任务已提交',
-      region: 'cn',
+      message: 'Market review task submitted',
+      region: 'vn',
       taskId: 'task-1',
     });
     vi.mocked(analysisApi.getStatus).mockResolvedValue({
       taskId: 'task-1',
       status: 'completed',
-      marketReviewReport: '市场复盘报告示例文本',
+      marketReviewReport: 'Sample market review report text',
     });
 
     render(
@@ -3412,24 +3368,24 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
-    await screen.findByText('趋势维持强势');
+    await screen.findByText('Strong trend persists');
 
-    fireEvent.click(screen.getByRole('button', { name: '大盘复盘' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Market review' }));
 
     await waitFor(() => {
       expect(screen.getByText('Market review completed')).toBeInTheDocument();
-      expect(screen.getByText('市场复盘报告示例文本')).toBeInTheDocument();
+      expect(screen.getByText('Sample market review report text')).toBeInTheDocument();
     });
 
     const marketHistoryButton = await screen.findByRole('button', { name: /MARKET/ });
     fireEvent.click(marketHistoryButton);
 
     await waitFor(() => {
-      expect(screen.queryByText('市场复盘报告示例文本')).not.toBeInTheDocument();
+      expect(screen.queryByText('Sample market review report text')).not.toBeInTheDocument();
       expect(screen.queryByText('Market review completed')).not.toBeInTheDocument();
     });
-    expect(await screen.findByText('大盘复盘摘要')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '市场情绪与赚钱效应' })).toBeInTheDocument();
+    expect(await screen.findByText('Market recap summary')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Market sentiment and profit effect' })).toBeInTheDocument();
     expect(vi.mocked(historyApi.getDetail)).toHaveBeenCalledWith(2);
   });
 });

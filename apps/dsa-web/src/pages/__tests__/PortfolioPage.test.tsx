@@ -2,7 +2,6 @@ import type React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { decisionSignalsApi } from '../../api/decisionSignals';
-import { createApiError, createParsedApiError } from '../../api/error';
 import { UiLanguageProvider } from '../../contexts/UiLanguageContext';
 import type { DecisionSignalItem } from '../../types/decisionSignals';
 import { UI_LANGUAGE_STORAGE_KEY } from '../../utils/uiLanguage';
@@ -12,8 +11,6 @@ const {
   getAccounts,
   getSnapshot,
   getRisk,
-  refreshFx,
-  listImportBrokers,
   listTrades,
   listCashLedger,
   listCorporateActions,
@@ -23,8 +20,6 @@ const {
   deleteCashLedger,
   createCorporateAction,
   deleteCorporateAction,
-  parseCsvImport,
-  commitCsvImport,
   createAccount,
   deleteAccount,
   analyzePosition,
@@ -34,8 +29,6 @@ const {
   getAccounts: vi.fn(),
   getSnapshot: vi.fn(),
   getRisk: vi.fn(),
-  refreshFx: vi.fn(),
-  listImportBrokers: vi.fn(),
   listTrades: vi.fn(),
   listCashLedger: vi.fn(),
   listCorporateActions: vi.fn(),
@@ -45,8 +38,6 @@ const {
   deleteCashLedger: vi.fn(),
   createCorporateAction: vi.fn(),
   deleteCorporateAction: vi.fn(),
-  parseCsvImport: vi.fn(),
-  commitCsvImport: vi.fn(),
   createAccount: vi.fn(),
   deleteAccount: vi.fn(),
   analyzePosition: vi.fn(),
@@ -66,9 +57,7 @@ vi.mock('../../api/portfolio', () => ({
     getAccounts,
     getSnapshot,
     getRisk,
-    refreshFx,
-    listImportBrokers,
-    listTrades,
+        listTrades,
     listCashLedger,
     listCorporateActions,
     createTrade,
@@ -77,9 +66,7 @@ vi.mock('../../api/portfolio', () => ({
     deleteCashLedger,
     createCorporateAction,
     deleteCorporateAction,
-    parseCsvImport,
-    commitCsvImport,
-    createAccount,
+        createAccount,
     deleteAccount,
     analyzePosition,
   },
@@ -97,7 +84,7 @@ vi.mock('recharts', () => ({
 type AccountItem = {
   id: number;
   name: string;
-  market?: 'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'tw';
+  market?: 'vn';
   baseCurrency?: string;
 };
 
@@ -107,8 +94,8 @@ function makeAccounts(items: AccountItem[] = [{ id: 1, name: 'Main' }]) {
       id: item.id,
       name: item.name,
       broker: 'Demo',
-      market: item.market ?? 'us',
-      baseCurrency: item.baseCurrency ?? 'CNY',
+      market: item.market ?? 'vn',
+      baseCurrency: item.baseCurrency ?? 'VND',
       isActive: true,
       ownerId: null,
       createdAt: '2026-03-19T00:00:00Z',
@@ -129,7 +116,7 @@ function makeSnapshot(options: {
   return {
     asOf: '2026-03-19',
     costMethod: 'fifo' as const,
-    currency: 'CNY',
+    currency: 'VND',
     accountCount: options.accountCount ?? 1,
     totalCash: 1000,
     totalMarketValue: 2000,
@@ -147,8 +134,8 @@ function makeSnapshot(options: {
         accountName: `Account ${accountId}`,
         ownerId: null,
         broker: 'Demo',
-        market: 'us',
-        baseCurrency: 'CNY',
+        market: 'vn',
+        baseCurrency: 'VND',
         asOf: '2026-03-19',
         costMethod: 'fifo' as const,
         totalCash: 1000,
@@ -167,9 +154,9 @@ function makeSnapshot(options: {
 
 function makePosition(overrides: Record<string, unknown> = {}) {
   return {
-    symbol: '600519',
-    market: 'cn',
-    currency: 'CNY',
+    symbol: 'HPG',
+    market: 'vn',
+    currency: 'VND',
     quantity: 1,
     avgCost: 1500,
     totalCost: 1500,
@@ -177,7 +164,7 @@ function makePosition(overrides: Record<string, unknown> = {}) {
     marketValueBase: 1600,
     unrealizedPnlBase: 100,
     unrealizedPnlPct: 6.67,
-    valuationCurrency: 'CNY',
+    valuationCurrency: 'VND',
     priceSource: 'history_close',
     priceDate: '2026-06-17',
     priceStale: false,
@@ -191,7 +178,7 @@ function makeRisk(overrides: Record<string, unknown> = {}) {
     asOf: '2026-03-19',
     accountId: null,
     costMethod: 'fifo' as const,
-    currency: 'CNY',
+    currency: 'VND',
     thresholds: {},
     concentration: {
       totalMarketValue: 0,
@@ -233,9 +220,9 @@ function makeRisk(overrides: Record<string, unknown> = {}) {
 function makeDecisionSignal(overrides: Partial<DecisionSignalItem> = {}): DecisionSignalItem {
   return {
     id: 100,
-    stockCode: '600519',
-    stockName: '贵州茅台',
-    market: 'cn',
+    stockCode: 'HPG',
+    stockName: 'Hoa Phat',
+    market: 'vn',
     sourceType: 'analysis',
     sourceReportId: 1,
     traceId: null,
@@ -251,9 +238,9 @@ function makeDecisionSignal(overrides: Partial<DecisionSignalItem> = {}): Decisi
     stopLoss: null,
     targetPrice: null,
     invalidation: null,
-    watchConditions: '观察量能',
-    reason: '趋势延续',
-    riskSummary: '短线回撤风险',
+    watchConditions: 'Watch volume',
+    reason: 'Trend continues',
+    riskSummary: 'Short-term pullback risk',
     catalystSummary: null,
     evidence: undefined,
     dataQualitySummary: undefined,
@@ -284,7 +271,7 @@ async function waitForInitialLoad() {
   await waitFor(() => expect(listTrades).toHaveBeenCalledTimes(1));
 }
 
-describe('PortfolioPage FX refresh', () => {
+describe('PortfolioPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();
@@ -292,19 +279,6 @@ describe('PortfolioPage FX refresh', () => {
     getAccounts.mockResolvedValue(makeAccounts());
     getSnapshot.mockImplementation(async ({ accountId }: { accountId?: number } = {}) => makeSnapshot({ accountId, fxStale: true }));
     getRisk.mockResolvedValue(makeRisk());
-    refreshFx.mockResolvedValue({
-      asOf: '2026-03-19',
-      accountCount: 1,
-      refreshEnabled: true,
-      disabledReason: null,
-      pairCount: 1,
-      updatedCount: 1,
-      staleCount: 0,
-      errorCount: 0,
-    });
-    listImportBrokers.mockResolvedValue({
-      brokers: [{ broker: 'huatai', aliases: [], displayName: 'Huatai' }],
-    });
     listTrades.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
     listCashLedger.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
     listCorporateActions.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
@@ -314,23 +288,13 @@ describe('PortfolioPage FX refresh', () => {
     deleteCashLedger.mockResolvedValue({ deleted: 1 });
     createCorporateAction.mockResolvedValue({ id: 1 });
     deleteCorporateAction.mockResolvedValue({ deleted: 1 });
-    parseCsvImport.mockResolvedValue({ broker: 'huatai', recordCount: 0, skippedCount: 0, errorCount: 0, records: [], errors: [] });
-    commitCsvImport.mockResolvedValue({
-      accountId: 1,
-      recordCount: 0,
-      insertedCount: 0,
-      duplicateCount: 0,
-      failedCount: 0,
-      dryRun: true,
-      errors: [],
-    });
     createAccount.mockResolvedValue({ id: 1 });
     deleteAccount.mockResolvedValue({ deleted: 1 });
     analyzePosition.mockResolvedValue({
       taskId: 'task-portfolio-1',
       traceId: 'task-portfolio-1',
       status: 'pending',
-      message: '分析任务已加入队列: HK00700',
+      message: 'Analysis task queued: FPT',
       analysisPhase: 'auto',
     });
     getLatestDecisionSignals.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 1 });
@@ -354,15 +318,6 @@ describe('PortfolioPage FX refresh', () => {
     expect(getRisk).toHaveBeenCalledWith({ accountId: undefined, costMethod: 'fifo', includeRealtime: false });
   });
 
-  it('renders stale FX status with a manual refresh button', async () => {
-    render(<PortfolioPage />);
-
-    await waitForInitialLoad();
-
-    expect(await screen.findByText('过期')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Refresh FX' })).toBeInTheDocument();
-  });
-
   it('shows aggregate partial valuation limitations near summary totals', async () => {
     getSnapshot.mockResolvedValueOnce(makeSnapshot({
       dataQuality: 'partial',
@@ -375,7 +330,7 @@ describe('PortfolioPage FX refresh', () => {
 
     expect(await screen.findByText('Portfolio valuation limitations')).toBeInTheDocument();
     expect(screen.getByText(/Realtime quotes are best-effort/)).toBeInTheDocument();
-    expect(screen.getByText(/FX and cost basis are partial/)).toBeInTheDocument();
+    expect(screen.getByText(/Cost basis is partial/)).toBeInTheDocument();
   });
 
   it('renders portfolio risk drawdown labels in English UI mode', async () => {
@@ -391,7 +346,7 @@ describe('PortfolioPage FX refresh', () => {
     expect(screen.getByText('Scope')).toBeInTheDocument();
     expect(screen.getByText('AI risk signals')).toBeInTheDocument();
     expect(screen.getByText('No defensive signals')).toBeInTheDocument();
-    expect(screen.queryByText('Drawdown monitor')).not.toBeInTheDocument();
+    expect(screen.queryByText('Giám sát sụt giảm')).not.toBeInTheDocument();
   });
 
   it('renders portfolio decision signal risk summary', async () => {
@@ -403,15 +358,15 @@ describe('PortfolioPage FX refresh', () => {
         items: [
           {
             accountId: 1,
-            symbol: '600519',
-            market: 'cn',
+            symbol: 'HPG',
+            market: 'vn',
             signal: makeDecisionSignal({ id: 201, action: 'sell', actionLabel: null }),
           },
           {
             accountId: 1,
-            symbol: '300750',
-            market: 'cn',
-            signal: makeDecisionSignal({ id: 202, stockCode: '300750', action: 'alert', actionLabel: null }),
+            symbol: 'FPT',
+            market: 'vn',
+            signal: makeDecisionSignal({ id: 202, stockCode: 'FPT', action: 'alert', actionLabel: null }),
           },
         ],
       },
@@ -422,11 +377,11 @@ describe('PortfolioPage FX refresh', () => {
     await waitForInitialLoad();
 
     expect(screen.getByText('AI risk signals')).toBeInTheDocument();
-    expect(screen.getByText(/风险信号: 2/)).toBeInTheDocument();
-    expect(screen.getByText(/卖出: 1 · 减仓: 0 · 预警: 1/)).toBeInTheDocument();
-    expect(screen.getByText('600519 · 卖出')).toBeInTheDocument();
-    expect(screen.getByText('300750 · 预警')).toBeInTheDocument();
-    expect(screen.queryByText('600519 · sell')).not.toBeInTheDocument();
+    expect(screen.getByText(/Risk signals: 2/)).toBeInTheDocument();
+    expect(screen.getByText(/Sell: 1 · Reduce: 0 · Alert: 1/)).toBeInTheDocument();
+    expect(screen.getByText('HPG · Sell')).toBeInTheDocument();
+    expect(screen.getByText('FPT · Alert')).toBeInTheDocument();
+    expect(screen.queryByText('HPG · sell')).not.toBeInTheDocument();
     expect(screen.queryByText('300750 · alert')).not.toBeInTheDocument();
   });
 
@@ -439,9 +394,9 @@ describe('PortfolioPage FX refresh', () => {
         items: [
           {
             accountId: 1,
-            symbol: '600519',
-            market: 'cn',
-            signal: makeDecisionSignal({ id: 203, action: 'sell', actionLabel: '卖出' }),
+            symbol: 'HPG',
+            market: 'vn',
+            signal: makeDecisionSignal({ id: 203, action: 'sell', actionLabel: 'Bán' }),
           },
         ],
       },
@@ -452,9 +407,9 @@ describe('PortfolioPage FX refresh', () => {
     await waitForInitialLoad();
 
     expect(screen.getByText('AI risk signals')).toBeInTheDocument();
-    expect(screen.getByText('600519 · Sell')).toBeInTheDocument();
-    expect(screen.queryByText('600519 · 卖出')).not.toBeInTheDocument();
-    expect(screen.queryByText('600519 · sell')).not.toBeInTheDocument();
+    expect(screen.getByText('HPG · Sell')).toBeInTheDocument();
+    expect(screen.queryByText('HPG · Bán')).not.toBeInTheDocument();
+    expect(screen.queryByText('HPG · sell')).not.toBeInTheDocument();
   });
 
   it('renders portfolio decision signal risk fail-open state', async () => {
@@ -474,145 +429,70 @@ describe('PortfolioPage FX refresh', () => {
     expect(screen.getByText('Signal risk unavailable')).toBeInTheDocument();
   });
 
-  it('refreshes FX for a single selected account and only reloads snapshot/risk', async () => {
-    getSnapshot
-      .mockResolvedValueOnce(makeSnapshot({ fxStale: true }))
-      .mockResolvedValueOnce(makeSnapshot({ accountId: 1, fxStale: true }))
-      .mockResolvedValueOnce(makeSnapshot({ accountId: 1, fxStale: false }));
-
-    render(<PortfolioPage />);
-
-    await waitForInitialLoad();
-
-    const accountSelect = screen.getAllByRole('combobox')[0];
-    fireEvent.change(accountSelect, { target: { value: '1' } });
-
-    await waitFor(() => {
-      expect(getSnapshot).toHaveBeenLastCalledWith({ accountId: 1, costMethod: 'fifo', includeRealtime: false });
-    });
-
-    const snapshotCallsBeforeRefresh = getSnapshot.mock.calls.length;
-    const riskCallsBeforeRefresh = getRisk.mock.calls.length;
-    const tradeCallsBeforeRefresh = listTrades.mock.calls.length;
-
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh FX' }));
-
-    await waitFor(() => expect(refreshFx).toHaveBeenCalledWith({ accountId: 1 }));
-    expect(await screen.findByText('FX rates refreshed; 1 pair(s) updated.')).toBeInTheDocument();
-    await waitFor(() => expect(getSnapshot).toHaveBeenCalledTimes(snapshotCallsBeforeRefresh + 1));
-    await waitFor(() => expect(getRisk).toHaveBeenCalledTimes(riskCallsBeforeRefresh + 1));
-    expect(listTrades).toHaveBeenCalledTimes(tradeCallsBeforeRefresh);
-    expect(listCashLedger).not.toHaveBeenCalled();
-    expect(listCorporateActions).not.toHaveBeenCalled();
-    expect(screen.getByText('最新')).toBeInTheDocument();
-  });
-
-  it('refreshes FX for the full portfolio without sending accountId and shows neutral feedback when no pair exists', async () => {
-    refreshFx.mockResolvedValueOnce({
-      asOf: '2026-03-19',
-      accountCount: 1,
-      refreshEnabled: true,
-      disabledReason: null,
-      pairCount: 0,
-      updatedCount: 0,
-      staleCount: 0,
-      errorCount: 0,
-    });
-
-    render(<PortfolioPage />);
-
-    await waitForInitialLoad();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh FX' }));
-
-    await waitFor(() => expect(refreshFx).toHaveBeenCalledWith({ accountId: undefined }));
-    expect(await screen.findByText('No FX pair in the current scope needs refreshing.')).toBeInTheDocument();
-  });
-
-  it('shows disabled feedback when FX online refresh is disabled even without a disabled reason', async () => {
-    refreshFx.mockResolvedValueOnce({
-      asOf: '2026-03-19',
-      accountCount: 1,
-      refreshEnabled: false,
-      pairCount: 1,
-      updatedCount: 0,
-      staleCount: 0,
-      errorCount: 0,
-    });
-
-    render(<PortfolioPage />);
-
-    await waitForInitialLoad();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh FX' }));
-
-    expect(await screen.findByText('Online FX-rate refresh is disabled.')).toBeInTheDocument();
-  });
-
   it('renders backend-provided position valuation fields and stale missing-price hint', async () => {
     getSnapshot.mockResolvedValueOnce(makeSnapshot({ fxStale: true, positions: [
-      { symbol: 'HK00700', market: 'hk', currency: 'HKD', quantity: 10, avgCost: 400, totalCost: 4000, lastPrice: 420, marketValueBase: 4200, unrealizedPnlBase: 200, unrealizedPnlPct: 5, valuationCurrency: 'HKD', priceSource: 'history_close', priceDate: '2026-03-18', priceStale: true, priceAvailable: true },
-      { symbol: 'AAPL', market: 'us', currency: 'USD', quantity: 5, avgCost: 100, totalCost: 500, lastPrice: 0, marketValueBase: 0, unrealizedPnlBase: 0, unrealizedPnlPct: null, valuationCurrency: 'USD', priceSource: 'missing', priceDate: null, priceStale: true, priceAvailable: false },
+      { symbol: 'FPT', market: 'vn', currency: 'VND', quantity: 10, avgCost: 400, totalCost: 4000, lastPrice: 420, marketValueBase: 4200, unrealizedPnlBase: 200, unrealizedPnlPct: 5, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-03-18', priceStale: true, priceAvailable: true },
+      { symbol: 'VCB', market: 'vn', currency: 'VND', quantity: 5, avgCost: 100, totalCost: 500, lastPrice: 0, marketValueBase: 0, unrealizedPnlBase: 0, unrealizedPnlPct: null, valuationCurrency: 'VND', priceSource: 'missing', priceDate: null, priceStale: true, priceAvailable: false },
     ] }));
 
     render(<PortfolioPage />);
 
     await waitForInitialLoad();
 
-    expect(await screen.findByText('HK00700')).toBeInTheDocument();
+    expect(await screen.findByText('FPT')).toBeInTheDocument();
     expect(screen.getByText('420.0000')).toBeInTheDocument();
-    expect(screen.getByText('HKD 4,200.00')).toBeInTheDocument();
+    expect(screen.getByText('VND 4,200.00')).toBeInTheDocument();
     expect(screen.getByText('+5.00%')).toBeInTheDocument();
     expect(screen.getByText('Close · 2026-03-18')).toBeInTheDocument();
     expect(screen.getByText('No price')).toBeInTheDocument();
     expect(screen.getAllByText('--').length).toBeGreaterThanOrEqual(2);
 
-    const hkRow = screen.getByText('HK00700').closest('tr');
-    const aaplRow = screen.getByText('AAPL').closest('tr');
-    expect(hkRow).not.toBeNull();
-    expect(aaplRow).not.toBeNull();
+    const fptRow = screen.getByText('FPT').closest('tr');
+    const vcbRow = screen.getByText('VCB').closest('tr');
+    expect(fptRow).not.toBeNull();
+    expect(vcbRow).not.toBeNull();
 
-    const hkRowCells = within(hkRow as HTMLTableRowElement).getAllByRole('cell');
-    const aaplRowCells = within(aaplRow as HTMLTableRowElement).getAllByRole('cell');
-    expect(hkRowCells.at(-3)).toHaveClass('text-success');
-    expect(aaplRowCells.at(-3)).toHaveClass('text-secondary');
+    const fptRowCells = within(fptRow as HTMLTableRowElement).getAllByRole('cell');
+    const vcbRowCells = within(vcbRow as HTMLTableRowElement).getAllByRole('cell');
+    expect(fptRowCells.at(-3)).toHaveClass('text-success');
+    expect(vcbRowCells.at(-3)).toHaveClass('text-secondary');
   });
 
   it('loads latest active signals for holdings without scanning paginated signal lists', async () => {
     getSnapshot.mockResolvedValueOnce(makeSnapshot({ positions: [
-      { symbol: '600519', market: 'cn', currency: 'CNY', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'CNY', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
+      { symbol: 'HPG', market: 'vn', currency: 'VND', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
     ] }));
     const latestSignal = makeDecisionSignal({
       id: 101,
-      stockCode: '600519',
-      riskSummary: '分页后的风险摘要',
-      watchConditions: '分页后的观察条件',
+      stockCode: 'HPG',
+      riskSummary: 'Paginated risk summary',
+      watchConditions: 'Paginated watch conditions',
     });
     getLatestDecisionSignals.mockResolvedValueOnce({ items: [latestSignal], total: 1, page: 1, pageSize: 1 });
 
     render(<PortfolioPage />);
 
-    expect(await screen.findByText('600519')).toBeInTheDocument();
-    expect(await screen.findByText('分页后的风险摘要')).toBeInTheDocument();
-    expect(decisionSignalsApi.getLatest).toHaveBeenCalledWith('600519', {
-      market: 'cn',
+    expect(await screen.findByText('HPG')).toBeInTheDocument();
+    expect(await screen.findByText('Paginated risk summary')).toBeInTheDocument();
+    expect(decisionSignalsApi.getLatest).toHaveBeenCalledWith('HPG', {
+      market: 'vn',
       limit: 1,
     });
     expect(decisionSignalsApi.list).not.toHaveBeenCalled();
   });
 
   it('refreshes holding signals when manually refreshing unchanged portfolio data', async () => {
-    const position = { symbol: '600519', market: 'cn', currency: 'CNY', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'CNY', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true };
+    const position = { symbol: 'HPG', market: 'vn', currency: 'VND', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true };
     getSnapshot.mockResolvedValue(makeSnapshot({ positions: [position] }));
     getLatestDecisionSignals
       .mockResolvedValueOnce({
-        items: [makeDecisionSignal({ stockCode: '600519', riskSummary: '旧 AI 风险' })],
+        items: [makeDecisionSignal({ stockCode: 'HPG', riskSummary: 'Old AI risk' })],
         total: 1,
         page: 1,
         pageSize: 1,
       })
       .mockResolvedValueOnce({
-        items: [makeDecisionSignal({ stockCode: '600519', riskSummary: '新 AI 风险' })],
+        items: [makeDecisionSignal({ stockCode: 'HPG', riskSummary: 'New AI risk' })],
         total: 1,
         page: 1,
         pageSize: 1,
@@ -620,12 +500,12 @@ describe('PortfolioPage FX refresh', () => {
 
     render(<PortfolioPage />);
 
-    expect(await screen.findByText('旧 AI 风险')).toBeInTheDocument();
+    expect(await screen.findByText('Old AI risk')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh data' }));
 
-    expect(await screen.findByText('新 AI 风险')).toBeInTheDocument();
+    expect(await screen.findByText('New AI risk')).toBeInTheDocument();
     await waitFor(() => expect(getLatestDecisionSignals).toHaveBeenCalledTimes(2));
-    expect(screen.queryByText('旧 AI 风险')).not.toBeInTheDocument();
+    expect(screen.queryByText('Old AI risk')).not.toBeInTheDocument();
   });
 
   it('waits for the selected-account snapshot before loading account-scoped holding signals', async () => {
@@ -638,12 +518,12 @@ describe('PortfolioPage FX refresh', () => {
       .mockResolvedValueOnce(makeSnapshot({
         accountCount: 2,
         positions: [
-          { symbol: '600519', market: 'cn', currency: 'CNY', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'CNY', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
+          { symbol: 'HPG', market: 'vn', currency: 'VND', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
         ],
       }))
       .mockReturnValueOnce(accountTwoSnapshot.promise);
     getLatestDecisionSignals.mockResolvedValue({
-      items: [makeDecisionSignal({ stockCode: '600519', riskSummary: '账号信号' })],
+      items: [makeDecisionSignal({ stockCode: 'HPG', riskSummary: 'Account signal' })],
       total: 1,
       page: 1,
       pageSize: 1,
@@ -651,7 +531,7 @@ describe('PortfolioPage FX refresh', () => {
 
     render(<PortfolioPage />);
 
-    expect(await screen.findByText('账号信号')).toBeInTheDocument();
+    expect(await screen.findByText('Account signal')).toBeInTheDocument();
     const signalCallsBeforeSwitch = getLatestDecisionSignals.mock.calls.length;
 
     const accountSelect = screen.getAllByRole('combobox')[0];
@@ -660,22 +540,22 @@ describe('PortfolioPage FX refresh', () => {
     await waitFor(() => {
       expect(getSnapshot).toHaveBeenLastCalledWith({ accountId: 2, costMethod: 'fifo', includeRealtime: false });
     });
-    expect(screen.queryByText('账号信号')).not.toBeInTheDocument();
+    expect(screen.queryByText('Account signal')).not.toBeInTheDocument();
     expect(getLatestDecisionSignals).toHaveBeenCalledTimes(signalCallsBeforeSwitch);
 
     await act(async () => {
       accountTwoSnapshot.resolve(makeSnapshot({
         accountId: 2,
         positions: [
-          { symbol: '600519', market: 'cn', currency: 'CNY', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'CNY', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
+          { symbol: 'HPG', market: 'vn', currency: 'VND', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
         ],
       }));
       await accountTwoSnapshot.promise;
     });
 
     await waitFor(() => {
-      expect(getLatestDecisionSignals).toHaveBeenLastCalledWith('600519', {
-        market: 'cn',
+      expect(getLatestDecisionSignals).toHaveBeenLastCalledWith('HPG', {
+        market: 'vn',
         limit: 1,
       });
     });
@@ -690,13 +570,13 @@ describe('PortfolioPage FX refresh', () => {
       .mockResolvedValueOnce(makeSnapshot({
         accountCount: 2,
         positions: [
-          { symbol: '600519', market: 'cn', currency: 'CNY', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'CNY', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
+          { symbol: 'HPG', market: 'vn', currency: 'VND', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
         ],
       }))
       .mockResolvedValueOnce(makeSnapshot({
         accountId: 2,
         positions: [
-          { symbol: '600519', market: 'cn', currency: 'CNY', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'CNY', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
+          { symbol: 'HPG', market: 'vn', currency: 'VND', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
         ],
       }));
     const oldSignals = deferredPromise<{
@@ -708,7 +588,7 @@ describe('PortfolioPage FX refresh', () => {
     getLatestDecisionSignals
       .mockReturnValueOnce(oldSignals.promise)
       .mockResolvedValueOnce({
-        items: [makeDecisionSignal({ stockCode: '600519', riskSummary: '新账号信号' })],
+        items: [makeDecisionSignal({ stockCode: 'HPG', riskSummary: 'New account signal' })],
         total: 1,
         page: 1,
         pageSize: 1,
@@ -716,16 +596,16 @@ describe('PortfolioPage FX refresh', () => {
 
     render(<PortfolioPage />);
 
-    expect(await screen.findByText('600519')).toBeInTheDocument();
+    expect(await screen.findByText('HPG')).toBeInTheDocument();
 
     const accountSelect = screen.getAllByRole('combobox')[0];
     fireEvent.change(accountSelect, { target: { value: '2' } });
 
-    expect(await screen.findByText('新账号信号')).toBeInTheDocument();
+    expect(await screen.findByText('New account signal')).toBeInTheDocument();
 
     await act(async () => {
       oldSignals.resolve({
-        items: [makeDecisionSignal({ stockCode: '600519', riskSummary: '旧账号晚返回信号' })],
+        items: [makeDecisionSignal({ stockCode: 'HPG', riskSummary: 'Late old account signal' })],
         total: 1,
         page: 1,
         pageSize: 1,
@@ -733,29 +613,29 @@ describe('PortfolioPage FX refresh', () => {
       await oldSignals.promise;
     });
 
-    expect(screen.getByText('新账号信号')).toBeInTheDocument();
-    expect(screen.queryByText('旧账号晚返回信号')).not.toBeInTheDocument();
+    expect(screen.getByText('New account signal')).toBeInTheDocument();
+    expect(screen.queryByText('Late old account signal')).not.toBeInTheDocument();
   });
 
   it('matches holding signals by stock-code equivalence and leaves unmatched rows empty', async () => {
     getSnapshot.mockResolvedValueOnce(makeSnapshot({ positions: [
-      { symbol: '600519', market: 'cn', currency: 'CNY', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'CNY', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
-      { symbol: 'SH600519', market: 'cn', currency: 'CNY', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'CNY', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
-      { symbol: '00700.HK', market: 'hk', currency: 'HKD', quantity: 10, avgCost: 400, totalCost: 4000, lastPrice: 420, marketValueBase: 4200, unrealizedPnlBase: 200, unrealizedPnlPct: 5, valuationCurrency: 'HKD', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
-      { symbol: 'AAPL', market: 'us', currency: 'USD', quantity: 2, avgCost: 180, totalCost: 360, lastPrice: 190, marketValueBase: 380, unrealizedPnlBase: 20, unrealizedPnlPct: 5.56, valuationCurrency: 'USD', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
+      { symbol: 'HPG', market: 'vn', currency: 'VND', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
+      { symbol: 'HPG.VN', market: 'vn', currency: 'VND', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
+      { symbol: 'FPT.VN', market: 'vn', currency: 'VND', quantity: 10, avgCost: 400, totalCost: 4000, lastPrice: 420, marketValueBase: 4200, unrealizedPnlBase: 200, unrealizedPnlPct: 5, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
+      { symbol: 'VCB', market: 'vn', currency: 'VND', quantity: 2, avgCost: 180, totalCost: 360, lastPrice: 190, marketValueBase: 380, unrealizedPnlBase: 20, unrealizedPnlPct: 5.56, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
     ] }));
     getLatestDecisionSignals.mockImplementation(async (stockCode: string) => {
-      if (stockCode.includes('600519')) {
+      if (stockCode.includes('HPG')) {
         return {
-          items: [makeDecisionSignal({ id: 1, stockCode: '600519', market: 'cn', riskSummary: 'A 股风险' })],
+          items: [makeDecisionSignal({ id: 1, stockCode: 'HPG', market: 'vn', riskSummary: 'HPG risk' })],
           total: 1,
           page: 1,
           pageSize: 1,
         };
       }
-      if (stockCode.includes('00700')) {
+      if (stockCode.includes('FPT')) {
         return {
-          items: [makeDecisionSignal({ id: 2, stockCode: 'HK00700', market: 'hk', riskSummary: '港股风险', watchConditions: '观察回购' })],
+          items: [makeDecisionSignal({ id: 2, stockCode: 'FPT', market: 'vn', riskSummary: 'FPT risk', watchConditions: 'Watch buyback' })],
           total: 1,
           page: 1,
           pageSize: 1,
@@ -766,48 +646,48 @@ describe('PortfolioPage FX refresh', () => {
 
     render(<PortfolioPage />);
 
-    expect(await screen.findAllByText('A 股风险')).toHaveLength(2);
-    expect(screen.getByText('港股风险')).toBeInTheDocument();
+    expect(await screen.findAllByText('HPG risk')).toHaveLength(2);
+    expect(screen.getByText('FPT risk')).toBeInTheDocument();
     const latestLookupSymbols = getLatestDecisionSignals.mock.calls.map(([stockCode]) => String(stockCode));
-    expect(latestLookupSymbols.filter((stockCode) => stockCode.includes('600519'))).toEqual(['600519']);
+    expect(latestLookupSymbols.filter((stockCode) => stockCode.includes('HPG'))).toEqual(['HPG']);
     expect(getLatestDecisionSignals).toHaveBeenCalledTimes(3);
-    expect(getLatestDecisionSignals).toHaveBeenCalledWith('00700.HK', {
-      market: 'hk',
+    expect(getLatestDecisionSignals).toHaveBeenCalledWith('FPT.VN', {
+      market: 'vn',
       limit: 1,
     });
-    const aaplRow = screen.getByText('AAPL').closest('tr');
-    expect(aaplRow).not.toBeNull();
-    expect(within(aaplRow as HTMLTableRowElement).getByText('—')).toBeInTheDocument();
+    const vcbRow = screen.getByText('VCB').closest('tr');
+    expect(vcbRow).not.toBeNull();
+    expect(within(vcbRow as HTMLTableRowElement).getByText('-')).toBeInTheDocument();
   });
 
   it('shows a visible partial warning when one latest holding signal lookup fails', async () => {
     getSnapshot.mockResolvedValueOnce(makeSnapshot({ positions: [
-      { symbol: '600519', market: 'cn', currency: 'CNY', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'CNY', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
-      { symbol: 'AAPL', market: 'us', currency: 'USD', quantity: 2, avgCost: 180, totalCost: 360, lastPrice: 190, marketValueBase: 380, unrealizedPnlBase: 20, unrealizedPnlPct: 5.56, valuationCurrency: 'USD', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
+      { symbol: 'HPG', market: 'vn', currency: 'VND', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
+      { symbol: 'VCB', market: 'vn', currency: 'VND', quantity: 2, avgCost: 180, totalCost: 360, lastPrice: 190, marketValueBase: 380, unrealizedPnlBase: 20, unrealizedPnlPct: 5.56, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
     ] }));
     getLatestDecisionSignals
       .mockResolvedValueOnce({
-        items: [makeDecisionSignal({ stockCode: '600519', riskSummary: '已加载风险' })],
+        items: [makeDecisionSignal({ stockCode: 'HPG', riskSummary: 'Loaded risk' })],
         total: 1,
         page: 1,
         pageSize: 1,
       })
-      .mockRejectedValueOnce(new Error('latest AAPL failed'));
+      .mockRejectedValueOnce(new Error('latest VCB failed'));
 
     render(<PortfolioPage />);
 
-    expect(await screen.findByText('已加载风险')).toBeInTheDocument();
+    expect(await screen.findByText('Loaded risk')).toBeInTheDocument();
     expect(await screen.findByText('AI signals degraded')).toBeInTheDocument();
-    expect(screen.getByText(/latest AAPL failed/)).toBeInTheDocument();
+    expect(screen.getByText(/latest VCB failed/)).toBeInTheDocument();
   });
 
   it('loads each unique holding through the latest endpoint once', async () => {
     getSnapshot.mockResolvedValueOnce(makeSnapshot({ positions: [
-      { symbol: '600519', market: 'cn', currency: 'CNY', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'CNY', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
-      { symbol: '600519', market: 'cn', currency: 'CNY', quantity: 2, avgCost: 1500, totalCost: 3000, lastPrice: 1600, marketValueBase: 3200, unrealizedPnlBase: 200, unrealizedPnlPct: 6.67, valuationCurrency: 'CNY', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
+      { symbol: 'HPG', market: 'vn', currency: 'VND', quantity: 1, avgCost: 1500, totalCost: 1500, lastPrice: 1600, marketValueBase: 1600, unrealizedPnlBase: 100, unrealizedPnlPct: 6.67, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
+      { symbol: 'HPG', market: 'vn', currency: 'VND', quantity: 2, avgCost: 1500, totalCost: 3000, lastPrice: 1600, marketValueBase: 3200, unrealizedPnlBase: 200, unrealizedPnlPct: 6.67, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
     ] }));
     getLatestDecisionSignals.mockResolvedValueOnce({
-      items: [makeDecisionSignal({ stockCode: '600519', riskSummary: '唯一 latest 风险' })],
+      items: [makeDecisionSignal({ stockCode: 'HPG', riskSummary: 'Unique latest risk' })],
       total: 1,
       page: 1,
       pageSize: 1,
@@ -815,16 +695,16 @@ describe('PortfolioPage FX refresh', () => {
 
     render(<PortfolioPage />);
 
-    expect(await screen.findAllByText('唯一 latest 风险')).toHaveLength(2);
+    expect(await screen.findAllByText('Unique latest risk')).toHaveLength(2);
     expect(getLatestDecisionSignals).toHaveBeenCalledTimes(1);
     expect(decisionSignalsApi.list).not.toHaveBeenCalled();
   });
 
   it('limits concurrent latest lookups for large portfolios', async () => {
     const positions = Array.from({ length: 10 }, (_, index) => makePosition({
-      symbol: `AAPL${index}`,
-      market: 'us',
-      currency: 'USD',
+      symbol: `V${String.fromCharCode(65 + index)}${String.fromCharCode(65 + index)}`,
+      market: 'vn',
+      currency: 'VND',
       totalCost: 100 + index,
       marketValueBase: 120 + index,
     }));
@@ -841,7 +721,7 @@ describe('PortfolioPage FX refresh', () => {
 
     render(<PortfolioPage />);
 
-    expect(await screen.findByText('AAPL0')).toBeInTheDocument();
+    expect(await screen.findByText('VAA')).toBeInTheDocument();
     await waitFor(() => expect(getLatestDecisionSignals).toHaveBeenCalledTimes(10));
     await waitFor(() => expect(inFlight).toBe(0));
     expect(maxInFlight).toBeLessThanOrEqual(6);
@@ -849,238 +729,25 @@ describe('PortfolioPage FX refresh', () => {
 
   it('submits manual analysis for a held position without exposing portfolio details in the UI call', async () => {
     getSnapshot.mockResolvedValueOnce(makeSnapshot({ fxStale: true, positions: [
-      { symbol: 'HK00700', market: 'hk', currency: 'HKD', quantity: 10, avgCost: 400, totalCost: 4000, lastPrice: 420, marketValueBase: 4200, unrealizedPnlBase: 200, unrealizedPnlPct: 5, valuationCurrency: 'HKD', priceSource: 'history_close', priceDate: '2026-03-18', priceStale: true, priceAvailable: true },
+      { symbol: 'FPT', market: 'vn', currency: 'VND', quantity: 10, avgCost: 400, totalCost: 4000, lastPrice: 420, marketValueBase: 4200, unrealizedPnlBase: 200, unrealizedPnlPct: 5, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-03-18', priceStale: true, priceAvailable: true },
     ] }));
 
     render(<PortfolioPage />);
 
     await waitForInitialLoad();
 
-    const row = screen.getByText('HK00700').closest('tr');
+    const row = screen.getByText('FPT').closest('tr');
     expect(row).not.toBeNull();
-    fireEvent.click(within(row as HTMLTableRowElement).getByRole('button', { name: 'Analysis' }));
+    fireEvent.click(within(row as HTMLTableRowElement).getByRole('button', { name: 'Analyze' }));
 
     await waitFor(() => {
-      expect(analyzePosition).toHaveBeenCalledWith('HK00700', {
+      expect(analyzePosition).toHaveBeenCalledWith('FPT', {
         accountId: 1,
         analysisPhase: 'auto',
         force: false,
       });
     });
-    expect(await screen.findByText('Submitted an analysis task for HK00700: task-portfolio-1')).toBeInTheDocument();
-  });
-
-  it('prefers disabled feedback over empty-pair feedback when refresh is disabled', async () => {
-    refreshFx.mockResolvedValueOnce({
-      asOf: '2026-03-19',
-      accountCount: 1,
-      refreshEnabled: false,
-      disabledReason: 'portfolio_fx_update_disabled',
-      pairCount: 0,
-      updatedCount: 0,
-      staleCount: 0,
-      errorCount: 0,
-    });
-
-    render(<PortfolioPage />);
-
-    await waitForInitialLoad();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh FX' }));
-
-    expect(await screen.findByText('Online FX-rate refresh is disabled.')).toBeInTheDocument();
-    expect(screen.queryByText('No FX pair in the current scope needs refreshing.')).not.toBeInTheDocument();
-  });
-
-  it('shows warning feedback when FX refresh still falls back to stale rates', async () => {
-    refreshFx.mockResolvedValueOnce({
-      asOf: '2026-03-19',
-      accountCount: 1,
-      pairCount: 2,
-      updatedCount: 1,
-      staleCount: 1,
-      errorCount: 0,
-    });
-
-    render(<PortfolioPage />);
-
-    await waitForInitialLoad();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh FX' }));
-
-    expect(await screen.findByText(/stale\/fallback rates/)).toBeInTheDocument();
-  });
-
-  it('shows warning feedback when FX refresh returns online errors without stale pairs', async () => {
-    refreshFx.mockResolvedValueOnce({
-      asOf: '2026-03-19',
-      accountCount: 1,
-      pairCount: 1,
-      updatedCount: 0,
-      staleCount: 0,
-      errorCount: 1,
-    });
-
-    render(<PortfolioPage />);
-
-    await waitForInitialLoad();
-
-    const snapshotCallsBeforeRefresh = getSnapshot.mock.calls.length;
-    const riskCallsBeforeRefresh = getRisk.mock.calls.length;
-    const tradeCallsBeforeRefresh = listTrades.mock.calls.length;
-
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh FX' }));
-
-    expect(await screen.findByText(/Online refresh did not fully succeed/)).toBeInTheDocument();
-    await waitFor(() => expect(getSnapshot).toHaveBeenCalledTimes(snapshotCallsBeforeRefresh + 1));
-    await waitFor(() => expect(getRisk).toHaveBeenCalledTimes(riskCallsBeforeRefresh + 1));
-    expect(listTrades).toHaveBeenCalledTimes(tradeCallsBeforeRefresh);
-    expect(listCashLedger).not.toHaveBeenCalled();
-    expect(listCorporateActions).not.toHaveBeenCalled();
-  });
-
-  it('restores the button state and shows the existing error alert when FX refresh fails', async () => {
-    refreshFx.mockRejectedValueOnce(
-      createApiError(
-        createParsedApiError({
-          title: '刷新失败',
-          message: '汇率服务暂时不可用',
-        }),
-      ),
-    );
-
-    render(<PortfolioPage />);
-
-    await waitForInitialLoad();
-
-    const refreshButton = screen.getByRole('button', { name: 'Refresh FX' });
-    fireEvent.click(refreshButton);
-
-    const fxAlertTitle = await screen.findByText('刷新失败');
-    expect(fxAlertTitle.closest('[role="alert"]')).toHaveTextContent('汇率服务暂时不可用');
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh FX' })).not.toBeDisabled());
-  });
-
-  it('does not keep success feedback when snapshot reload fails after FX refresh succeeds', async () => {
-    getSnapshot
-      .mockResolvedValueOnce(makeSnapshot({ fxStale: true }))
-      .mockRejectedValueOnce(
-        createApiError(
-          createParsedApiError({
-            title: '快照刷新失败',
-            message: '无法加载最新持仓快照',
-          }),
-        ),
-      );
-
-    render(<PortfolioPage />);
-
-    await waitForInitialLoad();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh FX' }));
-
-    const fxAlertTitle = await screen.findByText('快照刷新失败');
-    expect(fxAlertTitle.closest('[role="alert"]')).toHaveTextContent('无法加载最新持仓快照');
-    await waitFor(() => expect(screen.queryByText('FX rates refreshed; 1 pair(s) updated.')).not.toBeInTheDocument());
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh FX' })).not.toBeDisabled());
-  });
-
-  it('drops late FX refresh results after switching to another account scope', async () => {
-    getAccounts.mockResolvedValueOnce(makeAccounts([{ id: 1, name: 'Main' }, { id: 2, name: 'Alt' }]));
-    getSnapshot.mockImplementation(async ({ accountId }: { accountId?: number } = {}) => {
-      if (accountId === 2) {
-        return makeSnapshot({ accountId: 2, fxStale: false });
-      }
-      return makeSnapshot({ accountId: accountId ?? 1, fxStale: true, accountCount: accountId ? 1 : 2 });
-    });
-
-    const pendingRefresh = deferredPromise<{
-      asOf: string;
-      accountCount: number;
-      pairCount: number;
-      updatedCount: number;
-      staleCount: number;
-      errorCount: number;
-    }>();
-    refreshFx.mockImplementationOnce(() => pendingRefresh.promise);
-
-    render(<PortfolioPage />);
-
-    await waitForInitialLoad();
-
-    const accountSelect = screen.getAllByRole('combobox')[0];
-    fireEvent.change(accountSelect, { target: { value: '1' } });
-    await waitFor(() => expect(getSnapshot).toHaveBeenLastCalledWith({ accountId: 1, costMethod: 'fifo', includeRealtime: false }));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh FX' }));
-    expect(await screen.findByRole('button', { name: 'Refreshing...' })).toBeDisabled();
-
-    fireEvent.change(accountSelect, { target: { value: '2' } });
-    await waitFor(() => expect(getSnapshot).toHaveBeenLastCalledWith({ accountId: 2, costMethod: 'fifo', includeRealtime: false }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh FX' })).not.toBeDisabled());
-
-    const snapshotCallsAfterSwitch = getSnapshot.mock.calls.length;
-    const riskCallsAfterSwitch = getRisk.mock.calls.length;
-
-    await act(async () => {
-      pendingRefresh.resolve({
-        asOf: '2026-03-19',
-        accountCount: 1,
-        pairCount: 1,
-        updatedCount: 1,
-        staleCount: 0,
-        errorCount: 0,
-      });
-      await pendingRefresh.promise;
-    });
-
-    expect(getSnapshot).toHaveBeenCalledTimes(snapshotCallsAfterSwitch);
-    expect(getRisk).toHaveBeenCalledTimes(riskCallsAfterSwitch);
-    expect(screen.queryByText('FX rates refreshed; 1 pair(s) updated.')).not.toBeInTheDocument();
-  });
-
-  it('drops late FX refresh results after switching cost method', async () => {
-    const pendingRefresh = deferredPromise<{
-      asOf: string;
-      accountCount: number;
-      pairCount: number;
-      updatedCount: number;
-      staleCount: number;
-      errorCount: number;
-    }>();
-    refreshFx.mockImplementationOnce(() => pendingRefresh.promise);
-
-    render(<PortfolioPage />);
-
-    await waitForInitialLoad();
-
-    const costMethodSelect = screen.getAllByRole('combobox')[1];
-
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh FX' }));
-    expect(await screen.findByRole('button', { name: 'Refreshing...' })).toBeDisabled();
-
-    fireEvent.change(costMethodSelect, { target: { value: 'avg' } });
-    await waitFor(() => expect(getSnapshot).toHaveBeenLastCalledWith({ accountId: undefined, costMethod: 'avg', includeRealtime: false }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh FX' })).not.toBeDisabled());
-
-    const snapshotCallsAfterSwitch = getSnapshot.mock.calls.length;
-    const riskCallsAfterSwitch = getRisk.mock.calls.length;
-
-    await act(async () => {
-      pendingRefresh.resolve({
-        asOf: '2026-03-19',
-        accountCount: 1,
-        pairCount: 1,
-        updatedCount: 1,
-        staleCount: 0,
-        errorCount: 0,
-      });
-      await pendingRefresh.promise;
-    });
-
-    expect(getSnapshot).toHaveBeenCalledTimes(snapshotCallsAfterSwitch);
-    expect(getRisk).toHaveBeenCalledTimes(riskCallsAfterSwitch);
-    expect(screen.queryByText('FX rates refreshed; 1 pair(s) updated.')).not.toBeInTheDocument();
+    expect(await screen.findByText('Submitted an analysis task for FPT: task-portfolio-1')).toBeInTheDocument();
   });
 
   it('deactivates the selected account from the account toolbar and reloads accounts', async () => {
@@ -1100,9 +767,10 @@ describe('PortfolioPage FX refresh', () => {
 
     const dialog = await screen.findByText('Delete portfolio account');
     expect(dialog.closest('[role="dialog"]') ?? document.body).toHaveTextContent(
-      '删除后该账户会从默认列表、快照、风险和录入入口隐藏',
+      'It will be hidden from default lists, snapshots, risk views, and entry forms',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
+    const deleteButtons = screen.getAllByRole('button', { name: 'Delete account' });
+    fireEvent.click(deleteButtons[deleteButtons.length - 1]);
 
     await waitFor(() => expect(deleteAccount).toHaveBeenCalledWith(1));
     await waitFor(() => expect(getAccounts).toHaveBeenCalledTimes(2));

@@ -4,8 +4,8 @@ import { getDecisionProfile, getDecisionProfileLabel } from '../decisionSignalPr
 
 const signal: DecisionSignalItem = {
   id: 1,
-  stockCode: '600519',
-  market: 'cn',
+  stockCode: 'HPG',
+  market: 'vn',
   sourceType: 'analysis',
   triggerSource: 'web',
   action: 'hold',
@@ -50,11 +50,11 @@ describe('getDecisionProfile', () => {
       'decisionSignals.profile.aggressive': 'Aggressive',
       'decisionSignals.profile.balanced': 'Balanced',
       'decisionSignals.profile.conservative': 'Conservative',
-      'decisionSignals.profile.unknown': '未知',
+      'decisionSignals.profile.unknown': 'Không rõ',
     } as const;
     const t = (key: string) => labels[key as keyof typeof labels] ?? key;
 
     expect(getDecisionProfileLabel('aggressive', t)).toBe('Aggressive');
-    expect(getDecisionProfileLabel('unknown', t)).toBe('未知');
+    expect(getDecisionProfileLabel('unknown', t)).toBe('Không rõ');
   });
 });

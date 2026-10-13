@@ -1,8 +1,7 @@
 import type { ReportLanguage } from '../types/analysis';
 
-// Backend chỉ phát `vi` (api/v1/schemas/analysis.py: Literal["vi"]), giao diện chỉ có
-// vi | en. Mọi giá trị lạ — kể cả `zh`/`ko` từ bản ghi cũ — đều lùi về `vi` thay vì
-// rơi vào bộ nhãn tiếng Trung như trước.
+// Backend chỉ hỗ trợ ngôn ngữ báo cáo `vi` và `en`. Mọi giá trị lạ đều lùi về `vi`.
+// The backend only supports `vi` and `en` report languages; anything else falls back to `vi`.
 export const normalizeReportLanguage = (value?: string | null): ReportLanguage =>
   value === 'en' ? 'en' : 'vi';
 
@@ -51,10 +50,6 @@ const REPORT_TEXT = {
     shareImageFailed: 'Thử lại',
     analysisModel: 'Mô hình phân tích',
     fearGreedIndex: 'Chỉ số Sợ hãi & Tham lam',
-    boardLinkage: 'LIÊN THÔNG NHÓM NGÀNH',
-    relatedBoards: 'Nhóm ngành liên quan',
-    leadingBoard: 'Dẫn dắt',
-    laggingBoard: 'Suy yếu',
     neutralBoard: 'Trung tính',
     reanalyze: 'Phân tích lại',
   },
@@ -102,10 +97,6 @@ const REPORT_TEXT = {
     shareImageFailed: 'Retry',
     analysisModel: 'Model',
     fearGreedIndex: 'Fear & Greed Index',
-    boardLinkage: 'BOARD LINKAGE',
-    relatedBoards: 'Related Boards',
-    leadingBoard: 'Leading',
-    laggingBoard: 'Lagging',
     neutralBoard: 'Neutral',
     reanalyze: 'Reanalyze',
   },

@@ -10,7 +10,7 @@ export interface PortfolioAccountItem {
   ownerId?: string | null;
   name: string;
   broker?: string | null;
-  market: 'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'tw';
+  market: 'vn';
   baseCurrency: string;
   isActive: boolean;
   createdAt?: string | null;
@@ -24,7 +24,7 @@ export interface PortfolioAccountListResponse {
 export interface PortfolioAccountCreateRequest {
   name: string;
   broker?: string;
-  market: 'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'tw';
+  market: 'vn';
   baseCurrency: string;
   ownerId?: string;
 }
@@ -187,7 +187,7 @@ export interface PortfolioTradeCreateRequest {
   price: number;
   fee?: number;
   tax?: number;
-  market?: 'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'tw';
+  market?: 'vn';
   currency?: string;
   tradeUid?: string;
   note?: string;
@@ -207,7 +207,7 @@ export interface PortfolioCorporateActionCreateRequest {
   symbol: string;
   effectiveDate: string;
   actionType: PortfolioCorporateActionType;
-  market?: 'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'tw';
+  market?: 'vn';
   currency?: string;
   cashDividendPerShare?: number;
   splitRatio?: number;
@@ -283,57 +283,4 @@ export interface PortfolioCorporateActionListResponse {
   total: number;
   page: number;
   pageSize: number;
-}
-
-export interface PortfolioImportTradeItem {
-  tradeDate: string;
-  symbol: string;
-  side: PortfolioSide;
-  quantity: number;
-  price: number;
-  fee: number;
-  tax: number;
-  tradeUid?: string | null;
-  dedupHash: string;
-  currency?: string | null;
-}
-
-export interface PortfolioImportParseResponse {
-  broker: string;
-  recordCount: number;
-  skippedCount: number;
-  errorCount: number;
-  records: PortfolioImportTradeItem[];
-  errors: string[];
-}
-
-export interface PortfolioImportCommitResponse {
-  accountId: number;
-  recordCount: number;
-  insertedCount: number;
-  duplicateCount: number;
-  failedCount: number;
-  dryRun: boolean;
-  errors: string[];
-}
-
-export interface PortfolioImportBrokerItem {
-  broker: string;
-  aliases: string[];
-  displayName?: string;
-}
-
-export interface PortfolioImportBrokerListResponse {
-  brokers: PortfolioImportBrokerItem[];
-}
-
-export interface PortfolioFxRefreshResponse {
-  asOf: string;
-  accountCount: number;
-  refreshEnabled?: boolean;
-  disabledReason?: string | null;
-  pairCount: number;
-  updatedCount: number;
-  staleCount: number;
-  errorCount: number;
 }

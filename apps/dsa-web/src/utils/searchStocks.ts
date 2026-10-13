@@ -77,7 +77,7 @@ export function searchStocks(
  * Score rules:
  * - 100: Exact match canonical code
  * - 99: Exact match display code
- * - 98: Exact match Chinese name
+ * - 98: Exact match primary name
  * - 97: Exact match alias
  * - 96: Exact match pinyin abbreviation
  * - 80-89: Prefix match

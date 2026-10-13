@@ -33,9 +33,9 @@ describe('decisionSignalsApi', () => {
       data: {
         item: {
           id: 11,
-          stock_code: '600519',
-          stock_name: '贵州茅台',
-          market: 'cn',
+          stock_code: 'FPT',
+          stock_name: 'FPT Corp',
+          market: 'vn',
           source_type: 'analysis',
           source_agent: null,
           source_report_id: 3001,
@@ -52,11 +52,11 @@ describe('decisionSignalsApi', () => {
           entry_high: 1720,
           stop_loss: 1600,
           target_price: 1850,
-          invalidation: '跌破支撑',
-          watch_conditions: '放量突破',
-          reason: '趋势改善',
-          risk_summary: '波动较高',
-          catalyst_summary: '行业修复',
+          invalidation: 'Thủng hỗ trợ',
+          watch_conditions: 'Bứt phá kèm khối lượng',
+          reason: 'Xu hướng cải thiện',
+          risk_summary: 'Biến động cao',
+          catalyst_summary: 'Ngành phục hồi',
           evidence: { source_url: 'https://example.com/news' },
           data_quality_summary: { raw_score: 80, level: 'usable' },
           plan_quality: 'complete',
@@ -71,9 +71,9 @@ describe('decisionSignalsApi', () => {
     });
 
     const response = await decisionSignalsApi.create({
-      stockCode: '600519',
-      stockName: '贵州茅台',
-      market: 'cn',
+      stockCode: 'FPT',
+      stockName: 'FPT Corp',
+      market: 'vn',
       sourceType: 'analysis',
       sourceReportId: 3001,
       traceId: 'trace-3001',
@@ -89,11 +89,11 @@ describe('decisionSignalsApi', () => {
       entryHigh: 1720,
       stopLoss: 1600,
       targetPrice: 1850,
-      invalidation: '跌破支撑',
-      watchConditions: '放量突破',
-      reason: '趋势改善',
-      riskSummary: '波动较高',
-      catalystSummary: '行业修复',
+      invalidation: 'Thủng hỗ trợ',
+      watchConditions: 'Bứt phá kèm khối lượng',
+      reason: 'Xu hướng cải thiện',
+      riskSummary: 'Biến động cao',
+      catalystSummary: 'Ngành phục hồi',
       evidence: { sourceUrl: 'https://example.com/news' },
       dataQualitySummary: { level: 'usable' },
       planQuality: 'complete',
@@ -104,9 +104,9 @@ describe('decisionSignalsApi', () => {
     });
 
     expect(post).toHaveBeenCalledWith('/api/v1/decision-signals', {
-      stock_code: '600519',
-      stock_name: '贵州茅台',
-      market: 'cn',
+      stock_code: 'FPT',
+      stock_name: 'FPT Corp',
+      market: 'vn',
       source_type: 'analysis',
       source_report_id: 3001,
       trace_id: 'trace-3001',
@@ -122,11 +122,11 @@ describe('decisionSignalsApi', () => {
       entry_high: 1720,
       stop_loss: 1600,
       target_price: 1850,
-      invalidation: '跌破支撑',
-      watch_conditions: '放量突破',
-      reason: '趋势改善',
-      risk_summary: '波动较高',
-      catalyst_summary: '行业修复',
+      invalidation: 'Thủng hỗ trợ',
+      watch_conditions: 'Bứt phá kèm khối lượng',
+      reason: 'Xu hướng cải thiện',
+      risk_summary: 'Biến động cao',
+      catalyst_summary: 'Ngành phục hồi',
       evidence: { sourceUrl: 'https://example.com/news' },
       data_quality_summary: { level: 'usable' },
       plan_quality: 'complete',
@@ -150,8 +150,8 @@ describe('decisionSignalsApi', () => {
       data: {
         item: {
           id: 12,
-          stock_code: 'AAPL',
-          market: 'us',
+          stock_code: 'HPG',
+          market: 'vn',
           source_type: 'manual',
           trigger_source: 'web',
           action: 'watch',
@@ -164,8 +164,8 @@ describe('decisionSignalsApi', () => {
     });
 
     await decisionSignalsApi.create({
-      stockCode: 'AAPL',
-      market: 'us',
+      stockCode: 'HPG',
+      market: 'vn',
       sourceType: 'manual',
       triggerSource: 'web',
       action: 'watch',
@@ -173,8 +173,8 @@ describe('decisionSignalsApi', () => {
     });
 
     expect(post).toHaveBeenCalledWith('/api/v1/decision-signals', {
-      stock_code: 'AAPL',
-      market: 'us',
+      stock_code: 'HPG',
+      market: 'vn',
       source_type: 'manual',
       trigger_source: 'web',
       action: 'watch',
@@ -188,8 +188,8 @@ describe('decisionSignalsApi', () => {
         items: [
           {
             id: 12,
-            stock_code: 'HK00700',
-            market: 'hk',
+            stock_code: 'VNM',
+            market: 'vn',
             source_type: 'manual',
             trigger_source: 'web',
             action: 'hold',
@@ -204,8 +204,8 @@ describe('decisionSignalsApi', () => {
     });
 
     const response = await decisionSignalsApi.list({
-      market: 'hk',
-      stockCode: '00700',
+      market: 'vn',
+      stockCode: 'VNM',
       action: 'hold',
       marketPhase: 'postmarket',
       decisionProfile: 'unknown',
@@ -226,8 +226,8 @@ describe('decisionSignalsApi', () => {
 
     expect(get).toHaveBeenCalledWith('/api/v1/decision-signals', {
       params: {
-        market: 'hk',
-        stock_code: '00700',
+        market: 'vn',
+        stock_code: 'VNM',
         action: 'hold',
         market_phase: 'postmarket',
         decision_profile: 'unknown',
@@ -247,7 +247,7 @@ describe('decisionSignalsApi', () => {
       },
     });
     expect(response.pageSize).toBe(10);
-    expect(response.items[0].stockCode).toBe('HK00700');
+    expect(response.items[0].stockCode).toBe('VNM');
   });
 
   it('reassesses preview with fixed persist false and opaque preview metadata', async () => {
@@ -321,9 +321,9 @@ describe('decisionSignalsApi', () => {
         preview: null,
         item: {
           id: 88,
-          stock_code: '600519',
-          stock_name: '贵州茅台',
-          market: 'cn',
+          stock_code: 'FPT',
+          stock_name: 'FPT Corp',
+          market: 'vn',
           source_type: 'analysis',
           source_report_id: 3001,
           source_agent: 'decision_profile_reassess',
@@ -339,7 +339,7 @@ describe('decisionSignalsApi', () => {
         },
         created: true,
         persist_status: 'created',
-        warnings: [{ code: 'action_adjusted_by_guardrail', message: '已调整。' }],
+        warnings: [{ code: 'action_adjusted_by_guardrail', message: 'Đã điều chỉnh.' }],
         blocked_reason: null,
       },
     });
@@ -376,7 +376,7 @@ describe('decisionSignalsApi', () => {
           warnings: [
             {
               code: 'action_blocked_by_guardrail',
-              message: '价格关系矛盾，未保存。',
+              message: 'Quan hệ giá mâu thuẫn, chưa lưu.',
               params: { violations: ['stop_loss_not_below_target_price'] },
             },
           ],
@@ -389,7 +389,7 @@ describe('decisionSignalsApi', () => {
       warnings: [
         {
           code: 'action_blocked_by_guardrail',
-          message: '价格关系矛盾，未保存。',
+          message: 'Quan hệ giá mâu thuẫn, chưa lưu.',
           params: { violations: ['stop_loss_not_below_target_price'] },
         },
       ],
@@ -421,16 +421,16 @@ describe('decisionSignalsApi', () => {
       },
     });
 
-    const response = await decisionSignalsApi.getLatest('00700.HK', { market: 'hk', limit: 2 });
+    const response = await decisionSignalsApi.getLatest('VNM.VN', { market: 'vn', limit: 2 });
 
-    expect(get).toHaveBeenCalledWith('/api/v1/decision-signals/latest/00700.HK', {
-      params: { market: 'hk', limit: 2 },
+    expect(get).toHaveBeenCalledWith('/api/v1/decision-signals/latest/VNM.VN', {
+      params: { market: 'vn', limit: 2 },
     });
     expect(response.pageSize).toBe(2);
   });
 
   it('rejects slash-containing latest stock codes before calling an unsupported backend path', async () => {
-    await expect(decisionSignalsApi.getLatest('HK/00700', { market: 'hk' })).rejects.toThrow(
+    await expect(decisionSignalsApi.getLatest('VN/VNM', { market: 'vn' })).rejects.toThrow(
       'DecisionSignal latest stockCode cannot contain "/"',
     );
     expect(get).not.toHaveBeenCalled();
@@ -440,8 +440,8 @@ describe('decisionSignalsApi', () => {
     get.mockResolvedValueOnce({
       data: {
         id: 13,
-        stock_code: 'AAPL',
-        market: 'us',
+        stock_code: 'HPG',
+        market: 'vn',
         source_type: 'agent',
         trigger_source: 'api',
         action: 'reduce',
@@ -452,8 +452,8 @@ describe('decisionSignalsApi', () => {
     patch.mockResolvedValueOnce({
       data: {
         id: 13,
-        stock_code: 'AAPL',
-        market: 'us',
+        stock_code: 'HPG',
+        market: 'vn',
         source_type: 'agent',
         trigger_source: 'api',
         action: 'reduce',
@@ -474,7 +474,7 @@ describe('decisionSignalsApi', () => {
       status: 'closed',
       metadata: { closedBy: 'tester' },
     });
-    expect(item.stockCode).toBe('AAPL');
+    expect(item.stockCode).toBe('HPG');
     expect(updated.status).toBe('closed');
     expect(updated.metadata).toEqual({ closed_by: 'tester' });
   });
@@ -505,7 +505,7 @@ describe('decisionSignalsApi', () => {
             end_close: 105,
             stock_return_pct: 5,
             action: 'buy',
-            market: 'cn',
+            market: 'vn',
             plan_quality: 'complete',
             data_quality_level: 'good',
             holding_state: 'holding',
@@ -541,7 +541,7 @@ describe('decisionSignalsApi', () => {
       signalId: 13,
       horizons: ['3d'],
       force: true,
-      market: 'cn',
+      market: 'vn',
       status: 'active',
     });
     const listed = await decisionSignalsApi.listOutcomes({ signalId: 13, horizon: '3d' });
@@ -550,7 +550,7 @@ describe('decisionSignalsApi', () => {
       signal_id: 13,
       horizons: ['3d'],
       force: true,
-      market: 'cn',
+      market: 'vn',
       status: 'active',
     });
     expect(get).toHaveBeenCalledWith('/api/v1/decision-signals/outcomes', {

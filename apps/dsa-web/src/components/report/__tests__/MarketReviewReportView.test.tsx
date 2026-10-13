@@ -26,81 +26,53 @@ const englishMarketReviewReport: AnalysisReport = {
   },
 };
 
-const combinedMarketReviewPayload: MarketReviewPayload = {
+const vnMarketReviewPayload: MarketReviewPayload = {
   version: 1,
   kind: 'market_review',
-  region: 'cn,hk',
+  region: 'vn',
   language: 'vi',
-  rootTitle: '大盘复盘',
-  markets: {
-    cn: {
-      title: 'A股市场',
-      breadth: {
-        upCount: 3120,
-        downCount: 1420,
-        limitUpCount: 72,
-        limitDownCount: 4,
-        totalAmount: 9600,
-        turnoverUnit: '亿元',
-      },
-      indices: [{
-        code: '000300',
-        name: '沪深300',
-        current: 3920.2,
-        changePct: 1.2,
-        high: 3940.5,
-        low: 3860.1,
-      }],
-      sectors: {
-        top: [{ name: '半导体', changePct: 2.35 }],
-        bottom: [{ name: '煤炭', changePct: -1.1 }],
-      },
-      concepts: {
-        top: [{ name: '机器人概念', changePct: 4.2 }],
-        bottom: [{ name: '转基因', changePct: -2.05 }],
-      },
-    },
-    hk: {
-      title: '港股市场',
-      breadth: {
-        upCount: 680,
-        downCount: 410,
-        limitUpCount: 0,
-        limitDownCount: 0,
-        totalAmount: 1180,
-        turnoverUnit: '亿港元',
-      },
-      indices: [{
-        code: 'HSI',
-        name: '恒生指数',
-        current: 18920.4,
-        changePct: -0.5,
-        high: 19050.2,
-        low: 18780.3,
-      }],
-    },
+  title: 'Điểm lại thị trường',
+  rootTitle: 'Điểm lại thị trường',
+  breadth: {
+    upCount: 312,
+    downCount: 142,
+    limitUpCount: 12,
+    limitDownCount: 4,
+    totalAmount: 21500,
+    turnoverUnit: 'tỷ đồng',
   },
+  indices: [{
+    code: 'VNINDEX',
+    name: 'VN-Index',
+    current: 1280.2,
+    changePct: 1.2,
+    high: 1285.5,
+    low: 1270.1,
+  }, {
+    code: 'VN30',
+    name: 'VN30',
+    current: 1320.4,
+    changePct: -0.5,
+    high: 1330.2,
+    low: 1310.3,
+  }],
 };
 
 const noBreadthMarketReviewPayload: MarketReviewPayload = {
   version: 1,
   kind: 'market_review',
-  region: 'us',
+  region: 'vn',
   language: 'en',
   title: 'Market Review',
   rootTitle: 'Market Review',
   indices: [{
-    code: 'SPX',
-    name: 'S&P 500',
-    current: 5200,
+    code: 'VNINDEX',
+    name: 'VN-Index',
+    current: 1280,
     changePct: 0.68,
-    high: 5235.2,
-    low: 5170.4,
+    high: 1285.2,
+    low: 1270.4,
   }],
-  sectors: {
-    top: [{ name: 'Technology', changePct: 1.9 }],
-    bottom: [{ name: 'Energy', changePct: -0.8 }],
-  },
   news: [],
   sections: [],
 };
@@ -127,58 +99,42 @@ describe('MarketReviewReportView', () => {
     expect(screen.queryByText('Chưa có tóm tắt')).not.toBeInTheDocument();
   });
 
-  it('renders structured data for every market in a combined market review payload', () => {
+  it('renders structured breadth and index data for the Vietnam market review payload', () => {
     render(
       <MarketReviewReportView
-        payload={combinedMarketReviewPayload}
-        content="# 大盘复盘"
+        payload={vnMarketReviewPayload}
+        content="# Điểm lại thị trường"
         reportLanguage="vi"
       />,
     );
 
-    expect(screen.getByText('A股市场')).toBeInTheDocument();
-    expect(screen.getByText('港股市场')).toBeInTheDocument();
-    expect(screen.getByText('沪深300')).toBeInTheDocument();
-    expect(screen.getByText('恒生指数')).toBeInTheDocument();
-    expect(screen.getByText('3120')).toBeInTheDocument();
-    expect(screen.getByText('680')).toBeInTheDocument();
+    expect(screen.getByText('VN-Index')).toBeInTheDocument();
+    expect(screen.getAllByText('VN30').length).toBeGreaterThan(0);
+    expect(screen.getByText('312')).toBeInTheDocument();
+    expect(screen.getByText('21500.00 tỷ đồng')).toBeInTheDocument();
+    // Không còn bảng xếp hạng ngành / khái niệm. / No sector or concept ranking panels.
+    expect(screen.queryByText('Nhóm ngành')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nhóm khái niệm')).not.toBeInTheDocument();
   });
 
-  it('renders industry and concept rankings from structured market review payloads', () => {
+  it('localizes structured market data labels for Vietnamese reports', () => {
     render(
       <MarketReviewReportView
-        payload={combinedMarketReviewPayload}
-        content="# 大盘复盘"
-        reportLanguage="vi"
-      />,
-    );
-
-    expect(screen.getAllByText('Nhóm ngành')).toHaveLength(2);
-    expect(screen.getAllByText('Nhóm khái niệm')).toHaveLength(2);
-    expect(screen.getByText('半导体')).toBeInTheDocument();
-    expect(screen.getByText('机器人概念')).toBeInTheDocument();
-    expect(screen.getByText('+4.20%')).toBeInTheDocument();
-    expect(screen.getByText('-2.05%')).toBeInTheDocument();
-  });
-
-  it('localizes structured market data labels for Chinese reports', () => {
-    render(
-      <MarketReviewReportView
-        payload={combinedMarketReviewPayload}
-        content="# 大盘复盘"
+        payload={vnMarketReviewPayload}
+        content="# Điểm lại thị trường"
         reportLanguage="vi"
       />,
     );
 
     expect(screen.getByText('Dữ liệu thị trường có cấu trúc')).toBeInTheDocument();
-    expect(screen.getAllByText('Số mã tăng')).toHaveLength(2);
-    expect(screen.getAllByText('Số mã giảm')).toHaveLength(2);
-    expect(screen.getAllByText('Trần/Sàn')).toHaveLength(2);
-    expect(screen.getAllByText('Giá trị giao dịch')).toHaveLength(2);
-    expect(screen.getAllByText('Chỉ số')).toHaveLength(2);
-    expect(screen.getAllByText('Mới nhất')).toHaveLength(2);
-    expect(screen.getAllByText('Biến động')).toHaveLength(2);
-    expect(screen.getAllByText('Cao/Thấp')).toHaveLength(2);
+    expect(screen.getByText('Số mã tăng')).toBeInTheDocument();
+    expect(screen.getByText('Số mã giảm')).toBeInTheDocument();
+    expect(screen.getByText('Trần/Sàn')).toBeInTheDocument();
+    expect(screen.getByText('Giá trị giao dịch')).toBeInTheDocument();
+    expect(screen.getByText('Chỉ số')).toBeInTheDocument();
+    expect(screen.getByText('Mới nhất')).toBeInTheDocument();
+    expect(screen.getByText('Biến động')).toBeInTheDocument();
+    expect(screen.getByText('Cao/Thấp')).toBeInTheDocument();
     expect(screen.queryByText('Structured Market Data')).not.toBeInTheDocument();
     expect(screen.queryByText('Advancers')).not.toBeInTheDocument();
     expect(screen.queryByText('Index')).not.toBeInTheDocument();
@@ -195,10 +151,8 @@ describe('MarketReviewReportView', () => {
 
     expect(screen.getByText('Structured Market Data')).toBeInTheDocument();
     expect(screen.getByText('No data')).toBeInTheDocument();
-    expect(screen.getByText('S&P 500')).toBeInTheDocument();
-    expect(screen.getAllByText('Industry Sectors').length).toBeGreaterThan(0);
-    expect(screen.getByText('Technology')).toBeInTheDocument();
-    expect(screen.getByText('Energy')).toBeInTheDocument();
+    expect(screen.getByText('VN-Index')).toBeInTheDocument();
+    expect(screen.queryByText('Industry Sectors')).not.toBeInTheDocument();
     expect(screen.queryByText('Advancers')).not.toBeInTheDocument();
     expect(screen.queryByText('Decliners')).not.toBeInTheDocument();
   });
@@ -207,7 +161,7 @@ describe('MarketReviewReportView', () => {
     const payload: MarketReviewPayload = {
       version: 1,
       kind: 'market_review',
-      region: 'cn',
+      region: 'vn',
       language: 'en',
       title: 'Market Review',
       rootTitle: 'Market Review',
@@ -220,8 +174,8 @@ describe('MarketReviewReportView', () => {
         turnoverUnit: 'bn',
       },
       indices: [{
-        code: '000001',
-        name: 'Shanghai Composite',
+        code: 'VNINDEX',
+        name: 'VN-Index',
         current: 4112.446,
         changePct: 0.44079750937683315,
         high: 4143.314,
@@ -249,7 +203,7 @@ describe('MarketReviewReportView', () => {
     const payload = {
       version: 1,
       kind: 'market_review',
-      region: 'cn',
+      region: 'vn',
       language: 'en',
       title: 'Market Review',
       rootTitle: 'Market Review',
@@ -262,8 +216,8 @@ describe('MarketReviewReportView', () => {
         turnoverUnit: 'bn',
       },
       indices: [{
-        code: '000001',
-        name: 'Shanghai Composite',
+        code: 'VNINDEX',
+        name: 'VN-Index',
         current: '4,112.446',
         changePct: '0.44079750937683315%',
         high: 0,
@@ -292,8 +246,8 @@ describe('MarketReviewReportView', () => {
 
     render(
       <MarketReviewReportView
-        payload={combinedMarketReviewPayload}
-        content="# 大盘复盘"
+        payload={vnMarketReviewPayload}
+        content="# Điểm lại thị trường"
         recordId={7}
         reportLanguage="vi"
         onOpenRunFlow={onOpenRunFlow}

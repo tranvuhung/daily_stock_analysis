@@ -7,8 +7,8 @@ const renderDrawer = async (onClose = vi.fn()) => {
   render(
     <ReportMarkdownDrawer
       recordId={1}
-      stockName="贵州茅台"
-      stockCode="600519"
+      stockName="Hoa Phat"
+      stockCode="HPG"
       onClose={onClose}
     />,
   );

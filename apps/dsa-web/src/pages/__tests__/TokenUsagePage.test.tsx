@@ -59,7 +59,7 @@ const dashboardResponse = {
       called_at: '2026-06-11T09:30:00',
       call_type: 'analysis',
       model: 'openai/gpt-test',
-      stock_code: '600519',
+      stock_code: 'FPT',
       prompt_tokens: 40,
       completion_tokens: 200,
       total_tokens: 240,
@@ -107,7 +107,7 @@ describe('TokenUsagePage', () => {
     expect(await screen.findByText('400')).toBeInTheDocument();
     expect(screen.getAllByText('openai/gpt-test')).toHaveLength(2);
     expect(screen.getAllByText('Stock analysis')).toHaveLength(2);
-    expect(screen.getByText(/600519/)).toBeInTheDocument();
+    expect(screen.getByText(/FPT/)).toBeInTheDocument();
     expect(get).toHaveBeenCalledWith('/api/v1/usage/dashboard', {
       params: { period: 'month', limit: 50 },
     });
@@ -122,7 +122,7 @@ describe('TokenUsagePage', () => {
     expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument();
     expect(screen.getAllByText('Stock analysis')).toHaveLength(2);
     expect(screen.getByText('Latest 50 LLM token audit records.')).toBeInTheDocument();
-    expect(screen.queryByText('Token usage')).not.toBeInTheDocument();
+    expect(screen.queryByText('Mức dùng token')).not.toBeInTheDocument();
   });
 
   it('keeps the newest period data when dashboard requests resolve out of order', async () => {

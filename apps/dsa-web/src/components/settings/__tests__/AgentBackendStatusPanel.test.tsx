@@ -68,8 +68,8 @@ describe('AgentBackendStatusPanel', () => {
     expect(previewStatus).not.toHaveBeenCalled();
     expect(await screen.findByText('Default model')).toBeInTheDocument();
     expect(screen.getByText('Can try')).toBeInTheDocument();
-    expect(screen.getByText(/不会登录、调用模型或读取股票数据/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /真实测试/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/does not sign in, call a model, or read stock/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /smoke test|real test/i })).not.toBeInTheDocument();
   });
 
   it('previews unsaved Agent settings through the same compatibility contract', async () => {
@@ -85,7 +85,7 @@ describe('AgentBackendStatusPanel', () => {
     expect(getStatus).not.toHaveBeenCalled();
     expect(await screen.findByText('Codex Agent')).toBeInTheDocument();
     expect(screen.getByText('Experimental')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /真实测试/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /smoke test|real test/i })).not.toBeInTheDocument();
   });
 
   it('ignores a stale draft preview response', async () => {
@@ -148,8 +148,8 @@ describe('AgentBackendStatusPanel', () => {
     });
     renderPanel({ onEnableAgentMode });
 
-    expect(await screen.findByText('Enable Agent Mode')).toBeInTheDocument();
-    expect(screen.getAllByText(/保存设置后再使用问股/)).not.toHaveLength(0);
+    expect((await screen.findAllByText('Enable Agent Mode')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/save the settings before using ask-stock Chat/)).not.toHaveLength(0);
     expect(screen.queryByText('internal message must not be shown')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Enable Agent Mode' }));
     expect(onEnableAgentMode).toHaveBeenCalledTimes(1);

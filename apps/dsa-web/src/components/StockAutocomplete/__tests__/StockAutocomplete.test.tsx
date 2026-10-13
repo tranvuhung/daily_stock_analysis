@@ -45,13 +45,13 @@ vi.mock('../../../hooks/useAutocomplete', () => ({
 
 const mockIndex: StockIndexItem[] = [
   {
-    canonicalCode: "600519.SH",
-    displayCode: "600519",
-    nameZh: "贵州茅台",
-    pinyinFull: "guizhoumaotai",
-    pinyinAbbr: "gzmt",
-    aliases: ["茅台"],
-    market: "CN",
+    canonicalCode: "FPT",
+    displayCode: "FPT",
+    nameZh: "FPT Corp",
+    pinyinFull: "fptcorp",
+    pinyinAbbr: "fc",
+    aliases: ["FPT"],
+    market: "VN",
     assetType: "stock",
     active: true,
     popularity: 100,
@@ -60,35 +60,15 @@ const mockIndex: StockIndexItem[] = [
 
 const mockSuggestions: StockSuggestion[] = [
   {
-    canonicalCode: "600519.SH",
-    displayCode: "600519",
-    nameZh: "贵州茅台",
-    market: "CN",
+    canonicalCode: "FPT",
+    displayCode: "FPT",
+    nameZh: "FPT Corp",
+    market: "VN",
     matchType: "exact" as const,
     matchField: "code" as const,
     score: 100,
   },
 ];
-
-const hkSuggestion = {
-  canonicalCode: "00700.HK",
-  displayCode: "00700",
-  nameZh: "腾讯控股",
-  market: "HK" as const,
-  matchType: "exact" as const,
-  matchField: "code" as const,
-  score: 100,
-};
-
-const bseSuggestion = {
-  canonicalCode: "920493.BJ",
-  displayCode: "920493",
-  nameZh: "示例北交所股票",
-  market: "BSE" as const,
-  matchType: "exact" as const,
-  matchField: "code" as const,
-  score: 100,
-};
 
 const vnSuggestion = {
   canonicalCode: "HPG",
@@ -108,26 +88,6 @@ const vnIndexSuggestion = {
   matchType: "exact" as const,
   matchField: "code" as const,
   score: 100,
-};
-
-const krSuggestion = {
-  canonicalCode: "000660.KS",
-  displayCode: "000660.KS",
-  nameZh: "SK Hynix",
-  market: "KR" as const,
-  matchType: "contains" as const,
-  matchField: "code" as const,
-  score: 60,
-};
-
-const jpSuggestion = {
-  canonicalCode: "7203.T",
-  displayCode: "7203.T",
-  nameZh: "ソニーグループ",
-  market: "JP" as const,
-  matchType: "contains" as const,
-  matchField: "code" as const,
-  score: 60,
 };
 
 describe('StockAutocomplete', () => {
@@ -181,24 +141,24 @@ describe('StockAutocomplete', () => {
         value=""
         onChange={mockOnChange}
         onSubmit={mockOnSubmit}
-        placeholder="请输入代码"
+        placeholder="Nhập mã"
       />
     );
 
-    const input = screen.getByPlaceholderText(/请输入代码/);
+    const input = screen.getByPlaceholderText(/Nhập mã/);
     expect(input).toBeInTheDocument();
   });
 
   it('renders the current value', () => {
     render(
       <StockAutocomplete
-        value="600519"
+        value="HPG"
         onChange={mockOnChange}
         onSubmit={mockOnSubmit}
       />
     );
 
-    const input = screen.getByDisplayValue('600519');
+    const input = screen.getByDisplayValue('HPG');
     expect(input).toBeInTheDocument();
   });
 
@@ -226,9 +186,9 @@ describe('StockAutocomplete', () => {
     );
 
     const input = screen.getByRole('combobox');
-    fireEvent.change(input, { target: { value: '600519' } });
+    fireEvent.change(input, { target: { value: 'HPG' } });
 
-    expect(mockOnChange).toHaveBeenCalledWith('600519');
+    expect(mockOnChange).toHaveBeenCalledWith('HPG');
   });
 
   it('applies a custom class name', () => {
@@ -346,16 +306,16 @@ describe('StockAutocomplete', () => {
 
       render(
         <StockAutocomplete
-          value="600519"
+          value="HPG"
           onChange={mockOnChange}
           onSubmit={mockOnSubmit}
         />
       );
 
-      const input = screen.getByDisplayValue('600519');
+      const input = screen.getByDisplayValue('HPG');
       fireEvent.keyDown(input, { key: 'Enter' });
 
-      expect(mockOnSubmit).toHaveBeenCalledWith('600519');
+      expect(mockOnSubmit).toHaveBeenCalledWith('HPG');
     });
 
     it('applies an accessible label to the fallback input', () => {
@@ -412,14 +372,14 @@ describe('StockAutocomplete', () => {
       render(
         <form onSubmit={formSubmit}>
           <StockAutocomplete
-            value="600519"
+            value="HPG"
             onChange={mockOnChange}
             onSubmit={mockOnSubmit}
           />
         </form>
       );
 
-      fireEvent.keyDown(screen.getByDisplayValue('600519'), { key: 'Enter' });
+      fireEvent.keyDown(screen.getByDisplayValue('HPG'), { key: 'Enter' });
 
       expect(mockOnSubmit).toHaveBeenCalledTimes(1);
       expect(formSubmit).not.toHaveBeenCalled();
@@ -468,16 +428,16 @@ describe('StockAutocomplete', () => {
 
       render(
         <StockAutocomplete
-          value="6005"
+          value="FP"
           onChange={mockOnChange}
           onSubmit={mockOnSubmit}
         />
       );
 
-      const input = screen.getByDisplayValue('6005');
+      const input = screen.getByDisplayValue('FP');
       fireEvent.keyDown(input, { key: 'Enter' });
 
-      expect(mockOnSubmit).toHaveBeenCalledWith('6005');
+      expect(mockOnSubmit).toHaveBeenCalledWith('FP');
     });
 
     it('submits the highlighted suggestion when one is explicitly selected', () => {
@@ -501,135 +461,29 @@ describe('StockAutocomplete', () => {
 
       render(
         <StockAutocomplete
-          value="6005"
+          value="FP"
           onChange={mockOnChange}
           onSubmit={mockOnSubmit}
         />
       );
 
-      const input = screen.getByDisplayValue('6005');
+      const input = screen.getByDisplayValue('FP');
       fireEvent.keyDown(input, { key: 'Enter' });
 
-      expect(mockOnChange).toHaveBeenCalledWith('600519');
-      expect(mockOnSubmit).toHaveBeenCalledWith('600519.SH', '贵州茅台', 'autocomplete', {
-        market: 'CN',
-        displayCode: '600519',
+      expect(mockOnChange).toHaveBeenCalledWith('FPT');
+      expect(mockOnSubmit).toHaveBeenCalledWith('FPT', 'FPT Corp', 'autocomplete', {
+        market: 'VN',
+        displayCode: 'FPT',
       });
     });
 
-    it('submits the highlighted HK suggestion using the canonical .HK code', () => {
-      autocompleteHookImpl = () => ({
-        query: '',
-        setQuery: vi.fn(),
-        suggestions: [hkSuggestion],
-        isOpen: true,
-        highlightedIndex: 0,
-        setHighlightedIndex: vi.fn(),
-        highlightPrevious: vi.fn(),
-        highlightNext: vi.fn(),
-        handleSelect: vi.fn(),
-        close: vi.fn(),
-        reset: vi.fn(),
-        isComposing: false,
-        setIsComposing: vi.fn(),
-        runtimeFallback: false,
-        error: null,
-      });
-
-      render(
-        <StockAutocomplete
-          value="00700"
-          onChange={mockOnChange}
-          onSubmit={mockOnSubmit}
-        />
-      );
-
-      const input = screen.getByDisplayValue('00700');
-      fireEvent.keyDown(input, { key: 'Enter' });
-
-      expect(mockOnChange).toHaveBeenCalledWith('00700');
-      expect(mockOnSubmit).toHaveBeenCalledWith('00700.HK', '腾讯控股', 'autocomplete', {
-        market: 'HK',
-        displayCode: '00700',
-      });
-    });
-
-    it('submits the highlighted BSE suggestion using the canonical .BJ code', () => {
-      autocompleteHookImpl = () => ({
-        query: '',
-        setQuery: vi.fn(),
-        suggestions: [bseSuggestion],
-        isOpen: true,
-        highlightedIndex: 0,
-        setHighlightedIndex: vi.fn(),
-        highlightPrevious: vi.fn(),
-        highlightNext: vi.fn(),
-        handleSelect: vi.fn(),
-        close: vi.fn(),
-        reset: vi.fn(),
-        isComposing: false,
-        setIsComposing: vi.fn(),
-        runtimeFallback: false,
-        error: null,
-      });
-
-      render(
-        <StockAutocomplete
-          value="920493"
-          onChange={mockOnChange}
-          onSubmit={mockOnSubmit}
-        />
-      );
-
-      const input = screen.getByDisplayValue('920493');
-      fireEvent.keyDown(input, { key: 'Enter' });
-
-      expect(mockOnChange).toHaveBeenCalledWith('920493');
-      expect(mockOnSubmit).toHaveBeenCalledWith('920493.BJ', '示例北交所股票', 'autocomplete', {
-        market: 'BSE',
-        displayCode: '920493',
-      });
-    });
   });
 
   describe('runtime boundary', () => {
-    it('renders KR suggestions without falling back to plain input', () => {
-      autocompleteHookImpl = () => ({
-        query: '',
-        setQuery: vi.fn(),
-        suggestions: [krSuggestion],
-        isOpen: true,
-        highlightedIndex: -1,
-        setHighlightedIndex: vi.fn(),
-        highlightPrevious: vi.fn(),
-        highlightNext: vi.fn(),
-        handleSelect: vi.fn(),
-        close: vi.fn(),
-        reset: vi.fn(),
-        isComposing: false,
-        setIsComposing: vi.fn(),
-        runtimeFallback: false,
-        error: null,
-      });
-
-      render(
-        <StockAutocomplete
-          value="000660"
-          onChange={mockOnChange}
-          onSubmit={mockOnSubmit}
-        />
-      );
-
-      const input = screen.getByDisplayValue('000660');
-      fireEvent.focus(input);
-
-      expect(input).not.toHaveAttribute('data-autocomplete-mode', 'fallback');
-      expect(screen.getByText('000660.KS')).toBeInTheDocument();
-    });
-
     it('renders VN market badges without falling back to plain input', () => {
-      // 回归：MARKET_BADGE_CONFIG 里没有 VN 时，MarketBadge 会抛异常，
-      // 整个自动补全降级成纯输入框（只能在真实运行里发现）。
+      // Hồi quy: thiếu VN trong MARKET_BADGE_CONFIG khiến MarketBadge ném lỗi và
+      // toàn bộ autocomplete rơi về ô nhập thường.
+      // Regression: a missing VN badge config made the autocomplete fall back.
       autocompleteHookImpl = () => ({
         query: '',
         setQuery: vi.fn(),
@@ -665,42 +519,6 @@ describe('StockAutocomplete', () => {
       expect(screen.getByText('Chỉ số VN-Index')).toBeInTheDocument();
     });
 
-    it('renders KR and JP market badges in the suggestion list', () => {
-      autocompleteHookImpl = () => ({
-        query: '',
-        setQuery: vi.fn(),
-        suggestions: [krSuggestion, jpSuggestion],
-        isOpen: true,
-        highlightedIndex: 0,
-        setHighlightedIndex: vi.fn(),
-        highlightPrevious: vi.fn(),
-        highlightNext: vi.fn(),
-        handleSelect: vi.fn(),
-        close: vi.fn(),
-        reset: vi.fn(),
-        isComposing: false,
-        setIsComposing: vi.fn(),
-        runtimeFallback: false,
-        error: null,
-      });
-
-      render(
-        <StockAutocomplete
-          value="000660"
-          onChange={mockOnChange}
-          onSubmit={mockOnSubmit}
-        />
-      );
-
-      const input = screen.getByDisplayValue('000660');
-      fireEvent.focus(input);
-
-      expect(screen.getByText('KR')).toBeInTheDocument();
-      expect(screen.getByText('JP')).toBeInTheDocument();
-      expect(screen.getByText('000660.KS')).toBeInTheDocument();
-      expect(screen.getByText('7203.T')).toBeInTheDocument();
-    });
-
     it('falls back to the plain input when the autocomplete tree throws during render', () => {
       autocompleteHookImpl = () => {
         throw new Error('Autocomplete render failed');
@@ -708,13 +526,13 @@ describe('StockAutocomplete', () => {
 
       render(
         <StockAutocomplete
-          value="META"
+          value="VNM"
           onChange={mockOnChange}
           onSubmit={mockOnSubmit}
         />
       );
 
-      const input = screen.getByDisplayValue('META');
+      const input = screen.getByDisplayValue('VNM');
       expect(input).toHaveAttribute('data-autocomplete-mode', 'fallback');
     });
 
@@ -727,7 +545,7 @@ describe('StockAutocomplete', () => {
           {
             canonicalCode: 'TEST.OTC',
             displayCode: 'TEST',
-            nameZh: '测试市场',
+            nameZh: 'Thị trường thử',
             market: 'OTC' as never,
             matchType: 'exact' as const,
             matchField: 'code' as const,

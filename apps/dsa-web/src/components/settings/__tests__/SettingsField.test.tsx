@@ -11,7 +11,7 @@ describe('SettingsField', () => {
       <SettingsField
         item={{
           key: 'STOCK_LIST',
-          value: '600519',
+          value: 'HPG',
           rawValueExists: true,
           isMasked: false,
           schema: {
@@ -28,7 +28,7 @@ describe('SettingsField', () => {
             displayOrder: 1,
           },
         }}
-        value="600519"
+        value="HPG"
         onChange={vi.fn()}
       />
     );
@@ -40,67 +40,67 @@ describe('SettingsField', () => {
     render(
       <SettingsField
         item={{
-          key: 'TICKFLOW_PRIORITY',
-          value: '2',
+          key: 'REALTIME_SOURCE_PRIORITY',
+          value: 'ssi,vci',
           rawValueExists: false,
           isMasked: false,
           schema: {
-            key: 'TICKFLOW_PRIORITY',
-            title: 'TickFlow Priority',
-            description: 'Priority for TickFlow daily K-line fetcher. Lower numbers are tried earlier.',
+            key: 'REALTIME_SOURCE_PRIORITY',
+            title: 'Realtime Source Priority',
+            description: 'Raw backend description for realtime source priority.',
             category: 'data_source',
-            dataType: 'integer',
-            uiControl: 'number',
+            dataType: 'string',
+            uiControl: 'text',
             isSensitive: false,
             isRequired: false,
             isEditable: true,
             options: [],
-            validation: { min: 0, max: 99 },
+            validation: {},
             displayOrder: 16,
-            helpKey: 'settings.data_source.TICKFLOW_PRIORITY',
+            helpKey: 'settings.data_source.REALTIME_SOURCE_PRIORITY',
           },
         }}
-        value="2"
+        value="ssi,vci"
         onChange={vi.fn()}
       />
     );
 
-    expect(screen.getByLabelText('TickFlow Priority')).toBeInTheDocument();
-    expect(screen.getByText(/Controls where TickFlow sits in the generic A-share daily K-line provider fallback chain/)).toBeInTheDocument();
-    expect(screen.queryByText(/Priority for TickFlow daily K-line fetcher/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Realtime Source Priority')).toBeInTheDocument();
+    expect(screen.getByText(/Configures the provider order for realtime quotes/)).toBeInTheDocument();
+    expect(screen.queryByText(/Raw backend description for realtime source priority/)).not.toBeInTheDocument();
   });
   it('resolves settings help from the schema key when the runtime item key differs', () => {
     render(
       <SettingsField
         item={{
           key: 'runtime.tickflow.priority',
-          value: '2',
+          value: 'ssi,vci',
           rawValueExists: false,
           isMasked: false,
           schema: {
-            key: 'TICKFLOW_PRIORITY',
-            title: 'TickFlow Priority',
-            description: 'Priority for TickFlow daily K-line fetcher. Lower numbers are tried earlier.',
+            key: 'REALTIME_SOURCE_PRIORITY',
+            title: 'Realtime Source Priority',
+            description: 'Raw backend description for realtime source priority.',
             category: 'data_source',
-            dataType: 'integer',
-            uiControl: 'number',
+            dataType: 'string',
+            uiControl: 'text',
             isSensitive: false,
             isRequired: false,
             isEditable: true,
             options: [],
-            validation: { min: 0, max: 99 },
+            validation: {},
             displayOrder: 16,
-            helpKey: 'settings.data_source.TICKFLOW_PRIORITY',
+            helpKey: 'settings.data_source.REALTIME_SOURCE_PRIORITY',
           },
         }}
-        value="2"
+        value="ssi,vci"
         onChange={vi.fn()}
       />
     );
 
-    expect(screen.getByLabelText('TickFlow Priority')).toBeInTheDocument();
-    expect(screen.getByText(/Controls where TickFlow sits in the generic A-share daily K-line provider fallback chain/)).toBeInTheDocument();
-    expect(screen.queryByText(/Priority for TickFlow daily K-line fetcher/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Realtime Source Priority')).toBeInTheDocument();
+    expect(screen.getByText(/Configures the provider order for realtime quotes/)).toBeInTheDocument();
+    expect(screen.queryByText(/Raw backend description for realtime source priority/)).not.toBeInTheDocument();
   });
   it('renders sensitive field metadata and validation errors', () => {
     const onChange = vi.fn();
@@ -114,6 +114,7 @@ describe('SettingsField', () => {
           isMasked: false,
           schema: {
             key: 'OPENAI_API_KEY',
+            title: 'OpenAI API Key',
             category: 'ai_model',
             dataType: 'string',
             uiControl: 'password',
@@ -131,7 +132,7 @@ describe('SettingsField', () => {
           {
             key: 'OPENAI_API_KEY',
             code: 'required',
-            message: 'API Key 必填',
+            message: 'API Key is required',
             severity: 'error',
           },
         ]}
@@ -139,7 +140,7 @@ describe('SettingsField', () => {
     );
 
     expect(screen.getByText('Sensitive')).toBeInTheDocument();
-    expect(screen.getByText('API Key 必填')).toBeInTheDocument();
+    expect(screen.getByText('API Key is required')).toBeInTheDocument();
 
     const input = screen.getByLabelText('OpenAI API Key');
     fireEvent.focus(input);
@@ -217,9 +218,9 @@ describe('SettingsField', () => {
       />
     );
 
-    const select = screen.getByLabelText('Minimal通知级别');
-    expect(screen.getByRole('option', { name: '未设置' })).not.toBeDisabled();
-    expect(screen.queryByRole('option', { name: '请选择' })).not.toBeInTheDocument();
+    const select = screen.getByLabelText('Notification Minimum Severity');
+    expect(screen.getByRole('option', { name: 'Not set' })).not.toBeDisabled();
+    expect(screen.queryByRole('option', { name: 'Select' })).not.toBeInTheDocument();
 
     fireEvent.change(select, { target: { value: '' } });
 
@@ -256,7 +257,7 @@ describe('SettingsField', () => {
       />
     );
 
-    expect(screen.getByLabelText('Analysis Generation Method')).toHaveValue('litellm');
+    expect(screen.getByLabelText('Generation Backend')).toHaveValue('litellm');
     expect(onChange).not.toHaveBeenCalled();
   });
 
@@ -266,19 +267,19 @@ describe('SettingsField', () => {
         key: 'NEWS_STRATEGY_PROFILE',
         category: 'data_source',
         options: ['ultra_short', 'short', 'medium', 'long'],
-        expectedLabels: ['超短线（1天）', '短期（3天）', '中期（7天）', 'Long term（30天）'],
+        expectedLabels: ['Ultra short (1 day)', 'Short (3 days)', 'Medium (7 days)', 'Long (30 days)'],
       },
       {
         key: 'REPORT_TYPE',
         category: 'notification',
         options: ['simple', 'full', 'brief'],
-        expectedLabels: ['简洁', 'Full', '简报'],
+        expectedLabels: ['Simple', 'Full', 'Brief'],
       },
       {
         key: 'LOG_LEVEL',
         category: 'system',
         options: ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        expectedLabels: ['调试', '信息', 'Warning', '错误', 'Critical'],
+        expectedLabels: ['Debug', 'Info', 'Warning', 'Error', 'Critical'],
       },
     ] as const;
 
@@ -321,18 +322,19 @@ describe('SettingsField', () => {
     });
   });
 
-  it('renders MARKET_REVIEW_REGION as free-text field with comma-separated defaults', () => {
+  it('renders MARKET_REVIEW_REGION as a free-text field (VN-only value)', () => {
     const onChange = vi.fn();
 
     render(
       <SettingsField
         item={{
           key: 'MARKET_REVIEW_REGION',
-          value: 'cn,jp',
+          value: 'vn',
           rawValueExists: true,
           isMasked: false,
           schema: {
             key: 'MARKET_REVIEW_REGION',
+            title: 'Market Review Region',
             category: 'system',
             dataType: 'string',
             uiControl: 'text',
@@ -344,23 +346,23 @@ describe('SettingsField', () => {
             displayOrder: 1,
           },
         }}
-        value="cn,jp"
+        value="vn"
         onChange={onChange}
       />
     );
 
-    const input = screen.getByLabelText('大盘复盘市场') as HTMLInputElement;
-    expect(input).toHaveValue('cn,jp');
+    const input = screen.getByLabelText('Market Review Region') as HTMLInputElement;
+    expect(input).toHaveValue('vn');
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
 
     fireEvent.change(input, {
-      target: { value: 'cn,jp,kr' },
+      target: { value: '' },
     });
 
-    expect(onChange).toHaveBeenCalledWith('MARKET_REVIEW_REGION', 'cn,jp,kr');
+    expect(onChange).toHaveBeenCalledWith('MARKET_REVIEW_REGION', '');
   });
 
-  it('renders context compression profile options with Chinese labels', () => {
+  it('renders context compression profile options with backend-provided labels', () => {
     const onChange = vi.fn();
 
     render(
@@ -372,6 +374,7 @@ describe('SettingsField', () => {
           isMasked: false,
           schema: {
             key: 'AGENT_CONTEXT_COMPRESSION_PROFILE',
+            title: 'Context Compression Profile',
             category: 'agent',
             dataType: 'string',
             uiControl: 'select',
@@ -379,9 +382,9 @@ describe('SettingsField', () => {
             isRequired: false,
             isEditable: true,
             options: [
-              { label: '成本优先', value: 'cost' },
-              { label: 'Balanced推荐', value: 'balanced' },
-              { label: '长上下文原文优先', value: 'long_context_raw_first' },
+              { label: 'Cost first', value: 'cost' },
+              { label: 'Balanced (recommended)', value: 'balanced' },
+              { label: 'Long-context raw first', value: 'long_context_raw_first' },
             ],
             validation: {
               enum: ['cost', 'balanced', 'long_context_raw_first'],
@@ -394,101 +397,10 @@ describe('SettingsField', () => {
       />
     );
 
-    expect(screen.getByLabelText('上下文压缩策略')).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: '成本优先' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Balanced推荐' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: '长上下文原文优先' })).toBeInTheDocument();
-  });
-
-  it('renders blank-value preset guidance for context compression numeric fields', () => {
-    const onChange = vi.fn();
-
-    render(
-      <>
-        <SettingsField
-          item={{
-            key: 'AGENT_CONTEXT_COMPRESSION_TRIGGER_TOKENS',
-            value: '',
-            rawValueExists: false,
-            isMasked: false,
-            schema: {
-              key: 'AGENT_CONTEXT_COMPRESSION_TRIGGER_TOKENS',
-              category: 'agent',
-              dataType: 'integer',
-              uiControl: 'number',
-              isSensitive: false,
-              isRequired: false,
-              isEditable: true,
-              options: [],
-              validation: { min: 1000 },
-              displayOrder: 73,
-            },
-          }}
-          value=""
-          onChange={onChange}
-        />
-        <SettingsField
-          item={{
-            key: 'AGENT_CONTEXT_PROTECTED_TURNS',
-            value: '',
-            rawValueExists: false,
-            isMasked: false,
-            schema: {
-              key: 'AGENT_CONTEXT_PROTECTED_TURNS',
-              category: 'agent',
-              dataType: 'integer',
-              uiControl: 'number',
-              isSensitive: false,
-              isRequired: false,
-              isEditable: true,
-              options: [],
-              validation: { min: 1 },
-              displayOrder: 74,
-            },
-          }}
-          value=""
-          onChange={onChange}
-        />
-      </>
-    );
-
-    expect(screen.getByLabelText('压缩触发阈值（tokens）')).toBeInTheDocument();
-    expect(screen.getByLabelText('原文保护轮次')).toBeInTheDocument();
-    expect(screen.getByText(/估算历史 token 超过该值时触发摘要/)).toHaveTextContent('留空则跟随当前上下文压缩策略 profile 默认值');
-    expect(screen.getByText(/压缩时最近 N 个用户轮次及其后的回复保持原文/)).toHaveTextContent('留空则跟随当前上下文压缩策略 profile 默认值');
-  });
-
-  it('renders localized custom webhook body template guidance', () => {
-    const onChange = vi.fn();
-
-    render(
-      <SettingsField
-        item={{
-          key: 'CUSTOM_WEBHOOK_BODY_TEMPLATE',
-          value: '',
-          rawValueExists: false,
-          isMasked: false,
-          schema: {
-            key: 'CUSTOM_WEBHOOK_BODY_TEMPLATE',
-            category: 'notification',
-            dataType: 'string',
-            uiControl: 'textarea',
-            isSensitive: false,
-            isRequired: false,
-            isEditable: true,
-            options: [],
-            validation: {},
-            displayOrder: 52,
-          },
-        }}
-        value=""
-        onChange={onChange}
-      />
-    );
-
-    expect(screen.getByLabelText('自定义 Webhook Body 模板')).toBeInTheDocument();
-    expect(screen.getByText(/会先于 Bark、Slack、Discord 等自动 payload 生效/)).toBeInTheDocument();
-    expect(screen.getByText(/裸 \$content \/ \$title 不做 JSON 转义/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Context Compression Profile')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Cost first' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Balanced (recommended)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Long-context raw first' })).toBeInTheDocument();
   });
 
   it('opens detailed field help when help metadata is available', () => {
@@ -496,7 +408,7 @@ describe('SettingsField', () => {
       <SettingsField
         item={{
           key: 'STOCK_LIST',
-          value: '600519,300750',
+          value: 'HPG,FPT',
           rawValueExists: true,
           isMasked: false,
           schema: {
@@ -511,17 +423,17 @@ describe('SettingsField', () => {
             validation: {},
             displayOrder: 1,
             helpKey: 'settings.base.STOCK_LIST',
-            examples: ['STOCK_LIST=600519,300750,002594'],
+            examples: ['STOCK_LIST=HPG,FPT,VCB'],
             docs: [
               {
-                label: '完整指南',
+                label: 'Full guide',
                 href: 'https://example.com/full-guide',
               },
             ],
             warningCodes: [],
           },
         }}
-        value="600519,300750"
+        value="HPG,FPT"
         onChange={() => undefined}
       />
     );
@@ -529,9 +441,9 @@ describe('SettingsField', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View STOCK_LIST configuration help' }));
 
     expect(screen.getByRole('dialog', { name: 'Watchlist' })).toBeInTheDocument();
-    expect(screen.getByText('STOCK_LIST=600519,300750,002594')).toBeInTheDocument();
+    expect(screen.getByText('STOCK_LIST=HPG,FPT,VCB')).toBeInTheDocument();
     // Mục "Tài liệu liên quan" đã bị ẩn: schema có docs nhưng không render link.
-    expect(screen.queryByRole('link', { name: /完整指南/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Full guide/ })).not.toBeInTheDocument();
     expect(screen.queryByText('Related docs')).not.toBeInTheDocument();
 
     const closeButtons = screen.getAllByRole('button', { name: 'Close configuration help' });
@@ -580,16 +492,15 @@ describe('SettingsField', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'View configuration help for Analysis Generation Method' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View Generation Backend configuration help' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Analysis Generation Method' });
-    expect(dialog).toHaveTextContent('决定系统用哪种方式生成');
+    expect(dialog).toHaveTextContent('Chooses how the system generates stock analysis');
     expect(dialog).not.toHaveTextContent('GENERATION_BACKEND');
     expect(dialog).not.toHaveTextContent('Examples');
     expect(dialog).not.toHaveTextContent('Phase 1');
-    expect(dialog).toHaveTextContent('本机已安装并登录对应 CLI');
-    expect(dialog).toHaveTextContent('Default model配置会继续使用现有 API Key');
-    expect(dialog).not.toHaveTextContent('高级说明');
+    expect(dialog).toHaveTextContent('installed and logged in on this machine');
+    expect(dialog).toHaveTextContent('Default model settings continue to use your existing API keys');
     expect(dialog).not.toHaveTextContent('LiteLLM');
   });
 
@@ -626,15 +537,13 @@ describe('SettingsField', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'View configuration help for Ask-stock method' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View Agent Generation Backend configuration help' }));
 
-    const dialog = screen.getByRole('dialog', { name: 'Ask-stock method' });
-    expect(dialog).toHaveTextContent('系统会选择当前可用的方式');
-    expect(dialog).toHaveTextContent('如果不确定，选择“自动”即可');
-    expect(dialog).toHaveTextContent('这项设置只影响问股助手');
-    expect(dialog).not.toHaveTextContent('高级说明');
+    const dialog = screen.getByRole('dialog', { name: 'Ask-Stock Generation Method' });
+    expect(dialog).toHaveTextContent('The system chooses the currently available method');
+    expect(dialog).toHaveTextContent('If you are unsure, choose Auto.');
+    expect(dialog).toHaveTextContent('This setting only affects the ask-stock assistant.');
     expect(dialog).not.toHaveTextContent('LiteLLM');
-    expect(dialog).not.toHaveTextContent('优先选择当前可用');
   });
 
   it('uses per-field schema titles even when helpKey is shared by multiple fields', () => {

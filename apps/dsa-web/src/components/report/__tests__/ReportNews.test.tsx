@@ -19,8 +19,8 @@ describe('ReportNews', () => {
       total: 1,
       items: [
         {
-          title: '茅台发布最新经营数据',
-          snippet: '公司披露季度经营情况，市场关注度提升。',
+          title: 'Hoa Phat công bố số liệu kinh doanh mới',
+          snippet: 'Công ty công bố kết quả kinh doanh quý, thị trường quan tâm hơn.',
           url: 'https://example.com/news',
         },
       ],
@@ -28,7 +28,7 @@ describe('ReportNews', () => {
 
     const { container } = render(<ReportNews recordId={1} />);
 
-    expect(await screen.findByText('茅台发布最新经营数据')).toBeInTheDocument();
+    expect(await screen.findByText('Hoa Phat công bố số liệu kinh doanh mới')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Mở liên kết' })).toHaveAttribute('href', 'https://example.com/news');
     expect(screen.getByText('Tin liên quan / tra cứu bổ sung')).toBeVisible();
     expect(screen.getByText('Nguồn: tin bổ sung trên trang báo cáo; phần thực sự dùng cho phân tích xem ở khối dữ liệu đầu vào.')).toBeVisible();
@@ -74,8 +74,8 @@ describe('ReportNews', () => {
         total: 1,
         items: [
           {
-            title: '重试成功',
-            snippet: '第二次请求成功返回。',
+            title: 'Thử lại thành công',
+            snippet: 'Yêu cầu lần hai trả về thành công.',
             url: 'https://example.com/retry',
           },
         ],
@@ -87,6 +87,6 @@ describe('ReportNews', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
 
-    expect(await screen.findByText('重试成功')).toBeInTheDocument();
+    expect(await screen.findByText('Thử lại thành công')).toBeInTheDocument();
   });
 });

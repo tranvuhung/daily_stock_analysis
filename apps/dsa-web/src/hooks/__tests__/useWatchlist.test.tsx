@@ -28,8 +28,8 @@ describe('useWatchlist', () => {
     mockRemoveFromWatchlist.mockResolvedValue([]);
   });
 
-  it('matches raw HK watchlist entries against prefixed and suffixed variants', async () => {
-    mockGetWatchlist.mockResolvedValue(['00700']);
+  it('matches raw VN watchlist entries against prefixed and suffixed variants', async () => {
+    mockGetWatchlist.mockResolvedValue(['HPG']);
 
     const { result } = renderHook(() => useWatchlist());
 
@@ -37,14 +37,14 @@ describe('useWatchlist', () => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    expect(result.current.isInWatchlist('00700')).toBe(true);
-    expect(result.current.isInWatchlist('HK00700')).toBe(true);
-    expect(result.current.isInWatchlist('00700.HK')).toBe(true);
-    expect(result.current.isInWatchlist('HK01810')).toBe(false);
+    expect(result.current.isInWatchlist('HPG')).toBe(true);
+    expect(result.current.isInWatchlist('vnHPG')).toBe(true);
+    expect(result.current.isInWatchlist('HPG.VN')).toBe(true);
+    expect(result.current.isInWatchlist('FPT')).toBe(false);
   });
 
   it('removes the matched raw watchlist entry instead of adding a duplicate variant', async () => {
-    mockGetWatchlist.mockResolvedValue(['00700']);
+    mockGetWatchlist.mockResolvedValue(['HPG']);
     mockRemoveFromWatchlist.mockResolvedValue([]);
 
     const { result } = renderHook(() => useWatchlist());
@@ -54,18 +54,18 @@ describe('useWatchlist', () => {
     });
 
     await act(async () => {
-      await result.current.toggleWatchlist('HK00700');
+      await result.current.toggleWatchlist('HPG.VN');
     });
 
-    expect(mockRemoveFromWatchlist).toHaveBeenCalledWith('00700');
+    expect(mockRemoveFromWatchlist).toHaveBeenCalledWith('HPG');
     expect(mockAddToWatchlist).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(result.current.watchlistCodes).toEqual([]);
     });
   });
 
-  it('compares submitted and stored US tickers case-insensitively', async () => {
-    mockGetWatchlist.mockResolvedValue(['aapl']);
+  it('compares submitted and stored VN tickers case-insensitively', async () => {
+    mockGetWatchlist.mockResolvedValue(['fpt']);
     mockRemoveFromWatchlist.mockResolvedValue([]);
 
     const { result } = renderHook(() => useWatchlist());
@@ -74,13 +74,13 @@ describe('useWatchlist', () => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    expect(result.current.isInWatchlist('AAPL')).toBe(true);
+    expect(result.current.isInWatchlist('FPT')).toBe(true);
 
     await act(async () => {
-      await result.current.toggleWatchlist('AAPL');
+      await result.current.toggleWatchlist('FPT');
     });
 
-    expect(mockRemoveFromWatchlist).toHaveBeenCalledWith('aapl');
+    expect(mockRemoveFromWatchlist).toHaveBeenCalledWith('fpt');
     expect(mockAddToWatchlist).not.toHaveBeenCalled();
   });
 });

@@ -10,7 +10,7 @@ import type { ResearchArtifact } from './researchArtifact';
 export type StockReportType = 'simple' | 'detailed' | 'full' | 'brief';
 export type ReportType = StockReportType | 'market_review';
 export type AnalysisPhase = 'auto' | 'premarket' | 'intraday' | 'postmarket';
-export type MarketReviewRegion = 'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'vn';
+export type MarketReviewRegion = 'vn';
 
 export interface AnalysisRequest {
   stockCode?: string;
@@ -121,124 +121,6 @@ export interface ReportStrategy {
   takeProfit?: string;
 }
 
-export interface RelatedBoard {
-  name: string;
-  code?: string;
-  type?: string;
-}
-
-export interface SectorRankingItem {
-  name: string;
-  code?: string;
-  changePct?: number;
-  source?: string;
-  updatedAt?: string;
-}
-
-export interface SectorRankings {
-  top?: SectorRankingItem[];
-  bottom?: SectorRankingItem[];
-}
-
-export type MarketStructureStatus = 'ok' | 'partial' | 'unknown' | 'not_supported';
-export type MarketStructureThemeSource = 'industry' | 'concept' | 'mixed' | 'unknown';
-export type MarketStructureThemePhase = 'warming' | 'accelerating' | 'cooling' | 'unknown';
-export type MarketStructureStockRole = 'leader' | 'follower' | 'edge' | 'unknown';
-
-export interface MarketStructureSource {
-  provider: string;
-  dataset: string;
-  status: string;
-  message?: string | null;
-}
-
-export interface MarketStructureDataQuality {
-  status: MarketStructureStatus;
-  missingFields?: string[];
-  sources?: MarketStructureSource[];
-  errors?: string[];
-}
-
-export interface RankedThemeItem {
-  name: string;
-  changePct?: number | null;
-  rank?: number | null;
-  source?: MarketStructureThemeSource;
-  code?: string | null;
-  updatedAt?: string | null;
-}
-
-export interface MarketThemeItem extends RankedThemeItem {
-  phase?: MarketStructureThemePhase;
-  strengthScore?: number | null;
-  reason?: string | null;
-}
-
-export interface ThemeBreadth {
-  activeCount?: number;
-  leadingIndustryCount?: number;
-  leadingConceptCount?: number;
-  laggingCount?: number;
-}
-
-export interface MarketThemeContext {
-  schemaVersion: 'market-theme-v1';
-  status: MarketStructureStatus;
-  market: string;
-  tradeDate?: string | null;
-  activeThemes?: MarketThemeItem[];
-  leadingIndustries?: RankedThemeItem[];
-  leadingConcepts?: RankedThemeItem[];
-  laggingThemes?: RankedThemeItem[];
-  themeBreadth?: ThemeBreadth;
-  dataQuality?: MarketStructureDataQuality;
-}
-
-export interface StockBoardPosition {
-  name: string;
-  type?: string | null;
-  code?: string | null;
-  rank?: number | null;
-  changePct?: number | null;
-  source?: MarketStructureThemeSource;
-}
-
-export interface PrimaryTheme {
-  name: string;
-  source?: MarketStructureThemeSource;
-  phase?: MarketStructureThemePhase;
-  rank?: number | null;
-  changePct?: number | null;
-}
-
-export interface MarketStructureRiskTag {
-  code: string;
-  message: string;
-}
-
-export interface StockMarketPosition {
-  schemaVersion: 'stock-market-position-v1';
-  status: MarketStructureStatus;
-  stockCode: string;
-  stockName?: string | null;
-  market: string;
-  primaryTheme?: PrimaryTheme | null;
-  relatedBoards?: StockBoardPosition[];
-  stockRole?: MarketStructureStockRole;
-  themePhase?: MarketStructureThemePhase;
-  riskTags?: MarketStructureRiskTag[];
-  missingFields?: string[];
-}
-
-export interface MarketStructureContext {
-  schemaVersion: 'market-structure-v1';
-  status: MarketStructureStatus;
-  market: string;
-  tradeDate?: string | null;
-  marketThemeContext: MarketThemeContext;
-  stockMarketPosition: StockMarketPosition;
-}
-
 export interface MarketReviewPayloadSection {
   key?: string;
   title: string;
@@ -282,11 +164,8 @@ export interface MarketReviewPayload {
   marketLight?: Record<string, unknown>;
   breadth?: MarketReviewBreadth;
   indices?: MarketReviewIndex[];
-  sectors?: SectorRankings;
-  concepts?: SectorRankings;
   news?: Array<Record<string, unknown>>;
   sections?: MarketReviewPayloadSection[];
-  markets?: Record<string, MarketReviewPayload>;
   markdownReport?: string;
 }
 
@@ -360,10 +239,6 @@ export interface ReportDetails {
   analysisContextPackOverview?: AnalysisContextPackOverview | null;
   financialReport?: Record<string, unknown>;
   dividendMetrics?: Record<string, unknown>;
-  belongBoards?: RelatedBoard[];
-  sectorRankings?: SectorRankings;
-  conceptRankings?: SectorRankings;
-  marketStructure?: MarketStructureContext | null;
 }
 
 /** Full analysis report */

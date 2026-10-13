@@ -52,16 +52,16 @@ const basePerformance = {
 
 const baseResultItem = {
   analysisHistoryId: 101,
-  code: '600519',
-  stockName: '贵州茅台',
+  code: 'FPT',
+  stockName: 'FPT Corp',
   analysisDate: '2026-03-20',
   evalWindowDays: 10,
   engineVersion: 'test-engine',
   evalStatus: 'completed',
-  operationAdvice: '继续持有',
+  operationAdvice: 'Tiếp tục nắm giữ',
   action: 'watch',
-  actionLabel: '观望',
-  trendPrediction: '震荡偏多',
+  actionLabel: 'Watch',
+  trendPrediction: 'Dao động tích cực',
   actualMovement: 'up',
   actualReturnPct: 3.8,
   directionExpected: 'long',
@@ -113,19 +113,19 @@ describe('BacktestPage', () => {
 
     expect(await screen.findByText('Win')).toBeInTheDocument();
     expect(screen.getByText('Completed')).toBeInTheDocument();
-    expect(screen.getByText('600519')).toBeInTheDocument();
-    expect(screen.getByText('贵州茅台')).toBeInTheDocument();
-    const resultRow = screen.getByText('600519').closest('tr');
+    expect(screen.getByText('FPT')).toBeInTheDocument();
+    expect(screen.getByText('FPT Corp')).toBeInTheDocument();
+    const resultRow = screen.getByText('FPT').closest('tr');
     expect(resultRow).not.toBeNull();
     const rowScope = within(resultRow as HTMLElement);
-    expect(rowScope.getByText('观望')).toBeInTheDocument();
-    expect(rowScope.getByText('震荡偏多')).toBeInTheDocument();
-    expect(rowScope.getByText('继续持有')).toBeInTheDocument();
+    expect(rowScope.getByText('Watch')).toBeInTheDocument();
+    expect(rowScope.getByText('Dao động tích cực')).toBeInTheDocument();
+    expect(rowScope.getByText('Tiếp tục nắm giữ')).toBeInTheDocument();
     expect(screen.getByText('Up')).toBeInTheDocument();
     expect(screen.getByText('Window return')).toBeInTheDocument();
     expect(screen.getByText('Direction match')).toBeInTheDocument();
     expect(screen.getByText('Long')).toBeInTheDocument();
-    expect(screen.getAllByLabelText('yes').length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText('Yes').length).toBeGreaterThan(0);
     expect(screen.getByText('Direction accuracy')).toBeInTheDocument();
     expect(screen.getByText('Avg simulated return')).toBeInTheDocument();
   });
@@ -146,12 +146,12 @@ describe('BacktestPage', () => {
 
     render(<BacktestPage />);
 
-    const codeCell = await screen.findByText('600519');
+    const codeCell = await screen.findByText('FPT');
     const resultRow = codeCell.closest('tr');
     expect(resultRow).not.toBeNull();
     const rowScope = within(resultRow as HTMLElement);
-    expect(rowScope.getByText('观望')).toBeInTheDocument();
-    expect(rowScope.getByText('继续持有')).toBeInTheDocument();
+    expect(rowScope.getByText('Watch')).toBeInTheDocument();
+    expect(rowScope.getByText('Tiếp tục nắm giữ')).toBeInTheDocument();
   });
 
   it('uses localized taxonomy labels before server labels in English UI mode', async () => {
@@ -164,7 +164,7 @@ describe('BacktestPage', () => {
           ...baseResultItem,
           operationAdvice: 'continue holding',
           action: 'watch',
-          actionLabel: '观望',
+          actionLabel: 'Theo dõi',
           trendPrediction: 'range-bound',
         },
       ],
@@ -172,13 +172,13 @@ describe('BacktestPage', () => {
 
     renderEnglishPage();
 
-    const codeCell = await screen.findByText('600519');
+    const codeCell = await screen.findByText('FPT');
     const resultRow = codeCell.closest('tr');
     expect(resultRow).not.toBeNull();
     const rowScope = within(resultRow as HTMLElement);
     expect(rowScope.getByText('Watch')).toBeInTheDocument();
     expect(rowScope.getByText('continue holding')).toBeInTheDocument();
-    expect(rowScope.queryByText('观望')).not.toBeInTheDocument();
+    expect(rowScope.queryByText('Theo dõi')).not.toBeInTheDocument();
   });
 
   it('keeps operation advice visible when backtest action fields are absent for multi-guard advice', async () => {
@@ -198,14 +198,14 @@ describe('BacktestPage', () => {
 
     render(<BacktestPage />);
 
-    const codeCell = await screen.findByText('600519');
+    const codeCell = await screen.findByText('FPT');
     const resultRow = codeCell.closest('tr');
     expect(resultRow).not.toBeNull();
     const rowScope = within(resultRow as HTMLElement);
-    expect(rowScope.getByText('震荡偏多')).toBeInTheDocument();
+    expect(rowScope.getByText('Dao động tích cực')).toBeInTheDocument();
     expect(rowScope.getByText('risk alert, avoid buying')).toBeInTheDocument();
-    expect(rowScope.queryByText('回避')).not.toBeInTheDocument();
-    expect(rowScope.queryByText('预警')).not.toBeInTheDocument();
+    expect(rowScope.queryByText('Avoid')).not.toBeInTheDocument();
+    expect(rowScope.queryByText('Alert')).not.toBeInTheDocument();
   });
 
   it('renders backtest controls and result headings in English UI mode', async () => {
@@ -218,8 +218,8 @@ describe('BacktestPage', () => {
     expect(screen.getByText('Window return')).toBeInTheDocument();
     expect(screen.getByText('Direction match')).toBeInTheDocument();
     expect(screen.getByText('Direction accuracy')).toBeInTheDocument();
-    expect(screen.queryByText('Run backtest')).not.toBeInTheDocument();
-    expect(screen.queryByText('Window return')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chạy backtest')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lợi suất trong kỳ')).not.toBeInTheDocument();
   });
 
   it('filters results with stock code, window, phase, and analysis date range when clicking Filter', async () => {
@@ -231,7 +231,7 @@ describe('BacktestPage', () => {
     const fromInput = screen.getByLabelText('Analysis start date');
     const toInput = screen.getByLabelText('Analysis end date');
 
-    fireEvent.change(filterInput, { target: { value: 'aapl' } });
+    fireEvent.change(filterInput, { target: { value: 'vcb' } });
     fireEvent.change(windowInput, { target: { value: '20' } });
     fireEvent.change(phaseSelect, { target: { value: 'intraday' } });
     fireEvent.change(fromInput, { target: { value: '2026-03-01' } });
@@ -240,7 +240,7 @@ describe('BacktestPage', () => {
 
     await waitFor(() => {
       expect(mockGetResults).toHaveBeenLastCalledWith({
-        code: 'AAPL',
+        code: 'VCB',
         evalWindowDays: 20,
         analysisDateFrom: '2026-03-01',
         analysisDateTo: '2026-03-31',
@@ -248,7 +248,7 @@ describe('BacktestPage', () => {
         page: 1,
         limit: 20,
       });
-      expect(mockGetStockPerformance).toHaveBeenLastCalledWith('AAPL', {
+      expect(mockGetStockPerformance).toHaveBeenLastCalledWith('VCB', {
         evalWindowDays: 20,
         analysisDateFrom: '2026-03-01',
         analysisDateTo: '2026-03-31',
@@ -264,7 +264,7 @@ describe('BacktestPage', () => {
       completed: 0,
       insufficient: 0,
       errors: 0,
-      message: '未找到符合条件的历史分析记录',
+      message: 'Không tìm thấy bản ghi phân tích phù hợp',
       diagnostics: { emptyReason: 'no_matching_analysis' },
     });
     render(<BacktestPage />);
@@ -274,7 +274,7 @@ describe('BacktestPage', () => {
     const fromInput = screen.getByLabelText('Analysis start date');
     const toInput = screen.getByLabelText('Analysis end date');
 
-    fireEvent.change(filterInput, { target: { value: '600519.SH' } });
+    fireEvent.change(filterInput, { target: { value: 'HPG.VN' } });
     fireEvent.change(windowInput, { target: { value: '15' } });
     fireEvent.change(fromInput, { target: { value: '2026-03-01' } });
     fireEvent.change(toInput, { target: { value: '2026-03-31' } });
@@ -282,7 +282,7 @@ describe('BacktestPage', () => {
 
     await waitFor(() => {
       expect(mockRun).toHaveBeenCalledWith({
-        code: '600519.SH',
+        code: 'HPG.VN',
         force: undefined,
         minAgeDays: undefined,
         evalWindowDays: 15,
@@ -293,7 +293,7 @@ describe('BacktestPage', () => {
 
     await waitFor(() => {
       expect(mockGetResults).toHaveBeenLastCalledWith({
-        code: '600519.SH',
+        code: 'HPG.VN',
         evalWindowDays: 15,
         analysisDateFrom: '2026-03-01',
         analysisDateTo: '2026-03-31',
@@ -301,7 +301,7 @@ describe('BacktestPage', () => {
         page: 1,
         limit: 20,
       });
-      expect(mockGetStockPerformance).toHaveBeenLastCalledWith('600519.SH', {
+      expect(mockGetStockPerformance).toHaveBeenLastCalledWith('HPG.VN', {
         evalWindowDays: 15,
         analysisDateFrom: '2026-03-01',
         analysisDateTo: '2026-03-31',
@@ -311,7 +311,7 @@ describe('BacktestPage', () => {
 
     expect(await screen.findByText('Processed:')).toBeInTheDocument();
     expect(screen.getByText('Saved:')).toBeInTheDocument();
-    expect(screen.getByText('未找到符合条件的历史分析记录')).toBeInTheDocument();
+    expect(screen.getByText('Không tìm thấy bản ghi phân tích phù hợp')).toBeInTheDocument();
   });
 
   it('uses backend-applied eval window when run input is empty', async () => {
@@ -322,7 +322,7 @@ describe('BacktestPage', () => {
       insufficient: 0,
       errors: 0,
       appliedEvalWindowDays: 10,
-      message: '未找到符合条件的历史分析记录',
+      message: 'Không tìm thấy bản ghi phân tích phù hợp',
       diagnostics: { emptyReason: 'no_matching_analysis' },
     });
     render(<BacktestPage />);
@@ -332,7 +332,7 @@ describe('BacktestPage', () => {
     const fromInput = screen.getByLabelText('Analysis start date');
     const toInput = screen.getByLabelText('Analysis end date');
 
-    fireEvent.change(filterInput, { target: { value: '600519.SH' } });
+    fireEvent.change(filterInput, { target: { value: 'HPG.VN' } });
     fireEvent.change(windowInput, { target: { value: '' } });
     fireEvent.change(fromInput, { target: { value: '2026-03-01' } });
     fireEvent.change(toInput, { target: { value: '2026-03-31' } });
@@ -340,7 +340,7 @@ describe('BacktestPage', () => {
 
     await waitFor(() => {
       expect(mockRun).toHaveBeenCalledWith({
-        code: '600519.SH',
+        code: 'HPG.VN',
         force: undefined,
         minAgeDays: undefined,
         evalWindowDays: undefined,
@@ -352,7 +352,7 @@ describe('BacktestPage', () => {
     await waitFor(() => {
       expect(windowInput).toHaveValue(10);
       expect(mockGetResults).toHaveBeenLastCalledWith({
-        code: '600519.SH',
+        code: 'HPG.VN',
         evalWindowDays: 10,
         analysisDateFrom: '2026-03-01',
         analysisDateTo: '2026-03-31',
@@ -360,7 +360,7 @@ describe('BacktestPage', () => {
         page: 1,
         limit: 20,
       });
-      expect(mockGetStockPerformance).toHaveBeenLastCalledWith('600519.SH', {
+      expect(mockGetStockPerformance).toHaveBeenLastCalledWith('HPG.VN', {
         evalWindowDays: 10,
         analysisDateFrom: '2026-03-01',
         analysisDateTo: '2026-03-31',
@@ -374,7 +374,7 @@ describe('BacktestPage', () => {
       });
     });
 
-    expect(await screen.findByText('未找到符合条件的历史分析记录')).toBeInTheDocument();
+    expect(await screen.findByText('Không tìm thấy bản ghi phân tích phù hợp')).toBeInTheDocument();
   });
 
   it('switches to next-day validation with the 1D shortcut', async () => {

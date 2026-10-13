@@ -1,13 +1,12 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { SidebarNav } from '../SidebarNav';
 import { useAlertStore } from '../../../stores/alertStore';
 
 const mockLogout = vi.fn().mockResolvedValue(undefined);
-const mockGetScreeningStatus = vi.fn().mockResolvedValue({ enabled: false, available: false });
 const mockThemeToggle = vi.fn(({ collapsed }: { collapsed?: boolean }) => (
-  <button type="button">{collapsed ? '切换主题(折叠)' : 'Toggle theme'}</button>
+  <button type="button">{collapsed ? 'Đổi giao diện (thu gọn)' : 'Toggle theme'}</button>
 ));
 
 const completionBadgeState = { value: true };
@@ -24,61 +23,21 @@ vi.mock('../../../stores/agentChatStore', () => ({
     selector({ completionBadge: completionBadgeState.value }),
 }));
 
-vi.mock('../../../api/screening', () => ({
-  SCREENING_CONFIG_CHANGED_EVENT: 'screening-config-changed',
-  SYSTEM_CONFIG_CHANGED_EVENT: 'dsa-system-config-changed',
-  screeningApi: {
-    getStatus: () => mockGetScreeningStatus(),
-  },
-}));
-
 vi.mock('../../theme/ThemeToggle', () => ({
   ThemeToggle: (props: { collapsed?: boolean }) => mockThemeToggle(props),
 }));
 
 describe('SidebarNav', () => {
-  it('hides the screening navigation item while Screening is disabled', () => {
-    mockGetScreeningStatus.mockResolvedValueOnce({ enabled: false, available: true });
-
+  it('does not render a screening navigation item (VN-only build)', () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <SidebarNav />
       </MemoryRouter>,
     );
 
-    expect(screen.queryByRole('link', { name: 'Screening' })).not.toBeInTheDocument();
-  });
-
-  it('shows screening first when Screening is enabled', async () => {
-    mockGetScreeningStatus.mockResolvedValueOnce({ enabled: true, available: true });
-
-    render(
-      <MemoryRouter initialEntries={['/']}>
-        <SidebarNav />
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByRole('link', { name: 'Screening' })).toHaveAttribute('href', '/screening');
     const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
-    expect(hrefs.slice(0, 3)).toEqual(['/screening', '/alerts', '/settings']);
-  });
-
-  it('refreshes the controlled screening entry after config changes', async () => {
-    mockGetScreeningStatus
-      .mockResolvedValueOnce({ enabled: false, available: true })
-      .mockResolvedValueOnce({ enabled: true, available: true });
-
-    render(
-      <MemoryRouter initialEntries={['/']}>
-        <SidebarNav />
-      </MemoryRouter>,
-    );
-
-    expect(screen.queryByRole('link', { name: 'Screening' })).not.toBeInTheDocument();
-    window.dispatchEvent(new Event('screening-config-changed'));
-
-    expect(await screen.findByRole('link', { name: 'Screening' })).toHaveAttribute('href', '/screening');
-    await waitFor(() => expect(mockGetScreeningStatus.mock.calls.length).toBeGreaterThanOrEqual(2));
+    expect(hrefs).not.toContain('/screening');
+    expect(hrefs.slice(0, 2)).toEqual(['/alerts', '/settings']);
   });
 
   it('does not render the chat completion badge while the chat item is hidden', () => {
@@ -104,7 +63,7 @@ describe('SidebarNav', () => {
     expect(mockThemeToggle).toHaveBeenCalledWith(
       expect.objectContaining({ variant: 'nav', collapsed: true }),
     );
-    expect(screen.getByRole('button', { name: '切换主题(折叠)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Đổi giao diện (thu gọn)' })).toBeInTheDocument();
   });
 
   it('renders the alerts navigation item and marks it active', () => {
@@ -114,7 +73,7 @@ describe('SidebarNav', () => {
       </MemoryRouter>,
     );
 
-    const alertsLink = screen.getByRole('link', { name: '告警' });
+    const alertsLink = screen.getByRole('link', { name: 'Alerts' });
     expect(alertsLink).toHaveAttribute('href', '/alerts');
     expect(alertsLink).toHaveClass('font-medium');
   });
@@ -159,7 +118,9 @@ describe('SidebarNav', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
 
     expect(await screen.findByRole('heading', { name: 'Log out' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
+    // Nút xác nhận trong hộp thoại là nút "Log out" cuối cùng. / The dialog confirm button is the last "Log out" button.
+    const logoutButtons = screen.getAllByRole('button', { name: 'Log out' });
+    fireEvent.click(logoutButtons[logoutButtons.length - 1]);
     expect(mockLogout).toHaveBeenCalled();
   });
 

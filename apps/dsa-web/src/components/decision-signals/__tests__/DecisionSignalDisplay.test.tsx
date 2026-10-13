@@ -6,9 +6,9 @@ import { DecisionSignalCard, DecisionSignalDetails, PortfolioSignalSummary } fro
 
 const signal: DecisionSignalItem = {
   id: 7,
-  stockCode: '600519',
-  stockName: '贵州茅台',
-  market: 'cn',
+  stockCode: 'FPT',
+  stockName: 'FPT Corp',
+  market: 'vn',
   sourceType: 'analysis',
   sourceReportId: 3001,
   decisionProfile: 'aggressive',
@@ -23,11 +23,11 @@ const signal: DecisionSignalItem = {
   entryHigh: 1620,
   stopLoss: 1550,
   targetPrice: 1700,
-  invalidation: '跌破 1550',
-  watchConditions: '观察成交量',
-  reason: '趋势保持',
-  riskSummary: '放量下跌风险',
-  catalystSummary: '业绩窗口',
+  invalidation: 'Thủng 1550',
+  watchConditions: 'Theo dõi khối lượng',
+  reason: 'Xu hướng duy trì',
+  riskSummary: 'Rủi ro giảm kèm khối lượng',
+  catalystSummary: 'Mùa kết quả kinh doanh',
   evidence: { technical: 'ma' },
   dataQualitySummary: { freshness: 'ok' },
   planQuality: 'complete',
@@ -39,7 +39,7 @@ const signal: DecisionSignalItem = {
 };
 
 function renderCard(onSelect?: (item: DecisionSignalItem) => void) {
-  window.localStorage.setItem('dsa.uiLanguage', 'zh');
+  window.localStorage.setItem('dsa.uiLanguage', 'en');
   render(
     <UiLanguageProvider>
       <DecisionSignalCard item={signal} onSelect={onSelect} />
@@ -52,18 +52,18 @@ describe('DecisionSignalCard', () => {
     const onSelect = vi.fn();
     renderCard(onSelect);
 
-    expect(screen.getByText('贵州茅台').closest('button')).toBeNull();
+    expect(screen.getByText('FPT Corp').closest('button')).toBeNull();
     expect(screen.getByText('72%')).toBeInTheDocument();
-    expect(screen.getByText('风格: 进取')).toBeInTheDocument();
+    expect(screen.getByText('Profile: Aggressive')).toBeInTheDocument();
     expect(screen.getByText('1600 - 1620')).toBeInTheDocument();
-    expect(screen.getByText('业绩窗口')).toBeInTheDocument();
-    expect(screen.getByText('跌破 1550')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for 贵州茅台' }));
+    expect(screen.getByText('Mùa kết quả kinh doanh')).toBeInTheDocument();
+    expect(screen.getByText('Thủng 1550')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for FPT Corp' }));
 
     expect(onSelect).toHaveBeenCalledWith(signal);
     expect(screen.getByText('3 days')).toBeInTheDocument();
-    expect(screen.getByText('计划质量: 完整')).toBeInTheDocument();
-    expect(screen.getByText('阶段: 盘中')).toBeInTheDocument();
+    expect(screen.getByText('Plan quality: Complete')).toBeInTheDocument();
+    expect(screen.getByText('Phase: Intraday')).toBeInTheDocument();
     expect(screen.queryByText('3d')).not.toBeInTheDocument();
     expect(screen.queryByText('complete')).not.toBeInTheDocument();
     expect(screen.queryByText('intraday')).not.toBeInTheDocument();
@@ -72,12 +72,12 @@ describe('DecisionSignalCard', () => {
   it('renders non-interactive cards without a details button', () => {
     renderCard();
 
-    expect(screen.getByText('贵州茅台')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'View AI signal details for 贵州茅台' })).not.toBeInTheDocument();
+    expect(screen.getByText('FPT Corp')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View AI signal details for FPT Corp' })).not.toBeInTheDocument();
   });
 
   it('hides missing optional plan text for sparse legacy signals', () => {
-    window.localStorage.setItem('dsa.uiLanguage', 'zh');
+    window.localStorage.setItem('dsa.uiLanguage', 'en');
     render(
       <UiLanguageProvider>
         <DecisionSignalCard
@@ -112,7 +112,7 @@ describe('DecisionSignalCard', () => {
 
 describe('DecisionSignalDetails', () => {
   it('renders secondary-only entry_high as a valid entry range', () => {
-    window.localStorage.setItem('dsa.uiLanguage', 'zh');
+    window.localStorage.setItem('dsa.uiLanguage', 'en');
     render(
       <UiLanguageProvider>
         <DecisionSignalDetails item={{ ...signal, entryLow: null, entryHigh: 1680 }} />
@@ -123,7 +123,7 @@ describe('DecisionSignalDetails', () => {
     expect(entryRange).not.toBeNull();
     expect(entryRange as HTMLElement).toHaveTextContent('1680');
     expect(screen.getByText('3 days')).toBeInTheDocument();
-    expect(screen.getByText('Full')).toBeInTheDocument();
+    expect(screen.getByText('Complete')).toBeInTheDocument();
     expect(screen.getByText('Intraday')).toBeInTheDocument();
     expect(screen.getByText('Profile')).toBeInTheDocument();
     expect(screen.getAllByText('Aggressive').length).toBeGreaterThanOrEqual(1);
@@ -131,7 +131,7 @@ describe('DecisionSignalDetails', () => {
   });
 
   it('renders explicit null profile as unknown on card and details', () => {
-    window.localStorage.setItem('dsa.uiLanguage', 'zh');
+    window.localStorage.setItem('dsa.uiLanguage', 'en');
     render(
       <UiLanguageProvider>
         <>
@@ -141,13 +141,13 @@ describe('DecisionSignalDetails', () => {
       </UiLanguageProvider>,
     );
 
-    expect(screen.getAllByText('风格: 未知').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('Profile').closest('div')).toHaveTextContent('未知');
+    expect(screen.getAllByText('Profile: Unknown').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Profile').closest('div')).toHaveTextContent('Unknown');
     expect(screen.queryByText('Balanced')).not.toBeInTheDocument();
   });
 
   it('renders opaque JSON fields without creating html nodes from their string values', () => {
-    window.localStorage.setItem('dsa.uiLanguage', 'zh');
+    window.localStorage.setItem('dsa.uiLanguage', 'en');
     const { container } = render(
       <UiLanguageProvider>
         <DecisionSignalDetails
@@ -173,7 +173,7 @@ describe('DecisionSignalDetails', () => {
 
   it('renders outcome results and feedback controls', () => {
     const onFeedbackSubmit = vi.fn();
-    window.localStorage.setItem('dsa.uiLanguage', 'zh');
+    window.localStorage.setItem('dsa.uiLanguage', 'en');
     render(
       <UiLanguageProvider>
         <DecisionSignalDetails
@@ -194,7 +194,7 @@ describe('DecisionSignalDetails', () => {
               endClose: 105,
               stockReturnPct: 5,
               action: 'hold',
-              market: 'cn',
+              market: 'vn',
               planQuality: 'complete',
               dataQualityLevel: 'good',
               holdingState: 'holding',
@@ -217,9 +217,9 @@ describe('DecisionSignalDetails', () => {
     expect(screen.getByText('Hit')).toBeInTheDocument();
     expect(screen.getByText('5%')).toBeInTheDocument();
     expect(screen.getByText('Catalyst')).toBeInTheDocument();
-    expect(screen.getByText('业绩窗口')).toBeInTheDocument();
+    expect(screen.getByText('Mùa kết quả kinh doanh')).toBeInTheDocument();
     expect(screen.getByText('Invalidation')).toBeInTheDocument();
-    expect(screen.getByText('跌破 1550')).toBeInTheDocument();
+    expect(screen.getByText('Thủng 1550')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Not useful' }));
     expect(onFeedbackSubmit).toHaveBeenCalledWith('not_useful');
   });

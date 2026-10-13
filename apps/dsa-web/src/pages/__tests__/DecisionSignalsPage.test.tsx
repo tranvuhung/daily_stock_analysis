@@ -85,9 +85,9 @@ vi.mock('recharts', () => ({
 
 const signal: DecisionSignalItem = {
   id: 7,
-  stockCode: '600519',
-  stockName: '贵州茅台',
-  market: 'cn',
+  stockCode: 'FPT',
+  stockName: 'FPT Corp',
+  market: 'vn',
   sourceType: 'analysis',
   sourceReportId: 3001,
   marketPhase: 'intraday',
@@ -101,11 +101,11 @@ const signal: DecisionSignalItem = {
   entryHigh: 1620,
   stopLoss: 1550,
   targetPrice: 1700,
-  invalidation: '跌破 1550',
-  watchConditions: '观察成交量',
-  reason: '趋势保持',
-  riskSummary: '放量下跌风险',
-  catalystSummary: '业绩窗口',
+  invalidation: 'Thủng 1550',
+  watchConditions: 'Theo dõi khối lượng',
+  reason: 'Xu hướng duy trì',
+  riskSummary: 'Rủi ro giảm kèm khối lượng',
+  catalystSummary: 'Mùa kết quả kinh doanh',
   evidence: { technical: 'ma' },
   dataQualitySummary: { freshness: 'ok' },
   planQuality: 'complete',
@@ -118,31 +118,31 @@ const signal: DecisionSignalItem = {
 
 const stockIndexItems: StockIndexItem[] = [
   {
-    canonicalCode: '600519.SH',
-    displayCode: '600519',
-    nameZh: '贵州茅台',
-    pinyinFull: 'guizhoumaotai',
-    pinyinAbbr: 'gzmt',
-    aliases: ['茅台'],
-    market: 'CN',
+    canonicalCode: 'FPT',
+    displayCode: 'FPT',
+    nameZh: 'FPT Corp',
+    pinyinFull: 'fptcorp',
+    pinyinAbbr: 'fpt',
+    aliases: ['FPT Corporation'],
+    market: 'VN',
     assetType: 'stock',
     active: true,
     popularity: 100,
   },
   {
-    canonicalCode: 'AAPL',
-    displayCode: 'AAPL',
-    nameZh: 'Apple',
-    market: 'US',
+    canonicalCode: 'HPG',
+    displayCode: 'HPG',
+    nameZh: 'Hoa Phat',
+    market: 'VN',
     assetType: 'stock',
     active: true,
     popularity: 90,
   },
   {
-    canonicalCode: '00700.HK',
-    displayCode: '00700',
-    nameZh: '腾讯控股',
-    market: 'HK',
+    canonicalCode: 'VNM',
+    displayCode: 'VNM',
+    nameZh: 'Vinamilk',
+    market: 'VN',
     assetType: 'stock',
     active: true,
     popularity: 80,
@@ -154,9 +154,9 @@ const stockBarResponse: StockBarResponse = {
   items: [
     {
       id: 1,
-      stockCode: '600519',
+      stockCode: 'FPT',
       analysisCount: 2,
-      marketPhaseSummary: { market: 'CN', phase: 'unknown', warnings: [] },
+      marketPhaseSummary: { market: 'VN', phase: 'unknown', warnings: [] },
     },
   ],
 };
@@ -168,7 +168,7 @@ function makeSignal(overrides: Partial<DecisionSignalItem> = {}): DecisionSignal
   };
 }
 
-const formattedCreatedAt = new Intl.DateTimeFormat('zh-CN', {
+const formattedCreatedAt = new Intl.DateTimeFormat('en-US', {
   month: '2-digit',
   day: '2-digit',
   hour: '2-digit',
@@ -259,7 +259,7 @@ const outcomeList: DecisionSignalOutcomeListResponse = {
       endClose: 105,
       stockReturnPct: 5,
       action: 'hold',
-      market: 'cn',
+      market: 'vn',
       planQuality: 'complete',
       dataQualityLevel: 'good',
       holdingState: 'holding',
@@ -330,7 +330,7 @@ const persistableReassessResponse: DecisionSignalReassessResponse = {
   },
   item: null,
   created: false,
-  warnings: [{ code: 'action_adjusted_by_guardrail', message: '已由风控调整为 watch。' }],
+  warnings: [{ code: 'action_adjusted_by_guardrail', message: 'Guardrail adjusted to watch.' }],
   blockedReason: null,
 };
 
@@ -340,7 +340,7 @@ const persistedReassessItem = makeSignal({
   sourceAgent: 'decision_profile_reassess',
   triggerSource: 'web:decision_profile_reassess',
   action: 'watch',
-  actionLabel: '观望',
+  actionLabel: 'Watch',
   confidence: null,
   createdAt: new Date(Date.now() - 1000).toISOString(),
   updatedAt: new Date(Date.now() - 1000).toISOString(),
@@ -362,7 +362,7 @@ const persistedReassessResponse: DecisionSignalReassessResponse = {
   item: persistedReassessItem,
   created: true,
   persistStatus: 'created',
-  warnings: [{ code: 'action_adjusted_by_guardrail', message: '已由风控调整为 watch。' }],
+  warnings: [{ code: 'action_adjusted_by_guardrail', message: 'Guardrail adjusted to watch.' }],
   blockedReason: null,
 };
 
@@ -389,8 +389,8 @@ function submitCurrentStock(value: string) {
 }
 
 async function persistReassessFromFirstSignal() {
-  await screen.findByText('贵州茅台');
-  fireEvent.click(screen.getAllByRole('button', { name: 'View AI signal details for 贵州茅台' })[0]);
+  await screen.findByText('FPT Corp');
+  fireEvent.click(screen.getAllByRole('button', { name: 'View AI signal details for FPT Corp' })[0]);
   fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Generate preview' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Confirm and save' }));
   const confirmButtons = screen.getAllByRole('button', { name: 'Confirm and save' });
@@ -400,7 +400,7 @@ async function persistReassessFromFirstSignal() {
 beforeEach(() => {
   window.history.pushState({}, '', '/');
   window.localStorage.clear();
-  window.localStorage.setItem('dsa.uiLanguage', 'zh');
+  window.localStorage.setItem('dsa.uiLanguage', 'en');
   vi.clearAllMocks();
   stockIndexState = {
     index: stockIndexItems,
@@ -437,12 +437,12 @@ describe('DecisionSignalsPage', () => {
         pageSize: 20,
       }));
     });
-    expect(screen.getByText('贵州茅台')).toBeInTheDocument();
+    expect(screen.getByText('FPT Corp')).toBeInTheDocument();
     expect(await screen.findByText('Signal performance')).toBeInTheDocument();
     expect(screen.getByText('50%')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'View AI signal details for 贵州茅台' })).toBeInTheDocument();
-    expect(screen.getByText('贵州茅台').closest('button')).toBeNull();
-    expect(screen.getByText('放量下跌风险')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View AI signal details for FPT Corp' })).toBeInTheDocument();
+    expect(screen.getByText('FPT Corp').closest('button')).toBeNull();
+    expect(screen.getByText('Rủi ro giảm kèm khối lượng')).toBeInTheDocument();
     expect(screen.getByText(formattedCreatedAt)).toBeInTheDocument();
     expect(screen.getByText('These are global reviewed outcome stats. They are not the current visible signal count and do not follow the current stock filter.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Decision profile history' })).toBeInTheDocument();
@@ -499,23 +499,23 @@ describe('DecisionSignalsPage', () => {
     expect(screen.getByLabelText('Source report ID')).toHaveValue(3001);
   });
 
-  it('renders decision signal enum filter labels in Chinese', async () => {
+  it('renders decision signal enum filter labels in Vietnamese with Vietnam as the only market', async () => {
+    window.localStorage.setItem('dsa.uiLanguage', 'vi');
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
-    expect(within(screen.getByLabelText('Market')).getByRole('option', { name: 'JP' })).toHaveValue('jp');
-    expect(within(screen.getByLabelText('Market')).getByRole('option', { name: 'KR' })).toHaveValue('kr');
-    expect(within(screen.getByLabelText('Phase')).getByRole('option', { name: 'Lunch break' })).toHaveValue('lunch_break');
-    expect(within(screen.getByLabelText('Phase')).getByRole('option', { name: 'Closing auction' })).toHaveValue('closing_auction');
-    expect(within(screen.getByLabelText('来源')).getByRole('option', { name: '大盘复盘' })).toHaveValue('market_review');
-    expect(screen.getByLabelText('Source report ID')).toBeInTheDocument();
+    const marketOptions = within(screen.getByLabelText('Thị trường')).getAllByRole('option');
+    expect(marketOptions.map((option) => (option as HTMLOptionElement).value)).toEqual(['', 'vn']);
+    expect(within(screen.getByLabelText('Thị trường')).getByRole('option', { name: 'Việt Nam' })).toHaveValue('vn');
+    expect(within(screen.getByLabelText('Giai đoạn')).getByRole('option', { name: 'Nghỉ trưa' })).toHaveValue('lunch_break');
+    expect(within(screen.getByLabelText('Nguồn')).getByRole('option', { name: 'Điểm lại thị trường' })).toHaveValue('market_review');
   });
 
   it('renders decision signal filters and card value labels in English', async () => {
     window.localStorage.setItem('dsa.uiLanguage', 'en');
     vi.mocked(decisionSignalsApi.list).mockResolvedValueOnce(listResponse([
       makeSignal({
-        market: 'jp',
+        market: 'vn',
         marketPhase: 'closing_auction',
         horizon: '10d',
         planQuality: 'partial',
@@ -525,12 +525,12 @@ describe('DecisionSignalsPage', () => {
     renderPage();
 
     expect(await screen.findByRole('heading', { name: 'AI signals' })).toBeInTheDocument();
-    expect(within(screen.getByLabelText('Market')).getByRole('option', { name: 'Japan' })).toHaveValue('jp');
-    expect(within(screen.getByLabelText('Market')).getByRole('option', { name: 'Korea' })).toHaveValue('kr');
+    expect(within(screen.getByLabelText('Market')).getByRole('option', { name: 'Vietnam' })).toHaveValue('vn');
+    expect(within(screen.getByLabelText('Market')).queryByRole('option', { name: 'Japan' })).not.toBeInTheDocument();
     expect(within(screen.getByLabelText('Phase')).getByRole('option', { name: 'Closing auction' })).toHaveValue('closing_auction');
     expect(within(screen.getByLabelText('Source')).getByRole('option', { name: 'Market review' })).toHaveValue('market_review');
     expect(screen.getByLabelText('Source report ID')).toBeInTheDocument();
-    expect(screen.getAllByText('Japan').length).toBeGreaterThan(1);
+    expect(screen.getAllByText('Vietnam').length).toBeGreaterThan(1);
     expect(screen.getByText('Horizon')).toBeInTheDocument();
     expect(screen.getByText('10 days')).toBeInTheDocument();
     expect(screen.getByText('Plan quality: Partial')).toBeInTheDocument();
@@ -541,17 +541,17 @@ describe('DecisionSignalsPage', () => {
 
   it('passes filter parameters when applying filters', async () => {
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
-    fireEvent.change(screen.getByLabelText('Market'), { target: { value: 'cn' } });
-    fireEvent.change(screen.getByLabelText('Stock code'), { target: { value: '600519' } });
+    fireEvent.change(screen.getByLabelText('Market'), { target: { value: 'vn' } });
+    fireEvent.change(screen.getByLabelText('Stock code'), { target: { value: 'FPT' } });
     fireEvent.change(screen.getByLabelText('Action'), { target: { value: 'hold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
 
     await waitFor(() => {
       expect(decisionSignalsApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
-        market: 'cn',
-        stockCode: '600519',
+        market: 'vn',
+        stockCode: 'FPT',
         action: 'hold',
         status: 'active',
         page: 1,
@@ -562,12 +562,12 @@ describe('DecisionSignalsPage', () => {
 
   it('uses an exact analysis source report lookup when a report id filter is applied', async () => {
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
-    fireEvent.change(screen.getByLabelText('Market'), { target: { value: 'cn' } });
-    fireEvent.change(screen.getByLabelText('Stock code'), { target: { value: '600519' } });
+    fireEvent.change(screen.getByLabelText('Market'), { target: { value: 'vn' } });
+    fireEvent.change(screen.getByLabelText('Stock code'), { target: { value: 'FPT' } });
     fireEvent.change(screen.getByLabelText('Action'), { target: { value: 'hold' } });
-    fireEvent.change(screen.getByLabelText('来源'), { target: { value: 'alert' } });
+    fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'alert' } });
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'closed' } });
     fireEvent.change(screen.getByLabelText('Source report ID'), { target: { value: '3001' } });
     fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
@@ -584,9 +584,9 @@ describe('DecisionSignalsPage', () => {
 
   it('reassesses from the selected signal source report without triggering list lookup', async () => {
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
-    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for 贵州茅台' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for FPT Corp' }));
     expect(await screen.findByText('Decision profile reassess preview')).toBeInTheDocument();
     vi.mocked(decisionSignalsApi.list).mockClear();
 
@@ -640,12 +640,12 @@ describe('DecisionSignalsPage', () => {
     ));
 
     renderPage();
-    await screen.findByText('贵州茅台');
-    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for 贵州茅台' }));
-    submitCurrentStock('600519');
+    await screen.findByText('FPT Corp');
+    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for FPT Corp' }));
+    submitCurrentStock('FPT');
     await waitFor(() => {
       expect(decisionSignalsApi.list).toHaveBeenCalledWith(expect.objectContaining({
-        stockCode: '600519',
+        stockCode: 'FPT',
         pageSize: 100,
       }));
     });
@@ -665,7 +665,7 @@ describe('DecisionSignalsPage', () => {
       });
     });
     expect(await screen.findByText('Saved as a new DecisionSignal #88.')).toBeInTheDocument();
-    expect(screen.getByText('已由风控调整为 watch。')).toBeInTheDocument();
+    expect(screen.getByText('Guardrail adjusted to watch.')).toBeInTheDocument();
     expect(await screen.findByTestId('timeline-click-88')).toBeInTheDocument();
     await waitFor(() => expect(
       vi.mocked(decisionSignalsApi.list).mock.calls.filter(([params]) => params?.pageSize === 100),
@@ -707,8 +707,8 @@ describe('DecisionSignalsPage', () => {
     vi.mocked(decisionSignalsApi.getLatest).mockResolvedValue(listResponse([signal]));
 
     renderPage();
-    await screen.findByText('贵州茅台');
-    submitCurrentStock('600519');
+    await screen.findByText('FPT Corp');
+    submitCurrentStock('FPT');
     await persistReassessFromFirstSignal();
 
     expect(await screen.findByText('Saved as a new DecisionSignal #92.')).toBeInTheDocument();
@@ -749,13 +749,16 @@ describe('DecisionSignalsPage', () => {
     await persistReassessFromFirstSignal();
 
     expect(await screen.findByText('Existing signal reused')).toBeInTheDocument();
-    expect(screen.getByText(/DecisionSignal #89 已存在，本次没有重复创建/)).toBeInTheDocument();
-    expect(screen.queryByText(/已保存为新的 DecisionSignal #89/)).not.toBeInTheDocument();
+    expect(screen.getByText(/DecisionSignal #89 already exists/)).toBeInTheDocument();
+    expect(screen.queryByText(/Saved as a new DecisionSignal #89/)).not.toBeInTheDocument();
   });
 
   it('reports an expired signal refresh separately and refreshes active views', async () => {
     const refreshedItem = makeSignal({
       id: 90,
+      // Dùng thời điểm tương đối để không phụ thuộc ngày chạy test (cửa sổ timeline 90 ngày).
+      // Use a relative timestamp so the item stays inside the 90-day timeline window.
+      createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       decisionProfile: 'balanced',
       sourceAgent: null,
       triggerSource: 'api',
@@ -788,12 +791,12 @@ describe('DecisionSignalsPage', () => {
     ));
 
     renderPage();
-    await screen.findByText('贵州茅台');
-    submitCurrentStock('600519');
+    await screen.findByText('FPT Corp');
+    submitCurrentStock('FPT');
     await persistReassessFromFirstSignal();
 
     expect(await screen.findByText('Reassessed signal refreshed')).toBeInTheDocument();
-    expect(screen.getByText(/DecisionSignal #90 已按存储契约完成过期续期或缺失维度补齐/)).toBeInTheDocument();
+    expect(screen.getByText(/DecisionSignal #90 was refreshed under the storage contract/)).toBeInTheDocument();
     expect(await screen.findByTestId('timeline-click-90')).toBeInTheDocument();
     await waitFor(() => expect(decisionSignalsApi.getLatest).toHaveBeenCalledTimes(2));
   });
@@ -828,14 +831,14 @@ describe('DecisionSignalsPage', () => {
     vi.mocked(decisionSignalsApi.list).mockResolvedValue(listResponse([signal]));
 
     renderPage();
-    await screen.findByText('贵州茅台');
-    submitCurrentStock('600519');
+    await screen.findByText('FPT Corp');
+    submitCurrentStock('FPT');
     await persistReassessFromFirstSignal();
 
     expect(await screen.findByText('Existing signal remains terminal')).toBeInTheDocument();
-    expect(screen.getByText(/DecisionSignal #91 已处于“已关闭”状态/)).toBeInTheDocument();
+    expect(screen.getByText(/DecisionSignal #91 is already/)).toBeInTheDocument();
     expect(screen.queryByTestId('timeline-click-91')).not.toBeInTheDocument();
-    expect(screen.queryByText(/已保存为新的 DecisionSignal #91/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Saved as a new DecisionSignal #91/)).not.toBeInTheDocument();
     await waitFor(() => expect(
       vi.mocked(decisionSignalsApi.list).mock.calls.filter(([params]) => params?.pageSize === 20),
     ).toHaveLength(2));
@@ -845,16 +848,16 @@ describe('DecisionSignalsPage', () => {
   it('keeps the authoritative persist result visible after refreshing a latest-sourced detail', async () => {
     const latestSignal = makeSignal({
       id: 8,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
-      market: 'us',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
+      market: 'vn',
       riskSummary: 'Latest reassess source',
     });
     const persistedLatestItem = {
       ...persistedReassessItem,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
-      market: 'us' as const,
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
+      market: 'vn' as const,
     };
     let persisted = false;
     vi.mocked(decisionSignalsApi.reassess).mockImplementation(async (request) => {
@@ -871,9 +874,9 @@ describe('DecisionSignalsPage', () => {
     });
 
     renderPage();
-    await screen.findByText('贵州茅台');
-    submitCurrentStock('AAPL');
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for Apple' }));
+    await screen.findByText('FPT Corp');
+    submitCurrentStock('HPG');
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for Hoa Phat' }));
 
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Generate preview' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm and save' }));
@@ -883,7 +886,7 @@ describe('DecisionSignalsPage', () => {
     await waitFor(() => expect(decisionSignalsApi.getLatest).toHaveBeenCalledTimes(2));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Saved as a new DecisionSignal #88.')).toBeInTheDocument();
-    expect(within(dialog).getByText('观望')).toBeInTheDocument();
+    expect(within(dialog).getByText('Watch')).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Mark invalid' }));
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
@@ -895,16 +898,16 @@ describe('DecisionSignalsPage', () => {
   it('keeps the authoritative persist result visible after refreshing a timeline-sourced detail', async () => {
     const timelineSignal = makeSignal({
       id: 8,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
-      market: 'us',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
+      market: 'vn',
       riskSummary: 'Timeline reassess source',
     });
     const persistedTimelineItem = {
       ...persistedReassessItem,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
-      market: 'us' as const,
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
+      market: 'vn' as const,
     };
     let persisted = false;
     vi.mocked(decisionSignalsApi.reassess).mockImplementation(async (request) => {
@@ -919,8 +922,8 @@ describe('DecisionSignalsPage', () => {
     ));
 
     renderPage();
-    await screen.findByText('贵州茅台');
-    submitCurrentStock('AAPL');
+    await screen.findByText('FPT Corp');
+    submitCurrentStock('HPG');
     fireEvent.click(await screen.findByTestId('timeline-click-8'));
 
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Generate preview' }));
@@ -933,7 +936,7 @@ describe('DecisionSignalsPage', () => {
     ).toHaveLength(2));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Saved as a new DecisionSignal #88.')).toBeInTheDocument();
-    expect(within(dialog).getByText('观望')).toBeInTheDocument();
+    expect(within(dialog).getByText('Watch')).toBeInTheDocument();
   });
 
   it('keeps the preview visible and renders structured persist guardrail errors', async () => {
@@ -945,14 +948,14 @@ describe('DecisionSignalsPage', () => {
       error === persistError
         ? {
           blockedReason: 'invalid_price_relationships',
-          warnings: [{ code: 'action_blocked_by_guardrail', message: '价格关系矛盾，未保存。' }],
+          warnings: [{ code: 'action_blocked_by_guardrail', message: 'Price relationships conflict; not saved.' }],
         }
         : null
     ));
 
     renderPage();
-    await screen.findByText('贵州茅台');
-    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for 贵州茅台' }));
+    await screen.findByText('FPT Corp');
+    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for FPT Corp' }));
     fireEvent.click(screen.getByRole('button', { name: 'Generate preview' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm and save' }));
     const confirmButtons = screen.getAllByRole('button', { name: 'Confirm and save' });
@@ -960,7 +963,7 @@ describe('DecisionSignalsPage', () => {
 
     expect(await screen.findByText('Save blocked by guardrail')).toBeInTheDocument();
     expect(screen.getByText('invalid_price_relationships')).toBeInTheDocument();
-    expect(screen.getByText('价格关系矛盾，未保存。')).toBeInTheDocument();
+    expect(screen.getByText('Price relationships conflict; not saved.')).toBeInTheDocument();
     expect(screen.getByText('persistable preview reason')).toBeInTheDocument();
     expect(screen.queryByText(/DecisionSignal #88/)).not.toBeInTheDocument();
   });
@@ -971,8 +974,8 @@ describe('DecisionSignalsPage', () => {
     ]));
 
     renderPage();
-    await screen.findByText('贵州茅台');
-    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for 贵州茅台' }));
+    await screen.findByText('FPT Corp');
+    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for FPT Corp' }));
 
     await waitFor(() => {
       expect(screen.getAllByText('This signal does not support reassess').length).toBeGreaterThan(0);
@@ -988,7 +991,7 @@ describe('DecisionSignalsPage', () => {
 
     renderPage();
     await screen.findByText('Decision profile reassess preview');
-    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for 贵州茅台' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for FPT Corp' }));
 
     await waitFor(() => {
       expect(screen.getAllByText('This signal does not support reassess').length).toBeGreaterThan(0);
@@ -1000,8 +1003,8 @@ describe('DecisionSignalsPage', () => {
   it('ignores stale reassess responses after switching the selected signal', async () => {
     const nextSignal = makeSignal({
       id: 8,
-      stockCode: '000001',
-      stockName: '平安银行',
+      stockCode: 'VNM',
+      stockName: 'Vinamilk',
       sourceReportId: 3002,
     });
     const pending = deferredPromise<DecisionSignalReassessResponse>();
@@ -1009,10 +1012,10 @@ describe('DecisionSignalsPage', () => {
     vi.mocked(decisionSignalsApi.reassess).mockReturnValueOnce(pending.promise);
 
     renderPage();
-    await screen.findByText('贵州茅台');
-    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for 贵州茅台' }));
+    await screen.findByText('FPT Corp');
+    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for FPT Corp' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Generate preview' }));
-    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for 平安银行' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for Vinamilk' }));
 
     await act(async () => {
       pending.resolve({
@@ -1026,12 +1029,12 @@ describe('DecisionSignalsPage', () => {
 
   it('queries latest active signals by stock code', async () => {
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
-    submitCurrentStock('600519');
+    submitCurrentStock('FPT');
 
     await waitFor(() => {
-      expect(decisionSignalsApi.getLatest).toHaveBeenCalledWith('600519', {
+      expect(decisionSignalsApi.getLatest).toHaveBeenCalledWith('FPT', {
         market: undefined,
         limit: 5,
       });
@@ -1040,82 +1043,86 @@ describe('DecisionSignalsPage', () => {
 
   it('submits the main stock context once and keeps the applied context separate from the draft', async () => {
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
     vi.mocked(decisionSignalsApi.getLatest).mockClear();
     vi.mocked(decisionSignalsApi.list).mockClear();
 
-    submitCurrentStock('AAPL');
+    submitCurrentStock('HPG');
 
     await waitFor(() => {
       expect(decisionSignalsApi.getLatest).toHaveBeenCalledTimes(1);
       expect(decisionSignalsApi.list).toHaveBeenCalledTimes(1);
     });
-    expect(screen.getByText('Current stock: AAPL')).toBeInTheDocument();
+    expect(screen.getByText('Current stock: HPG')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Current stock'), { target: { value: 'MSFT' } });
+    fireEvent.change(screen.getByLabelText('Current stock'), { target: { value: 'VCB' } });
 
-    expect(screen.getByText('Current stock: AAPL')).toBeInTheDocument();
+    expect(screen.getByText('Current stock: HPG')).toBeInTheDocument();
     expect(decisionSignalsApi.getLatest).toHaveBeenCalledTimes(1);
     expect(decisionSignalsApi.list).toHaveBeenCalledTimes(1);
   });
 
   it('uses autocomplete metadata for the active context instead of the old draft value', async () => {
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
-    fireEvent.change(screen.getByLabelText('Current stock'), { target: { value: '6005' } });
+    // Gợi ý chỉ mở khi ô nhập đang được focus (người dùng đang gõ).
+    // Suggestions only open while the input is focused (the user is typing).
+    const currentStockInput = screen.getByLabelText('Current stock');
+    currentStockInput.focus();
+    fireEvent.change(currentStockInput, { target: { value: 'FP' } });
     const listbox = await screen.findByRole('listbox');
-    fireEvent.click(within(listbox).getByRole('option', { name: /贵州茅台.*600519/ }));
+    fireEvent.click(within(listbox).getByRole('option', { name: /FPT Corp.*FPT/ }));
 
     await waitFor(() => {
-      expect(decisionSignalsApi.getLatest).toHaveBeenCalledWith('600519.SH', {
-        market: 'cn',
+      expect(decisionSignalsApi.getLatest).toHaveBeenCalledWith('FPT', {
+        market: 'vn',
         limit: 5,
       });
     });
-    expect(screen.getByText('Current stock: 600519 / 贵州茅台 / cn')).toBeInTheDocument();
-    expect(screen.getByLabelText('Current stock')).toHaveValue('600519');
+    expect(screen.getByText('Current stock: FPT / FPT Corp / vn')).toBeInTheDocument();
+    expect(screen.getByLabelText('Current stock')).toHaveValue('FPT');
   });
 
   it('shows recent history candidates and passes normalized market when a candidate is selected', async () => {
     renderPage();
 
     expect(await screen.findByText('Recent analyses')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /600519/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^FPT\s*\/\s*vn$/ }));
 
     await waitFor(() => {
-      expect(decisionSignalsApi.getLatest).toHaveBeenCalledWith('600519', {
-        market: 'cn',
+      expect(decisionSignalsApi.getLatest).toHaveBeenCalledWith('FPT', {
+        market: 'vn',
         limit: 5,
       });
     });
-    expect(screen.getByText('Current stock: 600519 / cn')).toBeInTheDocument();
+    expect(screen.getByText('Current stock: FPT / vn')).toBeInTheDocument();
   });
 
   it('preserves the applied stock context metadata when the unchanged draft is submitted again', async () => {
     renderPage();
 
     expect(await screen.findByText('Recent analyses')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /600519/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^FPT\s*\/\s*vn$/ }));
 
     await waitFor(() => {
-      expect(decisionSignalsApi.getLatest).toHaveBeenLastCalledWith('600519', {
-        market: 'cn',
+      expect(decisionSignalsApi.getLatest).toHaveBeenLastCalledWith('FPT', {
+        market: 'vn',
         limit: 5,
       });
     });
-    expect(screen.getByLabelText('Current stock')).toHaveValue('600519');
+    expect(screen.getByLabelText('Current stock')).toHaveValue('FPT');
 
     fireEvent.click(screen.getByRole('button', { name: 'View stock' }));
 
     await waitFor(() => {
-      expect(decisionSignalsApi.getLatest).toHaveBeenLastCalledWith('600519', {
-        market: 'cn',
+      expect(decisionSignalsApi.getLatest).toHaveBeenLastCalledWith('FPT', {
+        market: 'vn',
         limit: 5,
       });
       expect(decisionSignalsApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
-        stockCode: '600519',
-        market: 'cn',
+        stockCode: 'FPT',
+        market: 'vn',
       }));
     });
   });
@@ -1126,7 +1133,7 @@ describe('DecisionSignalsPage', () => {
       items: [
         {
           id: 1,
-          stockCode: '600519',
+          stockCode: 'FPT',
           analysisCount: 1,
           marketPhaseSummary: null,
         },
@@ -1134,10 +1141,10 @@ describe('DecisionSignalsPage', () => {
     });
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: /^600519$/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^FPT$/ }));
 
     await waitFor(() => {
-      expect(decisionSignalsApi.getLatest).toHaveBeenCalledWith('600519', {
+      expect(decisionSignalsApi.getLatest).toHaveBeenCalledWith('FPT', {
         market: undefined,
         limit: 5,
       });
@@ -1149,7 +1156,7 @@ describe('DecisionSignalsPage', () => {
     const { unmount } = renderPage();
 
     expect(await screen.findByText('Popular candidates')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /AAPL.*Apple.*us/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /HPG.*Hoa Phat.*vn/ })).toBeInTheDocument();
     expect(decisionSignalsApi.getLatest).not.toHaveBeenCalled();
 
     unmount();
@@ -1161,7 +1168,7 @@ describe('DecisionSignalsPage', () => {
     renderPage();
 
     expect(await screen.findByText('Popular candidates')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /AAPL.*Apple.*us/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /HPG.*Hoa Phat.*vn/ })).toBeInTheDocument();
   });
 
   it('renders no candidate fallback without crashing when history and stock index are unavailable', async () => {
@@ -1184,41 +1191,40 @@ describe('DecisionSignalsPage', () => {
     vi.mocked(historyApi.getStockBarList).mockResolvedValueOnce({
       total: 4,
       items: [
-        { id: 1, stockCode: '600519', analysisCount: 1, marketPhaseSummary: { market: 'CN', phase: 'unknown', warnings: [] } },
-        { id: 2, stockCode: '600519', analysisCount: 1, marketPhaseSummary: { market: 'HK', phase: 'unknown', warnings: [] } },
-        { id: 3, stockCode: 'AAPL', analysisCount: 1, marketPhaseSummary: null },
-        { id: 4, stockCode: 'AAPL', analysisCount: 1, marketPhaseSummary: null },
+        { id: 1, stockCode: 'FPT', analysisCount: 1, marketPhaseSummary: { market: 'VN', phase: 'unknown', warnings: [] } },
+        { id: 2, stockCode: 'FPT', analysisCount: 1, marketPhaseSummary: null },
+        { id: 3, stockCode: 'HPG', analysisCount: 1, marketPhaseSummary: null },
+        { id: 4, stockCode: 'HPG', analysisCount: 1, marketPhaseSummary: null },
       ],
     });
     renderPage();
 
     expect(await screen.findByText('Recent analyses')).toBeInTheDocument();
     const candidateButtons = screen.getAllByRole('button').filter((button) => (
-      button.textContent?.includes('600519') || button.textContent?.includes('AAPL')
+      button.textContent?.includes('FPT') || button.textContent?.includes('HPG')
     ));
 
-    expect(candidateButtons.filter((button) => button.textContent?.includes('600519'))).toHaveLength(2);
-    expect(candidateButtons.filter((button) => button.textContent?.includes('AAPL'))).toHaveLength(1);
+    expect(candidateButtons.filter((button) => button.textContent?.includes('FPT'))).toHaveLength(2);
+    expect(candidateButtons.filter((button) => button.textContent?.includes('HPG'))).toHaveLength(1);
   });
 
   it('does not use the advanced list market filter for latest lookup', async () => {
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
     const marketSelect = screen.getByLabelText('Market');
-    fireEvent.change(marketSelect, { target: { value: 'cn' } });
+    fireEvent.change(marketSelect, { target: { value: 'vn' } });
     fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
     await waitFor(() => {
       expect(decisionSignalsApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
-        market: 'cn',
+        market: 'vn',
       }));
     });
 
-    fireEvent.change(marketSelect, { target: { value: 'hk' } });
-    submitCurrentStock('600519');
+    submitCurrentStock('FPT');
 
     await waitFor(() => {
-      expect(decisionSignalsApi.getLatest).toHaveBeenCalledWith('600519', {
+      expect(decisionSignalsApi.getLatest).toHaveBeenCalledWith('FPT', {
         market: undefined,
         limit: 5,
       });
@@ -1230,45 +1236,45 @@ describe('DecisionSignalsPage', () => {
     const secondSignal = {
       ...signal,
       id: 8,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
-      market: 'us' as const,
-      riskSummary: '第二次查询结果',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
+      market: 'vn' as const,
+      riskSummary: 'Second query result',
     };
     vi.mocked(decisionSignalsApi.getLatest)
       .mockReturnValueOnce(firstSearch.promise)
       .mockResolvedValueOnce(listResponse([secondSignal]));
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
-    submitCurrentStock('600519');
+    submitCurrentStock('FPT');
 
-    submitCurrentStock('AAPL');
+    submitCurrentStock('HPG');
 
-    expect(await screen.findByText('第二次查询结果')).toBeInTheDocument();
+    expect(await screen.findByText('Second query result')).toBeInTheDocument();
 
     await act(async () => {
-      firstSearch.resolve(listResponse([{ ...signal, riskSummary: '第一次晚返回结果' }]));
+      firstSearch.resolve(listResponse([{ ...signal, riskSummary: 'First late result' }]));
       await firstSearch.promise;
     });
 
     await waitFor(() => {
-      expect(screen.queryByText('第一次晚返回结果')).not.toBeInTheDocument();
+      expect(screen.queryByText('First late result')).not.toBeInTheDocument();
     });
-    expect(screen.getByText('第二次查询结果')).toBeInTheDocument();
+    expect(screen.getByText('Second query result')).toBeInTheDocument();
   });
 
   it('renders latest empty and error states', async () => {
     vi.mocked(decisionSignalsApi.getLatest).mockResolvedValueOnce(listResponse([], 0));
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
-    submitCurrentStock('600519');
+    submitCurrentStock('FPT');
 
     expect(await screen.findByText('No latest active signals')).toBeInTheDocument();
 
     vi.mocked(decisionSignalsApi.getLatest).mockRejectedValueOnce(new Error('latest down'));
-    submitCurrentStock('600519');
+    submitCurrentStock('FPT');
 
     expect(await screen.findByRole('alert')).toHaveTextContent('latest down');
   });
@@ -1276,22 +1282,22 @@ describe('DecisionSignalsPage', () => {
   it('does not request the timeline before a current stock is selected', async () => {
     renderPage();
 
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
     expect(screen.getAllByText('Choose a stock to view AI signals').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Search timeline' })).toBeDisabled();
     expect(decisionSignalsApi.list).toHaveBeenCalledTimes(1);
     expect(within(screen.getByLabelText('Timeline status')).queryByRole('option', { name: 'Closed' })).not.toBeInTheDocument();
-    expect(within(screen.getByLabelText('Timeline profile')).getByRole('option', { name: '未知' })).toHaveValue('unknown');
+    expect(within(screen.getByLabelText('Timeline profile')).getByRole('option', { name: 'Unknown' })).toHaveValue('unknown');
   });
 
   it('queries timeline with independent filters and no default status', async () => {
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
-    submitCurrentStock('600519');
+    submitCurrentStock('FPT');
     await waitFor(() => expect(decisionSignalsApi.list).toHaveBeenCalledTimes(2));
 
-    fireEvent.change(screen.getByLabelText('Timeline market'), { target: { value: 'cn' } });
+    fireEvent.change(screen.getByLabelText('Timeline market'), { target: { value: 'vn' } });
     fireEvent.change(screen.getByLabelText('Range'), { target: { value: '30d' } });
     fireEvent.change(screen.getByLabelText('Timeline profile'), { target: { value: 'unknown' } });
     fireEvent.click(screen.getByRole('button', { name: 'Search timeline' }));
@@ -1300,8 +1306,8 @@ describe('DecisionSignalsPage', () => {
       expect(decisionSignalsApi.list).toHaveBeenCalledTimes(3);
     });
     expect(decisionSignalsApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
-      market: 'cn',
-      stockCode: '600519',
+      market: 'vn',
+      stockCode: 'FPT',
       page: 1,
       pageSize: 100,
       status: undefined,
@@ -1314,10 +1320,10 @@ describe('DecisionSignalsPage', () => {
 
   it('initializes timeline market from a new stock context once and preserves later user overrides', async () => {
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
     const getHistoryCandidateButton = () => screen.getAllByRole('button').find((button) => (
-      button.textContent?.includes('600519') && button.textContent.includes('/ cn')
+      button.textContent?.includes('FPT') && button.textContent.includes('/ vn')
     ));
     fireEvent.click(await waitFor(() => {
       const button = getHistoryCandidateButton();
@@ -1326,34 +1332,34 @@ describe('DecisionSignalsPage', () => {
     }));
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Timeline market')).toHaveValue('cn');
+      expect(screen.getByLabelText('Timeline market')).toHaveValue('vn');
       expect(decisionSignalsApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
-        stockCode: '600519',
-        market: 'cn',
+        stockCode: 'FPT',
+        market: 'vn',
       }));
     });
 
-    fireEvent.change(screen.getByLabelText('Timeline market'), { target: { value: 'hk' } });
+    fireEvent.change(screen.getByLabelText('Timeline market'), { target: { value: '' } });
     const sameCandidateButton = getHistoryCandidateButton();
     expect(sameCandidateButton).toBeTruthy();
     fireEvent.click(sameCandidateButton as HTMLButtonElement);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Timeline market')).toHaveValue('hk');
+      expect(screen.getByLabelText('Timeline market')).toHaveValue('');
       expect(decisionSignalsApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
-        stockCode: '600519',
-        market: 'hk',
+        stockCode: 'FPT',
+        market: undefined,
       }));
     });
   });
 
   it('clears timeline market from a previous stock context before a later manual stock submit without metadata', async () => {
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
     const historyCandidateButton = await waitFor(() => {
       const button = screen.getAllByRole('button').find((candidateButton) => (
-        candidateButton.textContent?.includes('600519') && candidateButton.textContent.includes('/ cn')
+        candidateButton.textContent?.includes('FPT') && candidateButton.textContent.includes('/ vn')
       ));
       expect(button).toBeTruthy();
       return button as HTMLButtonElement;
@@ -1361,10 +1367,10 @@ describe('DecisionSignalsPage', () => {
     fireEvent.click(historyCandidateButton);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Timeline market')).toHaveValue('cn');
+      expect(screen.getByLabelText('Timeline market')).toHaveValue('vn');
       expect(decisionSignalsApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
-        stockCode: '600519',
-        market: 'cn',
+        stockCode: 'FPT',
+        market: 'vn',
       }));
     });
 
@@ -1373,15 +1379,15 @@ describe('DecisionSignalsPage', () => {
       expect(screen.getByLabelText('Timeline market')).toHaveValue('');
     });
 
-    submitCurrentStock('AAPL');
+    submitCurrentStock('HPG');
 
     await waitFor(() => {
-      expect(decisionSignalsApi.getLatest).toHaveBeenLastCalledWith('AAPL', {
+      expect(decisionSignalsApi.getLatest).toHaveBeenLastCalledWith('HPG', {
         market: undefined,
         limit: 5,
       });
       expect(decisionSignalsApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
-        stockCode: 'AAPL',
+        stockCode: 'HPG',
         market: undefined,
       }));
     });
@@ -1389,32 +1395,32 @@ describe('DecisionSignalsPage', () => {
 
   it('preserves a user-selected timeline market when a later manual stock submit has no metadata', async () => {
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
-    fireEvent.change(screen.getByLabelText('Timeline market'), { target: { value: 'us' } });
-    submitCurrentStock('AAPL');
+    fireEvent.change(screen.getByLabelText('Timeline market'), { target: { value: 'vn' } });
+    submitCurrentStock('HPG');
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Timeline market')).toHaveValue('us');
-      expect(decisionSignalsApi.getLatest).toHaveBeenLastCalledWith('AAPL', {
+      expect(screen.getByLabelText('Timeline market')).toHaveValue('vn');
+      expect(decisionSignalsApi.getLatest).toHaveBeenLastCalledWith('HPG', {
         market: undefined,
         limit: 5,
       });
       expect(decisionSignalsApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
-        stockCode: 'AAPL',
-        market: 'us',
+        stockCode: 'HPG',
+        market: 'vn',
       }));
     });
   });
 
   it('applies timeline draft filters only after the query button is clicked', async () => {
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
-    submitCurrentStock('AAPL');
+    submitCurrentStock('HPG');
     await waitFor(() => expect(decisionSignalsApi.list).toHaveBeenCalledTimes(2));
 
-    fireEvent.change(screen.getByLabelText('Timeline market'), { target: { value: 'us' } });
+    fireEvent.change(screen.getByLabelText('Timeline market'), { target: { value: 'vn' } });
     fireEvent.change(screen.getByLabelText('Range'), { target: { value: '30d' } });
     fireEvent.change(screen.getByLabelText('Timeline status'), { target: { value: 'active' } });
     fireEvent.change(screen.getByLabelText('Timeline profile'), { target: { value: 'conservative' } });
@@ -1427,8 +1433,8 @@ describe('DecisionSignalsPage', () => {
       expect(decisionSignalsApi.list).toHaveBeenCalledTimes(3);
     });
     expect(decisionSignalsApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
-      stockCode: 'AAPL',
-      market: 'us',
+      stockCode: 'HPG',
+      market: 'vn',
       status: 'active',
       decisionProfile: 'conservative',
     }));
@@ -1437,9 +1443,9 @@ describe('DecisionSignalsPage', () => {
   it('passes active timeline status, shows truncation, and opens details from a point', async () => {
     const timelineSignal = makeSignal({
       id: 8,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
-      market: 'us',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
+      market: 'vn',
       action: 'alert',
       riskSummary: 'Timeline risk',
     });
@@ -1447,14 +1453,14 @@ describe('DecisionSignalsPage', () => {
       .mockResolvedValueOnce(listResponse())
       .mockResolvedValueOnce(listResponse([timelineSignal], 150));
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
     fireEvent.change(screen.getByLabelText('Timeline status'), { target: { value: 'active' } });
-    submitCurrentStock('AAPL');
+    submitCurrentStock('HPG');
 
     await waitFor(() => {
       expect(decisionSignalsApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
-        stockCode: 'AAPL',
+        stockCode: 'HPG',
         status: 'active',
         pageSize: 100,
       }));
@@ -1469,18 +1475,18 @@ describe('DecisionSignalsPage', () => {
   it('returns to the timeline guide when stock code is cleared after a search', async () => {
     const timelineSignal = makeSignal({
       id: 8,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
-      market: 'us',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
+      market: 'vn',
       riskSummary: 'Timeline stale risk',
     });
     vi.mocked(decisionSignalsApi.list)
       .mockResolvedValueOnce(listResponse())
       .mockResolvedValueOnce(listResponse([timelineSignal], 1));
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
-    submitCurrentStock('AAPL');
+    submitCurrentStock('HPG');
     fireEvent.click(await screen.findByTestId('timeline-click-8'));
     expect(within(await screen.findByRole('dialog')).getByText('Timeline stale risk')).toBeInTheDocument();
 
@@ -1495,26 +1501,26 @@ describe('DecisionSignalsPage', () => {
 
   it('clears current stock derived state without closing a list-sourced drawer', async () => {
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for 贵州茅台' }));
-    expect(within(await screen.findByRole('dialog')).getByText('趋势保持')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for FPT Corp' }));
+    expect(within(await screen.findByRole('dialog')).getByText('Xu hướng duy trì')).toBeInTheDocument();
 
-    submitCurrentStock('AAPL');
-    expect(await screen.findByText('Current stock: AAPL')).toBeInTheDocument();
+    submitCurrentStock('HPG');
+    expect(await screen.findByText('Current stock: HPG')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear current stock' }));
 
     expect(screen.getByLabelText('Current stock')).toHaveValue('');
     expect(screen.getAllByText('Choose a stock to view AI signals').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Search timeline' })).toBeDisabled();
-    expect(within(screen.getByRole('dialog')).getByText('趋势保持')).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog')).getByText('Xu hướng duy trì')).toBeInTheDocument();
   });
 
   it('closes a timeline-sourced drawer when an active timeline status update removes it', async () => {
     const timelineSignal = makeSignal({
       id: 8,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
-      market: 'us',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
+      market: 'vn',
       riskSummary: 'Timeline active risk',
     });
     vi.mocked(decisionSignalsApi.list)
@@ -1523,10 +1529,10 @@ describe('DecisionSignalsPage', () => {
       .mockResolvedValueOnce(listResponse());
     vi.mocked(decisionSignalsApi.updateStatus).mockResolvedValueOnce({ ...timelineSignal, status: 'invalidated' });
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
     fireEvent.change(screen.getByLabelText('Timeline status'), { target: { value: 'active' } });
-    submitCurrentStock('AAPL');
+    submitCurrentStock('HPG');
     fireEvent.click(await screen.findByTestId('timeline-click-8'));
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Mark invalid' }));
@@ -1542,9 +1548,9 @@ describe('DecisionSignalsPage', () => {
   it('uses applied timeline filters instead of draft filters after status updates', async () => {
     const timelineSignal = makeSignal({
       id: 8,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
-      market: 'us',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
+      market: 'vn',
       riskSummary: 'Timeline all risk',
     });
     vi.mocked(decisionSignalsApi.list)
@@ -1553,9 +1559,9 @@ describe('DecisionSignalsPage', () => {
       .mockResolvedValueOnce(listResponse());
     vi.mocked(decisionSignalsApi.updateStatus).mockResolvedValueOnce({ ...timelineSignal, status: 'invalidated' });
     renderPage();
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
 
-    submitCurrentStock('AAPL');
+    submitCurrentStock('HPG');
     fireEvent.change(screen.getByLabelText('Timeline status'), { target: { value: 'active' } });
     fireEvent.click(await screen.findByTestId('timeline-click-8'));
     const dialog = await screen.findByRole('dialog');
@@ -1578,7 +1584,7 @@ describe('DecisionSignalsPage', () => {
 
     expect(await screen.findByText('No decision signals')).toBeInTheDocument();
     vi.mocked(decisionSignalsApi.list).mockRejectedValueOnce(new Error('boom'));
-    fireEvent.click(screen.getByRole('button', { name: '刷新' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('boom');
   });
@@ -1589,15 +1595,15 @@ describe('DecisionSignalsPage', () => {
       .mockRejectedValueOnce(new Error('filter failed'));
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for 贵州茅台' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for FPT Corp' }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Stock code'), { target: { value: 'AAPL' } });
+    fireEvent.change(screen.getByLabelText('Stock code'), { target: { value: 'HPG' } });
     fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('filter failed');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: 'View AI signal details for 贵州茅台' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View AI signal details for FPT Corp' })).not.toBeInTheDocument();
     expect(screen.getByText('0 signals')).toBeInTheDocument();
   });
 
@@ -1607,10 +1613,10 @@ describe('DecisionSignalsPage', () => {
       .mockResolvedValueOnce(listResponse([], 0));
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for 贵州茅台' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for FPT Corp' }));
     const dialog = await screen.findByRole('dialog');
-    expect(screen.getAllByText('贵州茅台')).toHaveLength(2);
-    expect(within(dialog).getByText('趋势保持')).toBeInTheDocument();
+    expect(screen.getAllByText('FPT Corp')).toHaveLength(2);
+    expect(within(dialog).getByText('Xu hướng duy trì')).toBeInTheDocument();
     expect(within(dialog).getByText('#3001')).toBeInTheDocument();
     expect(await within(dialog).findByText('Hit')).toBeInTheDocument();
     expect(within(dialog).getByText('No feedback yet')).toBeInTheDocument();
@@ -1630,7 +1636,7 @@ describe('DecisionSignalsPage', () => {
   it('submits useful feedback from the details drawer', async () => {
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for 贵州茅台' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for FPT Corp' }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(await within(dialog).findByRole('button', { name: 'Useful' }));
 
@@ -1649,9 +1655,9 @@ describe('DecisionSignalsPage', () => {
     const feedbackSave = deferredPromise<DecisionSignalFeedbackItem>();
     const nextSignal = makeSignal({
       id: 8,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
-      market: 'us',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
+      market: 'vn',
       reason: 'Second signal reason',
     });
     vi.mocked(decisionSignalsApi.list).mockResolvedValueOnce(listResponse([signal, nextSignal], 2));
@@ -1662,10 +1668,10 @@ describe('DecisionSignalsPage', () => {
     vi.mocked(decisionSignalsApi.putFeedback).mockReturnValueOnce(feedbackSave.promise);
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for 贵州茅台' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for FPT Corp' }));
     let dialog = await screen.findByRole('dialog');
     fireEvent.click(await within(dialog).findByRole('button', { name: 'Useful' }));
-    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for Apple' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View AI signal details for Hoa Phat' }));
     dialog = await screen.findByRole('dialog');
     expect(await within(dialog).findByText('Second signal reason')).toBeInTheDocument();
 
@@ -1690,10 +1696,10 @@ describe('DecisionSignalsPage', () => {
       .mockResolvedValueOnce(listResponse([], 0));
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for 贵州茅台' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for FPT Corp' }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Stock code'), { target: { value: 'AAPL' } });
+    fireEvent.change(screen.getByLabelText('Stock code'), { target: { value: 'HPG' } });
     fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -1703,9 +1709,9 @@ describe('DecisionSignalsPage', () => {
   it('keeps a latest-sourced drawer open when the main list refreshes', async () => {
     const latestSignal = makeSignal({
       id: 8,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
-      market: 'us',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
+      market: 'vn',
       riskSummary: 'Latest risk',
     });
     vi.mocked(decisionSignalsApi.list)
@@ -1714,13 +1720,13 @@ describe('DecisionSignalsPage', () => {
     vi.mocked(decisionSignalsApi.getLatest).mockResolvedValueOnce(listResponse([latestSignal]));
     renderPage();
 
-    await screen.findByText('贵州茅台');
-    submitCurrentStock('AAPL');
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for Apple' }));
+    await screen.findByText('FPT Corp');
+    submitCurrentStock('HPG');
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for Hoa Phat' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Latest risk')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Stock code'), { target: { value: '600519' } });
+    fireEvent.change(screen.getByLabelText('Stock code'), { target: { value: 'FPT' } });
     fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
 
     await waitFor(() => {
@@ -1731,16 +1737,16 @@ describe('DecisionSignalsPage', () => {
   it('closes a latest-sourced drawer when the next latest search excludes the selected signal', async () => {
     const firstLatestSignal = makeSignal({
       id: 8,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
-      market: 'us',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
+      market: 'vn',
       riskSummary: 'Latest A risk',
     });
     const nextLatestSignal = makeSignal({
       id: 9,
-      stockCode: 'MSFT',
-      stockName: 'Microsoft',
-      market: 'us',
+      stockCode: 'VCB',
+      stockName: 'Vietcombank',
+      market: 'vn',
       riskSummary: 'Latest B risk',
     });
     vi.mocked(decisionSignalsApi.getLatest)
@@ -1748,12 +1754,12 @@ describe('DecisionSignalsPage', () => {
       .mockResolvedValueOnce(listResponse([nextLatestSignal]));
     renderPage();
 
-    await screen.findByText('贵州茅台');
-    submitCurrentStock('AAPL');
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for Apple' }));
+    await screen.findByText('FPT Corp');
+    submitCurrentStock('HPG');
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for Hoa Phat' }));
     expect(within(await screen.findByRole('dialog')).getByText('Latest A risk')).toBeInTheDocument();
 
-    submitCurrentStock('MSFT');
+    submitCurrentStock('VCB');
 
     expect(await screen.findByText('Latest B risk')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -1762,9 +1768,9 @@ describe('DecisionSignalsPage', () => {
   it('closes a latest-sourced drawer when latest search fails', async () => {
     const latestSignal = makeSignal({
       id: 8,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
-      market: 'us',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
+      market: 'vn',
       riskSummary: 'Latest risk before failure',
     });
     vi.mocked(decisionSignalsApi.getLatest)
@@ -1772,12 +1778,12 @@ describe('DecisionSignalsPage', () => {
       .mockRejectedValueOnce(new Error('latest failed'));
     renderPage();
 
-    await screen.findByText('贵州茅台');
-    submitCurrentStock('AAPL');
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for Apple' }));
+    await screen.findByText('FPT Corp');
+    submitCurrentStock('HPG');
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for Hoa Phat' }));
     expect(within(await screen.findByRole('dialog')).getByText('Latest risk before failure')).toBeInTheDocument();
 
-    submitCurrentStock('MSFT');
+    submitCurrentStock('VCB');
 
     expect(await screen.findByRole('alert')).toHaveTextContent('latest failed');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -1786,21 +1792,21 @@ describe('DecisionSignalsPage', () => {
   it('keeps a list-sourced drawer open when latest search results change', async () => {
     const latestSignal = makeSignal({
       id: 8,
-      stockCode: 'AAPL',
-      stockName: 'Apple',
-      market: 'us',
+      stockCode: 'HPG',
+      stockName: 'Hoa Phat',
+      market: 'vn',
       riskSummary: 'Latest lookup risk',
     });
     vi.mocked(decisionSignalsApi.getLatest).mockResolvedValueOnce(listResponse([latestSignal]));
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for 贵州茅台' }));
-    expect(within(await screen.findByRole('dialog')).getByText('趋势保持')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for FPT Corp' }));
+    expect(within(await screen.findByRole('dialog')).getByText('Xu hướng duy trì')).toBeInTheDocument();
 
-    submitCurrentStock('AAPL');
+    submitCurrentStock('HPG');
 
     expect(await screen.findByText('Latest lookup risk')).toBeInTheDocument();
-    expect(within(screen.getByRole('dialog')).getByText('趋势保持')).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog')).getByText('Xu hướng duy trì')).toBeInTheDocument();
   });
 
   it('ignores duplicate status confirmation clicks and disables confirmation controls', async () => {
@@ -1808,7 +1814,7 @@ describe('DecisionSignalsPage', () => {
     vi.mocked(decisionSignalsApi.updateStatus).mockReturnValueOnce(statusUpdate.promise);
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for 贵州茅台' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for FPT Corp' }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Mark invalid' }));
     const confirmButton = await screen.findByRole('button', { name: 'OK' });
@@ -1826,7 +1832,7 @@ describe('DecisionSignalsPage', () => {
   });
 
   it('clamps to a valid page after status update removes the only item on the last page', async () => {
-    const pageTwoSignal = makeSignal({ id: 8, stockCode: 'AAPL', stockName: 'Apple', market: 'us' });
+    const pageTwoSignal = makeSignal({ id: 8, stockCode: 'HPG', stockName: 'Hoa Phat', market: 'vn' });
     vi.mocked(decisionSignalsApi.list)
       .mockResolvedValueOnce(listResponse([signal], 21))
       .mockResolvedValueOnce(listResponse([pageTwoSignal], 21))
@@ -1835,9 +1841,9 @@ describe('DecisionSignalsPage', () => {
     vi.mocked(decisionSignalsApi.updateStatus).mockResolvedValueOnce({ ...pageTwoSignal, status: 'invalidated' });
     renderPage();
 
-    await screen.findByText('贵州茅台');
+    await screen.findByText('FPT Corp');
     fireEvent.click(screen.getByRole('button', { name: '2' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for Apple' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for Hoa Phat' }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Mark invalid' }));
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
@@ -1856,7 +1862,7 @@ describe('DecisionSignalsPage', () => {
     vi.mocked(decisionSignalsApi.updateStatus).mockRejectedValueOnce(new Error('status update failed'));
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for 贵州茅台' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for FPT Corp' }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Mark invalid' }));
     expect(await screen.findByRole('heading', { name: 'Update signal status' })).toBeInTheDocument();
@@ -1878,7 +1884,7 @@ describe('DecisionSignalsPage', () => {
     vi.mocked(decisionSignalsApi.updateStatus).mockResolvedValueOnce({ ...signal, status });
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for 贵州茅台' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View AI signal details for FPT Corp' }));
     const dialog = await screen.findByRole('dialog');
 
     expect(within(dialog).getByRole('button', { name: 'Close signal' })).toBeInTheDocument();

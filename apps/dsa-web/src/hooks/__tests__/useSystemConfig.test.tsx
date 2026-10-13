@@ -32,7 +32,7 @@ const sampleConfig = {
   items: [
     {
       key: 'STOCK_LIST',
-      value: 'SH600000',
+      value: 'HPG',
       rawValueExists: true,
       isMasked: false,
       schema: {
@@ -159,7 +159,7 @@ describe('useSystemConfig', () => {
       ...sampleConfig,
       items: sampleConfig.items.map((item) => (
         item.key === 'STOCK_LIST'
-          ? { ...item, value: 'SH600000,SH600519,AAPL' }
+          ? { ...item, value: 'HPG,FPT,VCB' }
           : item
       )),
     };
@@ -178,7 +178,7 @@ describe('useSystemConfig', () => {
     });
 
     act(() => {
-      result.current.setDraftValue('STOCK_LIST', 'SH600000，SH600519\nAAPL');
+      result.current.setDraftValue('STOCK_LIST', 'HPG;FPT\nVCB');
     });
 
     await act(async () => {
@@ -186,13 +186,13 @@ describe('useSystemConfig', () => {
     });
 
     expect(validate).toHaveBeenCalledWith({
-      items: [{ key: 'STOCK_LIST', value: 'SH600000,SH600519,AAPL' }],
+      items: [{ key: 'STOCK_LIST', value: 'HPG,FPT,VCB' }],
     });
     expect(update).toHaveBeenCalledWith({
       configVersion: 'v1',
       maskToken: '******',
       reloadNow: true,
-      items: [{ key: 'STOCK_LIST', value: 'SH600000,SH600519,AAPL' }],
+      items: [{ key: 'STOCK_LIST', value: 'HPG,FPT,VCB' }],
     });
   });
 
@@ -301,7 +301,7 @@ describe('useSystemConfig', () => {
       ...sampleLlmConfig,
       items: sampleLlmConfig.items.map((item) => {
         if (item.key === 'STOCK_LIST') {
-          return { ...item, value: 'SH600000,SH600519' };
+          return { ...item, value: 'HPG,FPT' };
         }
         return item;
       }),
@@ -321,7 +321,7 @@ describe('useSystemConfig', () => {
     });
 
     act(() => {
-      result.current.setDraftValue('STOCK_LIST', 'SH600000,SH600519');
+      result.current.setDraftValue('STOCK_LIST', 'HPG,FPT');
     });
 
     expect(result.current.hasDirty).toBe(true);
@@ -333,14 +333,14 @@ describe('useSystemConfig', () => {
 
     expect(validate).toHaveBeenCalledTimes(1);
     expect(validate).toHaveBeenCalledWith({
-      items: [{ key: 'STOCK_LIST', value: 'SH600000,SH600519' }],
+      items: [{ key: 'STOCK_LIST', value: 'HPG,FPT' }],
     });
     expect(update).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledWith({
       configVersion: 'v1',
       maskToken: '******',
       reloadNow: true,
-      items: [{ key: 'STOCK_LIST', value: 'SH600000,SH600519' }],
+      items: [{ key: 'STOCK_LIST', value: 'HPG,FPT' }],
     });
 
     expect(result.current.serverItems.find((item) => item.key === 'LITELLM_MODEL')?.value).toBe('gpt-5.0');

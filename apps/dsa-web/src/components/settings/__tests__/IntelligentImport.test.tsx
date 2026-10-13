@@ -35,7 +35,7 @@ describe('IntelligentImport', () => {
   it('opens the matching hidden file input when the picker buttons are clicked', () => {
     const { container } = render(
       <IntelligentImport
-        stockListValue="SH600000"
+        stockListValue="HPG"
         configVersion="v1"
         maskToken="******"
         onMerged={onMerged}
@@ -67,7 +67,7 @@ describe('IntelligentImport', () => {
   it('does not open hidden file inputs when the import actions are disabled', () => {
     const { container } = render(
       <IntelligentImport
-        stockListValue="SH600000"
+        stockListValue="HPG"
         configVersion="v1"
         maskToken="******"
         onMerged={onMerged}
@@ -99,7 +99,7 @@ describe('IntelligentImport', () => {
 
   it('refreshes config state after a config version conflict', async () => {
     parseImport.mockResolvedValue({
-      items: [{ code: 'SZ000001', name: 'Ping An Bank', confidence: 'high' }],
+      items: [{ code: 'MWG', name: 'Ping An Bank', confidence: 'high' }],
       codes: [],
     });
     update.mockRejectedValue(
@@ -108,7 +108,7 @@ describe('IntelligentImport', () => {
 
     render(
       <IntelligentImport
-        stockListValue="SH600000"
+        stockListValue="HPG"
         configVersion="v1"
         maskToken="******"
         onMerged={onMerged}
@@ -116,11 +116,11 @@ describe('IntelligentImport', () => {
     );
 
     fireEvent.change(screen.getByPlaceholderText('Or paste text copied from CSV/Excel...'), {
-      target: { value: '000001' },
+      target: { value: 'VCB' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Parse' }));
 
-    await screen.findByText('SZ000001');
+    await screen.findByText('MWG');
 
     fireEvent.click(screen.getByRole('button', { name: 'Merge into watchlist' }));
 
@@ -128,21 +128,21 @@ describe('IntelligentImport', () => {
       expect(update).toHaveBeenCalled();
     });
     await waitFor(() => {
-      expect(onMerged).toHaveBeenCalledWith('SH600000,SZ000001');
+      expect(onMerged).toHaveBeenCalledWith('HPG,MWG');
     });
     expect(await screen.findByText('Configuration changed. Click "Merge into watchlist" again.')).toBeInTheDocument();
   });
 
   it('normalizes existing mixed separators when merging into watchlist', async () => {
     parseImport.mockResolvedValue({
-      items: [{ code: 'HK00700', name: 'Tencent', confidence: 'high' }],
+      items: [{ code: 'VNM', name: 'Vinamilk', confidence: 'high' }],
       codes: [],
     });
     update.mockResolvedValue({ success: true });
 
     render(
       <IntelligentImport
-        stockListValue="SH600000，SH600519 AAPL"
+        stockListValue="HPG;FPT VCB"
         configVersion="v1"
         maskToken="******"
         onMerged={onMerged}
@@ -150,11 +150,11 @@ describe('IntelligentImport', () => {
     );
 
     fireEvent.change(screen.getByPlaceholderText('Or paste text copied from CSV/Excel...'), {
-      target: { value: 'HK00700' },
+      target: { value: 'VNM' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Parse' }));
 
-    await screen.findByText('HK00700');
+    await screen.findByText('VNM');
 
     fireEvent.click(screen.getByRole('button', { name: 'Merge into watchlist' }));
 
@@ -163,11 +163,11 @@ describe('IntelligentImport', () => {
         configVersion: 'v1',
         maskToken: '******',
         reloadNow: true,
-        items: [{ key: 'STOCK_LIST', value: 'SH600000,SH600519,AAPL,HK00700' }],
+        items: [{ key: 'STOCK_LIST', value: 'HPG,FPT,VCB,VNM' }],
       });
     });
     await waitFor(() => {
-      expect(onMerged).toHaveBeenCalledWith('SH600000,SH600519,AAPL,HK00700');
+      expect(onMerged).toHaveBeenCalledWith('HPG,FPT,VCB,VNM');
     });
   });
 });

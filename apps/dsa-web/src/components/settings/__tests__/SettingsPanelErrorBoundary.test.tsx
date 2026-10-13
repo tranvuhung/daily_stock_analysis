@@ -23,9 +23,9 @@ describe('SettingsPanelErrorBoundary', () => {
         resetKey="notification"
         diagnosticHint={(
           <>
-            请查看并提供桌面端日志
+            Hãy kiểm tra và cung cấp log desktop
             <code>desktop.log</code>
-            ，同时补充 release 版本、Windows 版本和触发入口。
+            , đồng thời bổ sung phiên bản release, phiên bản Windows và lối vào kích hoạt.
           </>
         )}
       >
@@ -36,7 +36,7 @@ describe('SettingsPanelErrorBoundary', () => {
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getByText('Notification settings failed to load')).toBeInTheDocument();
     expect(screen.getByText('desktop.log')).toBeInTheDocument();
-    expect(screen.getByText(/release 版本、Windows 版本和触发入口/)).toBeInTheDocument();
+    expect(screen.getByText(/phiên bản release, phiên bản Windows và lối vào kích hoạt/)).toBeInTheDocument();
     expect(screen.getByText(/Error summary: mock settings panel crash/)).toBeInTheDocument();
   });
 
@@ -72,12 +72,12 @@ describe('SettingsPanelErrorBoundary', () => {
 
     rerender(
       <SettingsPanelErrorBoundary title="Agent settings" resetKey="agent:v2">
-        <div>Agent 设置已恢复</div>
+        <div>Agent Đã khôi phục cài đặt</div>
       </SettingsPanelErrorBoundary>
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Agent 设置已恢复')).toBeInTheDocument();
+      expect(screen.getByText('Agent Đã khôi phục cài đặt')).toBeInTheDocument();
     });
     expect(screen.queryByText('Agent settings failed to load')).not.toBeInTheDocument();
   });

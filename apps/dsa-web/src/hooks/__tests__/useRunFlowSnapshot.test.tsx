@@ -34,8 +34,8 @@ vi.mock('../useTaskStream', () => ({
 const snapshot: RunFlowSnapshot = {
   taskId: 'task-1',
   traceId: 'trace-1',
-  stockCode: '600519',
-  stockName: '贵州茅台',
+  stockCode: 'HPG',
+  stockName: 'Hoa Phat',
   status: 'running',
   generatedAt: '2026-06-08T08:00:00Z',
   summary: {
@@ -55,7 +55,7 @@ const snapshot: RunFlowSnapshot = {
       id: 'task_queue',
       lane: 'entry',
       kind: 'queue',
-      label: 'Task 队列',
+      label: 'Task Hàng đợi',
       status: 'running',
     },
   ],
@@ -67,7 +67,7 @@ const snapshot: RunFlowSnapshot = {
       severity: 'info',
       type: 'task_started',
       nodeId: 'task_queue',
-      title: 'Task 开始执行',
+      title: 'Task Bắt đầu thực thi',
     },
   ],
 };
@@ -102,7 +102,7 @@ describe('useRunFlowSnapshot', () => {
       taskStreamCalls.at(-1)?.onTaskFlowEvent?.(
         {
           taskId: 'task-1',
-          stockCode: '600519',
+          stockCode: 'HPG',
           status: 'processing',
           progress: 30,
           reportType: 'detailed',
@@ -114,14 +114,14 @@ describe('useRunFlowSnapshot', () => {
           severity: 'success',
           type: 'provider_run',
           nodeId: 'provider_daily_1',
-          title: '日线K线成功',
+          title: 'Nến ngày thành công',
           metadata: {
             provider: 'DailyFetcher',
             node: {
               id: 'provider_daily_1',
               lane: 'data_source',
               kind: 'data_source',
-              label: '日线K线',
+              label: 'Nến ngày',
               status: 'success',
             },
           },
@@ -154,7 +154,7 @@ describe('useRunFlowSnapshot', () => {
       taskStreamCalls.at(-1)?.onTaskFlowEvent?.(
         {
           taskId: 'task-1',
-          stockCode: '600519',
+          stockCode: 'HPG',
           status: 'processing',
           progress: 30,
           reportType: 'detailed',
@@ -166,7 +166,7 @@ describe('useRunFlowSnapshot', () => {
           severity: 'info',
           type: 'provider_run_started',
           nodeId: 'provider_daily_data_dailyfetcher_1',
-          title: '日线K线开始',
+          title: 'Nến ngày bắt đầu',
           metadata: {
             provider: 'DailyFetcher',
             dataType: 'daily_data',
@@ -174,7 +174,7 @@ describe('useRunFlowSnapshot', () => {
               id: 'provider_daily_data_dailyfetcher_1',
               lane: 'data_source',
               kind: 'data_source',
-              label: '日线K线 · DailyFetcher',
+              label: 'Nến ngày · DailyFetcher',
               status: 'running',
               provider: 'DailyFetcher',
               metadata: { dataType: 'daily_data' },
@@ -185,7 +185,7 @@ describe('useRunFlowSnapshot', () => {
       taskStreamCalls.at(-1)?.onTaskFlowEvent?.(
         {
           taskId: 'task-1',
-          stockCode: '600519',
+          stockCode: 'HPG',
           status: 'processing',
           progress: 35,
           reportType: 'detailed',
@@ -197,7 +197,7 @@ describe('useRunFlowSnapshot', () => {
           severity: 'success',
           type: 'provider_run',
           nodeId: 'provider_daily_data_dailyfetcher_1',
-          title: '日线K线成功',
+          title: 'Nến ngày thành công',
           metadata: {
             provider: 'DailyFetcher',
             dataType: 'daily_data',
@@ -205,7 +205,7 @@ describe('useRunFlowSnapshot', () => {
               id: 'provider_daily_data_dailyfetcher_1',
               lane: 'data_source',
               kind: 'data_source',
-              label: '日线K线 · DailyFetcher',
+              label: 'Nến ngày · DailyFetcher',
               status: 'success',
               provider: 'DailyFetcher',
               recordCount: 30,
@@ -252,7 +252,7 @@ describe('useRunFlowSnapshot', () => {
       taskStreamCalls.at(-1)?.onTaskFlowEvent?.(
         {
           taskId: 'task-1',
-          stockCode: '600519',
+          stockCode: 'HPG',
           status: 'processing',
           progress: 25,
           reportType: 'detailed',
@@ -264,7 +264,7 @@ describe('useRunFlowSnapshot', () => {
           severity: 'danger',
           type: 'provider_run',
           nodeId: 'provider_daily_data_primary_1',
-          title: '日线K线失败',
+          title: 'Nến ngày thất bại',
           metadata: {
             provider: 'PrimaryDaily',
             dataType: 'daily_data',
@@ -272,7 +272,7 @@ describe('useRunFlowSnapshot', () => {
               id: 'provider_daily_data_primary_1',
               lane: 'data_source',
               kind: 'data_source',
-              label: '日线K线 · PrimaryDaily',
+              label: 'Nến ngày · PrimaryDaily',
               status: 'failed',
               provider: 'PrimaryDaily',
               durationMs: 120,
@@ -284,7 +284,7 @@ describe('useRunFlowSnapshot', () => {
       taskStreamCalls.at(-1)?.onTaskFlowEvent?.(
         {
           taskId: 'task-1',
-          stockCode: '600519',
+          stockCode: 'HPG',
           status: 'processing',
           progress: 35,
           reportType: 'detailed',
@@ -296,7 +296,7 @@ describe('useRunFlowSnapshot', () => {
           severity: 'success',
           type: 'provider_run',
           nodeId: 'provider_daily_data_backup_2',
-          title: '日线K线成功',
+          title: 'Nến ngày thành công',
           metadata: {
             provider: 'BackupDaily',
             dataType: 'daily_data',
@@ -305,7 +305,7 @@ describe('useRunFlowSnapshot', () => {
               id: 'provider_daily_data_backup_2',
               lane: 'data_source',
               kind: 'data_source',
-              label: '日线K线 · BackupDaily',
+              label: 'Nến ngày · BackupDaily',
               status: 'success',
               provider: 'BackupDaily',
               durationMs: 80,
@@ -348,7 +348,7 @@ describe('useRunFlowSnapshot', () => {
       taskStreamCalls.at(-1)?.onTaskFlowEvent?.(
         {
           taskId: 'task-1',
-          stockCode: '600519',
+          stockCode: 'HPG',
           status: 'processing',
           progress: 25,
           reportType: 'detailed',
@@ -360,7 +360,7 @@ describe('useRunFlowSnapshot', () => {
           severity: 'danger',
           type: 'provider_run',
           nodeId: 'provider_daily_data_primary_1',
-          title: '日线K线失败',
+          title: 'Nến ngày thất bại',
           metadata: {
             provider: 'PrimaryDaily',
             dataType: 'daily_data',
@@ -368,7 +368,7 @@ describe('useRunFlowSnapshot', () => {
               id: 'provider_daily_data_primary_1',
               lane: 'data_source',
               kind: 'data_source',
-              label: '日线K线 · PrimaryDaily',
+              label: 'Nến ngày · PrimaryDaily',
               status: 'failed',
               provider: 'PrimaryDaily',
               metadata: { dataType: 'daily_data' },
@@ -379,7 +379,7 @@ describe('useRunFlowSnapshot', () => {
       taskStreamCalls.at(-1)?.onTaskFlowEvent?.(
         {
           taskId: 'task-1',
-          stockCode: '600519',
+          stockCode: 'HPG',
           status: 'processing',
           progress: 35,
           reportType: 'detailed',
@@ -391,7 +391,7 @@ describe('useRunFlowSnapshot', () => {
           severity: 'success',
           type: 'provider_run',
           nodeId: 'provider_news_search_primary_1',
-          title: '新闻检索成功',
+          title: 'Tìm tin tức thành công',
           metadata: {
             provider: 'NewsFetcher',
             dataType: 'news_search',
@@ -399,7 +399,7 @@ describe('useRunFlowSnapshot', () => {
               id: 'provider_news_search_primary_1',
               lane: 'data_source',
               kind: 'data_source',
-              label: '新闻舆情 · NewsFetcher',
+              label: 'Tin tức dư luận · NewsFetcher',
               status: 'success',
               provider: 'NewsFetcher',
               metadata: { dataType: 'news_search' },
@@ -423,7 +423,7 @@ describe('useRunFlowSnapshot', () => {
       id: 'provider_daily_data_primary_1',
       lane: 'data_source',
       kind: 'data_source',
-      label: '日线K线 · PrimaryDaily',
+      label: 'Nến ngày · PrimaryDaily',
       status: 'failed',
       provider: 'PrimaryDaily',
       metadata: { dataType: 'daily_data' },
@@ -432,7 +432,7 @@ describe('useRunFlowSnapshot', () => {
       id: 'provider_daily_data_backup_2',
       lane: 'data_source',
       kind: 'data_source',
-      label: '日线K线 · BackupDaily',
+      label: 'Nến ngày · BackupDaily',
       status: 'success',
       provider: 'BackupDaily',
       metadata: { dataType: 'daily_data' },
@@ -443,7 +443,7 @@ describe('useRunFlowSnapshot', () => {
       severity: 'danger',
       type: 'provider_run',
       nodeId: primaryNode.id,
-      title: '日线K线失败',
+      title: 'Nến ngày thất bại',
       metadata: {
         provider: 'PrimaryDaily',
         dataType: 'daily_data',
@@ -456,7 +456,7 @@ describe('useRunFlowSnapshot', () => {
       severity: 'success',
       type: 'provider_run',
       nodeId: backupNode.id,
-      title: '日线K线成功',
+      title: 'Nến ngày thành công',
       metadata: {
         provider: 'BackupDaily',
         dataType: 'daily_data',
@@ -480,7 +480,7 @@ describe('useRunFlowSnapshot', () => {
       taskStreamCalls.at(-1)?.onTaskFlowEvent?.(
         {
           taskId: 'task-1',
-          stockCode: '600519',
+          stockCode: 'HPG',
           status: 'processing',
           progress: 25,
           reportType: 'detailed',
@@ -491,7 +491,7 @@ describe('useRunFlowSnapshot', () => {
       taskStreamCalls.at(-1)?.onTaskFlowEvent?.(
         {
           taskId: 'task-1',
-          stockCode: '600519',
+          stockCode: 'HPG',
           status: 'processing',
           progress: 35,
           reportType: 'detailed',
@@ -501,7 +501,7 @@ describe('useRunFlowSnapshot', () => {
       );
       taskStreamCalls.at(-1)?.onTaskCompleted?.({
         taskId: 'task-1',
-        stockCode: '600519',
+        stockCode: 'HPG',
         status: 'completed',
         progress: 100,
         reportType: 'detailed',
@@ -598,7 +598,7 @@ describe('useRunFlowSnapshot', () => {
     act(() => {
       taskStreamCalls.at(-1)?.onTaskCompleted?.({
         taskId: 'task-1',
-        stockCode: '600519',
+        stockCode: 'HPG',
         status: 'completed',
         progress: 100,
         reportType: 'detailed',
@@ -607,7 +607,7 @@ describe('useRunFlowSnapshot', () => {
       taskStreamCalls.at(-1)?.onTaskFlowEvent?.(
         {
           taskId: 'task-1',
-          stockCode: '600519',
+          stockCode: 'HPG',
           status: 'processing',
           progress: 99,
           reportType: 'detailed',
@@ -619,14 +619,14 @@ describe('useRunFlowSnapshot', () => {
           severity: 'success',
           type: 'provider_run',
           nodeId: 'provider_news_1',
-          title: '新闻检索成功',
+          title: 'Tìm tin tức thành công',
           metadata: {
             provider: 'NewsFetcher',
             node: {
               id: 'provider_news_1',
               lane: 'data_source',
               kind: 'data_source',
-              label: '新闻 · NewsFetcher',
+              label: 'Tin tức · NewsFetcher',
               status: 'success',
             },
           },
@@ -676,14 +676,14 @@ describe('useRunFlowSnapshot', () => {
       severity: 'warning' as const,
       type: 'notification_run' as const,
       nodeId: 'notification_report_1',
-      title: '通知跳过',
+      title: 'Bỏ qua thông báo',
       metadata: {
         channel: 'report',
         node: {
           id: 'notification_report_1',
           lane: 'artifact',
           kind: 'notification',
-          label: '推送通知 · report',
+          label: 'Gửi thông báo · report',
           status: 'skipped',
         },
       },
@@ -693,7 +693,7 @@ describe('useRunFlowSnapshot', () => {
       taskStreamCalls.at(-1)?.onTaskFlowEvent?.(
         {
           taskId: 'task-1',
-          stockCode: '600519',
+          stockCode: 'HPG',
           status: 'processing',
           progress: 99,
           reportType: 'detailed',
@@ -703,7 +703,7 @@ describe('useRunFlowSnapshot', () => {
       );
       taskStreamCalls.at(-1)?.onTaskCompleted?.({
         taskId: 'task-1',
-        stockCode: '600519',
+        stockCode: 'HPG',
         status: 'completed',
         progress: 100,
         reportType: 'detailed',
@@ -723,7 +723,7 @@ describe('useRunFlowSnapshot', () => {
             id: 'notification_report_1',
             lane: 'artifact',
             kind: 'notification',
-            label: '推送通知 · report',
+            label: 'Gửi thông báo · report',
             status: 'skipped',
           },
         ],
@@ -735,7 +735,7 @@ describe('useRunFlowSnapshot', () => {
             severity: 'warning',
             type: 'notification_run',
             nodeId: 'notification_report_1',
-            title: '通知跳过',
+            title: 'Bỏ qua thông báo',
           },
         ],
       });
