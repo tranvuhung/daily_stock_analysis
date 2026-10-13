@@ -91,7 +91,7 @@ Web/API tạo rule ─► alert_rules (DB)
 - Còn lại thì `_evaluate_rule`, rồi `process_result`.
 
 **`process_result`**
-1. Gắn decision signal (chỉ mã cn/hk/us, không áp dụng cho VN).
+1. Gắn decision signal cho mã Việt Nam (thị trường `vn`).
 2. Ghi trigger, kèm `analysis_visibility`: phase summary và context pack của lần phân tích gần nhất trong 30 ngày.
 3. Kiểm tra cooldown DB. Nếu đọc DB lỗi thì dùng fingerprint trong bộ nhớ thay thế.
 4. Phát sự kiện `alert_triggered`, gửi thông báo, ghi các lần gửi, rồi upsert cooldown.

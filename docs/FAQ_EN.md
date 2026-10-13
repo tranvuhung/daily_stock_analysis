@@ -6,50 +6,27 @@ This document compiles common issues encountered by users and their solutions.
 
 ## Data Related
 
-### Q1: US stock codes (e.g., AMD, AAPL) show incorrect prices during analysis?
+### Q1: A code such as `600519`, `hk00700`, or `AAPL` is rejected?
 
-**Symptom**: After entering US stock codes, displayed prices are clearly wrong (e.g., AMD showing 7.33 yuan), or being misidentified as A-shares.
+**Cause**: The project supports the Vietnam stock market only (HOSE / HNX / UPCoM). Codes from other markets are rejected at the input boundary.
 
-**Cause**: Earlier version code matching logic prioritized A-share rules, causing code conflicts.
-
-**Solution**:
-1. Fixed in v2.3.0, system now supports automatic US stock code recognition
-2. If issues persist, set in `.env`:
-   ```bash
-   YFINANCE_PRIORITY=0
-   ```
-   This prioritizes Yahoo Finance data source for US stock data
-
-> Related Issue: [#153](https://github.com/ZhuLinsen/daily_stock_analysis/issues/153)
+**Solution**: Use Vietnam codes such as `HPG`, `FPT.VN`, `FUEVN100`, or `VNINDEX`. See [Market scope](market-support.md) (Vietnamese).
 
 ---
 
-### Q2: "Volume Ratio" field shows empty or N/A in reports?
+### Q2: Prices look 1000x off, or HNX / UPCoM stocks fail on the Yahoo fallback?
 
-**Symptom**: Volume ratio data missing in analysis reports, affecting AI's judgment on volume changes.
-
-**Cause**: Some default real-time quote sources (e.g., Sina interface) don't provide volume ratio field.
+**Cause**: VCI and SSI snapshots quote in VND, while the SSI chart API and vnstock quote in thousands of VND (normalised by ×1000). Yahoo only covers HOSE and never covers indices.
 
 **Solution**:
-1. Fixed in v2.3.0, Tencent interface now supports volume ratio parsing
-2. Recommended real-time quote source priority:
-   ```bash
-   REALTIME_SOURCE_PRIORITY=tencent,akshare_sina,efinance,akshare_em
-   ```
-3. System has built-in 5-day average volume calculation as fallback
-
-> Related Issue: [#155](https://github.com/ZhuLinsen/daily_stock_analysis/issues/155)
+1. Keep the default priority (VCI → SSI → optional vnstock → Yahoo); do not move `YFINANCE_PRIORITY` ahead of `SSI_PRIORITY`.
+2. See [Data-source stability](data-source-stability.md) (Vietnamese) for the fallback chain.
 
 ---
 
-### Q3: Tushare data fetch failed, showing Token error?
+### Q3: Old `TUSHARE_TOKEN` / `TICKFLOW_*` / `LONGBRIDGE_*` keys are still in my `.env`?
 
-**Symptom**: Log shows `Tushare data fetch failed: Your token is incorrect, please verify`
-
-**Solution**:
-1. **No Tushare account**: No need to configure `TUSHARE_TOKEN`, system will automatically use free data sources (AkShare, Efinance)
-2. **Have Tushare account**: Verify Token is correct, check in [Tushare Pro](https://tushare.pro/weborder/#/login?reg=834638) personal center
-3. All core features of this project work normally without Tushare
+They are ignored. Those data sources were removed together with non-Vietnam market support; you can delete the keys.
 
 ---
 
@@ -57,7 +34,7 @@ This document compiles common issues encountered by users and their solutions.
 
 **Symptom**: Log shows `Circuit breaker triggered` or data returns `None`
 
-**Cause**: Free data sources (Eastmoney, Sina, etc.) have anti-scraping mechanisms, high-frequency requests get rate-limited.
+**Cause**: The public VCI / SSI endpoints rate-limit high-frequency requests.
 
 **Solution**:
 1. System has built-in multi-source auto-switching and circuit breaker protection
@@ -156,9 +133,8 @@ First confirm whether `LITELLM_CONFIG` or `LLM_CHANNELS` is active, because eith
 **Symptom**: Analysis succeeded but no notification received, log shows 400 error or `Message too long`
 
 **Cause**: Different platforms have different message length limits:
-- WeChat Work: 4KB
-- Feishu: 20KB
-- DingTalk: 20KB
+- Telegram: 4096 characters per message
+- Discord: 2000 characters per message
 
 **Solution**:
 1. **Auto-chunking**: Latest version implements automatic long message splitting
@@ -190,17 +166,6 @@ First confirm whether `LITELLM_CONFIG` or `LLM_CHANNELS` is active, because eith
    - Find `chat.id` in the returned JSON
 3. Ensure Bot has been added to target group (if group chat)
 4. When running locally, need to be able to access Telegram API (may need proxy)
-
----
-
-### Q10: WeChat Work Markdown format not displaying correctly?
-
-**Solution**:
-1. WeChat Work has limited Markdown support, try setting:
-   ```bash
-   WECHAT_MSG_TYPE=text
-   ```
-2. This will send plain text format messages
 
 ---
 

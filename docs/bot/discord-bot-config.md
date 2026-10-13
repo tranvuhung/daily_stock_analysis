@@ -14,7 +14,7 @@ Discord机器人支持两种消息发送方式：
 访问 https://discord.com/developers/applications 并使用你的Discord账号登录
 
 ### 2. 创建应用
-点击"New Application"按钮，输入应用名称（例如：A股智能分析机器人），然后点击"Create"
+点击"New Application"按钮，输入应用名称（例如：VN Stock Analysis Bot），然后点击"Create"
 
 ### 3. 配置机器人
 在左侧导航栏中点击"Bot"，然后点击"Add Bot"按钮，确认添加
@@ -55,7 +55,7 @@ DISCORD_BOT_TOKEN=your-discord-bot-token
 DISCORD_MAIN_CHANNEL_ID=your-channel-id
 DISCORD_WEBHOOK_URL=your-webhook-url (可选)
 DISCORD_INTERACTIONS_PUBLIC_KEY=your-public-key (仅接收入站 Interaction/Webhook 回调时需要)
-DISCORD_BOT_STATUS=A股智能分析 | /help
+DISCORD_BOT_STATUS=VN Stock Analysis | /help
 ```
 
 如果你配置了 Discord Interaction / Webhook 入站回调，务必在 Discord Developer Portal 的 `General Information -> Public Key` 复制公钥并填入 `DISCORD_INTERACTIONS_PUBLIC_KEY`；系统会使用该公钥校验每个入站请求的 Ed25519 签名，验签失败会直接拒绝请求。
@@ -74,7 +74,7 @@ DISCORD_BOT_STATUS=A股智能分析 | /help
 Discord机器人支持以下Slash命令：
 
 1. `/analyze <target> [full_report]` - 分析指定股票、已登记指数或股票名称
-   - `target`: 分析标的，可为股票代码（如 `600519`）、已登记指数（如 `sh000016`、`930955.CSI`、`上证50`）或股票名称（如 `贵州茅台`）
+   - `target`: 分析标的，可为越南股票代码（如 `HPG`、`FPT.VN`）或指数（如 `VNINDEX`、`VN30`）
    - `full_report`: 可选，是否生成完整报告（包含大盘）
 
 2. `/market_review` - 获取大盘复盘报告
@@ -87,7 +87,7 @@ Discord机器人支持以下Slash命令：
 
 1. 确保机器人已成功添加到你的服务器
 2. 在频道中输入`/help`，机器人会返回帮助信息
-3. 输入`/analyze 600519`测试股票分析功能（已登记指数如 `/analyze sh000016`、股票名称如 `/analyze 贵州茅台` 同样可用）
+3. 输入`/analyze HPG`测试股票分析功能（指数如 `/analyze VNINDEX` 同样可用）
 4. 输入`/market_review`测试大盘复盘功能
 
 ## 注意事项

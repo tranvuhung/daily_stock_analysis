@@ -13,7 +13,7 @@ Các hàm phân tích trả về một đối tượng `AnalysisResult` (hoặc 
 
 Thuộc tính `dashboard` chứa phần phân tích cốt lõi, được chia thành bốn khối chính:
 1.  **`core_conclusion`**: Kết luận một câu, loại tín hiệu và khuyến nghị tỷ trọng vị thế.
-2.  **`data_perspective`**: Dữ liệu kỹ thuật, bao gồm trạng thái xu hướng, vị trí giá, phân tích khối lượng và cấu trúc phân bố cổ phiếu (chip structure).
+2.  **`data_perspective`**: Dữ liệu kỹ thuật, bao gồm trạng thái xu hướng, vị trí giá, phân tích khối lượng.
 3.  **`intelligence`**: Thông tin định tính như tin tức, cảnh báo rủi ro và các chất xúc tác tích cực.
 4.  **`battle_plan`**: Chiến lược có thể hành động, gồm điểm vào/ra (mục tiêu mua/bán), chiến lược quản lý vị thế và danh sách kiểm soát rủi ro.
 
@@ -48,7 +48,7 @@ Một đối tượng `AnalysisResult` chứa kết quả phân tích, hoặc `N
 from src.services.analyzer_service import analyze_stock
 
 # Phân tích một cổ phiếu
-result = analyze_stock("600989")
+result = analyze_stock("HPG")
 if result:
     print(f"Cổ phiếu: {result.name} ({result.code})")
     print(f"Điểm tâm lý thị trường: {result.sentiment_score}")
@@ -78,7 +78,7 @@ Một danh sách các đối tượng `AnalysisResult`.
 from src.services.analyzer_service import analyze_stocks
 
 # Phân tích nhiều cổ phiếu
-results = analyze_stocks(["600989", "000001"])
+results = analyze_stocks(["HPG", "FPT"])
 for result in results:
     print(f"Cổ phiếu: {result.name}, Khuyến nghị hành động: {result.operation_advice}")
 ```

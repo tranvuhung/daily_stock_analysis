@@ -175,7 +175,6 @@ jobs:
             for (const file of files) {
               const filename = file.filename.toLowerCase();
               if (filename.includes('notification') || filename.includes('webhook')) labels.add('notification');
-              if (filename.includes('feishu')) labels.add('feishu');
               if (filename.includes('data_provider') || filename.includes('fetcher')) labels.add('data-source');
               if (filename.includes('analyzer') || filename.includes('ai')) labels.add('ai');
               if (filename.endsWith('.md') || filename.includes('doc')) labels.add('documentation');

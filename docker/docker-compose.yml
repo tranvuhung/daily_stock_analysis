@@ -1,5 +1,5 @@
 # ===================================
-# A-share watchlist intelligent analysis system - Docker Compose
+# Vietnam stock watchlist analysis system - Docker Compose
 # ===================================
 # 
 # Usage:
@@ -26,14 +26,11 @@ x-common: &common
     - ../logs:/app/logs
     - ../reports:/app/reports
     - ../strategies:/app/strategies:ro
-    # Longbridge OAuth token cache persistence; entrypoint repairs container-side ownership for dsa user.
-    # Create ../longbridge_tokens on the host before copying an authorized token cache into it.
-    - ../longbridge_tokens:/home/dsa/.longbridge
     # To override frontend static assets, mount a local static directory
     # - ../static:/app/static:ro
 
   environment:
-    - TZ=Asia/Shanghai
+    - TZ=Asia/Ho_Chi_Minh
 
     # Web/API service bind address (must be 0.0.0.0 inside container)
     - WEBUI_HOST=0.0.0.0

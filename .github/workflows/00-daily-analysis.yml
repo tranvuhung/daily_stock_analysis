@@ -1,15 +1,16 @@
 name: 每日股票分析
 
 on:
-  # Scheduled trigger - daily at 18:00 Beijing time (UTC 10:00)
+  # Lịch chạy tự động - 18:00 giờ Việt Nam (Asia/Ho_Chi_Minh, UTC+7) = 11:00 UTC, sau phiên HOSE/HNX
+  # Scheduled trigger - daily at 18:00 Vietnam time (UTC 11:00), after the HOSE/HNX close
   schedule:
-    - cron: '0 10 * * 1-5'     # Monday to Friday, UTC 10:00 = 18:00 Beijing time
+    - cron: '0 11 * * 1-5'     # Thứ Hai - thứ Sáu / Monday to Friday, UTC 11:00 = 18:00 Asia/Ho_Chi_Minh
   
   # Manual trigger
   workflow_dispatch:
     inputs:
       mode:
-        description: '运行模式'
+        description: 'Chế độ chạy / Run mode'
         required: true
         default: 'full'
         type: choice
@@ -18,7 +19,7 @@ on:
           - market-only   # Market review only
           - stocks-only   # Stock analysis only
       force_run:
-        description: '强制运行（跳过交易日检查）'
+        description: 'Buộc chạy (bỏ qua kiểm tra ngày giao dịch) / Force run (skip trading-day check)'
         required: false
         default: false
         type: boolean
@@ -54,7 +55,6 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          python -c "import futu; print('✅ futu SDK import OK')"
       
       - name: 创建必要目录
         run: |
@@ -269,31 +269,9 @@ jobs:
           LLM_OLLAMA_EXTRA_HEADERS: ${{ vars.LLM_OLLAMA_EXTRA_HEADERS || secrets.LLM_OLLAMA_EXTRA_HEADERS }}
 
           # ==========================================
-          # Data sources
+          # Data sources (Vietnam: VCI + SSI by default, Yahoo as HOSE daily fallback; no API key required)
           # ==========================================
-          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
-          # Custom Tushare Pro endpoint (optional; set when pointing at a self-hosted gateway or third-party compatible mirror)
-          TUSHARE_HTTP_URL: ${{ vars.TUSHARE_HTTP_URL || secrets.TUSHARE_HTTP_URL }}
-          # TickFlow (enhances A-share daily K-lines, realtime quotes, stock list/names and market review; falls back to free sources when unset)
-          TICKFLOW_API_KEY: ${{ secrets.TICKFLOW_API_KEY }}
-          TICKFLOW_PRIORITY: ${{ vars.TICKFLOW_PRIORITY || secrets.TICKFLOW_PRIORITY }}
-          TICKFLOW_KLINE_ADJUST: ${{ vars.TICKFLOW_KLINE_ADJUST || secrets.TICKFLOW_KLINE_ADJUST }}
-          TICKFLOW_BATCH_DAILY_ENABLED: ${{ vars.TICKFLOW_BATCH_DAILY_ENABLED || secrets.TICKFLOW_BATCH_DAILY_ENABLED }}
-          TICKFLOW_BATCH_SIZE: ${{ vars.TICKFLOW_BATCH_SIZE || secrets.TICKFLOW_BATCH_SIZE }}
-          # Longbridge OpenAPI (supplements US/HK realtime quote fields; when unset only YFinance/AkShare are used, no [Longbridge] calls)
-          LONGBRIDGE_OAUTH_CLIENT_ID: ${{ vars.LONGBRIDGE_OAUTH_CLIENT_ID || secrets.LONGBRIDGE_OAUTH_CLIENT_ID }}
-          LONGBRIDGE_OAUTH_TOKEN_CACHE_B64: ${{ secrets.LONGBRIDGE_OAUTH_TOKEN_CACHE_B64 }}
-          LONGBRIDGE_APP_KEY: ${{ secrets.LONGBRIDGE_APP_KEY }}
-          LONGBRIDGE_APP_SECRET: ${{ secrets.LONGBRIDGE_APP_SECRET }}
-          LONGBRIDGE_ACCESS_TOKEN: ${{ secrets.LONGBRIDGE_ACCESS_TOKEN }}
-          LONGBRIDGE_REGION: ${{ vars.LONGBRIDGE_REGION || secrets.LONGBRIDGE_REGION }}
-          LONGBRIDGE_HTTP_URL: ${{ vars.LONGBRIDGE_HTTP_URL || secrets.LONGBRIDGE_HTTP_URL }}
-          LONGBRIDGE_QUOTE_WS_URL: ${{ vars.LONGBRIDGE_QUOTE_WS_URL || secrets.LONGBRIDGE_QUOTE_WS_URL }}
-          LONGBRIDGE_TRADE_WS_URL: ${{ vars.LONGBRIDGE_TRADE_WS_URL || secrets.LONGBRIDGE_TRADE_WS_URL }}
-          LONGBRIDGE_STATIC_INFO_TTL_SECONDS: ${{ vars.LONGBRIDGE_STATIC_INFO_TTL_SECONDS || secrets.LONGBRIDGE_STATIC_INFO_TTL_SECONDS }}
-          LONGBRIDGE_ENABLE_OVERNIGHT: ${{ vars.LONGBRIDGE_ENABLE_OVERNIGHT || secrets.LONGBRIDGE_ENABLE_OVERNIGHT }}
-          LONGBRIDGE_PUSH_CANDLESTICK_MODE: ${{ vars.LONGBRIDGE_PUSH_CANDLESTICK_MODE || secrets.LONGBRIDGE_PUSH_CANDLESTICK_MODE }}
-          LONGBRIDGE_PRINT_QUOTE_PACKAGES: ${{ vars.LONGBRIDGE_PRINT_QUOTE_PACKAGES || secrets.LONGBRIDGE_PRINT_QUOTE_PACKAGES }}
+          VNSTOCK_ENABLED: ${{ vars.VNSTOCK_ENABLED || secrets.VNSTOCK_ENABLED }}
           
           # ==========================================
           # Search services
@@ -302,10 +280,8 @@ jobs:
           ANSPIRE_LLM_MODEL: ${{ vars.ANSPIRE_LLM_MODEL || secrets.ANSPIRE_LLM_MODEL }}
           ANSPIRE_LLM_BASE_URL: ${{ vars.ANSPIRE_LLM_BASE_URL || secrets.ANSPIRE_LLM_BASE_URL }}
           ANSPIRE_LLM_ENABLED: ${{ vars.ANSPIRE_LLM_ENABLED || secrets.ANSPIRE_LLM_ENABLED }}
-          BOCHA_API_KEYS: ${{ secrets.BOCHA_API_KEYS }}
           TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
           SERPAPI_API_KEYS: ${{ secrets.SERPAPI_API_KEYS }}
-          MINIMAX_API_KEYS: ${{ secrets.MINIMAX_API_KEYS }}
           BRAVE_API_KEYS: ${{ secrets.BRAVE_API_KEYS }}
           SEARXNG_BASE_URLS: ${{ vars.SEARXNG_BASE_URLS || secrets.SEARXNG_BASE_URLS }}
           SEARXNG_PUBLIC_INSTANCES_ENABLED: ${{ vars.SEARXNG_PUBLIC_INSTANCES_ENABLED || secrets.SEARXNG_PUBLIC_INSTANCES_ENABLED }}
@@ -315,72 +291,41 @@ jobs:
           # Notification channels (several can be configured; all receive pushes)
           # ==========================================
           
-          # Option 1: WeCom Webhook
-          WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
-          WECHAT_MSG_TYPE: ${{ vars.WECHAT_MSG_TYPE || secrets.WECHAT_MSG_TYPE || 'markdown' }}
-          
-          # Option 2: Feishu Webhook
-          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
-          FEISHU_WEBHOOK_SECRET: ${{ secrets.FEISHU_WEBHOOK_SECRET }}
-          FEISHU_WEBHOOK_KEYWORD: ${{ vars.FEISHU_WEBHOOK_KEYWORD || secrets.FEISHU_WEBHOOK_KEYWORD }}
-          # DingTalk Webhook
-          DINGTALK_WEBHOOK_URL: ${{ secrets.DINGTALK_WEBHOOK_URL }}
-          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
-          # Option 3: Telegram
+          # Telegram
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_MESSAGE_THREAD_ID: ${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}
           
-          # Option 4: Email
+          # Email
           EMAIL_SENDER: ${{ vars.EMAIL_SENDER || secrets.EMAIL_SENDER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECEIVERS: ${{ vars.EMAIL_RECEIVERS || secrets.EMAIL_RECEIVERS }}
-          EMAIL_SENDER_NAME: ${{ vars.EMAIL_SENDER_NAME || secrets.EMAIL_SENDER_NAME || 'daily_stock_analysis股票分析助手' }}
+          EMAIL_SENDER_NAME: ${{ vars.EMAIL_SENDER_NAME || secrets.EMAIL_SENDER_NAME || 'daily_stock_analysis' }}
           
-          # Option 5: Pushover
+          # Pushover
           PUSHOVER_USER_KEY: ${{ secrets.PUSHOVER_USER_KEY }}
           PUSHOVER_API_TOKEN: ${{ secrets.PUSHOVER_API_TOKEN }}
 
-          # Option 5 extension: ntfy
+          # ntfy
           NTFY_URL: ${{ secrets.NTFY_URL }}
           NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
 
-          # Option 5 extension: Gotify
+          # Gotify
           GOTIFY_URL: ${{ secrets.GOTIFY_URL }}
           GOTIFY_TOKEN: ${{ secrets.GOTIFY_TOKEN }}
           
-          # Option 6: PushPlus ⬅️ New!
-          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
-          PUSHPLUS_TOPIC: ${{ vars.PUSHPLUS_TOPIC || secrets.PUSHPLUS_TOPIC }}
-          
-          # Option 7: Custom Webhook (DingTalk, Bark, self-hosted services, etc.)
+          # Custom Webhook (Bark, self-hosted services, etc.)
           CUSTOM_WEBHOOK_URLS: ${{ secrets.CUSTOM_WEBHOOK_URLS }}
           CUSTOM_WEBHOOK_BEARER_TOKEN: ${{ secrets.CUSTOM_WEBHOOK_BEARER_TOKEN }}
           CUSTOM_WEBHOOK_BODY_TEMPLATE: ${{ vars.CUSTOM_WEBHOOK_BODY_TEMPLATE || secrets.CUSTOM_WEBHOOK_BODY_TEMPLATE }}
           WEBHOOK_VERIFY_SSL: ${{ vars.WEBHOOK_VERIFY_SSL || secrets.WEBHOOK_VERIFY_SSL || 'true' }}
           
-          # Option 8: Discord
+          # Discord
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_MAIN_CHANNEL_ID: ${{ secrets.DISCORD_MAIN_CHANNEL_ID }}
           
-          # Option 9: Feishu Docs
-          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
-          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
-          FEISHU_FOLDER_TOKEN: ${{ secrets.FEISHU_FOLDER_TOKEN }}
-          FEISHU_CHAT_ID: ${{ vars.FEISHU_CHAT_ID || secrets.FEISHU_CHAT_ID }}
-          FEISHU_RECEIVE_ID_TYPE: ${{ vars.FEISHU_RECEIVE_ID_TYPE || secrets.FEISHU_RECEIVE_ID_TYPE }}
-          FEISHU_DOMAIN: ${{ vars.FEISHU_DOMAIN || secrets.FEISHU_DOMAIN }}
-          FEISHU_SEND_AS_FILE: ${{ vars.FEISHU_SEND_AS_FILE || secrets.FEISHU_SEND_AS_FILE }}
-
-          # Option 10: AstrBot
-          ASTRBOT_URL: ${{ secrets.ASTRBOT_URL }}
-          ASTRBOT_TOKEN: ${{ secrets.ASTRBOT_TOKEN }}
-
-          # Option 11: ServerChan 3
-          SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
-
-          # Option 12: Slack
+          # Slack
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
@@ -401,7 +346,7 @@ jobs:
           # ==========================================
           # Do not write STOCK_LIST directly, so the runner value from a same-named Environment variable is kept.
           STOCK_LIST_CONFIG: ${{ vars.STOCK_LIST || secrets.STOCK_LIST }}
-          MARKET_REVIEW_REGION: ${{ vars.MARKET_REVIEW_REGION || secrets.MARKET_REVIEW_REGION || 'cn' }}
+          MARKET_REVIEW_REGION: ${{ vars.MARKET_REVIEW_REGION || secrets.MARKET_REVIEW_REGION || 'vn' }}
           MARKET_REVIEW_COLOR_SCHEME: ${{ vars.MARKET_REVIEW_COLOR_SCHEME || secrets.MARKET_REVIEW_COLOR_SCHEME || 'green_up' }}
           
           # ==========================================
@@ -420,12 +365,8 @@ jobs:
           # ==========================================
           LOG_LEVEL: INFO
           MAX_WORKERS: ${{ vars.MAX_WORKERS || secrets.MAX_WORKERS || '1' }}
-          # Chip distribution: false by default (cloud API is unstable); to enable, add ENABLE_CHIP_DISTRIBUTION=true under Settings → Variables
-          ENABLE_CHIP_DISTRIBUTION: ${{ vars.ENABLE_CHIP_DISTRIBUTION || secrets.ENABLE_CHIP_DISTRIBUTION || 'false' }}
-          # Realtime quote source priority (Tencent provides volume ratio and is stable; recommended first)
-          # Allowed values: tencent, akshare_sina, efinance, akshare_em, tickflow, tushare
-          # With TickFlow or Tushare Pro, move tickflow / tushare earlier according to your access level
-          REALTIME_SOURCE_PRIORITY: ${{ vars.REALTIME_SOURCE_PRIORITY || 'tencent,akshare_sina,efinance,akshare_em' }}
+          # Thứ tự nguồn giá realtime Việt Nam (token: ssi / vci; để trống = mặc định của code) / Vietnam realtime quote source order
+          REALTIME_SOURCE_PRIORITY: ${{ vars.REALTIME_SOURCE_PRIORITY || secrets.REALTIME_SOURCE_PRIORITY }}
           
         run: |
           # Resolve the watchlist configuration:
@@ -435,87 +376,74 @@ jobs:
           if [ -n "${STOCK_LIST_CONFIG:-}" ]; then
             export STOCK_LIST="$STOCK_LIST_CONFIG"
           elif [ -z "${STOCK_LIST:-}" ]; then
-            export STOCK_LIST="600519"
+            export STOCK_LIST="HPG,FPT,VCB"
           fi
 
           # Handle the LiteLLM YAML config file
           if [ -n "$LITELLM_CONFIG_YAML" ] && [ -n "$LITELLM_CONFIG" ]; then
-            echo "📝 使用 GitHub Actions Secrets/Variables 中的 LITELLM_CONFIG_YAML 配置"
+            echo "📝 Dùng LITELLM_CONFIG_YAML từ GitHub Actions Secrets/Variables"
             # Make sure the directory exists
             mkdir -p "$(dirname "$LITELLM_CONFIG")"
             # Write the config file (overwrites any existing file)
             echo "$LITELLM_CONFIG_YAML" > "$LITELLM_CONFIG"
-            echo "✅ LITELLM 配置文件已写入: $LITELLM_CONFIG"
+            echo "✅ Đã ghi file cấu hình LiteLLM: $LITELLM_CONFIG"
           fi
 
           # Determine the run mode
           MODE="${{ github.event.inputs.mode || 'full' }}"
           
           echo "=========================================="
-          echo "🚀 A股自选股智能分析系统"
+          echo "🚀 Hệ thống phân tích cổ phiếu Việt Nam"
           echo "=========================================="
-          echo "⏰ 时间: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')"
-          echo "🎯 运行模式: $MODE"
-          echo "📊 自选股: $STOCK_LIST"
-          echo "📝 报告类型: $REPORT_TYPE"
+          echo "⏰ Thời gian: $(TZ='Asia/Ho_Chi_Minh' date '+%Y-%m-%d %H:%M:%S')"
+          echo "🎯 Chế độ chạy: $MODE"
+          echo "📊 Danh mục theo dõi: $STOCK_LIST"
+          echo "📝 Loại báo cáo: $REPORT_TYPE"
           echo ""
           echo "=========================================="
-          echo "📋 配置检查"
+          echo "📋 Kiểm tra cấu hình"
           echo "=========================================="
-          echo "【AI 配置】"
+          echo "[Cấu hình AI]"
           if [ -n "$LITELLM_CONFIG" ] || [ -n "$LITELLM_API_KEY" ] || [ -n "$LITELLM_MODEL" ] || [ -n "$ANSPIRE_API_KEYS" ]; then
-            echo "  LiteLLM: ✅ 已配置"
+            echo "  LiteLLM: ✅ configured"
           else
-            echo "  LiteLLM: ❌ 未配置"
+            echo "  LiteLLM: ❌ not configured"
           fi
-          echo "  Gemini API Key: $([ -n "$GEMINI_API_KEY" ] && echo '✅ 已配置' || echo '❌ 未配置')"
-          echo "  DeepSeek Key:   $([ -n "$DEEPSEEK_API_KEY" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  Anspire Key:    $([ -n "$ANSPIRE_API_KEYS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  AIHubMix Key:   $([ -n "$AIHUBMIX_KEY" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  OpenAI API Key: $([ -n "$OPENAI_API_KEY" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  Anthropic Key:  $([ -n "$ANTHROPIC_API_KEY" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "  Gemini API Key: $([ -n "$GEMINI_API_KEY" ] && echo '✅ configured' || echo '❌ not configured')"
+          echo "  DeepSeek Key:   $([ -n "$DEEPSEEK_API_KEY" ] && echo '✅ configured' || echo '⚪ not configured')"
+          echo "  Anspire Key:    $([ -n "$ANSPIRE_API_KEYS" ] && echo '✅ configured' || echo '⚪ not configured')"
+          echo "  AIHubMix Key:   $([ -n "$AIHUBMIX_KEY" ] && echo '✅ configured' || echo '⚪ not configured')"
+          echo "  OpenAI API Key: $([ -n "$OPENAI_API_KEY" ] && echo '✅ configured' || echo '⚪ not configured')"
+          echo "  Anthropic Key:  $([ -n "$ANTHROPIC_API_KEY" ] && echo '✅ configured' || echo '⚪ not configured')"
           echo ""
-          echo "【数据源】"
-          echo "  Tushare Token: $([ -n "$TUSHARE_TOKEN" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  TickFlow:      $([ -n "$TICKFLOW_API_KEY" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          if [ -n "$LONGBRIDGE_APP_KEY" ] && [ -n "$LONGBRIDGE_APP_SECRET" ] && [ -n "$LONGBRIDGE_ACCESS_TOKEN" ]; then
-            echo "  Longbridge: ✅ 已配置（Legacy API Key）"
-          elif [ -n "$LONGBRIDGE_OAUTH_CLIENT_ID" ] || { [ -n "$LONGBRIDGE_APP_KEY" ] && [ -z "$LONGBRIDGE_ACCESS_TOKEN" ]; }; then
-            echo "  Longbridge: $([ -n "$LONGBRIDGE_OAUTH_TOKEN_CACHE_B64" ] && echo '✅ 已配置（OAuth token cache）' || echo '🟡 已配置 OAuth client，缺少 token cache')"
-          else
-            echo "  Longbridge: ⚪ 未配置（仅 YFinance 等，无长桥调用）"
-          fi
+          echo "[Nguồn dữ liệu]"
+          echo "  VCI / SSI: ✅ mặc định (API công khai, không cần key)"
+          echo "  vnstock:   $([ "${VNSTOCK_ENABLED,,}" = "true" ] && echo '✅ đã bật' || echo '⚪ tắt (tuỳ chọn)')"
           echo ""
-          echo "【搜索引擎】"
-          echo "  Bocha API Keys: $([ -n "$BOCHA_API_KEYS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  Tavily API Keys: $([ -n "$TAVILY_API_KEYS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  SerpAPI Keys: $([ -n "$SERPAPI_API_KEYS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  MiniMax API Keys: $([ -n "$MINIMAX_API_KEYS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  Brave API Keys: $([ -n "$BRAVE_API_KEYS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  SearXNG Base URLs: $([ -n "$SEARXNG_BASE_URLS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "[Công cụ tìm kiếm]"
+          echo "  Tavily API Keys: $([ -n "$TAVILY_API_KEYS" ] && echo '✅ configured' || echo '⚪ not configured')"
+          echo "  SerpAPI Keys: $([ -n "$SERPAPI_API_KEYS" ] && echo '✅ configured' || echo '⚪ not configured')"
+          echo "  Brave API Keys: $([ -n "$BRAVE_API_KEYS" ] && echo '✅ configured' || echo '⚪ not configured')"
+          echo "  SearXNG Base URLs: $([ -n "$SEARXNG_BASE_URLS" ] && echo '✅ configured' || echo '⚪ not configured')"
           case "${SEARXNG_PUBLIC_INSTANCES_ENABLED,,}" in
             0|false|no|off)
-              echo "  SearXNG Public Instances: ❌ 已禁用"
+              echo "  SearXNG Public Instances: ❌ disabled"
               ;;
             "")
-              echo "  SearXNG Public Instances: ⚪ 默认关闭（公共实例普遍限流，如需启用请显式设为 true）"
+              echo "  SearXNG Public Instances: ⚪ tắt mặc định (instance công khai hay bị giới hạn; đặt true để bật)"
               ;;
             *)
-              echo "  SearXNG Public Instances: ✅ 已启用"
+              echo "  SearXNG Public Instances: ✅ enabled"
               ;;
           esac
           echo ""
-          echo "【通知渠道】"
-          echo "  PushPlus: $([ -n "$PUSHPLUS_TOKEN" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  ntfy: $([ -n "$NTFY_URL" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  Gotify: $([ -n "$GOTIFY_URL" ] && [ -n "$GOTIFY_TOKEN" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  企业微信: $([ -n "$WECHAT_WEBHOOK_URL" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  钉钉: $( [ -n "$DINGTALK_WEBHOOK_URL" ] && echo '✅ 已配置' || echo '⚪ 未配置' )"
-          echo "  飞书: $( ([ -n "$FEISHU_WEBHOOK_URL" ] || ([ -n "$FEISHU_APP_ID" ] && [ -n "$FEISHU_APP_SECRET" ] && [ -n "$FEISHU_CHAT_ID" ]) ) && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  Telegram: $([ -n "$TELEGRAM_BOT_TOKEN" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  Discord: $([ -n "$DISCORD_WEBHOOK_URL" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  AstrBot: $([ -n "$ASTRBOT_URL" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
-          echo "  Slack: $(([ -n "$SLACK_WEBHOOK_URL" ] || ([ -n "$SLACK_BOT_TOKEN" ] && [ -n "$SLACK_CHANNEL_ID" ])) && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "[Kênh thông báo]"
+          echo "  ntfy: $([ -n "$NTFY_URL" ] && echo '✅ configured' || echo '⚪ not configured')"
+          echo "  Gotify: $([ -n "$GOTIFY_URL" ] && [ -n "$GOTIFY_TOKEN" ] && echo '✅ configured' || echo '⚪ not configured')"
+          echo "  Email: $([ -n "$EMAIL_SENDER" ] && [ -n "$EMAIL_PASSWORD" ] && echo '✅ configured' || echo '⚪ not configured')"
+          echo "  Telegram: $([ -n "$TELEGRAM_BOT_TOKEN" ] && echo '✅ configured' || echo '⚪ not configured')"
+          echo "  Discord: $([ -n "$DISCORD_WEBHOOK_URL" ] && echo '✅ configured' || echo '⚪ not configured')"
+          echo "  Slack: $(([ -n "$SLACK_WEBHOOK_URL" ] || ([ -n "$SLACK_BOT_TOKEN" ] && [ -n "$SLACK_CHANNEL_ID" ])) && echo '✅ configured' || echo '⚪ not configured')"
           echo "=========================================="
           echo ""
           
@@ -523,7 +451,7 @@ jobs:
           FORCE_RUN_ARG=""
           if [ "${{ github.event.inputs.force_run }}" = "true" ]; then
             FORCE_RUN_ARG="--force-run"
-            echo "⚡ 已启用强制运行模式（跳过交易日检查）"
+            echo "⚡ Đã bật chế độ buộc chạy (bỏ qua kiểm tra ngày giao dịch)"
           fi
 
           # Run the analysis
@@ -550,16 +478,16 @@ jobs:
         run: |
           echo ""
           echo "=========================================="
-          echo "📊 分析完成"
+          echo "📊 Phân tích hoàn tất"
           echo "=========================================="
           if [ -d "reports" ] && [ "$(ls -A reports 2>/dev/null)" ]; then
-            echo "生成的报告:"
+            echo "Báo cáo đã tạo:"
             ls -la reports/
           else
-            echo "⚠️ 未生成报告文件"
+            echo "⚠️ Không có file báo cáo nào được tạo"
           fi
           echo ""
           if [ -f "logs/stock_analysis_$(date +%Y%m%d).log" ]; then
-            echo "📜 最近日志（最后 30 行）:"
-            tail -30 logs/stock_analysis_*.log 2>/dev/null || echo "无日志"
+            echo "📜 Log gần nhất (30 dòng cuối):"
+            tail -30 logs/stock_analysis_*.log 2>/dev/null || echo "Không có log"
           fi

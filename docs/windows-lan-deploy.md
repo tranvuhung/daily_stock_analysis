@@ -180,7 +180,7 @@ Muốn rollback thì giải nén lại gói cũ theo cùng các bước trên.
 | `Cổng 8000 đang bị chiếm` | Chạy `stop`, hoặc đổi `WEBUI_PORT` rồi chạy lại `firewall` |
 | Web UI hiện trang "chưa build" | Thiếu `static\`: đóng gói lại trên Mac (không dùng `--skip-build` khi chưa build) |
 | `Building wheel for tiktoken ... can't find Rust compiler` | `.venv` được tạo bằng Python 3.13+ (log có `cpython-313`/`cpython-314`). Cài Python 3.11, chạy `Remove-Item -Recurse -Force .venv` rồi chạy lại `setup` |
-| `pip install` lỗi một gói | Xem tên gói trong log. Các gói dễ vướng trên Windows: `futu-api`, `longbridge`, `pytdx`, `lxml`/`newspaper3k`. Kiểm tra bản Python có phải 3.11 64-bit không |
+| `pip install` lỗi một gói | Xem tên gói trong log. Các gói dễ vướng trên Windows: `lxml`/`newspaper3k`. Kiểm tra bản Python có phải 3.11 64-bit không |
 | Log bị lỗi ký tự (`UnicodeEncodeError`) | Chạy qua `run-server.ps1` (script tự đặt `PYTHONUTF8=1`), không chạy `python main.py` trực tiếp |
 | Không có giá realtime / cảnh báo tick | Kiểm tra `REALTIME_FEED_ENABLED` và `AGENT_EVENT_MONITOR_ENABLED`, thông tin `TVSI_MQTT_*`, và firewall hoặc proxy có chặn kết nối ra cổng 443 không. Có thể thăm dò broker bằng `scripts/probe_tvsi_mqtt.py`: script đọc biến môi trường, không đọc `.env`, cú pháp xem docstring đầu file |
 | Quên mật khẩu admin | `.\.venv\Scripts\python.exe -m src.auth reset_password` |

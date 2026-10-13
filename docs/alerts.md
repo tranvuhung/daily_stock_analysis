@@ -366,7 +366,7 @@ scope/type 校验是双向约束：`target_scope=market` 只能使用两类 Mark
 ### Thị trường Việt Nam và cơ chế bật theo `SUPPORTED_MARKETS`
 
 - `vn` được hỗ trợ cho cả hai loại rule Market Light. Snapshot VN dựng từ chỉ số VCI (VN-Index/VN30/HNX/UPCoM) và độ rộng/trần/sàn từ snapshot SSI. Mỗi lượt điểm lại thị trường VN sẽ lưu `context_snapshot.market_light_snapshots["vn"]`, nên `market_light_score_drop` cho `vn` chỉ có baseline sau ít nhất một lượt điểm lại VN.
-- Region dùng được = tập hỗ trợ (`vn/cn/hk/us`) ∩ `SUPPORTED_MARKETS`, xếp theo thứ tự `vn, cn, hk, us`. Mặc định `SUPPORTED_MARKETS=vn` nên chỉ có Việt Nam. Muốn dùng `cn/hk/us` thì bật trong Cài đặt → `SUPPORTED_MARKETS` (ví dụ `vn,us`). Không có key cấu hình mới.
+- Region dùng được chỉ có `vn` (hệ thống chỉ hỗ trợ thị trường Việt Nam). Không có key cấu hình mới.
 - `GET /api/v1/alerts/market-regions` trả `{"regions": [...], "default": "vn" | null}`. Web dùng endpoint này để lọc dropdown region và chọn sẵn `default`. Không có region nào thì Web hiện gợi ý và chặn tạo rule market. Nếu endpoint lỗi, Web hiện đủ bốn region và để server kiểm tra lại.
 - Tạo rule, `PATCH` hoặc `POST /rules/{id}/enable` sẽ trả HTTP 400 `validation_error` nếu rule market ở trạng thái bật mà region chưa có trong `SUPPORTED_MARKETS`. Tắt, xoá, đổi tên, hoặc đổi sang region đang bật thì luôn được phép. Rule cũ vẫn hiện trong danh sách.
 - Worker và dry-run gặp rule market có region chưa bật sẽ trả `skipped` với lý do `market is not enabled in SUPPORTED_MARKETS`. Không kiểm tra lịch giao dịch, không lấy snapshot. Trước đây trường hợp này bị báo nhầm là "not a trading day".

@@ -35,7 +35,6 @@ RUN_PORT_OVERRIDE="${RUN_PORT:-}"
 RUN_HOST_OVERRIDE="${RUN_HOST:-}"
 RUN_PORT="${RUN_PORT:-8765}"
 RUN_HOST="${RUN_HOST:-127.0.0.1}"
-RUN_MARKETS="${RUN_MARKETS:-vn}"
 RUN_STOCK_LIST="${RUN_STOCK_LIST:-HPG,FPT,VNM,VNINDEX,VN30}"
 RUN_REPORT_LANGUAGE="${RUN_REPORT_LANGUAGE:-vi}"
 RUN_MARKET_REVIEW="${RUN_MARKET_REVIEW:-false}"
@@ -88,7 +87,7 @@ write_env_file() {
   cat >> "$ENV_TMP" <<EOF
 
 # --- ghi đè bởi scripts/run-app.sh ---
-SUPPORTED_MARKETS=${RUN_MARKETS}
+SUPPORTED_MARKETS=vn
 STOCK_LIST=${RUN_STOCK_LIST}
 REPORT_LANGUAGE=${RUN_REPORT_LANGUAGE}
 DATABASE_PATH=${DB_TMP}
@@ -97,7 +96,7 @@ WEBUI_PORT=${RUN_PORT}
 WEBUI_AUTO_BUILD=${RUN_WEBUI_AUTO_BUILD}
 MARKET_REVIEW_ENABLED=${RUN_MARKET_REVIEW}
 EOF
-  info "Cấu hình chạy: $ENV_TMP (thị trường=$RUN_MARKETS, ngôn ngữ=$RUN_REPORT_LANGUAGE, DB=$DB_TMP)"
+  info "Cấu hình chạy: $ENV_TMP (thị trường=vn, ngôn ngữ=$RUN_REPORT_LANGUAGE, DB=$DB_TMP)"
 }
 
 warn_if_no_llm_key() {
@@ -202,7 +201,7 @@ run_smoke() {
   local sample_stock sample_index disabled_code code
   sample_stock="${RUN_SMOKE_STOCK:-HPG}"
   sample_index="${RUN_SMOKE_INDEX:-VNINDEX}"
-  disabled_code="${RUN_SMOKE_DISABLED_CODE:-600519}"
+  disabled_code="${RUN_SMOKE_DISABLED_CODE:-AAPL}"
 
   info "Tổng quan nguồn dữ liệu"
   curl -s "${BASE_URL}/api/v1/data/overview" | python -m json.tool | head -40
@@ -215,9 +214,9 @@ run_smoke() {
 
   code="$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/api/v1/stocks/${disabled_code}/quote")"
   if [[ "$code" == "404" ]]; then
-    info "Mã thuộc thị trường đã tắt ($disabled_code) -> HTTP $code (đúng kỳ vọng)"
+    info "Mã ngoài thị trường Việt Nam ($disabled_code) -> HTTP $code (đúng kỳ vọng)"
   else
-    warn "Mã thuộc thị trường đã tắt ($disabled_code) -> HTTP $code (kỳ vọng 404) — cổng chặn thị trường có thể đã hỏng."
+    warn "Mã ngoài thị trường Việt Nam ($disabled_code) -> HTTP $code (kỳ vọng 404) — cổng chặn thị trường có thể đã hỏng."
   fi
 }
 
@@ -248,8 +247,8 @@ PY
 
 # --- Tiền kiểm cho dịch vụ thật ------------------------------------------------
 # Cảnh báo khi STOCK_LIST không có mã nào thuộc thị trường đang bật. Đây là bẫy thật:
-# .env mặc định để STOCK_LIST là mã Trung Quốc, còn SUPPORTED_MARKETS không đặt nên
-# rơi về "vn" (src/core/markets.py) — lịch chạy hằng ngày sẽ lọc sạch và không làm gì.
+# .env cũ có thể còn STOCK_LIST là mã ngoài Việt Nam, trong khi hệ thống chỉ hỗ trợ "vn"
+# (src/core/markets.py) — lịch chạy hằng ngày sẽ lọc sạch và không làm gì.
 preflight_stock_list() {
   local stock_list markets
   stock_list="$(env_value STOCK_LIST)"
@@ -285,12 +284,13 @@ PY
 # In trạng thái kênh thông báo. Dịch vụ thật tôn trọng .env, nên phải nói rõ lần chạy
 # này có khả năng đẩy tin thật hay không.
 preflight_notify() {
-  local feishu_chat feishu_hook dingtalk_hook telegram
-  feishu_chat="$(env_value FEISHU_CHAT_ID)"
-  feishu_hook="$(env_value FEISHU_WEBHOOK_URL)"
-  dingtalk_hook="$(env_value DINGTALK_WEBHOOK_URL)"
+  local telegram discord slack email webhook
   telegram="$(env_value TELEGRAM_BOT_TOKEN)"
-  if [[ -n "$feishu_chat$feishu_hook$dingtalk_hook$telegram" ]]; then
+  discord="$(env_value DISCORD_WEBHOOK_URL)$(env_value DISCORD_BOT_TOKEN)"
+  slack="$(env_value SLACK_WEBHOOK_URL)$(env_value SLACK_BOT_TOKEN)"
+  email="$(env_value EMAIL_SENDER)"
+  webhook="$(env_value CUSTOM_WEBHOOK_URLS)"
+  if [[ -n "$telegram$discord$slack$email$webhook" ]]; then
     warn "Có kênh thông báo đã cấu hình — lượt phân tích sẽ ĐẨY TIN THẬT. Dùng --no-notify nếu không muốn."
   else
     info "Thông báo: chưa kênh nào đủ cấu hình để gửi — sẽ không đẩy tin đi đâu."
@@ -524,13 +524,12 @@ CHUNG:
 Biến môi trường (đều có mặc định):
   RUN_DIR=$RUN_DIR
   RUN_PORT=$RUN_PORT                RUN_HOST=$RUN_HOST
-  RUN_MARKETS=$RUN_MARKETS
   RUN_STOCK_LIST=$RUN_STOCK_LIST
   RUN_REPORT_LANGUAGE=$RUN_REPORT_LANGUAGE
   RUN_MARKET_REVIEW=$RUN_MARKET_REVIEW      RUN_WEBUI_AUTO_BUILD=$RUN_WEBUI_AUTO_BUILD
   RUN_HEALTH_TIMEOUT=$RUN_HEALTH_TIMEOUT
 
-Lưu ý: RUN_MARKETS / RUN_STOCK_LIST / RUN_REPORT_LANGUAGE chỉ áp dụng cho môi trường
+Lưu ý: RUN_STOCK_LIST / RUN_REPORT_LANGUAGE chỉ áp dụng cho môi trường
 kiểm chứng. Lệnh start không ghi đè gì — mọi thứ theo .env, cổng lấy từ WEBUI_PORT.
 
 Ví dụ:
@@ -539,7 +538,6 @@ Ví dụ:
   $0 status                         # xem đang chạy gì
   $0 serve                          # môi trường kiểm chứng, giữ ở foreground
   RUN_PORT=9000 $0 serve            # đổi cổng
-  RUN_MARKETS=vn,cn $0 dry-run      # bật lại thị trường khác để rollback thử
   $0 analyze FPT                    # phân tích thật một mã
 EOF
 }

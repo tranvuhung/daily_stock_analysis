@@ -42,7 +42,7 @@ Outcome 统计是只读数据面，按 `skill_id + horizon + engine_version` 独
 | Valid Opinion / Invalid Opinion | 通过 `is_valid_strategy_signal(signal) == True` 且未标记 `invalid_signal=True` 的观点为 Valid，其余为 Invalid。 | Orchestrator 分拣、Aggregator、DecisionAgent | 记录为契约层的合法/非法判定；Baseline 只定义判定函数与语义，不预设分拣位置。 |
 | Evidence Chain | 进入 DecisionAgent prompt 与 `strategy_synthesis` 数值计算的**有效观点集合**。 | DecisionAgent、Aggregator | 记录为决策输入面；Baseline 规定 Evidence Chain 只由 Valid Opinion 组成，Invalid 不得混入。 |
 | Diagnostics | 无效观点的诊断收纳位，仅供日志、调试、用户可见的“另有 N 个策略解析失败”计数使用。 | Renderer 展示、日志 | 记录为诊断面；Baseline 规定 Invalid 必须落到 Diagnostics，不得被静默转成 `hold` 混入 Evidence Chain。 |
-| `strategy_synthesis` | `dashboard.strategy_synthesis` 顶层 payload，含 `final_signal` / `consensus_level` / `conflict_severity` / `supporting_skills` / `opposing_skills` / `summary_params`。 | Markdown、WeChat、Notification、History 四条 renderer | 记录为公共低敏 payload；Baseline 规定该 payload 是**唯一权威合成来源**，LLM dashboard 不得反向覆盖。 |
+| `strategy_synthesis` | `dashboard.strategy_synthesis` 顶层 payload，含 `final_signal` / `consensus_level` / `conflict_severity` / `supporting_skills` / `opposing_skills` / `summary_params`。 | Markdown、Notification、History 各 renderer | 记录为公共低敏 payload；Baseline 规定该 payload 是**唯一权威合成来源**，LLM dashboard 不得反向覆盖。 |
 | `disagreement_summary` | `ctx.meta["agent_disagreement_summary"]`，低敏跨 Agent 分歧摘要，来自 `build_agent_disagreement_summary()`。 | DecisionAgent prompt、日志 | 记录为决策路径提示面；Baseline 规定只从 Valid Opinion 建桶，Invalid 不得进入 `bullish_agents` / `bearish_agents` / `neutral_agents`。 |
 | Consensus Level | `strategy_synthesis.consensus_level`，取值 `high` / `medium` / `low` / `insufficient`。 | Renderer 展示、Aggregator 内部判定 | 记录为共识度枚举；Baseline 规定 ≤ 1 valid 或 `sum(confidence) == 0` 时强制 `insufficient`，不得输出 `high`。 |
 
@@ -333,7 +333,7 @@ Baseline 的语义边界收敛为九条不变量。所有 Phase N 的实现必�
 | I-3 | 零证据 → insufficient | 任意有效信号但 `sum(confidences) == 0`，或 valid 数量 = 0 | `final_signal="hold"`, `weighted_confidence=0.0`, `consensus_level="insufficient"`；禁止输出 `strong_sell` 或任何方向性信号 |
 | I-4 | 单样本 → insufficient | 恰好 1 个 valid opinion | `consensus_level="insufficient"`，即使与 final 完全一致 |
 | I-5 | Hold-final 一致性 | `final_signal == "hold"` 且存在 ≥ 2 个 hold valid opinion | 全部 hold opinion 必须归入 `supporting_skills`；consensus_level 与 supporting_skills 数量关系必须自洽（`high` 时 supporting 覆盖 ≥ 2/3） |
-| I-6 | Payload 与 renderer 语义一致 | `dashboard.strategy_synthesis` 值 | 四条 renderer（Markdown / WeChat / Notification / History）实际文本必须与 payload 完全一致，不得出现"共识度：高 + 支持策略：无"等自相矛盾组合 |
+| I-6 | Payload 与 renderer 语义一致 | `dashboard.strategy_synthesis` 值 | 各 renderer（Markdown / Notification / History）实际文本必须与 payload 完全一致，不得出现"共识度：高 + 支持策略：无"等自相矛盾组合 |
 | I-7 | Canonical-First 评分 | Aggregator / ConflictDetector / Synthesizer 内部的评分、加权、冲突判定、分组 | 必须使用 `normalize_strategy_signal()` 返回的 canonical 小写值；禁止用大写 `"BUY"`、别名等原始字符串直接查 `strategy_signal_score` |
 | I-8 | 多语言空占位符 | `supporting_skills` / `opposing_skills` 为空时的展示 | 必须通过 `labels.none_label` 按 `report_language` 查表；禁止在代码或模板中硬编码中文 `"无"` / 英文 `"None"` / 韩文 `"없음"` 字面量 |
 | I-9 | Deliberation 单调保守 | v1/v2/v4 基于上一层已验证 baseline 修订，v3 应用 projection | 不得撤销已有 `softened`、恢复 original signal、提高 baseline revised confidence 或提高 baseline confidence adjustment；越界结果回退上一层 |
@@ -351,7 +351,7 @@ Phase 1 涉及的入口：
 - `src/agent/skills/synthesis.py`：`ConflictDetector` / `StrategySynthesizer` 使用 canonical signal 计算；`_group_opinions()` 按 §"动态二分阵营" 实现；`_consensus_level()` 按 §"共识度门槛" 实现；`summary_params` 补齐 `invalid_opinion_count` / `total_opinion_count`。
 - `src/agent/agents/decision_agent.py`：`build_user_message()` 直接消费 `ctx.opinions`，不再二次过滤；在 prompt 中如实展示 `ctx.meta["invalid_opinions"]` 数量。
 - `src/agent/disagreement.py`：`build_agent_disagreement_summary()` 直接消费 `ctx.opinions`（因 StrategyEngine 已完成分拣并由 Orchestrator 写回），Invalid 完全不出现在 `bullish_agents` / `bearish_agents` / `neutral_agents` 三桶中。
-- `src/services/report_renderer.py`、`templates/report_markdown.j2`、`templates/report_wechat.j2`、`src/notification.py`、`src/services/history_service.py`：读取 `strategy_synthesis.supporting_skills` / `opposing_skills` / `consensus_level` / `summary_params.invalid_opinion_count`；空列表通过 `labels.none_label` 输出；不再消费 `neutral_skills`。
+- `src/services/report_renderer.py`、`templates/report_markdown.j2`、`src/notification.py`、`src/services/history_service.py`：读取 `strategy_synthesis.supporting_skills` / `opposing_skills` / `consensus_level` / `summary_params.invalid_opinion_count`；空列表通过 `labels.none_label` 输出；不再消费 `neutral_skills`。
 - `src/report_language.py`：`labels.none_label` 在 zh/en/ko 三语中完备；共识度、诊断计数文案完备。
 - `tests/test_multi_agent.py`：新增 E2E-A..G 反例矩阵，从 SkillAgent 输入 → StrategyEngine 分拣/聚合 → DecisionAgent prompt → dashboard payload → renderer 实际文本全链路断言。
 
@@ -513,7 +513,6 @@ Phase 1 必须提供如下 E2E 反例覆盖。E2E 定义为：从 SkillAgent 输
 | Disagreement | `src/agent/disagreement.py::build_agent_disagreement_summary` |
 | Dashboard 合成挂载 | `src/agent/orchestrator.py::_collect_strategy_synthesis` |
 | Renderer · Markdown | `src/services/report_renderer.py::render`, `templates/report_markdown.j2` |
-| Renderer · WeChat | `templates/report_wechat.j2` |
 | Renderer · Notification | `src/notification.py`（策略综合行渲染） |
 | Renderer · History | `src/services/history_service.py`（历史详情策略综合块） |
 | 多语言与宽松 payload 防腐 | `src/report_language.py::_REPORT_LABELS`, `normalize_strategy_synthesis_payload`, `strategy_invalid_opinion_count`, `localize_strategy_synthesis_summary`, `labels.none_label` |

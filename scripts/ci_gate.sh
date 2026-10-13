@@ -17,8 +17,12 @@ flake8_checks() {
 
 deterministic_checks() {
   echo "==> backend-gate: local deterministic checks"
-  ./scripts/test.sh code
-  ./scripts/test.sh yfinance
+  # Kiểm tra tĩnh, không cần mạng: cú pháp shell script và script Python trong scripts/
+  # (thay cho scripts/test.sh cũ vốn chạy kịch bản A-share/HK/US qua akshare).
+  for script in scripts/*.sh; do
+    bash -n "$script"
+  done
+  python -m py_compile scripts/*.py
 }
 
 offline_test_suite() {

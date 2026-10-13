@@ -63,7 +63,7 @@ The default `docker/docker-compose.yml` sets `limits.memory: 1G` and `reservatio
 
 - Minimum trial: `512M`, only for lightweight Web/API usage, single-stock runs, and low concurrency. Set `MAX_WORKERS=1`.
 - Recommended: `1G`, suitable for normal analysis when running either `server` or `analyzer`.
-- Heavy workloads: `2G+`, suitable when running `server + analyzer` together, multi-stock analysis, default `MAX_WORKERS=3`, market review, news expansion, image reports, or screening.
+- Heavy workloads: `2G+`, suitable when running `server + analyzer` together, multi-stock analysis, default `MAX_WORKERS=3`, market review, news expansion, or image reports.
 
 If you can only use `512M`, avoid starting both `server` and `analyzer`, and disable non-essential market review, news expansion, and image report features.
 
@@ -203,8 +203,8 @@ journalctl -u stock-analyzer -f
 | Config Item | Description | How to Get |
 |--------|------|----------|
 | `ANSPIRE_API_KEYS` / `AIHUBMIX_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | Configure at least one AI model key; Anspire or AIHubMix is recommended first | Provider console |
-| `STOCK_LIST` | Watchlist | Comma-separated stock codes; registered-index explicit forms (e.g. `sh000016`, `930606.CSI`, `sz399365`) are supported via the one-shot `--stocks` argument or the GitHub Actions entry (local `.env`/Docker no-arg default runs keep stock semantics; use `--stocks` there for indices) — see [Index watchlist configuration](full-guide_EN.md#index-watchlist-configuration) |
-| Notification channel | Configure at least one, such as WeChat Work, Feishu, Telegram, or email | Notification provider |
+| `STOCK_LIST` | Watchlist | Comma-separated Vietnam stock codes, e.g. `HPG,FPT,VCB,VNINDEX` — see [Market scope](market-support.md) (Vietnamese) |
+| Notification channel | Configure at least one, such as Telegram, Discord, Slack, or email | Notification provider |
 
 ### Optional Configuration
 
@@ -217,7 +217,6 @@ journalctl -u stock-analyzer -f
 | `AIHUBMIX_KEY` | - | AIHubMix one-key multi-model access (recommended) |
 | `SERPAPI_API_KEYS` | - | SerpAPI realtime financial news search (recommended) |
 | `TAVILY_API_KEYS` | - | Tavily news search (optional) |
-| `MINIMAX_API_KEYS` | - | MiniMax search (optional) |
 
 ---
 
@@ -300,7 +299,7 @@ rm /opt/stock-analyzer/data/*.lock
 
 ### 4. Insufficient memory
 
-The default Compose recommendation is already `1G`. If the container still hits OOM or is killed by the platform, raise the memory limit in `docker-compose.yml`; use `2G+` when running `server + analyzer` together, multi-stock analysis, market review, image reports, or screening:
+The default Compose recommendation is already `1G`. If the container still hits OOM or is killed by the platform, raise the memory limit in `docker-compose.yml`; use `2G+` when running `server + analyzer` together, multi-stock analysis, market review, or image reports:
 ```yaml
 deploy:
   resources:
@@ -379,22 +378,16 @@ Add these Secrets:
 | `ANTHROPIC_API_KEY` | Anthropic API Key | Optional |
 | `GEMINI_API_KEY` | Gemini AI API Key | Optional |
 | `OPENAI_API_KEY` | OpenAI-compatible API Key | Optional |
-| `WECHAT_WEBHOOK_URL` | WeChat Work Bot Webhook | Optional* |
-| `FEISHU_WEBHOOK_URL` | Feishu Bot Webhook | Optional* |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token | Optional* |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | Optional* |
 | `TELEGRAM_MESSAGE_THREAD_ID` | Telegram Topic ID | Optional* |
 | `EMAIL_SENDER` | Sender email | Optional* |
 | `EMAIL_PASSWORD` | Email authorization code | Optional* |
-| `SERVERCHAN3_SENDKEY` | ServerChan v3 Sendkey | Optional* |
 | `CUSTOM_WEBHOOK_URLS` | Custom Webhook (comma-separated for multiple) | Optional* |
-| `STOCK_LIST` | Watchlist, e.g., `600519,300750` | ✅ |
+| `STOCK_LIST` | Watchlist, e.g., `HPG,FPT,VCB` | ✅ |
 | `SERPAPI_API_KEYS` | SerpAPI Key | Recommended |
 | `TAVILY_API_KEYS` | Tavily Search API Key | Optional |
-| `BOCHA_API_KEYS` | Bocha Search API Key | Optional |
 | `BRAVE_API_KEYS` | Brave Search API Key | Optional |
-| `MINIMAX_API_KEYS` | MiniMax Coding Plan Web Search | Optional |
-| `TUSHARE_TOKEN` | Tushare Token | Optional |
 | `GEMINI_MODEL` | Model name (default gemini-2.0-flash) | Optional |
 
 > *Note: Configure at least one notification channel, multiple channels supported for simultaneous push
@@ -428,22 +421,22 @@ git push
 
 ### Schedule Details
 
-Default configuration: **Monday to Friday, 18:00 Beijing Time** auto-execution
+Default configuration: **Monday to Friday, 18:00 Vietnam time (Asia/Ho_Chi_Minh, UTC+7)** auto-execution
 
 Modify time: Edit cron expression in `.github/workflows/00-daily-analysis.yml`:
 
 ```yaml
 schedule:
-  - cron: '0 10 * * 1-5'  # UTC time, +8 = Beijing time
+  - cron: '0 11 * * 1-5'  # UTC time, +7 = Vietnam time
 ```
 
 Common cron examples:
 | Expression | Description |
 |--------|------|
-| `'0 10 * * 1-5'` | Mon-Fri 18:00 (Beijing) |
-| `'30 7 * * 1-5'` | Mon-Fri 15:30 (Beijing) |
-| `'0 10 * * *'` | Daily 18:00 (Beijing) |
-| `'0 2 * * 1-5'` | Mon-Fri 10:00 (Beijing) |
+| `'0 11 * * 1-5'` | Mon-Fri 18:00 (Vietnam) |
+| `'30 8 * * 1-5'` | Mon-Fri 15:30 (Vietnam, after the HOSE close) |
+| `'0 11 * * *'` | Daily 18:00 (Vietnam) |
+| `'0 3 * * 1-5'` | Mon-Fri 10:00 (Vietnam) |
 
 ### Modify Watchlist
 

@@ -1,293 +1,115 @@
-# 数据源稳定性与故障处理图示
+# Độ ổn định nguồn dữ liệu và xử lý sự cố
 
-本文面向用户、部署者和维护者，说明 DSA 已接入的数据源如何参与分析、选股和大盘复盘，以及当数据源失败时系统会怎么降级。
+Tài liệu cho người dùng, người triển khai và người bảo trì: các nguồn dữ liệu thị trường Việt Nam tham gia phân tích và điểm lại thị trường như thế nào, và hệ thống hạ cấp ra sao khi một nguồn lỗi.
 
-核心原则：先用项目已经接入并验证过的数据源，把失败路径讲清楚；新增外部数据源应放在第二阶段，避免先扩大维护面。
+Hệ thống chỉ hỗ trợ thị trường Việt Nam (xem [Phạm vi thị trường](market-support.md)). Các nguồn A-share / quốc tế (akshare, efinance, tushare, pytdx, baostock, tencent, tickflow, longbridge, futu, finnhub, alphavantage) đã bị xoá; biến môi trường của chúng bị bỏ qua.
 
-## 一句话答复用户
+## Trả lời người dùng trong một câu
 
-如果遇到“数据源失败”，通常不是系统只能用一个源，而是免费源被限流、上游接口临时变更、网络抖动或当前市场/标的不支持。DSA 已经内置多数据源 fallback，会按场景自动尝试下一个源；如果你希望更稳定，建议至少配置一个 token 型稳定源：
+"Lỗi nguồn dữ liệu" thường là do API công khai bị giới hạn tần suất, thay đổi tạm thời phía upstream hoặc mạng chập chờn, không phải hệ thống chỉ có một nguồn. Chuỗi mặc định VCI → SSI → (vnstock tuỳ chọn) → Yahoo tự chuyển sang nguồn kế tiếp; cả ba nguồn mặc định đều là API công khai, **không cần API key**.
 
-- A 股个股与选股：优先配置 `TUSHARE_TOKEN`，并保留 AkShare / Efinance / Tencent / TickFlow / Baostock / YFinance 兜底；普通个股日线按 priority 配置排序。
-- 已登记 A 股指数：固定按 Tencent → AkShare → TickFlow → YFinance 降级，不读取普通日 K 的 `*_PRIORITY` 配置。
-- A 股大盘复盘：配置 `TICKFLOW_API_KEY` 后，复盘聚合所需的指数和市场宽度会优先尝试 TickFlow，失败后回退现有免费源；这与单标的指数日线的 Tencent-first 固定链是不同入口。
-- 港股：配置 `FUTU_OPEND_HOST` 后，Futu 可作为港股实时与基本面主源；`FUTU_HK_REALTIME_SOURCE_PRIORITY` 控制港股实时行情顺序，Longbridge、AkShare、YFinance 保留为 fallback。
-- 美股：配置 `LONGBRIDGE_*` 后可优先使用 Longbridge，YFinance 保留实时主链 fallback；Finnhub、AlphaVantage 只在已有主源报价后补充字段或参与日线链，不能在 Longbridge/YFinance 全部失败时独立返回实时报价。
-- 热点题材：选股的热点实现参考 AlphaSift，默认走 EastMoney provider，并使用本地 last-good cache 降低实时接口失败影响。
+## Ma trận nguồn dữ liệu
 
-## 已接入数据源矩阵
-
-| 场景 | 已接入源 | 默认使用方式 | 失败处理 |
+| Tình huống | Nguồn | Cách dùng mặc định | Xử lý khi lỗi |
 | --- | --- | --- | --- |
-| 越南个股日线 / 技术面 | VCI (Vietcap)、SSI iBoard、YFinance（仅 HOSE） | `DataFetcherManager` 按 priority 尝试：VCI(P0) → SSI(P1) → YFinance(P4)。三者都是公开接口，无需 API Key | VCI 失败后回退 SSI，再回退 YFinance；连续失败会短期熔断该源；全部失败抛出汇总异常 |
-| 越南实时行情 | SSI iBoard | 全市场快照（HOSE/HNX/UPCOM 各一次请求，共 1526 个标的），逐股查询命中进程内缓存 | 快照失败返回 None 降级为历史收盘价；单个交易所失败不影响其余两个 |
-| 越南指数日线 | VCI (Vietcap) | `VNINDEX` / `VN30` / `HNXIndex` / `HNX30` / `HNXUpcomIndex`，走与个股相同的日线接口 | 与个股同链路，失败后回退 SSI。**YFinance 不参与**：Yahoo 没有越南指数历史 |
-| A 股个股日线 / 技术面 | Efinance、Tencent、AkShare、Tushare、TickFlow、Pytdx、Baostock、YFinance | `DataFetcherManager` 按 priority 尝试；配置 `TUSHARE_TOKEN` 后 Tushare 自动进入候选源 | 单源失败后尝试下一个源；连续失败会短期熔断该源 |
-| 已登记 A 股指数日线 / 技术面 | Tencent、AkShare、TickFlow、YFinance | 当前 5 个 `IndexRegistry` 标的固定按 Tencent → AkShare → TickFlow → YFinance 尝试，不读取普通日 K 的 `*_PRIORITY` 配置 | 未配置、熔断、异常或空结果均继续下一源；全部失败返回空结果并记录汇总告警 |
-| A 股实时行情 | Tencent、AkShare Sina、Efinance、AkShare EM、Tushare | `REALTIME_SOURCE_PRIORITY` 控制顺序，默认偏向 Tencent / Sina 这类轻量源 | 失败源记录 `fallback_from`，成功源继续返回 |
-| A 股大盘复盘 | TickFlow、AkShare、Tushare、Efinance | 配置 `TICKFLOW_API_KEY` 后，复盘聚合的主指数和市场宽度优先尝试 TickFlow；不等同于单标的指数日线链 | TickFlow 权限不足或失败时回退 AkShare / Tushare / Efinance 链路 |
-| 选股快照 | Tushare、Sina、Efinance、AkShare EM、EastMoney Datacenter | 有 `TUSHARE_TOKEN` 时自动把 `tushare` 放入快照优先级；否则使用免费源链路 | 选股引擎维护 source health；状态接口透出 snapshot/daily health |
-| 选股日线补特征 | `DataFetcherManager` | 选股引擎优先复用现有日线与缓存链路 | 现有链路失败后才回到引擎自身的日线源 |
-| 选股热点题材 | EastMoney provider、参考 AlphaSift 的 hotspot 实现、last-good cache | 未指定 provider 时默认使用 EastMoney provider | 实时失败时回退热点缓存；无缓存时返回稳定空态和可读错误 |
-| 港股 | Futu、Longbridge、YFinance、AkShare、Tushare | 配置 `FUTU_OPEND_HOST` 后 Futu 作为实时与基本面主源，按 `FUTU_HK_REALTIME_SOURCE_PRIORITY` 顺序尝试 | Futu 失败时回退 Longbridge / AkShare / YFinance；Longbridge 冷却或失败时继续回退 YFinance / 其他可用源 |
-| 美股 | Longbridge、YFinance、AkShare、Tushare、Finnhub、AlphaVantage、Stooq | 配置 Longbridge 凭证后参与美股日线/实时主链；YFinance 保持实时基础 fallback；Finnhub/AlphaVantage 可补充已有报价字段并参与日线链 | Longbridge 冷却或失败时实时主链回退 YFinance；两者都失败时不把补充源伪装成可独立返回报价的 fallback |
+| Nến ngày cổ phiếu / kỹ thuật | VCI (Vietcap), SSI iBoard, vnstock (tuỳ chọn), Yahoo (chỉ HOSE) | `DataFetcherManager` thử theo priority: VCI(P0) → SSI(P1) → vnstock(P2, nếu bật) → Yahoo(P4) | Lỗi thì sang nguồn kế; lỗi liên tiếp sẽ ngắt mạch nguồn đó một thời gian ngắn; tất cả đều lỗi thì ném ngoại lệ tổng hợp |
+| Giá realtime | SSI iBoard (VCI là lựa chọn thứ hai qua `REALTIME_SOURCE_PRIORITY`), TVSI MQTT (tuỳ chọn) | Snapshot toàn thị trường (HOSE/HNX/UPCoM mỗi sàn một request), tra từng mã trúng cache trong tiến trình | Snapshot lỗi thì trả `None` và hạ cấp về giá đóng cửa lịch sử; một sàn lỗi không ảnh hưởng hai sàn còn lại |
+| Nến ngày chỉ số | VCI (Vietcap) | `VNINDEX` / `VN30` / `VN100` / `HNXIndex` / `HNX30` / `HNXUpcomIndex`, dùng cùng API nến ngày với cổ phiếu | Lỗi thì sang SSI. **Yahoo không tham gia** vì không có lịch sử chỉ số Việt Nam |
+| Điểm lại thị trường | VCI (chỉ số), SSI (độ rộng thị trường) | `MARKET_REVIEW_REGION=vn` | Một chỉ số lỗi chỉ bỏ qua chỉ số đó; độ rộng lỗi thì báo cáo thiếu khối độ rộng |
 
-## 越南市场（默认启用）
-
-部署默认 `SUPPORTED_MARKETS=vn`，只启用越南市场；其余市场的数据源不会被实例化，也不会发出任何请求。设为 `all` 可完整回滚。详见 [市场支持边界](market-support.md#市场白名单与越南市场supported_markets)。
-
-降级链：
+## Chuỗi hạ cấp
 
 ```mermaid
 flowchart LR
-    Q[越南标的请求] --> K{日线还是实时?}
-    K -->|日线| V[VciFetcher]
-    V -->|成功| OK[返回并记录 source]
-    V -->|失败/空| S1[SsiFetcher 图表接口]
-    S1 -->|成功| OK
-    S1 -->|失败| VS{VNSTOCK_ENABLED?}
-    VS -->|是且已安装| VN2[VnstockFetcher]
-    VS -->|否| Y[YfinanceFetcher<br/>仅 HOSE 个股]
-    VN2 -->|失败| Y
-    Y -->|成功| OKNB[返回但不写入 stock_daily]
-    Y -->|失败/非 HOSE/指数| FAIL[抛出汇总异常]
-    K -->|实时| S2[SsiFetcher 全市场快照]
-    S2 -->|成功| OK
-    S2 -->|失败| NONE[返回 None，降级为历史收盘价]
+    Q[Yêu cầu mã Việt Nam] --> K{Nến ngày hay realtime?}
+    K -->|Nến ngày| V[VciFetcher]
+    V -->|Thành công| OK[Trả về và ghi source]
+    V -->|Lỗi/rỗng| S1[SsiFetcher API biểu đồ]
+    S1 -->|Thành công| OK
+    S1 -->|Lỗi| VS{VNSTOCK_ENABLED?}
+    VS -->|Có và đã cài| VN2[VnstockFetcher]
+    VS -->|Không| Y[YfinanceFetcher<br/>chỉ cổ phiếu HOSE]
+    VN2 -->|Lỗi| Y
+    Y -->|Thành công| OKNB[Trả về nhưng không ghi stock_daily]
+    Y -->|Lỗi/không phải HOSE/chỉ số| FAIL[Ném ngoại lệ tổng hợp]
+    K -->|Realtime| S2[SsiFetcher snapshot toàn thị trường]
+    S2 -->|Thành công| OK
+    S2 -->|Lỗi| NONE[Trả None, hạ cấp về giá đóng cửa lịch sử]
 ```
 
-⚠️ **单位口径**：VCI 日线与 SSI 快照使用「盾」（HPG 报 `21300`），SSI 图表接口与 `vnstock` 使用「千盾」（报 `21.3`）。后两者在归一化时统一乘 1000。这个差异出错时**不会抛异常**，只会让均线、涨跌幅和止损价静默偏离 1000 倍，因此 `tests/test_vn_source_drift.py` 对跨源收盘价一致性和绝对量级都设了断言，并随 `network-smoke` 定时运行。
+⚠️ **Đơn vị giá**: nến ngày VCI và snapshot SSI dùng "đồng" (HPG báo `21300`), API biểu đồ SSI và `vnstock` dùng "nghìn đồng" (báo `21.3`); hai nguồn sau được nhân 1000 khi chuẩn hoá. Sai đơn vị **không ném lỗi** mà làm MA, % thay đổi và giá cắt lỗ lệch 1000 lần, vì vậy `tests/test_vn_source_drift.py` kiểm tra độ khớp giá đóng cửa giữa các nguồn và độ lớn tuyệt đối, chạy định kỳ cùng `network-smoke`.
 
-### YFinance 在越南市场的定位（第三兜底源）
+### Vai trò của Yahoo Finance (dự phòng thứ ba)
 
-Yahoo 通过 `.VN` 后缀提供越南数据，定位是**第三兜底**：只有 VCI 与 SSI 都失败时才会被调用。加入它的理由是它部署在越南基础设施之外，能覆盖「境内公开接口同时不可用」这一类故障。
+Yahoo cung cấp dữ liệu Việt Nam qua hậu tố `.VN` và chỉ được gọi khi cả VCI lẫn SSI đều lỗi. Lý do giữ lại: hạ tầng của Yahoo nằm ngoài Việt Nam, che được trường hợp các API công khai trong nước cùng lúc không truy cập được.
 
-实测覆盖范围（2026-09-21，各板块 20 个随机样本）：
+Độ phủ đo thực tế (2026-09-21, 20 mẫu ngẫu nhiên mỗi sàn):
 
-| 板块 | 覆盖 | 说明 |
+| Sàn | Độ phủ | Ghi chú |
 | --- | --- | --- |
-| HOSE | 20/20 | `HPG.VN`、`FPT.VN` 等，价格为越南盾全额计价 |
-| HNX | **0/20** | 所有后缀写法（`.HN` / `.HNX` / `.VN` / `.HA`）均为空 |
-| UPCOM | **0/20** | 仅个别大市值标的（如 `MCH.VN`）有数据 |
-| 指数 | **无可用历史** | `^VNINDEX.VN` 请求一年只返回 1 根 K 线；`^VN30.VN` / `^HNXINDEX.VN` / `^UPCOM.VN` 全空 |
+| HOSE | 20/20 | `HPG.VN`, `FPT.VN`..., giá tính bằng đồng |
+| HNX | **0/20** | Mọi kiểu hậu tố (`.HN` / `.HNX` / `.VN` / `.HA`) đều rỗng |
+| UPCoM | **0/20** | Chỉ vài mã vốn hoá lớn (ví dụ `MCH.VN`) có dữ liệu |
+| Chỉ số | **Không dùng được** | `^VNINDEX.VN` hỏi một năm chỉ trả 1 nến; `^VN30.VN` / `^HNXINDEX.VN` / `^UPCOM.VN` rỗng |
 
-因此 `data_capability_service` 中 YFinance 只对 `vn` 声明 `kline.daily`，不声明 `quote.realtime`、`index.daily` 或 `market.overview`；请求越南指数时 `_convert_stock_code` 直接抛 `DataFetchError`，不发请求，避免把那 1 根垃圾 K 线当成数据。HNX/UPCOM 标的会得到空结果并正常抛错，交由 manager 当作一个失败源处理。
+Vì vậy `data_capability_service` chỉ khai báo `kline.daily` cho Yahoo, không khai báo `quote.realtime`, `index.daily` hay `market.overview`; khi hỏi chỉ số Việt Nam, `_convert_stock_code` ném `DataFetchError` ngay mà không gửi request.
 
-⚠️ **复权基准不一致，所以 Yahoo 的日线不写入数据库**：`save_daily_data` 以 `(code, date)` 做 UPSERT，而 Yahoo 与 VCI 对除权除息的处理基准不同。以 MBB 实测（82 个交易日）为例，2026-08-11 之后两源完全一致，但 2026-07-09 之前的历史整体相差固定系数 **1.043938**——这是除权日上的一个台阶，不是噪声。若两源混写同一支股票的历史，该日期就会出现约 4.4% 的假跳空，均线、量比与支撑/压力位会静默失真且没有任何报错。
+⚠️ **Mốc điều chỉnh giá khác nhau nên nến ngày Yahoo không ghi DB**: `save_daily_data` UPSERT theo `(code, date)`, nhưng Yahoo và VCI điều chỉnh quyền khác nhau. Ví dụ MBB (82 phiên): sau 2026-08-11 hai nguồn khớp hoàn toàn, còn trước 2026-07-09 lệch hệ số cố định **1.043938** — đó là bậc thang tại ngày giao dịch không hưởng quyền, không phải nhiễu. Ghi lẫn hai nguồn sẽ tạo khoảng trống giả ~4.4%, làm MA, tỷ lệ khối lượng và hỗ trợ/kháng cự sai lệch mà không báo lỗi. `should_persist_daily_data()` (`data_provider/base.py`) chặn việc ghi này: nến ngày từ Yahoo chỉ phục vụ lần phân tích hiện tại, dựng ngữ cảnh trong bộ nhớ qua `_build_analysis_context_from_daily_df()`.
 
-因此 `should_persist_daily_data()`（`data_provider/base.py`）会拦住这类写入：Yahoo 为越南标的返回的日线**只服务当次分析**，通过 `_build_analysis_context_from_daily_df()` 直接在内存中构建分析上下文，数据库里的历史序列始终保持单一复权口径。其他市场（美股、港股、日韩台）的 Yahoo 数据不受影响，照常写入。
+⚠️ **Đừng đặt `YFINANCE_PRIORITY` trước `SSI_PRIORITY`**: Yahoo thiếu HNX, UPCoM và toàn bộ chỉ số; dùng làm nguồn chính sẽ khiến hàng loạt mã lỗi.
 
-⚠️ **不要把 `YFINANCE_PRIORITY` 调到 `SSI_PRIORITY` 之前**：Yahoo 缺 HNX、UPCOM 与全部指数，一旦被当成主源，这些标的会成片失败。
+⚠️ **Không có lịch giao dịch**: `exchange-calendars` không có HOSE/HNX/UPCoM; kiểm tra ngày giao dịch chỉ loại thứ Bảy / Chủ nhật (fail-open), nên dịp nghỉ lễ dài vẫn gửi request.
 
-⚠️ **无交易日历**：`exchange-calendars` 未收录 HOSE/HNX/UPCOM，越南的交易日判断走既有 fail-open 分支（任何日期都视为交易日），长假期间会照常发起请求。
+## Hợp đồng chỉ đọc về năng lực dữ liệu
 
-## 统一数据能力只读契约
+Web/API cung cấp `GET /api/v1/data/overview` (bí danh `GET /api/v1/data/capabilities`) để trình bày năng lực nguồn, chất lượng tập dữ liệu và thứ tự ưu tiên theo một cấu trúc chỉ đọc. Endpoint chỉ đọc cấu hình và snapshot fetcher của `DataFetcherManager`, không gọi API thị trường và không trả về khoá bí mật.
 
-Web/API 提供 `GET /api/v1/data/overview` 和等价别名 `GET /api/v1/data/capabilities`，用于把数据源能力、数据集质量和场景优先级以同一个只读结构暴露给首页看板、数据中心、个股详情、自选和选股页面。
+- `providers`: `enabled`, `configured`, `status`, `markets`, `datasets`, `dataset_markets` và cảnh báo không nhạy cảm của từng provider.
+- `datasets`: `status/source/fallback_from/stale/warnings` của `quote.realtime`, `kline.daily`, `index.daily`, `market.overview`, `news.events`, `alert.monitor`, `portfolio.account`...
+- `priorities`: thứ tự nguồn hiện tại theo từng tình huống.
 
-首版契约只读取配置和 `DataFetcherManager` 的 fetcher 快照，不触发外部行情请求，也不返回任何原始密钥。响应分三层：
+`unknown` nghĩa là chưa thăm dò lúc chạy, `unconfigured` nghĩa là thiếu cấu hình bắt buộc, `degraded` nghĩa là nguồn ưu tiên trước không dùng được nhưng nguồn sau vẫn phục vụ.
 
-- `providers`：每个 provider 的 `enabled`、`configured`、`status`、`markets`、`datasets`、精确的 `dataset_markets` 和非敏感 warning。`markets` 与 `datasets` 只是聚合索引，不能推断为笛卡尔积；例如 YFinance 可参与 A 股行情，但 A 股基本面固定走 AkShare，因此 `dataset_markets.financial.snapshot` 不包含 `cn`。Finnhub/AlphaVantage 的美股报价 handler 当前只在 Longbridge/YFinance 已返回主报价后补字段，因此不声明 `quote.realtime` 独立路由能力。
-- `datasets`：`quote.realtime`、`kline.daily`、`index.daily`、`market.overview`、`financial.snapshot`、`news.events`、`strategy.screening`、`alert.monitor`、`portfolio.account` 的 `status/source/fallback_from/stale/warnings`；其中 `quote.realtime`、`kline.daily`、`market.overview` 和 `financial.snapshot` 都聚合市场级 coverage，避免把单市场健康度误报成全局可用。A 股实时额外拆分 `cn` 股票优先级、`cn.index.exchange` 固定指数链和 `cn.index.csi` Efinance-only 链；美股实时拆分 `us` 个股动态优先级与 `us.index` 固定 YFinance-only 链。AkShare Tencent/Sina/EM、AkShare HK 双子源、Efinance 股票/指数子源级熔断及日线 breaker 会先于 provider-wide unknown 判定，使 overview 与运行时跳过行为一致。YFinance 的港股实时声明对应其实际 `.HK` 执行路径；未配置 OpenD 时 HK priority 与运行时一致地跳过 Futu；美股个股实时也按当前请求可用性跳过处于连接冷却的 Longbridge，使 YFinance 成为实际主源而不是伪 fallback。PyTDX 不声明未接入统一 route 的实时能力，YFinance 指数日线只声明实际可执行的 CN/US route。任何按运行时顺序尝试的数据集在首个优先源尚未探测且没有更具体的 open breaker 证据时保持 `unknown`，不会越过它宣称后续源已被选中。`alert.monitor` 只有在开关启用且当前 API 进程的 scheduler 已实际注册并运行 `agent_event_monitor` 时才为 `ok`；开关关闭返回 `agent_event_monitor_disabled`，scheduler 未运行则返回 `agent_event_monitor_not_running`。
-- `priorities`：`cn.realtime`、`hk.realtime`、`us.realtime`、`daily.generic`、`cn.index.daily`、`market.overview`、`screening.snapshot`、`news.events` 的当前 source order；`daily.generic` 与运行时一样先排除当前请求不可用或处于连接冷却的 fetcher，不把已跳过的数据源记录成 fallback。
-- `index.daily` 额外区分 `cn.exchange`、`cn.csi` 与 `us` coverage：沪深交易所指数使用 Tencent、AkShare、TickFlow、YFinance 固定多源链，CSI 指数按运行时契约只认 AkShare，美股指数只声明当前能够接收指数 symbol 的 YFinance；Finnhub 当前 fetcher 会拒绝指数 symbol，因此不作为伪 fallback。Tushare 不声明指数日线能力。CN/HK realtime 都只接受对应运行时实际有 handler 的 source token，Tushare realtime 能力仅声明 A 股。
+## Cấu hình khuyến nghị
 
-其中 `unknown` 表示尚未执行运行态探测，`unconfigured` 表示缺少必要配置，`degraded` 表示前置优先源不可用但后续源仍可消费。选股 source health 在冷启动、成功数和失败数都为 0 时保持 `unknown`，不会把尚未调用的数据源提前标成 `ok`。后续 Data Center 可以在同一结构上追加 last_success、coverage、cooldown 和运行历史，不需要各页面各自维护数据质量口径。
-
-## 总体链路图
-
-```mermaid
-flowchart TD
-    Q[用户触发分析/选股/大盘复盘] --> S{场景}
-
-    S --> D[个股日线与技术面]
-    S --> R[实时行情]
-    S --> A[选股/热点]
-    S --> M[大盘复盘]
-
-    D --> C[本地 stock_daily 缓存]
-    C -->|命中且新鲜| COK[复用缓存]
-    C -->|缺失或过期| DM{市场}
-    DM -->|A 股个股/未登记标的| CN[按 priority 动态排序: Efinance/AkShare/Tushare/TickFlow/Pytdx/Baostock/YFinance/Tencent]
-    DM -->|已登记沪深指数| CNI[Tencent -> AkShare -> TickFlow -> YFinance]
-    DM -->|港股| HK[Futu if configured -> Longbridge/AkShare/YFinance fallback]
-    DM -->|美股| US[Longbridge/YFinance -> Finnhub/AlphaVantage -> Stooq]
-
-    R --> RP[REALTIME_SOURCE_PRIORITY]
-    RP --> RS[Tencent -> AkShare Sina -> Efinance -> AkShare EM]
-    RP --> RT[Tushare can be placed first when token/points are available]
-
-    A --> AS[Snapshot: Tushare/Sina/Efinance/AkShare EM/EM Datacenter]
-    A --> AD[Daily features: DSA DataFetcherManager]
-    A --> AH[Hotspots: DSA EastMoney provider]
-    AH --> AC[hotspots.json / hotspot_details last-good cache]
-
-    M --> TF{TICKFLOW_API_KEY configured?}
-    TF -->|yes| TFM[TickFlow indices and market breadth]
-    TF -->|no or failed| MF[AkShare/Tushare/Efinance fallback]
-
-    CN --> QL[质量标记: source/fallback/stale/fetch_failed]
-    CNI --> QL
-    HK --> QL
-    US --> QL
-    RS --> QL
-    RT --> QL
-    AS --> QL
-    AD --> QL
-    AC --> QL
-    TFM --> QL
-    MF --> QL
-```
-
-## 失败与降级图
-
-```mermaid
-flowchart LR
-    A[请求某个数据块] --> B{当前源成功且数据有效?}
-    B -->|是| OK[返回数据并记录 source]
-    B -->|否| E[记录失败原因]
-    E --> F{还有下一个可用源?}
-    F -->|有| N[切换到下一源]
-    N --> B
-    F -->|没有| C{有 last-good cache?}
-    C -->|有| STALE[返回 stale/fallback 数据并提示降级]
-    C -->|没有| FAIL[返回 fetch_failed/稳定空态]
-
-    E --> H{同源连续失败达到阈值?}
-    H -->|是| CB[短期熔断该源]
-    H -->|否| KEEP[保留在候选链中]
-    CB --> SKIP[后续请求先跳过该源]
-    SKIP --> RECOVER[冷却后半开探测恢复]
-```
-
-当前日线源熔断策略为连续失败 3 次后短期冷却约 5 分钟。它的目的不是永久禁用数据源，而是避免一个短时间不可用的源拖慢整批分析。
-
-## 选股与热点链路
-
-```mermaid
-flowchart TD
-    UI[Web 选股/热点入口] --> API[/api/v1/screening/]
-
-    API --> SCREEN{screen}
-    SCREEN --> ENV[注入 DSA LLM 与数据源运行环境]
-    ENV --> CACHE{5 分钟内有成功快照?}
-    CACHE -->|yes| RESULT
-    CACHE -->|no| SNAP[内建 snapshot 源优先级]
-    SNAP --> TS{TUSHARE_TOKEN?}
-    TS -->|yes| SP1[tushare -> sina -> efinance -> akshare_em -> em_datacenter]
-    TS -->|no| SP2[sina -> efinance -> akshare_em -> em_datacenter]
-    ENV --> DAILY[DSA provider context]
-    DAILY --> DFM[DataFetcherManager: Tushare/Efinance/Tencent/AkShare/TickFlow/Pytdx/Baostock/YFinance]
-    DFM --> RESULT[候选股 + source_errors/warnings/llm_parse_errors]
-
-    API --> HOT{hotspots，与 screen 并行}
-    HOT --> HP{provider specified?}
-    HP -->|no| EM[DSA EastMoney provider]
-    HP -->|yes| CUSTOM[指定 provider/env provider]
-    EM --> LIVE[实时热点榜单，详情按需加载]
-    LIVE -->|成功| HCACHE[写入热点 last-good cache]
-    LIVE -->|失败| OLD[读取 hotspots.json / hotspot_details]
-    OLD -->|无缓存| EMPTY[稳定空态 + eastmoney_hotspot_unavailable]
-```
-
-## 推荐配置档
-
-### 免费模式
-
-适合个人试用，依赖免费源自动 fallback。优点是不需要 token；缺点是更容易遇到上游限流或临时接口变化。
+Không cần cấu hình gì để chạy: VCI + SSI là mặc định. Các tuỳ chọn trong `.env.example`:
 
 ```env
-REALTIME_SOURCE_PRIORITY=tencent,akshare_sina,efinance,akshare_em
-ENABLE_EASTMONEY_PATCH=true
+# Thứ tự priority (số nhỏ hơn được thử trước)
+# VCI_PRIORITY=0
+# SSI_PRIORITY=1
+# Thứ tự nguồn giá realtime (token: ssi / vci)
+# REALTIME_SOURCE_PRIORITY=ssi
+# vnstock tuỳ chọn: chỉ bật khi chấp nhận giấy phép Personal Use và telemetry của vnstock
+# pip install -r requirements-vn-optional.txt
+# VNSTOCK_ENABLED=false
 ```
 
-### A 股稳定模式
+## Gợi ý thông điệp cho người dùng
 
-适合经常跑选股、批量分析或对外服务。Tushare 用于增强普通 A 股日线与快照稳定性；TickFlow 可增强普通 A 股日 K、已登记指数固定 fallback、实时行情和大盘复盘（实时行情需显式加入 `REALTIME_SOURCE_PRIORITY`）；免费源继续作为兜底。
-
-```env
-TUSHARE_TOKEN=your_tushare_token
-TICKFLOW_API_KEY=your_tickflow_key
-
-REALTIME_SOURCE_PRIORITY=tickflow,tushare,tencent,akshare_sina,efinance,akshare_em
-SNAPSHOT_SOURCE_PRIORITY=tushare,sina,efinance,akshare_em,em_datacenter
-
-# 选股运行期默认值；显式配置时会保留你的值
-DAILY_FETCH_RETRIES=3
-DAILY_FETCH_MAX_WORKERS=1
-```
-
-注意：TickFlow 能力按套餐权限分层；权限不足或请求失败时会 fail-open 回退到现有免费源，不建议把它当成所有市场行情的唯一来源。
-
-### 港股 / 美股稳定模式
-
-适合港美股组合、持仓和个股分析。Longbridge 配置后优先参与港美股链路；YFinance、Finnhub、AlphaVantage 作为兜底。
-
-```env
-LONGBRIDGE_OAUTH_CLIENT_ID=your_client_id
-LONGBRIDGE_OAUTH_TOKEN_CACHE_B64=your_token_cache_base64
-
-FINNHUB_API_KEY=your_finnhub_key
-ALPHAVANTAGE_API_KEY=your_alphavantage_key
-```
-
-如果仍使用 Legacy Longbridge 凭证，也可以继续配置：
-
-```env
-LONGBRIDGE_APP_KEY=your_app_key
-LONGBRIDGE_APP_SECRET=your_app_secret
-LONGBRIDGE_ACCESS_TOKEN=your_access_token
-```
-
-## 用户可见提示建议
-
-对外沟通时建议区分三类情况：
-
-| 情况 | 建议提示 |
+| Tình huống | Thông điệp gợi ý |
 | --- | --- |
-| 单个源失败但 fallback 成功 | 本次使用了降级数据源，分析仍可继续；报告中会标记实际成功源。 |
-| 多个源失败但有缓存 | 实时源不可用，本次使用上一次成功缓存；结论会降低置信度。 |
-| 全部源失败且无缓存 | 当前数据不可用，请稍后重试。普通 A 股可检查 Tushare/TickFlow；已登记指数应检查 Tencent/AkShare 连通性或配置 TickFlow；港美股可检查 Longbridge。 |
+| Một nguồn lỗi nhưng fallback thành công | Lần này dùng nguồn dự phòng, phân tích vẫn tiếp tục; báo cáo ghi rõ nguồn đã dùng. |
+| Nhiều nguồn lỗi nhưng còn cache | Nguồn realtime không khả dụng, dùng dữ liệu thành công gần nhất; độ tin cậy kết luận giảm. |
+| Mọi nguồn đều lỗi và không có cache | Dữ liệu hiện không khả dụng, vui lòng thử lại sau; kiểm tra kết nối tới `trading.vietcap.com.vn` và `iboard-query.ssi.com.vn`. |
 
-普通 A 股日线使用 `cn` 健康度命名空间，已登记指数固定链使用独立的 `cn_index` 命名空间；任一链的连续失败不会熔断另一条链。指数源返回空结果时会继续 fallback 并记录诊断，四源全部失败则返回空结果和空来源；普通股票保留既有最终异常语义。
+### Ghi chú báo cáo khi thiếu bằng chứng tin tức (đã triển khai)
 
-### 新闻面证据缺失的报告标注（已实现）
+Báo cáo phân biệt **chưa tìm kiếm tin** với **đã tìm nhưng không có kết quả** và hiển thị cảnh báo tương ứng ở dashboard, brief, báo cáo từng mã, báo cáo ngày, Markdown lịch sử, ảnh chia sẻ và chi tiết báo cáo trên Web; báo cáo tiếng Việt và tiếng Anh dùng câu chữ riêng. Cảnh báo không phụ thuộc đầu ra của mô hình: dù LLM vẫn viết `market_sentiment` / `hot_topics`, hễ tìm kiếm không có kết quả là vẫn cảnh báo.
 
-报告会区分新闻检索**未执行**和**执行后零命中**，分别渲染对应提示：
+Căn cứ là `AnalysisResult.news_result_count`:
 
-> ⚠️ 未配置搜索渠道，本次分析未纳入新闻面证据。
-
-> ⚠️ 本次未获取到可用的新闻面数据，以下结论未纳入新闻维度证据。
-
-覆盖 dashboard、brief、个股与日报四个渲染路径，以及历史 Markdown、分享图片和 Web
-报告详情；中文、英文、韩文报告使用各自的披露文案。该提示的判定独立于模型输出：
-即使 LLM 按 schema 写出了 `market_sentiment` / `hot_topics`，只要检索零命中就照常提示，
-避免出现「展示模型生成的情绪判断、却隐瞒无新闻证据」这一组合。
-
-判定依据是 `AnalysisResult.news_result_count`：
-
-| 取值 | 含义 | 是否提示 |
+| Giá trị | Ý nghĩa | Có cảnh báo |
 | --- | --- | --- |
-| `None` | 未执行检索（未配置搜索渠道） | **是**——明确说明本次分析没有新闻面证据 |
-| `0` | 执行了检索但零命中（搜索源限流、全部失败等） | **是** |
-| `> 0` | 正常拿到新闻 | 否 |
+| `None` | Chưa tìm kiếm (chưa cấu hình kênh tìm kiếm) | **Có** |
+| `0` | Đã tìm nhưng không có kết quả (bị giới hạn, mọi nguồn lỗi...) | **Có** |
+| `> 0` | Có tin tức | Không |
 
-新记录会把该三态值随分析结果持久化，保证实时报告和历史报告一致。旧记录若没有保存
-`news_result_count`，其新闻检索状态只能视为未知，历史展示保持原样，不会倒推为“未配置搜索渠道”。
+Bản ghi mới lưu giá trị ba trạng thái này cùng kết quả phân tích; bản ghi cũ không có trường này được coi là "không rõ" và giữ nguyên cách hiển thị.
 
-## 后续可做的产品化增强
+## Tài liệu chính thức
 
-1. 数据源 Doctor 页面：展示每个源最近成功时间、失败原因、熔断状态和下一次恢复探测时间。
-2. 一键推荐配置：根据市场选择生成 `.env` 片段，例如“A 股稳定模式”“港美股稳定模式”“免费模式”。
-3. 选股状态面板：直接展示 snapshot/daily source health，让用户知道是 Sina、Efinance、AkShare 还是 Tushare 出问题。
-4. 批量任务限速策略：对免费源自动降低并发，优先复用本地日线缓存，减少触发上游限流。
-5. 可选商业源接入：只有在现有 Tushare / TickFlow / Longbridge / Finnhub / AlphaVantage 仍不能覆盖需求时，再考虑新增 Twelve Data、Massive/Polygon、Nasdaq Data Link 等源。
-
-## 官方资料
-
-- Tushare: https://tushare.pro/document/2
-- TickFlow: https://tickflow.org/
-- AkShare: https://akshare.akfamily.xyz/
-- Longbridge OpenAPI: https://open.longportapp.com/
-- Finnhub API: https://finnhub.io/docs/api
-- Alpha Vantage API: https://www.alphavantage.co/documentation/
+- Vietcap (VCI): https://trading.vietcap.com.vn/
+- SSI iBoard: https://iboard.ssi.com.vn/
+- vnstock (giấy phép): https://vnstocks.com/onboard/giay-phep-su-dung
+- Yahoo Finance: https://finance.yahoo.com/

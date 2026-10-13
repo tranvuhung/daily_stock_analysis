@@ -1,28 +1,22 @@
 # 通知能力基线
 
+> Phạm vi hiện tại: các kênh WeChat Work / Feishu / DingTalk / PushPlus / ServerChan3 / AstrBot đã bị gỡ; biến môi trường cũ của chúng bị bỏ qua. Các kênh còn lại: Telegram, Email, Pushover, ntfy, Gotify, Custom Webhook, Discord, Slack.
+
 本文档记录通知能力 P0-P7 终态：渠道、配置 key、GitHub Actions 映射、Web 设置元数据、CLI 诊断口径、Web 一键测试、自定义 Webhook Body 模板语义、通知路由策略、降噪机制、聚合报告失败隔离、ntfy / Gotify 一等渠道、WebPush / Apprise 评估，以及本地 / Docker / GitHub Actions / Desktop 场景化配置说明。P0 只做基线与只读诊断；P1 增加 Web 单渠道真实测试；P2 产品化现有 Body 模板；P3 增加 report / alert / system_error 路由；P4 增加进程内降噪；P5 强化测试诊断和聚合报告逐渠道失败隔离；P6-A 新增 ntfy；P6-C 新增 Gotify；P6-D 只评估 WebPush / Apprise；P7 收口文档与 Actions env 对照表自动化，不新增运行时依赖、配置入口、per-URL 模板、跨进程持久化、真实每日摘要或重试循环。
 
 ## 渠道基线
 
 | 渠道 | 类型 | Minimal key | Advanced key | 说明 |
 | --- | --- | --- | --- | --- |
-| 钉钉 Webhook | 静态配置 | `DINGTALK_WEBHOOK_URL` | `DINGTALK_SECRET` | 支持加签安全方式，已接入 Web UI 设置页与单渠道测试。 |
-| 企业微信 | 静态配置 | `WECHAT_WEBHOOK_URL` | `WECHAT_MSG_TYPE` | 配置后参与批量通知发送 |
-| 飞书 Webhook / App Bot | 静态配置 | `FEISHU_WEBHOOK_URL` 或 `FEISHU_APP_ID` + `FEISHU_APP_SECRET` + `FEISHU_CHAT_ID` | `FEISHU_WEBHOOK_SECRET`, `FEISHU_WEBHOOK_KEYWORD`, `FEISHU_RECEIVE_ID_TYPE`, `FEISHU_DOMAIN` | Webhook URL 优先；未配置 Webhook 时，App Bot 三元组可主动向指定群/用户推送。`FEISHU_STREAM_ENABLED` 仅代表事件订阅 / Stream Bot，不参与主动通知配置完成判断 |
 | Telegram | 静态配置 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | `TELEGRAM_MESSAGE_THREAD_ID` | token 与 chat id 必须同时存在 |
 | 邮件 | 静态配置 | `EMAIL_SENDER`, `EMAIL_PASSWORD` | `EMAIL_RECEIVERS`, `EMAIL_SENDER_NAME` | `EMAIL_RECEIVERS` 留空时发给自己 |
 | Pushover | 静态配置 | `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN` | - | 两个 key 必须同时存在 |
 | ntfy | 静态配置 | `NTFY_URL` | `NTFY_TOKEN`, `WEBHOOK_VERIFY_SSL` | `NTFY_URL` 必须包含 topic path，例如 `https://ntfy.sh/my-topic` |
 | Gotify | 静态配置 | `GOTIFY_URL`, `GOTIFY_TOKEN` | `WEBHOOK_VERIFY_SSL` | `GOTIFY_URL` 是 server base URL，不包含 `/message`；token 通过 `X-Gotify-Key` Header 发送 |
-| PushPlus | 静态配置 | `PUSHPLUS_TOKEN` | `PUSHPLUS_TOPIC` | `PUSHPLUS_TOPIC` 仅在 token 存在时生效 |
-| Server酱3 | 静态配置 | `SERVERCHAN3_SENDKEY` | - | 手机 App 推送 |
 | 自定义 Webhook | 静态配置 | `CUSTOM_WEBHOOK_URLS` | `CUSTOM_WEBHOOK_BEARER_TOKEN`, `CUSTOM_WEBHOOK_BODY_TEMPLATE`, `WEBHOOK_VERIFY_SSL` | 支持多个 URL，逗号分隔 |
 | Discord | 静态配置 | `DISCORD_WEBHOOK_URL` 或 `DISCORD_BOT_TOKEN` + `DISCORD_MAIN_CHANNEL_ID` | `DISCORD_INTERACTIONS_PUBLIC_KEY` | Webhook 与 Bot 均可启用发送 |
 | Slack | 静态配置 | `SLACK_WEBHOOK_URL` 或 `SLACK_BOT_TOKEN` + `SLACK_CHANNEL_ID` | - | Bot 优先用于文本与图片同频道发送 |
-| AstrBot | 静态配置 | `ASTRBOT_URL` | `ASTRBOT_TOKEN`, `WEBHOOK_VERIFY_SSL` | `ASTRBOT_TOKEN` 可选 |
 | `UNKNOWN` | 兜底枚举 | - | - | 仅为未知渠道兜底，不由静态环境变量启用 |
-| 钉钉会话 | 运行时上下文 | - | - | 从来源消息上下文提取，无法仅由 `.env` 静态判断 |
-| 飞书会话 | 运行时上下文 | - | - | 从来源消息上下文提取，交互式命令结果仅回到来源会话 |
 | Telegram 会话 | 运行时上下文 | - | - | 从来源消息上下文提取，交互式命令结果仅回到来源会话 |
 
 Discord 长报告发送复用现有分片链路：单条 `content` 运行时不会超过 Discord 2000 字符限制，Webhook 与 Bot API 都会逐片发送并在片与片之间短暂等待；遇到 429 时按 Discord 返回的 `retry_after` 或 `Retry-After` 做有限重试，避免中途限流后只收到前半段报告。
@@ -37,67 +31,48 @@ Discord 长报告发送复用现有分片链路：单条 `content` 运行时不�
 - `WEBHOOK_VERIFY_SSL` 是读取该配置的 webhook-style HTTPS 通知请求共用的证书校验开关。
 - WebPush、Apprise、更细粒度路由、跨进程降噪和真实每日摘要暂不进入运行时实现；相关配置如未来引入，应先更新本文档、`.env.example`、Web 元数据与回归测试。
 - Bark 保持 custom webhook 基线，不新增 `BARK_*` 一等配置。
-- 飞书 App Bot 发送路径复用 `requirements.txt` 中已有的 `lark-oapi>=1.0.0`，不是新增依赖；标准源码安装、Docker、GitHub Actions daily workflow 和桌面构建链路均通过 `pip install -r requirements.txt` 安装。官方依据：[Feishu message create OpenAPI](https://open.feishu.cn/document/server-docs/im-v1/message/create)、[lark-oapi PyPI](https://pypi.org/project/lark-oapi/)、[SDK repo](https://github.com/larksuite/oapi-sdk-python)。App Bot 文件上传依赖同一 SDK 的 `im.v1.file.create` API，官方文档：[Feishu file create OpenAPI](https://open.feishu.cn/document/server-docs/im-v1/file/create)。
 
 ## 报告渲染与分片
 
 当前默认推送报告的入口、内容来源和整体版式保持不变。本阶段只收敛通知渲染的技术路线：沉淀渠道能力画像、发送前消息结构和结构感知分片能力，避免后续按渠道扩展时继续在各 sender 中堆叠平行逻辑。
 
-默认发送路径沿用既有 sender 行为，不接入新增 renderer：飞书和 Telegram 继续使用原有兼容转换，企业微信、Slack 继续使用原有分片逻辑，避免改变线上可见报告版式。新增的渠道能力画像、PreparedMessage、renderer preset 和结构感知分片仅作为后续扩展基础；如需启用企业微信、飞书、Telegram、Slack 等渠道专用 renderer，应通过显式配置、真实发送验证和回归测试逐步接入。
+默认发送路径沿用既有 sender 行为，不接入新增 renderer：Telegram 继续使用原有兼容转换，Slack 继续使用原有分片逻辑，避免改变线上可见报告版式。新增的渠道能力画像、PreparedMessage、renderer preset 和结构感知分片仅作为后续扩展基础；如需启用 Telegram、Slack 等渠道专用 renderer，应通过显式配置、真实发送验证和回归测试逐步接入。
 
 兼容性排除说明：
-- 本轮未改动 `src/notification_sender/wechat_sender.py`、`src/notification_sender/slack_sender.py`、`src/notification_sender/telegram_sender.py` 的发送路径；`src/notification_sender/feishu_sender.py` 新增 `send_feishu_file()` 文件发送路径，Webhook 模式回退为发送文件内容文本，App Bot 文字发送路径（`send_to_feishu` → `_send_via_app_bot`）保持不变。
+- 本轮未改动 `src/notification_sender/slack_sender.py`、`src/notification_sender/telegram_sender.py` 的发送路径。
 - `model_used` 只在报告渲染末尾展示，不参与 provider/model/base_url 的 runtime 选择、保存、清理或迁移。若某次 CI 扫描到“provider/API 兼容迁移”类关键词，命中范围应优先回归到测试夹具中的 `model_used` 示例与报告快照 fixture（`tests/fixtures/notification_reports/*.md`），以及 `src/notification.py` 对 `report_show_llm_model` 的仅展示开关逻辑。
 - `REPORT_SHOW_LLM_MODEL` 与 `report_renderer_enabled` 均为展示/降级策略开关：关闭仅影响报告可见结构，不会触发配置迁移或运行时参数回退；回退方式为恢复 `true`（或移除该项）或恢复默认配置。
 
-关联板块渲染保持报告正文生成阶段处理：没有行业/概念涨跌榜信号时，推送报告沿用原有单行样式，例如 `通信线缆及配套 / 通信设备 / 通信 / 江苏板块 / 科技风格`，不额外展示“类型”列。只有命中 `fundamental_context.boards.data` / `sector_rankings` 或 `fundamental_context.concept_boards.data` / `concept_rankings` 的领涨/领跌信号时，才使用表格展示“板块 / 类型 / 板块表现 / 板块涨跌幅”，其中“类型”列用于标明“行业板块”或“概念板块”。该逻辑仅影响报告展示，不改变 provider/model/Base URL、LiteLLM 路由、模型保存、迁移或清理逻辑。
+> Ghi chú (VN-only): khối "ngành / concept liên quan" (`belong_boards`, `sector_rankings`, `concept_rankings`) chỉ có ở A-share và đã bị gỡ khỏi báo cáo; báo cáo mã Việt Nam không còn hiển thị bảng ngành.
 
 ## GitHub Actions 映射
 
-仓库自带 `.github/workflows/00-daily-analysis.yml` 只显式导入固定变量名。P0/P3/P4/P6 已把 Body 模板、安全项、PushPlus topic、路由、降噪、ntfy 和 Gotify 等通知 key 纳入默认 workflow。下面的表格由 `scripts/generate_notification_actions_env_table.py` 从 workflow `env:` 和通知诊断元数据生成，避免手写对照表和真实 Actions 映射继续漂移。
+仓库自带 `.github/workflows/00-daily-analysis.yml` 只显式导入固定变量名。P0/P3/P4/P6 已把 Body 模板、安全项、路由、降噪、ntfy 和 Gotify 等通知 key 纳入默认 workflow。下面的表格由 `scripts/generate_notification_actions_env_table.py` 从 workflow `env:` 和通知诊断元数据生成，避免手写对照表和真实 Actions 映射继续漂移。
 
 <!-- notification-actions-env-table:start -->
 
 | Key | Tier | Channel / feature | Actions source | Default |
 | --- | --- | --- | --- | --- |
-| `WECHAT_WEBHOOK_URL` | minimal | wechat | Secret | - |
-| `WECHAT_MSG_TYPE` | advanced | wechat | Variable or Secret | `markdown` |
-| `FEISHU_WEBHOOK_URL` | minimal | feishu | Secret | - |
-| `FEISHU_WEBHOOK_SECRET` | advanced | feishu | Secret | - |
-| `FEISHU_WEBHOOK_KEYWORD` | advanced | feishu | Variable or Secret | - |
-| `DINGTALK_WEBHOOK_URL` | minimal | dingtalk | Secret | - |
-| `DINGTALK_SECRET` | advanced | dingtalk | Secret | - |
 | `TELEGRAM_BOT_TOKEN` | minimal | telegram | Secret | - |
 | `TELEGRAM_CHAT_ID` | minimal | telegram | Secret | - |
 | `TELEGRAM_MESSAGE_THREAD_ID` | advanced | telegram | Secret | - |
 | `EMAIL_SENDER` | minimal | email | Variable or Secret | - |
 | `EMAIL_PASSWORD` | minimal | email | Secret | - |
 | `EMAIL_RECEIVERS` | advanced | email | Variable or Secret | - |
-| `EMAIL_SENDER_NAME` | advanced | email | Variable or Secret | `daily_stock_analysis股票分析助手` |
+| `EMAIL_SENDER_NAME` | advanced | email | Variable or Secret | `daily_stock_analysis` |
 | `PUSHOVER_USER_KEY` | minimal | pushover | Secret | - |
 | `PUSHOVER_API_TOKEN` | minimal | pushover | Secret | - |
 | `NTFY_URL` | minimal | ntfy | Secret | - |
 | `NTFY_TOKEN` | advanced | ntfy | Secret | - |
 | `GOTIFY_URL` | minimal | gotify | Secret | - |
 | `GOTIFY_TOKEN` | minimal | gotify | Secret | - |
-| `PUSHPLUS_TOKEN` | minimal | pushplus | Secret | - |
-| `PUSHPLUS_TOPIC` | advanced | pushplus | Variable or Secret | - |
 | `CUSTOM_WEBHOOK_URLS` | minimal | custom | Secret | - |
 | `CUSTOM_WEBHOOK_BEARER_TOKEN` | advanced | custom | Secret | - |
 | `CUSTOM_WEBHOOK_BODY_TEMPLATE` | advanced | custom | Variable or Secret | - |
-| `WEBHOOK_VERIFY_SSL` | advanced | ntfy, gotify, custom, astrbot | Variable or Secret | `true` |
+| `WEBHOOK_VERIFY_SSL` | advanced | ntfy, gotify, custom | Variable or Secret | `true` |
 | `DISCORD_WEBHOOK_URL` | minimal | discord | Secret | - |
 | `DISCORD_BOT_TOKEN` | minimal | discord | Secret | - |
 | `DISCORD_MAIN_CHANNEL_ID` | minimal | discord | Secret | - |
-| `FEISHU_APP_ID` | minimal | feishu | Secret | - |
-| `FEISHU_APP_SECRET` | minimal | feishu | Secret | - |
-| `FEISHU_CHAT_ID` | minimal | feishu | Variable or Secret | - |
-| `FEISHU_RECEIVE_ID_TYPE` | advanced | feishu | Variable or Secret | - |
-| `FEISHU_DOMAIN` | advanced | feishu | Variable or Secret | - |
-| `FEISHU_SEND_AS_FILE` | advanced | feishu | Variable or Secret | - |
-| `ASTRBOT_URL` | minimal | astrbot | Secret | - |
-| `ASTRBOT_TOKEN` | advanced | astrbot | Secret | - |
-| `SERVERCHAN3_SENDKEY` | minimal | serverchan3 | Secret | - |
 | `SLACK_WEBHOOK_URL` | minimal | slack | Secret | - |
 | `SLACK_BOT_TOKEN` | minimal | slack | Secret | - |
 | `SLACK_CHANNEL_ID` | minimal | slack | Secret | - |
@@ -149,7 +124,7 @@ Web 设置页的“通知渠道”分类提供单渠道测试入口。测试会�
 
 ## 自定义 Webhook Body 模板
 
-`CUSTOM_WEBHOOK_BODY_TEMPLATE` 是自定义 Webhook 的全局 JSON body 模板。配置后，它会先于 URL 自动识别生效，因此会覆盖 Bark、Slack、Discord、钉钉等自动 payload。未配置时仍使用原有 URL 自动识别；渲染后不是合法 JSON object 时会记录错误并回退默认 payload，不中断主通知流程。
+`CUSTOM_WEBHOOK_BODY_TEMPLATE` 是自定义 Webhook 的全局 JSON body 模板。配置后，它会先于 URL 自动识别生效，因此会覆盖 Bark、Slack、Discord 等自动 payload。未配置时仍使用原有 URL 自动识别；渲染后不是合法 JSON object 时会记录错误并回退默认 payload，不中断主通知流程。
 
 可用占位符：
 
@@ -177,7 +152,7 @@ CUSTOM_WEBHOOK_URLS=https://api.day.app/YOUR_BARK_KEY
 CUSTOM_WEBHOOK_BODY_TEMPLATE={"title":$title_json,"body":$content_json,"group":"stock"}
 ```
 
-AstrBot 已是一等通知渠道，优先使用 `ASTRBOT_URL` 和可选的 `ASTRBOT_TOKEN`。只有需要把 AstrBot 兼容端点放入 `CUSTOM_WEBHOOK_URLS` 时，才使用 custom webhook 模板，例如：
+Đẩy tới endpoint chỉ nhận trường `content` (ví dụ bot tự host) qua `CUSTOM_WEBHOOK_URLS` thì dùng template:
 
 ```env
 CUSTOM_WEBHOOK_BODY_TEMPLATE={"content":$content_json}
@@ -221,7 +196,7 @@ P3 新增三类通知路由配置：
 
 | 路由类型 | 配置 key | 当前生产者 |
 | --- | --- | --- |
-| `report` | `NOTIFICATION_REPORT_CHANNELS` | 单股推送、聚合日报、大盘复盘、合并推送、飞书文档成功链接 |
+| `report` | `NOTIFICATION_REPORT_CHANNELS` | 单股推送、聚合日报、大盘复盘、合并推送 |
 | `alert` | `NOTIFICATION_ALERT_CHANNELS` | EventMonitor 触发通知 |
 | `system_error` | `NOTIFICATION_SYSTEM_ERROR_CHANNELS` | 预留能力；当前不新增自动系统错误生产者 |
 
@@ -230,7 +205,7 @@ P3 新增三类通知路由配置：
 - 留空或未配置：保持旧行为，发送到所有已配置静态渠道。
 - 非空：只发送到路由列表与已配置渠道的交集；交集为空时不会 fallback 到全渠道。
 - `send_to_context()` 不受路由限制，机器人会话上下文仍会收到触发任务的回复。
-- 交互式命令（钉钉会话、飞书会话、Telegram）带有来源上下文时，会跳过 `FEISHU_WEBHOOK_URL` 等静态通知渠道；`SCHEDULE`、CLI、API 或无来源上下文的任务仍按 report 路由发送。
+- 交互式命令（Telegram 会话等）带有来源上下文时，会跳过静态通知渠道；`SCHEDULE`、CLI、API 或无来源上下文的任务仍按 report 路由发送。
 - 路由过滤发生在 Markdown 转图片前，`MARKDOWN_TO_IMAGE_CHANNELS` 只对路由后的渠道子集生效。
 - `MERGE_EMAIL_NOTIFICATION` 不需要额外配置；只要 `email` 仍在 report 路由后的渠道中，现有合并邮件行为保持不变。
 - `--check-notify` 会把未知渠道值报为 error，把合法但未启用的路由目标报为 warning。
@@ -292,7 +267,7 @@ WebPush 后续如要实现，需要先单独设计订阅生命周期与安全边
 
 Apprise 后续如要引入，应先作为可选依赖评估，而不是默认依赖：
 
-- Apprise 是通用通知库，覆盖面广，但会与当前已有 WeChat、Telegram、Discord、Slack、ntfy、Gotify、Pushover 等一等渠道重叠。
+- Apprise 是通用通知库，覆盖面广，但会与当前已有 Telegram、Discord、Slack、ntfy、Gotify、Pushover 等一等渠道重叠。
 - 需要评估依赖体积、安装失败路径、Docker 镜像膨胀、GitHub Actions 依赖缓存和可选 extras 策略。
 - secret 传递不能直接暴露完整 Apprise URL；需要统一脱敏、Web 测试目标遮罩和错误日志过滤。
 - 发送失败应隔离在 Apprise 渠道内，不能影响已有渠道的失败隔离语义。
@@ -318,7 +293,7 @@ Docker 场景可通过 `--env-file .env` / Compose `env_file` 注入通知相关
 
 默认 `00-daily-analysis.yml` 只读取表格中显式映射的 Secret / Variable。新增 repository Secret 或 Variable 后，只有变量名已经出现在 workflow `env:` 中才会进入运行进程；`STOCK_GROUP_N` / `EMAIL_GROUP_N` 这类任意编号变量不会自动导入。
 
-Secret 适合 token、password、webhook URL 等敏感项；Variable 适合 `WECHAT_MSG_TYPE`、`EMAIL_SENDER_NAME`、路由、降噪窗口和时区这类非敏感行为配置。`MARKDOWN_TO_IMAGE_CHANNELS` 与 `MERGE_EMAIL_NOTIFICATION` 默认不映射，如需在自己的 fork 中使用，应显式修改 workflow 并补充对应测试。
+Secret 适合 token、password、webhook URL 等敏感项；Variable 适合 `EMAIL_SENDER_NAME`、路由、降噪窗口和时区这类非敏感行为配置。`MARKDOWN_TO_IMAGE_CHANNELS` 与 `MERGE_EMAIL_NOTIFICATION` 默认不映射，如需在自己的 fork 中使用，应显式修改 workflow 并补充对应测试。
 
 ## Desktop
 

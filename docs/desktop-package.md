@@ -8,7 +8,6 @@
 - Electron 启动时自动拉起后端服务，等待 `/api/health` 就绪后加载 UI
 - Windows 便携/安装模式下，用户配置文件 `.env` 和数据库放在 exe 同级目录；macOS 打包版使用 Electron 用户数据目录保存运行时配置
 - 桌面端会自动从本机 `8000-8100` 选择可用端口，并把实际选择的端口同步给内置后端；桌面端不依赖 `.env` 里的 `WEBUI_PORT` 来决定窗口连接地址，避免用户改端口后 Electron 仍等待旧端口导致启动超时
-- Desktop backend 默认随 `requirements.txt` 安装并冻结 `futu-api==10.8.6808`；Windows/macOS 构建脚本会在源码环境和 PyInstaller 产物中分别执行 `import futu`，防止发布包只安装但未携带 SDK。
 - 报告“分享”按钮使用 Electron 自带的隐藏 Chromium 窗口渲染本地后端输出的受限 HTML，并保存为 PNG；桌面安装包无需额外携带 `wkhtmltoimage`、`markdown-to-file` 或 Playwright 浏览器。
 
 ## 本地开发
@@ -218,7 +217,7 @@ npm install
 npm run build
 ```
 
-2) 按现有脚本打包 Python 后端（脚本会收集 DSA 选股引擎、Futu SDK 与 AkShare 数据文件）
+2) 按现有脚本打包 Python 后端
 
 - Windows：
 
@@ -232,7 +231,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build-backend.ps1
 bash scripts/build-backend-macos.sh
 ```
 
-该脚本会在安装依赖后执行 `--collect-all src.services.screening`、`--collect-all futu` 和 `--collect-data akshare`。构建完成后会通过冻结可执行文件校验 `src.services.screening.pipeline`、`futu`、`orjson` 均可导入，核对选股策略数量，并确认 AkShare 的 `file_fold/calendar.json` 已进入冻结产物，避免发行包在选股、热点题材、Futu 持仓导入或日线增强路径中因缺少模块/package data 降级。选股实现参考 AlphaSift。PR 主 CI 在 `requirements.txt`、Futu broker、Desktop 打包入口或相关 workflow 变化时，会分别运行 `desktop-futu-package-windows` 与 `desktop-futu-package-macos` 阻断检查。
+Script cài dependency rồi chạy PyInstaller (thu thập dữ liệu `litellm` / `tiktoken`). Sau khi build, file thực thi đóng băng được kiểm tra import `orjson`, số lượng chiến lược trong `strategies/` và tham chiếu static asset. Các bước thu thập engine lọc cổ phiếu, Futu SDK và dữ liệu AkShare đã bị gỡ cùng với các tính năng/nguồn tương ứng; job CI `desktop-futu-package-*` cũng đã bị xoá.
 
 3) 打包 Electron 桌面应用
 
@@ -326,8 +325,6 @@ win-unpacked/
 ### 后端启动报 ModuleNotFoundError
 
 PyInstaller 打包时缺少模块，需要在 Windows 与 macOS 后端构建脚本中同步增加 `--hidden-import`，并对冻结产物执行运行时导入校验。当前脚本会显式安装、冻结并探测 LiteLLM 运行路径需要的 `orjson`；若日志包含 `No module named 'orjson'`，请升级到修复版本并重新构建，不能只在已发布目录中手工安装依赖。
-
-如果日志提示缺少 `akshare/file_fold/calendar.json`，说明后端冻结产物没有完整收集 AkShare package data。请使用仓库当前的 `scripts/build-backend.ps1` 或 `scripts/build-backend-macos.sh` 重新构建；脚本会在生成桌面包前检查该文件，缺失时直接终止构建。
 
 ### UI 加载空白
 

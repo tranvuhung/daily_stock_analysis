@@ -155,7 +155,7 @@ The repository CI currently consists of:
 | `backend-gate`  | `.github/workflows/ci.yml`            | Runs `./scripts/ci_gate.sh`                                                                              | Yes                  |
 | `docker-build`  | `.github/workflows/ci.yml`            | Docker build plus an import smoke test of key modules                                                    | Yes                  |
 | `web-gate`      | `.github/workflows/ci.yml`            | Runs `npm run lint` + `npm run build` when the frontend changes                                          | Yes (when triggered) |
-| `network-smoke` | `.github/workflows/network-smoke.yml` | `pytest -m network` + `scripts/test.sh quick`                                                            | No, observational    |
+| `network-smoke` | `.github/workflows/network-smoke.yml` | `pytest -m network` + `main.py --stocks HPG` smoke                                                       | No, observational    |
 | `pr-review`     | `.github/workflows/pr-review.yml`     | PR static checks + AI review + automatic labelling                                                       | No, advisory         |
 
 If the PR already has the corresponding CI result, cite the CI conclusion directly. If CI does not cover the change, or the local environment differs substantially from CI, describe the local verification and the gap.

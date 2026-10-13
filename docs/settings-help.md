@@ -2,7 +2,7 @@
 
 设置页配置帮助用于把配置项的关键说明放到 WebUI 内部，减少用户在设置页和文档之间反复切换。页面上仍保留短描述，详细说明通过配置项标题旁的 help icon 打开。
 
-本文只说明帮助系统的维护规则，不替代完整配置文档。配置语义、默认值、运行时优先级和排障细节仍以 `.env.example`、`docs/full-guide.md` 及对应专题文档为事实源。
+本文只说明帮助系统的维护规则，不替代完整配置文档。配置语义、默认值、运行时优先级和排障细节仍以 `.env.example`、`docs/full-guide_EN.md` 及对应专题文档为事实源。
 
 ## 数据结构
 
@@ -42,7 +42,7 @@ PR2 继续覆盖高频、易填错配置项：
 
 - AI 模型运行时：Agent 主模型、fallback 模型、高级 YAML 路由、temperature、provider API Key、OpenAI-compatible Base URL。
 - LLM Channels 编辑器内部字段：渠道名、协议、Base URL、API Key、模型列表、运行时能力检测、主模型、Agent 主模型、fallback、Vision 和 temperature。
-- 数据源与搜索：Tushare、股票索引远程更新开关、实时行情优先级、实时技术指标、搜索 API Key、SearXNG、筹码分布、新闻窗口。
+- 数据源与搜索：实时行情优先级、实时技术指标、搜索 API Key、SearXNG、新闻窗口。
 - 通知：Webhook、Telegram、邮件、Discord/Slack 等聊天平台、报告输出、Webhook SSL 校验。
 - WebUI / auth / schedule / proxy：Host、Port、登录保护、可信反向代理、定时任务、交易日检查、网络代理。
 
@@ -54,8 +54,8 @@ PR3 registered-field slice / 阶段性补齐：聚焦 Web 设置页中实际展�
 - 通知路由配置（9 字段）：报告/告警/系统错误渠道路由、去重/冷却、静默时段/时区、最低等级、每日摘要（预留）。
 - 系统运行时（7 字段）：日志级别、调试模式、最大并发、分析间隔、大盘分析开关/市场/配色。
 - AI legacy 与 Anspire 配置：provider 专用多 Key、模型名、温度、Vision 模型、max tokens 与 Anspire LLM 网关字段。
-- 数据源与搜索：TickFlow、SerpAPI、Brave、Bocha、MiniMax、SearXNG 公共实例、BIAS 阈值和 Pytdx 服务器字段。
-- 通知高级字段：飞书高级安全/应用字段、Telegram topic、Discord/Slack 高级字段、Pushover、ntfy、Gotify、PushPlus、ServerChan3、AstrBot 和自定义 Webhook 高级模板/鉴权字段。
+- 数据源与搜索：VCI / SSI / vnstock 优先级、SerpAPI、Brave、SearXNG 公共实例、BIAS 阈值。
+- 通知高级字段：Telegram topic、Discord/Slack 高级字段、Pushover、ntfy、Gotify 和自定义 Webhook 高级模板/鉴权字段。
 
 Issue #1512 收口后，Web 设置页只展示后端配置注册表中的正式字段。未注册的 `.env` key 不再作为普通可编辑设置项展示，避免 raw key、`Auto-inferred field metadata.` 和无 help 按钮的配置项进入中文界面；这些 key 仍可通过 `.env` 文件或导入/导出能力保留和维护。
 
@@ -73,9 +73,9 @@ Issue #1512 收口后，Web 设置页只展示后端配置注册表中的正式�
 新增或修改帮助文案时，优先从以下位置核对：
 
 1. `.env.example`：配置键名、默认值、样例格式和敏感占位符。
-2. `docs/full-guide.md`：主要配置说明、运行入口和部署上下文。
+2. `docs/full-guide_EN.md`：主要配置说明、运行入口和部署上下文。
 3. `docs/LLM_CONFIG_GUIDE.md`、`docs/llm-providers.md`：LLM 优先级、Channels、provider/model、兼容边界和排障说明。
-4. 专题文档：例如 `docs/bot/feishu-bot-config.md`、`docs/deploy-webui-cloud.md`、`docs/desktop-package.md`。
+4. 专题文档：例如 `docs/bot/discord-bot-config.md`、`docs/deploy-webui-cloud.md`、`docs/desktop-package.md`、`docs/market-support.md`。
 5. 代码实现和测试：当文档与代码不一致时，先以可执行实现为准，并同步修正文档。
 
 ## 维护边界

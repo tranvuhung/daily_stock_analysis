@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Daily Stock Analysis API",
-    "description": "Watchlist analysis API for A-shares, Hong Kong and US stocks\n\n## Modules\n- Stock analysis: trigger AI analysis\n- History: query historical analysis reports\n- Stock data: fetch quote data\n\n## Authentication\nOptional admin authentication. When ADMIN_AUTH_ENABLED=true, /api/v1/* requires a valid admin session cookie, except for login, status, health check and the OpenAPI docs. When disabled, authentication is not enforced.",
+    "description": "Watchlist analysis API for Vietnamese stocks (HOSE/HNX/UPCoM)\n\n## Modules\n- Stock analysis: trigger AI analysis\n- History: query historical analysis reports\n- Stock data: fetch quote data\n\n## Authentication\nOptional admin authentication. When ADMIN_AUTH_ENABLED=true, /api/v1/* requires a valid admin session cookie, except for login, status, health check and the OpenAPI docs. When disabled, authentication is not enforced.",
     "version": "1.0.0"
   },
   "servers": [
@@ -1072,10 +1072,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Optional market filter: cn/hk/us/jp/kr/tw",
+              "description": "Optional market filter, e.g. vn",
               "title": "Market"
             },
-            "description": "Optional market filter: cn/hk/us/jp/kr/tw"
+            "description": "Optional market filter, e.g. vn"
           },
           {
             "name": "stock_code",
@@ -1455,10 +1455,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Optional market filter: cn/hk/us/jp/kr/tw",
+              "description": "Optional market filter, e.g. vn",
               "title": "Market"
             },
-            "description": "Optional market filter: cn/hk/us/jp/kr/tw"
+            "description": "Optional market filter, e.g. vn"
           },
           {
             "name": "limit",
@@ -3096,7 +3096,7 @@
             ],
             "title": "Stock Code",
             "description": "Single stock code",
-            "example": "600519"
+            "example": "HPG"
           },
           "stock_codes": {
             "anyOf": [
@@ -3113,8 +3113,8 @@
             "title": "Stock Codes",
             "description": "Multiple stock codes (alternative to stock_code)",
             "example": [
-              "600519",
-              "000858"
+              "HPG",
+              "FPT"
             ]
           },
           "report_type": {
@@ -3159,7 +3159,7 @@
             ],
             "title": "Stock Name",
             "description": "Stock name selected by the user (provided by autocomplete)",
-            "example": "贵州茅台"
+            "example": "Hoa Phat Group"
           },
           "original_query": {
             "anyOf": [
@@ -3171,8 +3171,8 @@
               }
             ],
             "title": "Original Query",
-            "description": "Raw user input (for example Moutai, gzmt, 600519)",
-            "example": "茅台"
+            "description": "Raw user input (for example Hoa Phat, hpg, HPG)",
+            "example": "hoa phat"
           },
           "selection_source": {
             "anyOf": [
@@ -3191,7 +3191,7 @@
           "notify": {
             "type": "boolean",
             "title": "Notify",
-            "description": "Whether to send push notifications (Telegram, Enterprise WeChat, etc.)",
+            "description": "Whether to send push notifications (Telegram, Discord, Slack, Email, etc.)",
             "default": true
           },
           "report_language": {
@@ -3235,15 +3235,15 @@
           "async_mode": false,
           "force_refresh": false,
           "notify": true,
-          "original_query": "茅台",
-          "report_language": "zh",
+          "original_query": "hoa phat",
+          "report_language": "vi",
           "report_type": "detailed",
           "selection_source": "autocomplete",
           "skills": [
             "bull_trend"
           ],
-          "stock_code": "600519",
-          "stock_name": "贵州茅台"
+          "stock_code": "HPG",
+          "stock_name": "Hoa Phat Group"
         }
       },
       "AnalysisResult": {
@@ -3419,9 +3419,9 @@
         "description": "A single successful submission within a batch asynchronous task.",
         "example": {
           "analysis_phase": "auto",
-          "message": "Analysis task queued: 600519",
+          "message": "Analysis task queued: HPG",
           "status": "pending",
-          "stock_code": "600519",
+          "stock_code": "HPG",
           "task_id": "task_abc123"
         }
       },
@@ -3453,8 +3453,8 @@
         "description": "A duplicate submission within a batch asynchronous task.",
         "example": {
           "existing_task_id": "task_existing_123",
-          "message": "Stock 600519 is already being analyzed (task_id: task_existing_123)",
-          "stock_code": "600519"
+          "message": "Stock HPG is already being analyzed (task_id: task_existing_123)",
+          "stock_code": "HPG"
         }
       },
       "BatchTaskAcceptedResponse": {
@@ -3506,17 +3506,17 @@
           "accepted": [
             {
               "analysis_phase": "auto",
-              "message": "Analysis task queued: 600519",
+              "message": "Analysis task queued: HPG",
               "status": "pending",
-              "stock_code": "600519",
+              "stock_code": "HPG",
               "task_id": "task_abc123"
             }
           ],
           "duplicates": [
             {
               "existing_task_id": "task_existing_456",
-              "message": "Stock 000858 is already being analyzed (task_id: task_existing_456)",
-              "stock_code": "000858"
+              "message": "Stock FPT is already being analyzed (task_id: task_existing_456)",
+              "stock_code": "FPT"
             }
           ],
           "message": "Submitted 1 task, skipped 1 duplicate"
@@ -3696,14 +3696,14 @@
         "description": "Task status model",
         "example": {
           "analysis_phase": "auto",
-          "original_query": "茅台",
+          "original_query": "hoa phat",
           "progress": 100,
           "selection_source": "autocomplete",
           "skills": [
             "bull_trend"
           ],
           "status": "completed",
-          "stock_name": "贵州茅台",
+          "stock_name": "Hoa Phat Group",
           "task_id": "task_abc123"
         }
       },
@@ -3908,7 +3908,7 @@
           "analysis_phase": "auto",
           "created_at": "2026-02-05T10:30:00",
           "message": "Analyzing...",
-          "original_query": "茅台",
+          "original_query": "hoa phat",
           "progress": 50,
           "report_type": "detailed",
           "selection_source": "autocomplete",
@@ -3917,8 +3917,8 @@
           ],
           "started_at": "2026-02-05T10:30:01",
           "status": "processing",
-          "stock_code": "600519",
-          "stock_name": "贵州茅台",
+          "stock_code": "HPG",
+          "stock_name": "Hoa Phat Group",
           "task_id": "abc123def456"
         }
       },
@@ -4352,8 +4352,8 @@
           "query_id": "abc123",
           "report_type": "detailed",
           "sentiment_score": 75,
-          "stock_code": "600519",
-          "stock_name": "贵州茅台"
+          "stock_code": "HPG",
+          "stock_name": "Hoa Phat Group"
         }
       },
       "AnalysisReport": {
@@ -4411,10 +4411,10 @@
           "meta": {
             "created_at": "2024-01-01T12:00:00",
             "query_id": "abc123",
-            "report_language": "zh",
+            "report_language": "vi",
             "report_type": "detailed",
-            "stock_code": "600519",
-            "stock_name": "贵州茅台"
+            "stock_code": "HPG",
+            "stock_name": "Hoa Phat Group"
           },
           "strategy": {
             "ideal_buy": "1800.00",
@@ -5126,8 +5126,8 @@
           "low": 1780.0,
           "open": 1785.0,
           "prev_close": 1785.0,
-          "stock_code": "600519",
-          "stock_name": "贵州茅台",
+          "stock_code": "HPG",
+          "stock_name": "Hoa Phat Group",
           "update_time": "2024-01-01T15:00:00",
           "volume": 10000000
         }
@@ -5798,14 +5798,7 @@
           },
           "market": {
             "type": "string",
-            "enum": [
-              "cn",
-              "hk",
-              "us",
-              "jp",
-              "kr",
-              "tw"
-            ],
+            "const": "vn",
             "title": "Market"
           },
           "source_type": {
@@ -7849,14 +7842,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": [
-                  "cn",
-                  "hk",
-                  "us",
-                  "jp",
-                  "kr",
-                  "tw"
-                ]
+                "const": "vn"
               },
               {
                 "type": "null"
@@ -10325,14 +10311,7 @@
           },
           "market": {
             "type": "string",
-            "enum": [
-              "cn",
-              "hk",
-              "us",
-              "jp",
-              "kr",
-              "tw"
-            ],
+            "const": "vn",
             "title": "Market"
           },
           "as_of": {
@@ -10544,7 +10523,7 @@
               }
             ],
             "title": "Report Language",
-            "description": "Report output language (zh/en/ko)"
+            "description": "Report output language. New reports are Vietnamese (vi) or English (en); legacy zh/ko values on historical records are rendered as vi"
           },
           "created_at": {
             "anyOf": [
@@ -10665,8 +10644,8 @@
         "example": {
           "error": "duplicate_task",
           "existing_task_id": "abc123def456",
-          "message": "Stock 600519 is already being analyzed",
-          "stock_code": "600519"
+          "message": "Stock HPG is already being analyzed",
+          "stock_code": "HPG"
         }
       },
       "RejectedTaskItem": {
@@ -10884,46 +10863,6 @@
             ],
             "title": "Dividend Metrics",
             "description": "Structured dividend metrics (including TTM basis)"
-          },
-          "belong_boards": {
-            "anyOf": [
-              {},
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Belong Boards",
-            "description": "Related sector list"
-          },
-          "sector_rankings": {
-            "anyOf": [
-              {},
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sector Rankings",
-            "description": "Sector gainers/losers board (shape: {top, bottom})"
-          },
-          "concept_rankings": {
-            "anyOf": [
-              {},
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Concept Rankings",
-            "description": "Concept sector gainers/losers board (shape: {top, bottom})"
-          },
-          "market_structure": {
-            "anyOf": [
-              {},
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Market Structure",
-            "description": "Market structure context (theme layer plus per-stock position layer)"
           }
         },
         "type": "object",
@@ -11028,8 +10967,8 @@
               "sentiment_score": 75
             }
           },
-          "stock_code": "600519",
-          "stock_name": "贵州茅台"
+          "stock_code": "HPG",
+          "stock_name": "Hoa Phat Group"
         }
       },
       "DeleteHistoryResponse": {

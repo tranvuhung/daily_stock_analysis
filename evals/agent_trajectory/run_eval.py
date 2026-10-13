@@ -21,7 +21,7 @@ against the real tool registry before running, so misspelled or stale
 rate.
 
 Usage:
-    python evals/agent_trajectory/run_eval.py --sample 600519_technical
+    python evals/agent_trajectory/run_eval.py --sample HPG_technical
     python evals/agent_trajectory/run_eval.py --all --json-out eval_report.json
 """
 

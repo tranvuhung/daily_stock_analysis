@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Generate the Vietnam stock autocomplete index from the full VCI symbol list and merge it into the existing index file.
+Generate the Vietnam stock autocomplete index from the full VCI symbol list.
 
 Output: apps/dsa-web/public/stocks.index.json
 
 Design notes:
 
-- **Merge, do not replace**. The existing file still holds 30,000+ CN/US/HK/JP/KR records,
-  which are still needed when rolling back to ``SUPPORTED_MARKETS=all``. This script only rebuilds rows with ``market == "VN"``
-  and keeps the rest unchanged.
+- **VN only**. Hệ thống chỉ còn hỗ trợ thị trường Việt Nam, nên file đầu ra chỉ chứa các dòng
+  ``market == "VN"``; các dòng thị trường khác (CN/US/HK/JP/KR) còn sót trong file cũ sẽ bị loại bỏ.
+  The system now supports Vietnam only, so legacy non-VN rows in the existing file are dropped.
 - Reuses ``VciFetcher.get_symbol_records()`` instead of reimplementing fetching and caching.
-- The compressed row format matches ``compress_index`` in
-  ``scripts/generate_index_from_csv.py``:
+- The compressed row format (consumed by the Web autocomplete) is:
   ``[canonicalCode, displayCode, nameZh, pinyinFull, pinyinAbbr,
      aliases, market, assetType, active, popularity]``
 - Vietnamese has no pinyin, but the ``pinyinFull`` / ``pinyinAbbr`` columns can hold **diacritic-free
@@ -142,10 +141,9 @@ def build_rows(records: List[Dict[str, Any]]) -> List[List[Any]]:
 
 
 def _atomic_write_json(path: Path, rows: List[List[Any]]) -> None:
-    """Atomic write, with exactly the same format as ``scripts/generate_index_from_csv.py``.
+    """Atomic write of the compressed index.
 
-    One record per line (rather than the whole array on one line): the file has 30,000+ records, and a single line
-    would make every change an unreviewable whole-file diff.
+    One record per line (rather than the whole array on one line), so every change stays a reviewable diff.
     """
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -197,18 +195,15 @@ def main() -> int:
         print(f"[Error] 股票条数 {stock_count} 异常偏少，疑似上游返回不完整，已中止")
         return 1
 
-    print("\n[3/4] 与现有索引合并（保留其他市场）...")
+    print("\n[3/4] So sánh với index hiện có (chỉ giữ thị trường VN)...")
     existing: List[List[Any]] = []
     if OUTPUT_PATH.exists():
         existing = json.loads(OUTPUT_PATH.read_text(encoding="utf-8"))
-    kept = [row for row in existing if len(row) > 6 and row[6] != MARKET]
-    dropped = len(existing) - len(kept)
-    print(f"      保留其他市场 {len(kept)} 条，替换旧越南记录 {dropped} 条")
-
-    # Keep other markets' records in their original order and append Vietnam records at the end. Reordering the whole file would make the diff
-    # cover all 30,000+ lines, which is unreviewable and inconsistent with the existing approach in generate_index_from_csv.py
-    # ("Preserves all non-index tuples in their original order").
-    merged = kept + vn_rows
+    # Loại bỏ các dòng thị trường khác còn sót từ phiên bản đa thị trường cũ
+    # Drop legacy non-VN rows left over from the former multi-market index
+    legacy_non_vn = sum(1 for row in existing if len(row) > 6 and row[6] != MARKET)
+    print(f"      Loại bỏ {legacy_non_vn} dòng ngoài VN, thay {len(existing) - legacy_non_vn} dòng VN cũ")
+    merged = vn_rows
 
     if args.test:
         print("\n[4/4] 测试模式：跳过写入")

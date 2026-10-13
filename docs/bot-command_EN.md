@@ -2,7 +2,7 @@
 
 This document covers the bot module architecture, supported commands, webhook routes, and how to configure platform integrations.
 
-> **Glossary:** "Enterprise bot" in this context means a chatbot that receives commands via webhook from a messaging platform (Feishu / DingTalk / WeChat Work / Telegram) and calls the analysis pipeline to reply inline.
+> **Glossary:** "Enterprise bot" in this context means a chatbot that receives commands via webhook from a messaging platform (currently Discord) and calls the analysis pipeline to reply inline.
 
 ---
 
@@ -11,10 +11,7 @@ This document covers the bot module architecture, supported commands, webhook ro
 ```mermaid
 flowchart TB
     subgraph Platforms [Messaging Platforms]
-        FS[Feishu]
-        DT[DingTalk]
-        WC[WeChat Work]
-        TG[Telegram]
+        DC[Discord]
         More[More platforms...]
     end
 
@@ -31,10 +28,7 @@ flowchart TB
         NS[NotificationService]
     end
 
-    FS -->|POST /bot/feishu| WH
-    DT -->|POST /bot/dingtalk| WH
-    WC -->|POST /bot/wecom| WH
-    TG -->|POST /bot/telegram| WH
+    DC -->|Interactions / Bot| WH
 
     WH --> Adapters
     Adapters -->|Unified message format| Dispatcher
@@ -67,9 +61,7 @@ bot/
 └── platforms/              # Platform adapters
     ├── __init__.py
     ├── base.py             # Abstract base class for platforms
-    ├── dingtalk.py         # DingTalk bot
-    ├── dingtalk_stream.py  # DingTalk Stream bot
-    └── feishu_stream.py    # Feishu (Lark) Stream bot
+    └── discord.py          # Discord bot
 ```
 
 ---
@@ -81,7 +73,7 @@ bot/
 ```python
 @dataclass
 class BotMessage:
-    platform: str       # Platform ID: feishu / dingtalk / wecom / telegram
+    platform: str       # Platform ID, e.g. discord
     user_id: str        # Sender ID
     user_name: str      # Sender display name
     chat_id: str        # Conversation ID (group or DM)
@@ -152,35 +144,15 @@ class BotCommand(ABC):
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `/analyze` | Analyze a specific stock or a registered index | `/analyze AAPL`, `/analyze 600519`, `/analyze sh000016`, `/analyze 上证50` |
-| `/ask` | Single-turn question about a stock or the market | `/ask what is RSI for AAPL` |
+| `/analyze` | Analyze a specific stock or a registered index | `/analyze HPG`, `/analyze VNINDEX`, `/analyze FPT.VN` |
+| `/ask` | Single-turn question about a stock or the market | `/ask what is RSI for HPG` |
 | `/batch` | Batch-analyze your configured watchlist | `/batch` |
 | `/chat` | Multi-turn strategy chat (maintains conversation context) | `/chat` |
-| `/market` | Market review (A-shares / US stocks) | `/market` |
+| `/market` | Vietnam market review | `/market` |
 | `/help` | Show help text | `/help` |
 | `/status` | Show system status | `/status` |
 
-> **Stock code formats:** A-shares use 6-digit codes (e.g. `600519`); HK stocks prefix `hk` (e.g. `hk00700`); US stocks use ticker symbols (e.g. `AAPL`, `TSLA`).
-
-> **Registered index inputs:** explicit codes (`sh000016`), CSI aliases (`930955.CSI` converges to `csi930955`) and registered Chinese names (`上证50`) are all accepted. Index inputs are submitted as a structured `AnalysisTarget` that flows through to the analysis pipeline, so `sh000016` is never rewritten to `SH000016`. Unregistered CSI forms (e.g. `930956.CSI`), code shapes the legacy gate rejected (`12345`, bare `00700`, `600519.SH`, unregistered `sh999999`) and unrecognized names return an explicit error without submitting a task; ambiguous registered names require an explicit code instead of guessing. Stock inputs (A-share 6-digit, `HK`+5-digit, US 1-5 letters, e.g. `usfd`→`USFD`) keep the legacy code path. Stock-name inputs (e.g. `贵州茅台`) are newly exposed by this Bot entry: they reuse the existing name resolver (`resolve_name_to_code`) and then submit the legacy code without a structured target.
-
-### Bot index entry online E2E smoke (`scripts/smoke_bot_index_entry.py`)
-
-Walks the real `CommandDispatcher.dispatch_async -> AnalyzeCommand -> TaskService -> StockAnalysisPipeline` online for a single target, covering the `SH.000016` / `上证50` / `930955.CSI` matrix scenarios without any webhook transport (no mocked online dependencies, no dry-run).
-
-Run with a single target argument (`--timeout` defaults to 900 seconds):
-
-```powershell
-.venv\Scripts\python.exe scripts/smoke_bot_index_entry.py "SH.000016"
-.venv\Scripts\python.exe scripts/smoke_bot_index_entry.py "上证50"
-.venv\Scripts\python.exe scripts/smoke_bot_index_entry.py "930955.CSI"
-```
-
-Process responsibilities: a worker subprocess submits and polls the in-process `TaskService` and prints single-line `E2E_EVENT {json}` events (`phase=submitted|completed|failed|timeout`, with `target`, plus `task_id`/`stock_code`/`result`/`error` per phase); the parent only enforces the deadline, cleans up the process tree and maps exit codes (0=success / 1=failure / 124=timeout).
-
-Failure semantics: a failed task or a completed-but-incomplete result (canonical code or registered name not matching the matrix expectation, or any of `analysis_summary`/`operation_advice`/`trend_prediction` empty or whitespace-only) emits a `failed` event and exits non-zero; on timeout the process tree is killed (Windows `taskkill /T /F`, POSIX process group) — a successful cleanup emits a `timeout` event and exits 124, a failed cleanup emits a `failed` event carrying the cleanup error and exits 1 — never rolling back DB / reports / notifications side effects. On a user Ctrl-C the parent also cleans up the process tree first: a successful cleanup propagates the interrupt, a failed cleanup emits a `failed` event carrying the cleanup error and exits 1 — a cleanup failure is never silently swallowed. The worker's expected code/name come from the script's built-in authoritative matrix map (`SH.000016`/`上证50` → `sh000016`/`上证50`, `930955.CSI` → `csi930955`/`红利低波100`) — never from the response or the result's self-reported identity: a submission whose `extra.stock_code` does not match the expectation fails with an explicit mismatch error carrying the expected and actual values (the failed event also carries the structured actual `stock_code`), and targets outside the matrix as well as non-positive `--timeout` are rejected before any submission or subprocess spawn (argument/input error, exit code 2). Unexpected worker exceptions (dispatch / poll / event serialization) emit a `failed` event and exit 1 with the exception evidence kept on stderr; `KeyboardInterrupt` is not treated as an ordinary failure; the parent normalizes any other worker exit code to 1 so the runtime contract only exposes 0 / 1 / 124. The parent spawns the worker with an internal `--worker` flag, not via environment variables.
-
-Prerequisites: network plus configured data-source and AI credentials (online chain). This script is not part of the offline gate and does not run in CI.
+> **Stock code formats:** Vietnam codes only — bare `HPG`, suffix `HPG.VN`, prefix `vnHPG`, fund certificates such as `FUEVN100`, and indices such as `VNINDEX` / `VN30` / `HNXIndex`. Non-Vietnam codes (e.g. `600519`, `hk00700`, `AAPL`) return an explicit error without submitting a task. See [market scope](market-support.md) (Vietnamese).
 
 ---
 
@@ -213,57 +185,23 @@ Prerequisites: network plus configured data-source and AI credentials (online ch
 
 ## 6. Webhook Routes
 
-Handler functions for each platform live in `bot/handler.py`.
-These routes are **not yet wired** into the FastAPI application — you must mount them manually.
-
-| Route | Method | Status | Notes |
-|-------|--------|--------|-------|
-| `/bot/dingtalk` | POST | **Ready** | `DingtalkPlatform` is registered in `ALL_PLATFORMS` |
-| `/bot/feishu` | POST | Stream only | Use `feishu_stream.py`; no Webhook adapter in `ALL_PLATFORMS` |
-| `/bot/wecom` | POST | Not implemented | Handler exists but no platform adapter |
-| `/bot/telegram` | POST | Not implemented | Handler exists but no platform adapter |
-
-To mount the DingTalk webhook in your FastAPI app:
-
-```python
-from bot.handler import handle_dingtalk_webhook
-
-@app.post("/bot/dingtalk")
-async def dingtalk_webhook(request: Request):
-    headers = dict(request.headers)
-    body = await request.body()
-    return handle_dingtalk_webhook(headers, body)
-```
+Handler functions for each platform live in `bot/handler.py`; the only remaining platform adapter is Discord (see [Discord bot setup](bot/discord-bot-config.md)). Feishu, DingTalk and WeChat Work adapters have been removed.
 
 ---
 
 ## 7. Configuration
 
-Add the following to your `.env`. Some of these bot-specific keys are already listed in `.env.example` (for example the DingTalk and Feishu app credentials), while others are not, so treat this section as a consolidated reference for bot setup:
+Add the following to your `.env` (see `.env.example` for the full list):
 
 ```dotenv
 # --- Bot general ---
 BOT_ENABLED=false
 BOT_COMMAND_PREFIX=/
 
-# --- Feishu (Lark) bot ---
-FEISHU_APP_ID=
-FEISHU_APP_SECRET=
-FEISHU_DOMAIN=feishu             # feishu (China) or lark (international/Lark)
-FEISHU_VERIFICATION_TOKEN=    # Event verification token
-FEISHU_ENCRYPT_KEY=           # Encryption key (optional)
-
-# --- DingTalk bot ---
-DINGTALK_APP_KEY=
-DINGTALK_APP_SECRET=
-
-# --- WeChat Work bot (in development) ---
-WECOM_TOKEN=
-WECOM_ENCODING_AES_KEY=
-
-# --- Telegram bot ---
-TELEGRAM_BOT_TOKEN=           # Get from @BotFather
-TELEGRAM_WEBHOOK_SECRET=      # Webhook secret token
+# --- Discord bot ---
+DISCORD_BOT_TOKEN=
+DISCORD_MAIN_CHANNEL_ID=
+DISCORD_INTERACTIONS_PUBLIC_KEY=
 ```
 
 ---

@@ -1,14 +1,13 @@
 
 
+> Ghi chú (VN-only): các nền tảng Feishu / DingTalk / WeChat Work đã bị gỡ; adapter còn lại là Discord. Lệnh `/analyze` chỉ nhận mã Việt Nam.
+
 ## 一、整体设计
 
 ```mermaid
 flowchart TB
     subgraph Platforms [外部平台]
-        FS[飞书]
-        DT[钉钉]
-        WC[企业微信（开发中）]
-        TG[Telegram（开发中）]
+        DC[Discord]
         More[更多平台...]
     end
 
@@ -25,10 +24,7 @@ flowchart TB
         NS[NotificationService]
     end
 
-    FS -->|POST /bot/feishu| WH
-    DT -->|POST /bot/dingtalk| WH
-    WC -->|POST /bot/wecom| WH
-    TG -->|POST /bot/telegram| WH
+    DC -->|Interactions / Bot| WH
 
     WH --> Adapters
     Adapters -->|统一消息格式| Dispatcher
@@ -59,11 +55,7 @@ bot/
 └── platforms/              # 平台适配器
     ├── __init__.py
     ├── base.py             # 平台抽象基类
-    ├── feishu.py           # 飞书机器人
-    ├── dingtalk.py         # 钉钉机器人
-    ├── dingtalk_stream.py  # 钉钉机器人Stream
-    ├── wecom.py            # 企业微信机器人 （开发中）
-    └── telegram.py         # Telegram 机器人 （开发中）
+    └── discord.py          # Discord 机器人
 ```
 
 ## 三、核心抽象设计
@@ -74,7 +66,7 @@ bot/
 @dataclass
 class BotMessage:
     """统一的机器人消息模型"""
-    platform: str           # 平台标识: feishu/dingtalk/wecom/telegram
+    platform: str           # 平台标识: discord 等
     user_id: str            # 发送者 ID
     user_name: str          # 发送者名称
     chat_id: str            # 会话 ID（群聊或私聊）
@@ -185,7 +177,7 @@ class CommandDispatcher:
 
 |------|------|------|------|
 
-| /analyze | /a, 分析 | 分析指定股票或已登记指数 | `/analyze 600519`、`/analyze sh000016`、`/analyze 上证50` |
+| /analyze | /a, 分析 | 分析指定股票或已登记指数 | `/analyze HPG`、`/analyze VNINDEX`、`/analyze FPT.VN` |
 
 | /market | /m, 大盘 | 大盘复盘 | `/market` |
 
@@ -197,28 +189,8 @@ class CommandDispatcher:
 
 ### `/analyze` 支持边界
 
-- 股票：A 股 6 位数字（`600519`）、港股 `HK+5 位数字`（`hk00700`）、美股 1-5 个字母（`AAPL`、`usfd`→`USFD`）。股票名称（`贵州茅台`）由本次 Bot 入口新暴露：复用既有名称解析器（`resolve_name_to_code`）解析后提交 legacy code，不携带结构化 target。
-- 已登记指数：显式代码（`sh000016`）、CSI alias（`930955.CSI` 收敛为 `csi930955`）、注册中文名（`上证50`）均可提交；指数以结构化 `AnalysisTarget` 贯穿到分析 Pipeline，`sh000016` 不会被改写为 `SH000016`。
-- 未登记 CSI（如 `930956.CSI`）、旧闸门拒绝的代码形态（如 `12345`、裸 `00700`、`600519.SH`、未登记 `sh999999`）或无法识别的名称：返回明确错误，不提交任务。
-- 注册表内存在等价名称歧义时：要求改用显式代码，不猜测、不进入股票名称兜底。
-
-### Bot 指数入口在线 E2E smoke（`scripts/smoke_bot_index_entry.py`）
-
-用于从真实 `CommandDispatcher.dispatch_async -> AnalyzeCommand -> TaskService -> StockAnalysisPipeline` 在线贯穿单标的分析，覆盖 `SH.000016` / `上证50` / `930955.CSI` 三条矩阵场景，不经过任何 webhook transport（不 mock 在线依赖、不 dry-run）。
-
-运行（单 target 参数，`--timeout` 默认 900 秒）：
-
-```powershell
-.venv\Scripts\python.exe scripts/smoke_bot_index_entry.py "SH.000016"
-.venv\Scripts\python.exe scripts/smoke_bot_index_entry.py "上证50"
-.venv\Scripts\python.exe scripts/smoke_bot_index_entry.py "930955.CSI"
-```
-
-进程职责：worker 独立子进程提交并轮询（同进程 `TaskService`），输出单行 `E2E_EVENT {json}` 事件（`phase=submitted|completed|failed|timeout`，含 `target`，按阶段附加 `task_id`/`stock_code`/`result`/`error`）；父进程只负责 deadline、进程树清理和退出码（0=成功 / 1=失败 / 124=超时）。
-
-失败语义：任务失败、completed 但结果不完整（canonical code 或注册名称与矩阵期望不符，或 `analysis_summary`/`operation_advice`/`trend_prediction` 任一为空或仅空白）即输出 `failed` 事件并不为零退出；超时清理进程树（Windows `taskkill /T /F`，POSIX 杀进程组），清理成功输出 `timeout` 事件并退出 124，清理失败则输出含清理错误的 `failed` 事件并退出 1，不回滚 DB / 报告 / 通知等既有副作用。用户 Ctrl-C 中止时父进程同样先清理进程树：清理成功透传中断，清理失败输出含清理错误的 `failed` 事件并退出 1，绝不静默吞掉清理失败。worker 的期望 code/name 来自脚本内置的矩阵权威映射（`SH.000016`/`上证50` → `sh000016`/`上证50`，`930955.CSI` → `csi930955`/`红利低波100`），不信任响应或任务结果自报身份：提交响应的 `stock_code` 与期望不符时输出含期望值与实际值的显式 mismatch 错误（failed 事件同时携带结构化 `stock_code` 实际值）；矩阵之外的 target 与非正 `--timeout` 在提交与子进程 spawn 之前即被拒绝（参数/输入错误，退出码 2）。worker 意外异常（dispatch/轮询/事件序列化）输出 `failed` 事件并退出 1（异常证据保留在 stderr），`KeyboardInterrupt` 不按普通失败处理；父进程将 worker 的任意其他退出码归一化为 1，运行时契约只暴露 0 / 1 / 124。父进程以内部 `--worker` flag 显式拉起子进程，不依赖环境变量。
-
-前置条件：需要网络与数据源/AI 凭据配置齐全（在线链路）。本脚本不属于离线 gate，不进入 CI。
+- Cổ phiếu Việt Nam: mã trần `HPG`, hậu tố `HPG.VN`, tiền tố `vnHPG`; chứng chỉ quỹ `FUEVN100`, `E1VFVN30`. Chỉ số: `VNINDEX`, `VN30`, `HNXIndex`... Định dạng chi tiết xem [Phạm vi thị trường](market-support.md).
+- Mã ngoài thị trường Việt Nam (ví dụ `600519`, `hk00700`, `AAPL`) hoặc tên không nhận diện được: trả lỗi rõ ràng, không tạo task.
 
 ## 五、`/status` 与模型配置诊断说明
 
@@ -253,10 +225,7 @@ class CommandDispatcher:
 
 ```python
 # Webhook 路由
-/bot/feishu      # POST - 飞书事件回调
-/bot/dingtalk    # POST - 钉钉事件回调
-/bot/wecom       # POST - 企业微信事件回调 （开发中）
-/bot/telegram    # POST - Telegram 更新回调 （开发中）
+# Discord: Interactions endpoint / Bot (xem docs/bot/discord-bot-config.md)
 ```
 
 ## 配置
@@ -268,23 +237,9 @@ class CommandDispatcher:
 bot_enabled: bool = False              # 是否启用机器人
 bot_command_prefix: str = "/"          # 命令前缀
 
-# 飞书机器人（事件订阅）
-feishu_app_id: str                     # 已有
-feishu_app_secret: str                 # 已有
-feishu_verification_token: str         # 新增：事件校验 Token
-feishu_encrypt_key: str                # 新增：加密密钥
-
-# 钉钉机器人（应用）
-dingtalk_app_key: str                  # 新增
-dingtalk_app_secret: str               # 新增
-
-# 企业微信机器人（开发中）
-wecom_token: str                       # 新增：回调 Token
-wecom_encoding_aes_key: str            # 新增：EncodingAESKey
-
-# Telegram 机器人（开发中）
-telegram_bot_token: str                # 已有
-telegram_webhook_secret: str           # 新增：Webhook 密钥
+# Discord 机器人
+discord_bot_token: str                 # 已有
+discord_interactions_public_key: str   # Interactions 签名校验
 ```
 
 ## 扩展说明

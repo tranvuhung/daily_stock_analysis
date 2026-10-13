@@ -46,10 +46,10 @@ Dùng `start` khi muốn chạy đúng dịch vụ như triển khai thật.
 
 `start` mặc định truyền `--no-run-immediately`: `.env` đang đặt `SCHEDULE_RUN_IMMEDIATELY=true`
 nên nếu không chặn thì vừa khởi động là phân tích toàn bộ `STOCK_LIST`. Trước khi chạy, `start`
-tiền kiểm và cảnh báo nếu `STOCK_LIST` không có mã nào thuộc thị trường đang bật — bẫy có thật,
-vì `.env` để `STOCK_LIST` là mã A-share trong khi thị trường mặc định là `vn`.
+tiền kiểm và cảnh báo nếu `STOCK_LIST` không có mã Việt Nam hợp lệ nào (hệ thống chỉ hỗ trợ
+thị trường `vn`).
 
-Mọi giá trị đều override được: `RUN_PORT`, `RUN_MARKETS`, `RUN_STOCK_LIST`,
+Mọi giá trị đều override được: `RUN_PORT`, `RUN_STOCK_LIST`,
 `RUN_REPORT_LANGUAGE`, `RUN_DIR`, `RUN_HEALTH_TIMEOUT`… (`./scripts/run-app.sh --help`).
 
 ## Điều kiện trước
@@ -109,7 +109,7 @@ Có **hai** tầng lọc khác nhau, đừng nhầm:
 | `跳过不属于已启用市场的标的` | `src/core/pipeline.py` | Backstop khi vào thẳng pipeline (đường API), thường **không** xuất hiện ở đường CLI |
 
 Muốn kiểm chứng cổng chặn thị trường một cách trực tiếp thì dùng đường API ở Chế độ 3
-(`/api/v1/stocks/600519/quote` -> 404), chắc chắn hơn là soi log.
+(`/api/v1/stocks/AAPL/quote` -> 404), chắc chắn hơn là soi log.
 Các chuỗi trên là log gốc tiếng Trung của chương trình, giữ nguyên để còn `grep` được.
 
 ## Chế độ 2: chạy một lượt phân tích thật (cần LLM key)
@@ -149,7 +149,7 @@ curl -s http://127.0.0.1:8765/api/v1/data/overview | python3 -m json.tool | head
 curl -s http://127.0.0.1:8765/api/v1/stocks/HPG/quote      # cổ phiếu Việt Nam
 curl -s http://127.0.0.1:8765/api/v1/stocks/VNINDEX/quote  # chỉ số Việt Nam
 curl -s -o /dev/null -w '%{http_code}\n' \
-  http://127.0.0.1:8765/api/v1/stocks/600519/quote         # thị trường đã tắt -> 404
+  http://127.0.0.1:8765/api/v1/stocks/AAPL/quote           # mã không phải VN -> 404
 ```
 
 Web UI: mở trình duyệt vào `http://127.0.0.1:8765/`.

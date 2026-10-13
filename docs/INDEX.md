@@ -1,82 +1,85 @@
-# 文档中心
+# Trung tâm tài liệu
 
-这里是项目文档入口。README 负责项目概览和快速开始；更完整的配置、部署、功能说明和排障内容从这里进入。
+Đây là điểm vào tài liệu của dự án. README chỉ giới thiệu tổng quan và cách chạy nhanh; cấu hình chi tiết, triển khai, hướng dẫn tính năng và xử lý sự cố đi từ trang này.
 
-## 按场景选择
+> Phạm vi hiện tại: hệ thống **chỉ hỗ trợ thị trường chứng khoán Việt Nam** (HOSE / HNX / UPCoM). Xem [Phạm vi thị trường](market-support.md).
+>
+> Nhiều tài liệu chuyên đề bên dưới vẫn đang viết bằng tiếng Trung (ghi chú "tiếng Trung"); khi nội dung mâu thuẫn với `.env.example` hoặc code thì code là nguồn sự thật.
 
-| 我想要 | 先看 | 继续看 |
+## Chọn theo mục đích
+
+| Tôi muốn | Đọc trước | Đọc tiếp |
 | --- | --- | --- |
-| 快速了解项目能做什么 | [README](../README.md) | [完整配置与部署指南](full-guide.md) |
-| 第一次把项目跑起来 | [小白客户端安装与配置](beginner-client-setup.md) | [完整配置与部署指南](full-guide.md) |
-| 配置大模型渠道 | [LLM 配置指南](LLM_CONFIG_GUIDE.md) | [LLM 服务商配置指南](llm-providers.md)（含 xAI Grok 直连） |
-| 配置推送通知 | [通知能力基线](notifications.md) | [完整配置与部署指南](full-guide.md) |
-| 部署到服务器或云平台 | [部署指南](DEPLOY.md) | [云端 WebUI 部署](deploy-webui-cloud.md)、[Zeabur 部署](docker/zeabur-deployment.md) |
-| 使用 Bot / IM 接入 | [Bot 命令与接入](bot-command.md) | [Bot 平台配置](bot/)、[Grok Bot 集成](grok-bot-integration.md) |
-| 排查运行问题 | [FAQ](FAQ.md) | [更新日志](CHANGELOG.md) |
-| 处理数据源失败或降级 | [数据源稳定性与故障处理图示](data-source-stability.md) | [FAQ](FAQ.md) |
-| 参与开发或提交 PR | [贡献指南](CONTRIBUTING.md) | [API 规格](architecture/api_spec.json) |
+| Biết dự án làm được gì | [README](../README.md) | [Hướng dẫn đầy đủ (EN)](full-guide_EN.md) |
+| Chạy dự án lần đầu | [Cài đặt client cho người mới](beginner-client-setup.md) (tiếng Trung) | [Hướng dẫn đầy đủ (EN)](full-guide_EN.md) |
+| Cấu hình mô hình LLM | [Hướng dẫn cấu hình LLM](LLM_CONFIG_GUIDE.md) (tiếng Trung) | [Cấu hình nhà cung cấp LLM](llm-providers.md) (tiếng Trung, có xAI Grok) |
+| Cấu hình thông báo | [Năng lực thông báo](notifications.md) (tiếng Trung) | [Hướng dẫn đầy đủ (EN)](full-guide_EN.md) |
+| Triển khai lên server / cloud | [Hướng dẫn triển khai (EN)](DEPLOY_EN.md) | [Triển khai WebUI trên cloud](deploy-webui-cloud.md), [Triển khai Zeabur](docker/zeabur-deployment.md) |
+| Chạy trên Windows trong mạng LAN | [Chạy trên Windows qua LAN](windows-lan-deploy.md) | [Đóng gói desktop](desktop-package.md) |
+| Dùng Bot / IM | [Lệnh Bot](bot-command.md) (tiếng Trung) | [Cấu hình Discord Bot](bot/discord-bot-config.md), [Tích hợp Grok Bot](grok-bot-integration.md) |
+| Xử lý sự cố khi chạy | [FAQ (EN)](FAQ_EN.md) | [Nhật ký thay đổi](CHANGELOG.md) |
+| Xử lý lỗi / suy giảm nguồn dữ liệu | [Độ ổn định nguồn dữ liệu](data-source-stability.md) | [Phạm vi thị trường](market-support.md) |
+| Đóng góp code hoặc PR | [Hướng dẫn đóng góp](CONTRIBUTING.md) | [Đặc tả API](architecture/api_spec.json) |
 
-## 快速开始
+## Bắt đầu nhanh
 
-| 文档 | 内容 |
+| Tài liệu | Nội dung |
 | --- | --- |
-| [README](../README.md) | 项目定位、核心能力、快速开始、推送效果 |
-| [小白客户端安装与配置](beginner-client-setup.md) | 面向不会代码用户的客户端下载、Anspire Open / AIHubMix 模型配置、新闻源配置和常见问题 |
-| [完整配置与部署指南](full-guide.md) | 环境准备、运行方式、配置说明、部署路径和常见问题 |
-| [FAQ](FAQ.md) | 常见配置、模型、通知、部署和运行问题 |
-| [数据源稳定性与故障处理图示](data-source-stability.md) | Tushare、TickFlow、AkShare、Efinance、YFinance、Longbridge 等已接入源的使用场景、fallback 链路和推荐配置 |
-| [更新日志](CHANGELOG.md) | 版本变化、能力调整和迁移说明 |
+| [README](../README.md) | Định vị dự án, năng lực chính, chạy nhanh |
+| [Hướng dẫn đầy đủ (EN)](full-guide_EN.md) | Chuẩn bị môi trường, cách chạy, cấu hình, triển khai, câu hỏi thường gặp |
+| [FAQ (EN)](FAQ_EN.md) | Câu hỏi thường gặp về cấu hình, mô hình, thông báo, triển khai |
+| [Phạm vi thị trường](market-support.md) | Thị trường Việt Nam: định dạng mã, sàn, chỉ số, nguồn dữ liệu, các tính năng đã gỡ |
+| [Độ ổn định nguồn dữ liệu](data-source-stability.md) | Chuỗi VCI → SSI → vnstock (tuỳ chọn) → Yahoo, fallback và cấu hình khuyến nghị |
+| [Nhật ký thay đổi](CHANGELOG.md) | Thay đổi theo phiên bản, điều chỉnh năng lực và ghi chú di chuyển |
 
-## 配置
+## Cấu hình
 
-| 文档 | 内容 |
+| Tài liệu | Nội dung |
 | --- | --- |
-| [LLM 配置指南](LLM_CONFIG_GUIDE.md) | 大模型渠道、三层配置、Web 设置页和常见模型配置 |
-| [LLM 服务商配置指南](llm-providers.md) | Provider 预设、Actions 映射、错误分类和诊断建议 |
-| [LiteLLM YAML 示例](examples/litellm_config.example.yaml) | LiteLLM 多渠道配置示例 |
-| [Grok Bot Skill 示例](examples/grok_bot/README.md) | 给 Grok Bot 粘贴的最小 Skill，调用现有 REST |
-| [通知能力基线](notifications.md) | 企业微信、飞书、Telegram、Discord、Slack、邮件等通知渠道配置 |
-| [Tushare 股票列表指南](TUSHARE_STOCK_LIST_GUIDE.md) | Tushare 股票列表相关配置和使用说明 |
+| [Hướng dẫn cấu hình LLM](LLM_CONFIG_GUIDE.md) (tiếng Trung) / [EN](LLM_CONFIG_GUIDE_EN.md) | Kênh mô hình, cấu hình ba tầng, trang cài đặt Web |
+| [Cấu hình nhà cung cấp LLM](llm-providers.md) (tiếng Trung) | Preset provider, ánh xạ GitHub Actions, phân loại lỗi và chẩn đoán |
+| [Ví dụ LiteLLM YAML](examples/litellm_config.example.yaml) | Ví dụ cấu hình LiteLLM nhiều kênh |
+| [Ví dụ Skill cho Grok Bot](examples/grok_bot/README.md) | Skill tối giản dán vào Grok Bot, gọi REST có sẵn |
+| [Năng lực thông báo](notifications.md) (tiếng Trung) | Telegram, Email, Discord, Slack, Pushover, ntfy, Gotify, Custom Webhook |
 
-## 使用专题
+## Chuyên đề sử dụng
 
-| 文档 | 内容 |
+| Tài liệu | Nội dung |
 | --- | --- |
-| [Bot 命令与接入](bot-command.md) | Bot 命令、Webhook、平台接入和回调说明 |
-| [Bot 平台配置](bot/) | 飞书、钉钉、Discord 等 Bot 配置截图和补充说明 |
-| [实时告警中心](alerts.md) | EventMonitor 基线、Web 规则管理、通知结果、冷却状态和 Phase 边界 |
-| [Hướng dẫn sử dụng Cảnh báo](alerts-user-guide.md) | Hướng dẫn cho người dùng Web: bật tính năng, tạo/quản lý quy tắc, đọc lịch sử kích hoạt, xử lý sự cố (tiếng Việt) |
-| [Cơ chế hoạt động của Cảnh báo](alerts-mechanism.md) | Kiến trúc và luồng Alert Center: mô hình dữ liệu, loại rule, worker định kỳ, engine realtime MQTT, thông báo, API, Web, cấu hình, điểm hở (tiếng Việt) |
-| [个股研究聚合 API](stock-profile-api.md) | 单一 stock-profile 契约、分块质量状态、代码归一与后续 Web 边界 |
-| [DecisionSignal 决策信号专题](decision-signals.md) | AI 建议池字段语义、API、Web 展示、告警/通知/组合风险联动、后验评估、脱敏、迁移与回滚 |
-| [ResearchArtifact 结构化研究产物](research-artifact.md) | structured_report 字段、Thesis / Evidence / Invalidation / Next Action / Data Quality 契约和旧报告兼容边界 |
-| [资讯 / 情报源](intelligence-sources.md) | RSS/Atom 合规资讯源配置、测试、拉取、去重、存储、查询与安全边界 |
-| [分析上下文包契约、运行态消费与可见性](analysis-context-pack.md) | AnalysisContextPack 首版范围、字段质量状态、P1/P2 内部契约、P3 Prompt 摘要消费、P4 历史/API/Web 低敏可见性、P5 数据质量评分、P6 迁移回滚与源码锚点；完整指南补充 #1386 阶段感知分析、迁移与回滚入口 |
-| [图片识别 Prompt](image-extract-prompt.md) | 图片识别股票信息的 Prompt 与使用边界 |
-| [OpenClaw Skill 集成](openclaw-skill-integration.md) | OpenClaw / Skill 外部集成说明 |
-| [Grok Bot 集成](grok-bot-integration.md) | 2026-08-11 Grok Bot（AI teammate）与 DSA REST / DecisionSignal / Skill 的对接边界 |
+| [Lệnh Bot](bot-command.md) (tiếng Trung) / [EN](bot-command_EN.md) | Lệnh Bot, Webhook, tích hợp nền tảng và callback |
+| [Cấu hình Discord Bot](bot/discord-bot-config.md) (tiếng Trung) | Cấu hình Discord Bot |
+| [Trung tâm cảnh báo realtime](alerts.md) (tiếng Trung) | EventMonitor, quản lý rule trên Web, kết quả thông báo, cooldown |
+| [Hướng dẫn sử dụng Cảnh báo](alerts-user-guide.md) | Bật tính năng, tạo/quản lý quy tắc, đọc lịch sử kích hoạt, xử lý sự cố |
+| [Cơ chế hoạt động của Cảnh báo](alerts-mechanism.md) | Mô hình dữ liệu, loại rule, worker định kỳ, engine realtime MQTT, thông báo, API, Web |
+| [API hồ sơ cổ phiếu](stock-profile-api.md) (tiếng Trung) | Hợp đồng stock-profile, trạng thái chất lượng từng khối, chuẩn hoá mã |
+| [DecisionSignal - tín hiệu quyết định](decision-signals.md) (tiếng Trung) | Trường dữ liệu, API, hiển thị Web, liên kết cảnh báo/thông báo/rủi ro danh mục, đánh giá hậu kiểm, che dữ liệu nhạy cảm, rollback |
+| [ResearchArtifact](research-artifact.md) (tiếng Trung) | Hợp đồng `structured_report`: Thesis / Evidence / Invalidation / Next Action / Data Quality |
+| [Nguồn tin tức / tình báo](intelligence-sources.md) (tiếng Trung) | Cấu hình RSS/Atom, kiểm thử, kéo tin, khử trùng lặp, lưu trữ |
+| [Gói ngữ cảnh phân tích](analysis-context-pack.md) (tiếng Trung) | AnalysisContextPack: phạm vi, trạng thái chất lượng trường, tiêu thụ trong prompt, hiển thị lịch sử/API/Web |
+| [Prompt nhận diện ảnh](image-extract-prompt.md) (tiếng Trung) | Prompt và giới hạn khi nhận diện mã cổ phiếu từ ảnh |
+| [Tích hợp OpenClaw Skill](openclaw-skill-integration.md) (tiếng Trung) | Tích hợp ngoài qua OpenClaw / Skill |
+| [Tích hợp Grok Bot](grok-bot-integration.md) (tiếng Trung) | Grok Bot (AI teammate) với REST / DecisionSignal / Skill của DSA |
 
-## 部署与打包
+## Triển khai và đóng gói
 
-| 文档 | 内容 |
+| Tài liệu | Nội dung |
 | --- | --- |
-| [部署指南](DEPLOY.md) | 服务器部署、Docker、systemd、Supervisor 等部署方式 |
-| [云端 WebUI 部署](deploy-webui-cloud.md) | 云服务器访问 WebUI 的部署说明 |
-| [Zeabur 部署](docker/zeabur-deployment.md) | Zeabur 平台部署说明 |
-| [桌面端打包说明](desktop-package.md) | Electron 桌面端和 Web 构建产物打包说明 |
-| [Chạy trên Windows qua LAN](windows-lan-deploy.md) | Build trên Mac, chạy FastAPI + Web UI + lịch + cảnh báo realtime trên máy Windows, truy cập qua IP mạng LAN (tiếng Việt) |
+| [Hướng dẫn triển khai (EN)](DEPLOY_EN.md) | Server, Docker, systemd, Supervisor |
+| [Triển khai WebUI trên cloud](deploy-webui-cloud.md) (tiếng Trung) | Truy cập WebUI trên server cloud |
+| [Triển khai Zeabur](docker/zeabur-deployment.md) (tiếng Trung) | Triển khai trên nền tảng Zeabur |
+| [Đóng gói desktop](desktop-package.md) (tiếng Trung) | Đóng gói Electron desktop và bản build Web |
+| [Chạy trên Windows qua LAN](windows-lan-deploy.md) | Build trên Mac, chạy FastAPI + Web UI + lịch + cảnh báo realtime trên máy Windows, truy cập qua IP LAN |
 
-## 参考与开发
+## Tham khảo và phát triển
 
-| 文档 | 内容 |
+| Tài liệu | Nội dung |
 | --- | --- |
-| [API 规格](architecture/api_spec.json) | FastAPI OpenAPI 规格产物 |
-| [贡献指南](CONTRIBUTING.md) | Issue、PR、测试、文档同步和协作要求 |
+| [Đặc tả API](architecture/api_spec.json) | Bản OpenAPI của FastAPI |
+| [Hướng dẫn đóng góp](CONTRIBUTING.md) / [EN](CONTRIBUTING_EN.md) | Issue, PR, kiểm thử, đồng bộ tài liệu |
 
-## 多语言
+## Ngôn ngữ khác
 
-| 文档 | 内容 |
+| Tài liệu | Nội dung |
 | --- | --- |
-| [英文文档索引](INDEX_EN.md) | English documentation index |
-| [英文 README](README_EN.md) | English project overview and quick start |
-| [繁中 README](README_CHT.md) | 繁體中文項目概覽與快速開始 |
+| [Mục lục tài liệu tiếng Anh](INDEX_EN.md) | English documentation index |
+| [README tiếng Anh](README_EN.md) | English project overview and quick start |

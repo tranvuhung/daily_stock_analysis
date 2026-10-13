@@ -81,7 +81,7 @@ Mở menu bên trái → **Cảnh báo** (`/alerts`). Trang gồm 4 khu vực:
 
 | Phạm vi | Đối tượng | Dùng khi |
 | --- | --- | --- |
-| **Một mã** | Nhập mã, ví dụ `HPG`, `FPT`, `VNM`, `AAPL`, `600519` | Theo dõi một cổ phiếu cụ thể. |
+| **Một mã** | Nhập mã, ví dụ `HPG`, `FPT`, `VNM`, `VCB` | Theo dõi một cổ phiếu cụ thể. |
 | **Danh mục theo dõi** | Cố định `default` | Áp dụng cho mọi mã trong danh sách cổ phiếu theo dõi (`STOCK_LIST`). |
 | **Cổ phiếu đang nắm giữ** | `Tất cả tài khoản` hoặc một tài khoản | Áp dụng cho từng mã đang có vị thế trong danh mục. |
 | **Tài khoản danh mục** | `Tất cả tài khoản` hoặc một tài khoản | Cảnh báo rủi ro ở cấp tài khoản, như cắt lỗ, tập trung hay sụt giảm. |

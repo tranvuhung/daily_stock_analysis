@@ -62,7 +62,7 @@ chore:    Build / tooling changes
 Examples:
 
 ```
-feat: add DingTalk bot support
+feat: add Discord slash command support
 fix: handle 429 rate-limit with retry backoff
 docs: update README deployment section
 ```
@@ -82,7 +82,7 @@ PRs that only change ordinary `docs/**`, non-governance Markdown, or `LICENSE` k
 
 | Check | Description | Required |
 |-------|-------------|:--------:|
-| `backend-gate` | `scripts/ci_gate.sh` — py_compile + flake8 critical errors + `./scripts/test.sh code` + `./scripts/test.sh yfinance` + offline pytest | ✅ |
+| `backend-gate` | `scripts/ci_gate.sh` — py_compile + flake8 critical errors + shell/script syntax checks (`bash -n scripts/*.sh`, `py_compile scripts/*.py`) + offline pytest | ✅ |
 | `docker-build` | Docker image build and key module import smoke test | ✅ |
 | `web-gate` | `npm run lint` + `npm run build` (triggered when `apps/dsa-web/` changes) | ✅ (when triggered) |
 | `pr-review` | Automatic PR triggering is temporarily paused. Maintainers can still run it by PR number through `workflow_dispatch`; it reads PR metadata and diff through the GitHub API and never checks out or executes fork PR code. | ❌ (advisory) |
@@ -106,7 +106,7 @@ npm run build
 
 ### Documentation Sync Rule
 
-When modifying a Chinese-language core document (e.g., `docs/full-guide.md`), your PR description **must state** whether the corresponding English document has been updated. If not updated, explain why.
+When modifying a Chinese-language core document (e.g., `docs/LLM_CONFIG_GUIDE.md`), your PR description **must state** whether the corresponding English document has been updated. If not updated, explain why.
 
 ## 📋 Priority Areas for Contribution
 

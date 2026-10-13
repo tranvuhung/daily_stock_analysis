@@ -14,7 +14,7 @@
 
 ```bash
 # 跑单个样例(真实 LLM,依赖本地已配置的模型)
-python evals/agent_trajectory/run_eval.py --sample 600519_technical
+python evals/agent_trajectory/run_eval.py --sample HPG_technical
 
 # 跑全部样例,并输出结构化 JSON(按样例 id 键控)
 python evals/agent_trajectory/run_eval.py --all --json-out eval_report.json
@@ -65,9 +65,9 @@ python evals/agent_trajectory/run_eval.py --all --json-out eval_report.json
 
 ```json
 {
-  "sample_id": "600519_technical",
+  "sample_id": "HPG_technical",
   "task_description": "…",
-  "stock_code": "600519",
+  "stock_code": "HPG",
   "metrics": { "expected_hit_rate": …, "expected_total": …, "…": "… 共 11 个字段" },
   "violations": ["…"]
 }

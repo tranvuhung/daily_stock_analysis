@@ -60,7 +60,7 @@ chore: 构建/工具相关
 
 示例：
 ```
-feat: 添加钉钉机器人支持
+feat: 添加 Discord 斜杠命令支持
 fix: 修复 429 限流重试逻辑
 docs: 更新 README 部署说明
 ```
@@ -84,7 +84,7 @@ docs: 更新 README 部署说明
 | docker-build | Docker 镜像构建与关键模块导入 smoke | ✅ |
 | web-gate | 前端变更时执行 `npm run lint` + `npm run build` | ✅（触发时） |
 | pr-review | 暂停 PR 自动触发，仅保留维护者通过 `workflow_dispatch` 按 PR 编号手动运行；通过 GitHub API 读取 PR 元数据和 diff，不检出或执行 fork PR 代码 | ❌（辅助项） |
-| network-smoke | 定时/手动执行 `pytest -m network` + `scripts/test.sh quick`（非阻断） | ❌（观测项） |
+| network-smoke | 定时/手动执行 `pytest -m network` + `python main.py --stocks HPG --no-market-review --no-notify`（非阻断） | ❌（观测项） |
 
 **本地运行检查：**
 
@@ -105,7 +105,7 @@ npm run build
 
 查看 [README](../README.md) 了解项目当前的核心能力与主要入口：
 
-- 🔔 新通知渠道（钉钉、飞书、Telegram）
+- 🔔 新通知渠道
 - 🤖 新 AI 模型支持（GPT-4、Claude）
 - 📊 新数据源接入
 - 🐛 Bug 修复和性能优化

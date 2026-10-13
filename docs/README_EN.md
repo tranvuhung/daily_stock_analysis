@@ -14,13 +14,13 @@
   <img src="https://trendshift.io/api/badge/trendshift/repositories/18527/daily?language=Python" alt="#1 Python Repository Of The Day | Trendshift" width="250" height="55"/>&nbsp;<a href="https://hellogithub.com/repository/ZhuLinsen/daily_stock_analysis" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=6daa16e405ce46ed97b4a57706aeb29f&claim_uid=pfiJMqhR9uvDGlT&theme=neutral" alt="Featured｜HelloGitHub" width="230" /></a>
 </p>
 
-**AI-powered stock analysis system for A-shares / Hong Kong / US / Japanese / Korean / Taiwan stocks**
+**AI-powered stock analysis system for the Vietnam stock market (HOSE / HNX / UPCoM)**
 
-Analyze your watchlist daily -> generate a decision dashboard -> push to Telegram / Discord / Slack / Email / WeChat Work / Feishu.
+Analyze your watchlist daily -> generate a decision dashboard -> push to Telegram / Discord / Slack / Email / webhooks.
 
 [**Product Preview**](#-product-preview) · [**Key Features**](#-key-features) · [**Quick Start**](#-quick-start) · [**Sample Output**](#-sample-output) · [**Documentation Index**](./INDEX_EN.md) · [**Full Guide**](./full-guide_EN.md)
 
-English | [简体中文](README_CN.md) | [繁體中文](README_CHT.md)
+English | [Tiếng Việt (tài liệu)](INDEX.md)
 
 </div>
 
@@ -44,11 +44,11 @@ English | [简体中文](README_CN.md) | [繁體中文](README_CHT.md)
 | Capability | Coverage |
 |------------|----------|
 | AI decision reports | Core conclusion, score, trend, entry/exit levels, risk alerts, catalysts, and action checklist |
-| Multi-market data | Covers A-shares, Hong Kong, US, Japanese, Korean, Taiwan stocks, and ETFs, with quotes, K-lines, technical indicators, news, announcements, fundamentals, and report context. Data-source coverage and market boundaries are documented in [market boundaries](market-support.md) |
+| Vietnam market data | Covers HOSE / HNX / UPCoM stocks, ETFs / fund certificates, and VN indices, with quotes, K-lines, technical indicators, news, announcements, fundamentals, and report context. Data-source coverage and market boundaries are documented in [market scope](market-support.md) (Vietnamese) |
 | Web / desktop workspace | Manual analysis, task progress, history, full Markdown reports, backtest, portfolio, settings, and light/dark themes |
 | Agent strategy chat | Multi-turn Q&A with 15 built-in strategies across Web/Bot/API |
-| Smart import & autocomplete | Image, CSV/Excel, clipboard import; code/name/pinyin/alias autocomplete |
-| Automation & notifications | GitHub Actions, Docker, local scheduler, FastAPI service, and WeChat Work / Feishu / Telegram / Discord / Slack / Email delivery |
+| Smart import & autocomplete | Image, CSV/Excel, clipboard import; code/name/alias autocomplete |
+| Automation & notifications | GitHub Actions, Docker, local scheduler, FastAPI service, and Telegram / Discord / Slack / Email / webhook delivery |
 
 > Detailed fields, fundamental P0 timeout semantics, trading rules, data-source priority, Web/API behavior, and troubleshooting live in the [Full Guide](./full-guide_EN.md).
 
@@ -57,11 +57,10 @@ English | [简体中文](README_CN.md) | [繁體中文](README_CHT.md)
 | Type | Supported |
 |------|-----------|
 | AI Models | [Anspire](https://open.anspire.cn/?share_code=QFBC0FYC), [AIHubMix](https://inferera.com/?aff=CfMq), Gemini, OpenAI-compatible providers, DeepSeek, Qwen, Claude, Ollama |
-| Market Data | [TickFlow](https://tickflow.org/auth/register?ref=WDSGSPS5XC), AkShare, Tushare, Pytdx, Baostock, YFinance, Longbridge |
-| News Search | [Anspire](https://open.anspire.cn/?share_code=QFBC0FYC), [SerpAPI](https://serpapi.com/github-daily-stock-analysis), [Tavily](https://tavily.com/), [Bocha](https://open.bocha.cn/), [Brave](https://brave.com/search/api/), [MiniMax](https://platform.minimaxi.com/), SearXNG |
-| Social Sentiment | [Stock Sentiment API](https://api.adanos.org/docs) for Reddit / X / Polymarket, US stocks only |
+| Market Data | VCI (Vietcap), SSI iBoard, [vnstock](../requirements-vn-optional.txt) (optional), YFinance (HOSE daily fallback) |
+| News Search | [Anspire](https://open.anspire.cn/?share_code=QFBC0FYC), [SerpAPI](https://serpapi.com/github-daily-stock-analysis), [Tavily](https://tavily.com/), [Brave](https://brave.com/search/api/), SearXNG |
 
-> The project includes free market-data sources such as AkShare, Baostock, and YFinance and can run without extra data-source credentials. These free sources can be rate-limited, change upstream contracts, or fluctuate by network condition, so stability is not guaranteed. For scheduled runs, batch analysis, or steadier quotes, configure token-based sources such as TickFlow, Tushare, or Longbridge; market coverage, Actions mappings, and fallback rules are documented in [Data Source Configuration](./full-guide_EN.md#data-source-configuration).
+> Vietnam market data comes from the public VCI and SSI endpoints and needs no API key. Public endpoints can be rate-limited or change upstream contracts; the fallback chain is documented in [Data-source stability](data-source-stability.md) (Vietnamese).
 
 ## 🚀 Quick Start
 
@@ -96,8 +95,6 @@ Start with one provider and one API key. For multi-model routing, image recognit
 
 | Secret Name | Description |
 |-------------|-------------|
-| `WECHAT_WEBHOOK_URL` | WeChat Work bot |
-| `FEISHU_WEBHOOK_URL` | Feishu bot |
 | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` | Telegram |
 | `DISCORD_WEBHOOK_URL` | Discord webhook |
 | `SLACK_BOT_TOKEN` + `SLACK_CHANNEL_ID` | Slack bot |
@@ -109,7 +106,7 @@ More channels, signatures, email groups, and Markdown-to-image settings are in [
 
 | Secret Name | Description | Required |
 |-------------|-------------|:--------:|
-| `STOCK_LIST` | Watchlist codes, such as `600519,hk00700,AAPL,7203.T,005930.KS,2330.TW`; registered-index explicit codes (e.g. `sh000016`, `930606.CSI`) are supported via the one-shot `--stocks` argument or the GitHub Actions entry — see [Index watchlist configuration](full-guide_EN.md#index-watchlist-configuration) | ✅ |
+| `STOCK_LIST` | Watchlist codes, such as `HPG,FPT,VCB,VNINDEX`; code formats are listed in [market scope](market-support.md) | ✅ |
 
 **News sources (recommended)**
 
@@ -117,27 +114,23 @@ News search strongly improves sentiment, announcements, events, and catalyst qua
 
 | Secret Name | Description | Required |
 |-------------|-------------|:--------:|
-| `ANSPIRE_API_KEYS` | [Anspire AI Search](https://aisearch.anspire.cn/), optimized for Chinese content and A-share analysis; the same key can also be used for Anspire LLM fallback examples | **Recommended** |
+| `ANSPIRE_API_KEYS` | [Anspire AI Search](https://aisearch.anspire.cn/), aggregated news search; the same key can also be used for Anspire LLM fallback examples | **Recommended** |
 | `SERPAPI_API_KEYS` | [SerpAPI](https://serpapi.com/github-daily-stock-analysis), search-engine results for realtime financial news | **Recommended** |
 | `TAVILY_API_KEYS` | [Tavily](https://tavily.com/), general news search API | Optional |
-| `BOCHA_API_KEYS` | [Bocha](https://open.bocha.cn/), Chinese search with AI summaries | Optional |
-| `BRAVE_API_KEYS` | [Brave Search](https://brave.com/search/api/), privacy-first search and US-stock news enrichment | Optional |
-| `MINIMAX_API_KEYS` | [MiniMax](https://platform.minimaxi.com/), structured search results | Optional |
+| `BRAVE_API_KEYS` | [Brave Search](https://brave.com/search/api/), privacy-first web search | Optional |
 | `SEARXNG_BASE_URLS` | Self-hosted SearXNG instances for quota-free fallback | Optional |
 
-More search providers, social sentiment, and fallback behavior are in [Search Configuration](./full-guide_EN.md#search-service-configuration).
+More search providers and fallback behavior are in [Search Configuration](./full-guide_EN.md#search-service-configuration).
 
 **Market data sources (optional)**
 
-> Free sources like AkShare, Baostock, and YFinance are used by default. "Not configured" messages in the logs are informational and do not affect execution.
-> For more stable data, configure the following secrets per market:
+> VCI and SSI are public and need no key. The only optional data-source switch is:
 
 | Secret Name | Market | Description |
 |-------------|:------:|-------------|
-| `TUSHARE_TOKEN` | A-shares | Improves historical data stability |
-| `LONGBRIDGE_OAUTH_CLIENT_ID` + `LONGBRIDGE_OAUTH_TOKEN_CACHE_B64` | HK/US stocks | Fills in volume ratio, turnover rate, P/E, and other fields |
+| `VNSTOCK_ENABLED` | Vietnam | Enables the optional `vnstock` source (requires `requirements-vn-optional.txt`; vnstock is licensed for personal use and ships telemetry) |
 
-> See [Data Source Configuration](./full-guide_EN.md#data-source-configuration).
+> See [Data-source stability](data-source-stability.md).
 
 #### 3. Enable Actions
 
@@ -149,7 +142,7 @@ Open the `Actions` tab and click `I understand my workflows, go ahead and enable
 
 #### Done
 
-By default, the workflow runs every weekday at 18:00 Beijing time and skips non-trading days. Forced runs, trading-day checks, and resume rules are covered in the [Full Guide](./full-guide_EN.md#scheduled-task-configuration).
+By default, the workflow runs every weekday at 18:00 Vietnam time (UTC+7); weekends are skipped (there is no HOSE/HNX holiday calendar). Forced runs, trading-day checks, and resume rules are covered in the [Full Guide](./full-guide_EN.md#scheduled-task-configuration).
 
 ### Option 2: Local / Docker Deployment
 
@@ -172,7 +165,7 @@ Common commands:
 ```bash
 python main.py --debug
 python main.py --dry-run
-python main.py --stocks 600519,hk00700,AAPL,2330.TW
+python main.py --stocks HPG,FPT,VCB,VNINDEX
 python main.py --market-review
 python main.py --schedule
 python main.py --serve-only
@@ -244,11 +237,11 @@ After configuring any available AI API key, the Web `/chat` page can use strateg
 
 ## 🧩 Related Projects
 
-> DSA focuses on daily analysis reports. Its screening implementation references AlphaSift, while AlphaEvo covers strategy validation and evolution.
+> DSA focuses on daily analysis reports and no longer ships a stock screener. AlphaSift is a separate screening project, while AlphaEvo covers strategy validation and evolution.
 
 | Project | Focus |
 |---------|-------|
-| [AlphaSift](https://github.com/ZhuLinsen/alphasift) | Reference project for DSA's screening implementation |
+| [AlphaSift](https://github.com/ZhuLinsen/alphasift) | Separate stock screening project (not integrated into DSA) |
 | [AlphaEvo](https://github.com/ZhuLinsen/alphaevo) | Strategy backtesting and self-evolution experiments for validating rules and iteratively exploring strategy parameters and combinations |
 
 ## 📞 Contact

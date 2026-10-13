@@ -51,16 +51,6 @@ if (-not (Test-PythonCode -Python $pythonBin -Code "import multipart, multipart.
   throw 'python-multipart is not importable in the selected Python environment.'
 }
 
-Write-Host 'Checking built-in screening engine availability...'
-if (-not (Test-PythonCode -Python $pythonBin -Code "import src.services.screening.pipeline")) {
-  throw 'src.services.screening.pipeline is not importable.'
-}
-
-Write-Host 'Checking Futu SDK availability...'
-if (-not (Test-PythonCode -Python $pythonBin -Code "import futu")) {
-  throw 'futu is not importable after installing requirements.'
-}
-
 Write-Host 'Checking orjson availability...'
 if (-not (Test-PythonCode -Python $pythonBin -Code "import orjson")) {
   throw 'orjson is not importable after installing requirements.'
@@ -97,9 +87,6 @@ $hiddenImports = @(
   'api.v1.endpoints.history',
   'api.v1.endpoints.stocks',
   'api.v1.endpoints.health',
-  'api.v1.endpoints.screening',
-  'src.services.screening',
-  'src.services.screening.pipeline',
   'api.v1.schemas',
   'api.v1.schemas.analysis',
   'api.v1.schemas.history',
@@ -111,7 +98,6 @@ $hiddenImports = @(
   'src.services.task_queue',
   'src.services.analysis_service',
   'src.services.history_service',
-  'src.services.screening_service',
   'uvicorn.logging',
   'uvicorn.loops',
   'uvicorn.loops.auto',
@@ -137,10 +123,7 @@ $pyInstallerArgs = @(
   '--add-data', 'strategies;strategies',
   '--add-data', 'src/assets/share_image;src/assets/share_image',
   '--collect-data', 'litellm',
-  '--collect-data', 'tiktoken',
-  '--collect-data', 'akshare',
-  '--collect-all', 'src.services.screening',
-  '--collect-all', 'futu'
+  '--collect-data', 'tiktoken'
 )
 $pyInstallerArgs += $hiddenImportArgs
 $pyInstallerArgs += 'main.py'
@@ -164,7 +147,7 @@ if (-not (Test-Path $packagedEntry)) {
 }
 $previousProbe = $env:DSA_PACKAGED_IMPORT_PROBE
 try {
-  foreach ($module in @('src.services.screening.pipeline', 'futu', 'orjson')) {
+  foreach ($module in @('orjson')) {
     $env:DSA_PACKAGED_IMPORT_PROBE = $module
     $probeProcess = Start-Process -FilePath $packagedEntry -Wait -PassThru
     if ($probeProcess.ExitCode -ne 0) {
@@ -177,15 +160,6 @@ try {
   } else {
     $env:DSA_PACKAGED_IMPORT_PROBE = $previousProbe
   }
-}
-
-Write-Host 'Verifying packaged AkShare calendar data...'
-$packagedAkshareCalendar = Join-Path 'dist\backend\stock_analysis' '_internal\akshare\file_fold\calendar.json'
-if (-not (Test-Path $packagedAkshareCalendar)) {
-  $packagedAkshareCalendar = Join-Path 'dist\backend\stock_analysis' 'akshare\file_fold\calendar.json'
-}
-if (-not (Test-Path $packagedAkshareCalendar)) {
-  throw 'Packaged AkShare calendar data not found under dist\backend\stock_analysis.'
 }
 
 Write-Host 'Verifying static asset references (packaged)...'
@@ -214,21 +188,6 @@ if (-not (Test-Path $packagedStrategies)) {
 $packagedStrategyCount = @(Get-ChildItem -Path $packagedStrategies -Filter '*.yaml' -File).Count
 if ($packagedStrategyCount -ne $sourceStrategyCount) {
   throw "Packaged strategies count mismatch: expected $sourceStrategyCount, got $packagedStrategyCount."
-}
-
-Write-Host 'Verifying packaged screening strategies...'
-$sourceScreeningStrategies = Join-Path 'src\services\screening' 'strategies'
-$sourceScreeningStrategyCount = @(Get-ChildItem -Path $sourceScreeningStrategies -Filter '*.yaml' -File).Count
-$packagedScreeningStrategies = Join-Path 'dist\backend\stock_analysis' '_internal\src\services\screening\strategies'
-if (-not (Test-Path $packagedScreeningStrategies)) {
-  $packagedScreeningStrategies = Join-Path 'dist\backend\stock_analysis' 'src\services\screening\strategies'
-}
-if (-not (Test-Path $packagedScreeningStrategies)) {
-  throw 'Packaged screening strategies directory not found under dist\backend\stock_analysis.'
-}
-$packagedScreeningStrategyCount = @(Get-ChildItem -Path $packagedScreeningStrategies -Filter '*.yaml' -File).Count
-if ($packagedScreeningStrategyCount -ne $sourceScreeningStrategyCount) {
-  throw "Packaged screening strategies count mismatch: expected $sourceScreeningStrategyCount, got $packagedScreeningStrategyCount."
 }
 
 Write-Host 'Backend build completed.'

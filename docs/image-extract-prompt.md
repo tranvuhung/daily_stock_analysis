@@ -9,23 +9,22 @@
 ## 当前 Prompt（完整）
 
 ```
-请分析这张股票市场截图或图片，提取其中所有可见的股票代码及名称。
+Analyze this Vietnamese stock market screenshot or image and extract every visible stock code and its name.
 
-重要：若图中同时显示股票名称和代码（如自选股列表、ETF 列表），必须同时提取两者，每个元素必须包含 code 和 name 字段。
+Important: if the image shows both stock names and codes (for example a watchlist or an ETF list), you must extract both; every element must contain the code and name fields.
 
-输出格式：仅返回有效的 JSON 数组，不要 markdown、不要解释。
-每个元素为对象：{"code":"股票代码","name":"股票名称","confidence":"high|medium|low"}
-- code: 必填，股票代码（A股6位、港股5位、美股1-5字母、ETF 如 159887/512880）
-- name: 若图中有名称则必填（如 贵州茅台、银行ETF、证券ETF），与代码一一对应；仅当图中确实无名称时可省略
-- confidence: 必填，识别置信度，high=确定、medium=较确定、low=不确定
+Output format: return ONLY a valid JSON array, with no markdown and no explanation.
+Each element is an object: {"code":"stock code","name":"stock name","confidence":"high|medium|low"}
+- code: required. A Vietnam-listed code on HOSE / HNX / UPCoM: a 3-character stock ticker (e.g. HPG, FPT, VCB), an 8-character fund certificate (e.g. FUEVN100, E1VFVN30), or an index (VNINDEX, VN30, HNXINDEX, UPCOMINDEX)
+- name: required when the image shows a name (e.g. Hòa Phát, FPT Corp, Vietcombank), matched one-to-one with the code; omit only when the image truly has no name
+- confidence: required. Recognition confidence: high=certain, medium=fairly certain, low=uncertain
 
-示例（图中同时有名称和代码时）：
-- 个股：600519 贵州茅台、300750 宁德时代
-- 港股：00700 腾讯控股、09988 阿里巴巴
-- 美股：AAPL 苹果、TSLA 特斯拉
-- ETF：159887 银行ETF、512880 证券ETF、512000 券商ETF、512480 半导体ETF、515030 新能源车ETF
+Examples (when the image shows both names and codes):
+- Stocks: HPG Hòa Phát, FPT FPT Corp, VCB Vietcombank, VNM Vinamilk
+- Fund certificates: FUEVN100 Quỹ ETF VINACAPITAL VN100, E1VFVN30 Quỹ ETF DCVFMVN30
+- Indices: VNINDEX VN-Index, VN30 VN30-Index
 
-输出示例：[{"code":"600519","name":"贵州茅台","confidence":"high"},{"code":"159887","name":"银行ETF","confidence":"high"}]
+Output example: [{"code":"HPG","name":"Hòa Phát","confidence":"high"},{"code":"FUEVN100","name":"Quỹ ETF VINACAPITAL VN100","confidence":"high"}]
 
-禁止只返回代码数组如 ["159887","512880"]，必须使用对象格式。若未找到任何股票代码，返回：[]
+Never return a bare array of codes such as ["HPG","FPT"]; always use the object format. If no stock code is found, return: []
 ```

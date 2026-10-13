@@ -40,7 +40,8 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          ./scripts/test.sh quick --no-notify | tee quick-smoke.log
+          # Lượt phân tích nhanh một mã Việt Nam, không đẩy thông báo / quick single VN stock run
+          python main.py --stocks HPG --no-market-review --no-notify | tee quick-smoke.log
 
       - name: 📤 Upload smoke logs
         if: always()

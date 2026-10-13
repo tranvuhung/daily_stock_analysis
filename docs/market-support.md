@@ -1,209 +1,84 @@
-# 市场支持与边界
+# Phạm vi thị trường
 
-## 日本/韩国个股 suffix-only MVP（Issue #1718，Refs #1718）
+Hệ thống **chỉ hỗ trợ thị trường chứng khoán Việt Nam** (HOSE / HNX / UPCoM). Toàn bộ hỗ trợ A-share, Hồng Kông, Mỹ, Nhật, Hàn và Đài Loan đã bị gỡ khỏi code, cấu hình, Web và tài liệu.
 
-当前阶段支持手动输入日本、韩国股票的 Yahoo Finance 后缀代码，进入既有个股分析、历史保存和基础报告展示链路。Web 自动补全内置一批常用日股/韩股种子索引，支持按 suffix 代码、中英文名称或常用别名搜索。
+Nguồn sự thật duy nhất là `src/core/markets.py`: registry chỉ có một `MarketSpec` là `vn` (múi giờ `Asia/Ho_Chi_Minh`, tiền tệ `VND`).
 
-支持格式：
+## Tương thích cấu hình cũ
 
-- 日本：`7203.T`、`6758.T`
-- 韩国 KOSPI：`005930.KS`
-- 韩国 KOSDAQ：`035720.KQ`
+| Cấu hình / tham số | Hành vi hiện tại |
+| --- | --- |
+| `SUPPORTED_MARKETS` | Vẫn được đọc để tương thích. Mọi giá trị khác `vn` (`cn`, `us`, `all`, ...) chỉ ghi log cảnh báo rồi bị bỏ qua; tiến trình không dừng. |
+| `MARKET_REVIEW_REGION` | Chỉ còn `vn`. Giá trị cũ (`cn`, `hk`, `us`, `jp`, `kr`, `both`, danh sách phân tách dấu phẩy) được chuẩn hoá về `vn`. |
+| Tham số `market` / `region` trên API | Chỉ chấp nhận `vn`; giá trị region cũ được chuẩn hoá về `vn`. |
+| Biến môi trường của nguồn dữ liệu / kênh thông báo đã gỡ | Bị bỏ qua (không lỗi). Ví dụ: `TUSHARE_TOKEN`, `TICKFLOW_*`, `LONGBRIDGE_*`, `FINNHUB_*`, `ALPHAVANTAGE_*`, `WECHAT_*`, `FEISHU_*`, `DINGTALK_*`, `PUSHPLUS_*`, `SERVERCHAN3_*`, `ASTRBOT_*`, `ENABLE_CHIP_DISTRIBUTION`. |
 
-约束与边界：
+## Định dạng mã
 
-- 手动输入裸代码时会先检索本地/远程股票池；若 `005930`、`000660` 等裸码命中 `005930.KS`、`000660.KS` 等日韩条目，则按命中的市场提交分析；若股票池未命中，仍按既有 6 位数字代码规则默认落到 A 股语义，并保留为可追踪的跨市场歧义边界。
-- 日股/韩股 suffix 识别已集中到共享市场代码工具，数据源路由、Prompt 市场识别、交易日历和股票索引裸码解析复用同一组规则，减少后续市场扩展时的规则漂移。
-- 日股/韩股日线和基础实时/近实时行情只走 `YfinanceFetcher`，不尝试 AkShare、Tushare、Efinance、Pytdx、Baostock 等 A 股专属数据源；yfinance 报价会尽量带上 `market`、`currency`、`data_quality`、`missing_fields` 等质量元数据。
-- 基本面复用既有 offshore yfinance 轻量路径；A 股专属资金流、龙虎榜、板块等能力按 `not_supported` 降级，offshore 基本面上下文也会标记 provider、as_of、data_quality 和缺失块。
-- 报告 Prompt 已增加日股/韩股市场语义，避免套用 A 股涨跌停、北向资金、龙虎榜、融资融券等概念。
-- 交易日历注册 `jp: XTKS / Asia/Tokyo` 与 `kr: XKRX / Asia/Seoul`。日股常规阶段可识别盘前、盘中、午休、15:25-15:30 收盘集合竞价、盘后与非交易日；韩股常规阶段可识别盘前、盘中、15:20-15:30 收盘集合竞价、盘后与非交易日。若本地 `exchange-calendars` 版本缺少对应日历，既有 fail-open/fail-closed 语义保持不变。
+Ba cách viết sau được quy về cùng một `canonical_id`, tránh `stock_daily` có dòng trùng:
 
-兼容性与回退说明（针对结构化检测命中项）：
+- Mã trần: `HPG`, `FPT`, `VCB`, `X77` (3 ký tự chữ/số viết hoa).
+- Hậu tố tường minh: `HPG.VN`.
+- Tiền tố tường minh: `vnHPG` (tiền tố viết thường).
+- Chứng chỉ quỹ ETF / quỹ đóng: `FUEVN100`, `E1VFVN30`, `FUCVREIT` (8 ký tự, tiền tố `FU` hoặc `E1VF`; cũng nhận `FUEVN100.VN`, `vnFUEVN100`). Dữ liệu ngày lấy từ VCI như cổ phiếu.
 
-- `#1815` 本次仅新增 `yfinance` 报价/基本面上下文中的可选字段元数据（如 `market`、`currency`、`data_quality`、`missing_fields`、`provider`），未改动 LLM provider/model/base URL、配置 Schema、运行时环境变量、数据库字段、存量缓存序列化或消息协议版本。
-- 与本条 PR 相关的配置语义上，未新增或替换 provider、model、base URL，未新增配置清理/迁移分支；已保存配置仍保持原样，回退方式为回退该提交。
-- 外部 API 边界仍仅限既有 `yfinance` fetch 路径（含 `Ticker`/`history`/`fast_info`）与既有兜底逻辑；没有新增或迁移 API 网关/host，`YFINANCE_PRIORITY` 是唯一受影响的可见参数。JP/KR 主指数与 Yahoo symbol 对应如下（可核验）：
-  - 日经225：`^N225`（<https://finance.yahoo.com/quote/%5EN225/>）
-  - 东证指数：`^TOPX`（<https://finance.yahoo.com/quote/%5ETOPX/>）
-  - KOSPI：`^KS11`（<https://finance.yahoo.com/quote/%5EKS11/>）
-  - KOSDAQ：`^KQ11`（<https://finance.yahoo.com/quote/%5EKQ11/>）
-  - 依赖版本：`requirements.txt` 中 `yfinance>=0.2.0`，回归覆盖路径见 `tests/test_yfinance_jp_kr_indices.py` 与 `tests/test_yfinance_hk_indices.py`。
-- 兼容性与回退：`MARKET_REVIEW_REGION` 会保留合法逗号子集（如 `cn,us`）并保持 `both` 全量行为，非法值或空值回退到第一个已启用的复盘市场（Không hợp lệ/để trống thì lùi về thị trường đầu tiên đang bật; chỉ bật vn thì là `vn`），不会清空或迁移已保存配置。
-- 运行时边界：JP/KR 指数按 market_review 的 fail-open 约定逐项抓取；单项失败不会阻断其余指数与其他市场；当两个市场均无可用主指数行情时返回本地可见 `None/空`，主流程继续可按其余市场输出或直接降级。
-- 兼容性验证依据：行情/基本面上下文在 `data_provider/base.py` 与 `realtime_types.py` 中按现有 `getattr`/可选字段约定向下游透传，不强制读写新增字段；无配置迁移脚本，未观察到 provider/model/base URL fallback 路径变更。
-- 回退方式：若新增元数据字段在某端产生兼容问题，可先忽略这些字段并按既有市场判定+行情展示链路运行；必要时回滚本次提交或通过移除 `jp/kr` `MarketSymbol` 及路由扩展恢复旧行为。
+Chỉ số: `VNINDEX`, `VN30`, `VN100`, `HNXIndex`, `HNX30`, `HNXUpcomIndex`. Người dùng nhập không phân biệt hoa/thường, nhưng tên gửi sang VCI **phân biệt hoa/thường** (`HNXINDEX` trả rỗng, `HNXIndex` mới có dữ liệu); bảng ánh xạ ở `data_provider/base.py:VN_INDEX_SYMBOLS`.
 
-不承诺项：
+Mã không thuộc Việt Nam (ví dụ `600519`, `hk00700`, `AAPL`) bị từ chối ở đầu vào; endpoint lấy giá trả 404.
 
-- 不承诺实时行情；Yahoo Finance 数据可能延迟或字段缺失。
-- 不承诺完整基本面、行业/板块、市场宽度或涨跌家数。JP/KR 大盘复盘 v1 仅提供主要指数、新闻线索与模板/LLM 复盘，不提供日韩市场宽度或板块排行。
-- 不承诺完整日韩全市场股票列表；Web 自动补全当前仅覆盖仓内种子索引中的常用标的（已扩充至各 30 只左右的头部标的），未命中时仍可手动输入 suffix 代码。
-- 不补齐 Portfolio 的 JPY/KRW 汇率、成本、市值完整口径；相关字段仅放开市场类型以避免前后端校验拒绝。
+## Nguồn dữ liệu
 
-回滚方式：移除 `jp/kr` 市场识别、交易日历注册、YFinance 路由扩展、Web/API 类型放行、`scripts/stock_index_seeds/` 日韩种子索引，并删除本文档中的能力声明。
-
-## 日本/韩国大盘复盘 v1（Issue #1815 Phase 2）
-
-大盘复盘 `MARKET_REVIEW_REGION` 新增 `jp` 与 `kr`，并纳入 `both` 的多市场顺序：`cn,hk,us,jp,kr`。
-
-支持范围：
-
-- `jp`：通过 Yahoo Finance 获取日经225 `^N225` 与东证指数 `^TOPX`，输出日股大盘复盘。可复核页面：
-  - `^N225`：<https://finance.yahoo.com/quote/%5EN225/>
-  - `^TOPX`：<https://finance.yahoo.com/quote/%5ETOPX/>
-- `kr`：通过 Yahoo Finance 获取 KOSPI `^KS11` 与 KOSDAQ `^KQ11`，输出韩股大盘复盘。可复核页面：
-  - `^KS11`：<https://finance.yahoo.com/quote/%5EKS11/>
-  - `^KQ11`：<https://finance.yahoo.com/quote/%5EKQ11/>
-- Web 设置页通过 `MARKET_REVIEW_REGION` 文本框输入逗号分隔子集（如 `cn,jp`、`cn,us,jp,kr`）；交易日检查会按 `XTKS / Asia/Tokyo` 与 `XKRX / Asia/Seoul` 过滤 `both` 中当日开市市场。
-- 复盘策略、新闻搜索词、Prompt 市场语义和中英文通知标题均按 JP/KR 独立 profile 处理。
-
-说明（兼容性与验收口径）：
-
-- 线上数据可用性来自 Yahoo Finance 指数页面与接口契约，当前实现仅覆盖 `data_provider/yfinance_fetcher.py` 的指数路由与降级行为；不对实时行情连通性作稳定性承诺。
-- 与该条目标相关的本地自动化验证默认使用离线回归：`tests/test_yfinance_jp_kr_indices.py`、`tests/test_yfinance_hk_indices.py`（共性映射/回退）与 `tests/test_trading_calendar.py`（交易日过滤）。如果要补充实时可用性复核，可在联网环境直接访问上述 Yahoo Finance 页面进行一次性抽检。
-
-- 外部兼容性边界（当前实现默认假设）：
-  - 数据源：`yfinance`（版本下限 `requirements.txt` 中的 `yfinance>=0.2.0`）
-  - 长期约束：`^N225`、`^TOPX`、`^KS11`、`^KQ11` 必须在 Yahoo Finance 端有可检索 quote 页面；无法检索视为索引级不可用，由 `market_review` fail-open 机制退化到已有市场输出，不中断主流程。
-- 兼容验证（可复核）：
-  - <https://finance.yahoo.com/quote/%5EN225/>
-  - <https://finance.yahoo.com/quote/%5ETOPX/>
-  - <https://finance.yahoo.com/quote/%5EKS11/>
-  - <https://finance.yahoo.com/quote/%5EKQ11/>
-  - 可复现联机复核命令（选做）：
-```bash
-python - <<'PY'
-from yfinance import Ticker
-for symbol in ("^N225", "^TOPX", "^KS11", "^KQ11"):
-    data = Ticker(symbol).history(period="5d")
-    print(symbol, "rows", len(data))
-PY
-```
-
-边界：
-
-- JP/KR 大盘复盘 v1 不提供涨跌家数、涨跌停、行业/板块排行或资金流统计；结构化 payload 中 `breadth` 仍只在有市场宽度数据时出现。
-- 单一 JP/KR 指数拉取失败按既有 yfinance fail-open 逻辑跳过，不拖垮其它指数或其它市场。
-- 如果 `exchange-calendars` 缺少对应交易所日历，继续沿用既有交易日 fail-open/fail-closed 语义。
-
-回滚方式：从 `MARKET_REVIEW_REGION` 合法值、Web 设置枚举、MarketProfile/MarketStrategy、`_MARKET_REVIEW_MARKETS` 和本文档中移除 `jp` / `kr`。
-
-## 市场白名单与越南市场（SUPPORTED_MARKETS）
-
-系统现在通过 `SUPPORTED_MARKETS` 控制部署实际服务哪些市场，唯一真源是 `src/core/markets.py`。**默认值是 `vn`（只启用越南）**。此前市场列表在仓库里被独立重复声明了至少 8 处，彼此并不同步；本轮把它们统一派生自该注册表。
-
-停用的市场不是"能用但不推荐"，而是**一个请求都不会发出**：
-
-- `DataFetcherManager._init_default_fetchers()` 不实例化只服务停用市场的数据源；
-- `get_daily_data()` / `get_realtime_quote()` 在进入任何网络调用前按市场拦截；
-- `StockAnalysisPipeline.run()` 在提交线程池之前剔除停用市场的代码；
-- `/api/v1/data/overview` 把这些 provider 标为 `unconfigured` 并附带 `market_disabled` warning。
-
-合法值：`vn` / `cn` / `hk` / `us` / `jp` / `kr` / `tw`，支持逗号分隔；`all` 表示全部启用。非法值记录 warning 后回退默认值，不会导致进程启动失败。
-
-### 越南市场数据源
-
-| 场景 | 数据源 | 说明 |
+| Tình huống | Nguồn | Ghi chú |
 | --- | --- | --- |
-| 日线 / 指数日线 | `VciFetcher`（Priority 0） | `POST trading.vietcap.com.vn/api/chart/OHLCChart/gap-chart`，无需 API Key。**一次只能查一个代码**（传多个返回空数组），因此不实现批量日线预取 |
-| 实时行情 | `SsiFetcher`（Priority 1） | `GET iboard-query.ssi.com.vn/stock/exchange/{hose,hnx,upcom}`，**一次请求覆盖整个交易所**（HOSE 408 / HNX 299 / UPCOM 819），`prefetch_realtime_quotes` 三个请求即可覆盖全市场 |
-| 日线兜底 | `SsiFetcher` | `GET iboard-api.ssi.com.vn/statistics/charts/history`（TradingView UDF 格式） |
-| 可选补充 | `VnstockFetcher`（Priority 2） | 需 `VNSTOCK_ENABLED=true` 且已安装 `vnstock`，默认不启用 |
-| 第三兜底 | `YfinanceFetcher`（Priority 4） | `.VN` 后缀，无需 API Key。**仅覆盖 HOSE**（HNX / UPCOM / 指数均无数据），且日线**不写入数据库**，详见 [数据源稳定性](data-source-stability.md#yfinance-在越南市场的定位第三兜底源) |
+| Nến ngày / nến ngày chỉ số | `VciFetcher` (ưu tiên 0) | `POST trading.vietcap.com.vn/api/chart/OHLCChart/gap-chart`, không cần API key. **Mỗi lần chỉ hỏi một mã**, nên không có prefetch nến ngày hàng loạt. |
+| Giá realtime | `SsiFetcher` (ưu tiên 1) | `GET iboard-query.ssi.com.vn/stock/exchange/{hose,hnx,upcom}`, **một request phủ cả sàn**; `prefetch_realtime_quotes` chỉ cần ba request cho toàn thị trường. |
+| Nến ngày dự phòng | `SsiFetcher` | `GET iboard-api.ssi.com.vn/statistics/charts/history` (định dạng TradingView UDF). |
+| Bổ sung tuỳ chọn | `VnstockFetcher` (ưu tiên 2) | Cần `VNSTOCK_ENABLED=true` và đã cài `requirements-vn-optional.txt`; mặc định tắt vì giấy phép vnstock là "Personal Use" và có telemetry. |
+| Dự phòng thứ ba | `YfinanceFetcher` (ưu tiên 4) | Hậu tố `.VN`, không cần key. **Chỉ phủ HOSE** (HNX / UPCoM / chỉ số không có dữ liệu), và nến ngày **không ghi vào DB**. Xem [Độ ổn định nguồn dữ liệu](data-source-stability.md). |
+| Giá realtime qua MQTT (tuỳ chọn) | TVSI MQTT | Tắt mặc định; cấu hình `TVSI_MQTT_*` trong `.env.example`. |
 
-支持的代码写法（三者归一到同一个 `canonical_id`，避免 `stock_daily` 出现重复行）：
+Các nguồn A-share / quốc tế đã bị xoá: akshare, efinance, tushare, pytdx, baostock, tencent, tickflow, longbridge, futu, finnhub, alphavantage.
 
-- 裸代码：`HPG`、`FPT`、`X77`（固定 3 位大写字母数字）
-- 显式后缀：`HPG.VN`
-- 显式前缀：`vnHPG`（**前缀必须小写**，与 `us` 前缀的既有约定一致；全大写的 `VNHPG` 会按美股 ticker 处理，避免 `VNRDF` 这类 5 位美股代码被误剥成 `RDF`）
-- Chứng chỉ quỹ ETF / quỹ đóng: `FUEVN100`、`E1VFVN30`、`FUCVREIT`（8 ký tự, tiền tố `FU` hoặc `E1VF`; cũng nhận `FUEVN100.VN`、`vnFUEVN100`）。Không trùng ticker Mỹ nên mã trần luôn được nhận là Việt Nam kể cả khi bật `us`；dữ liệu ngày lấy từ VCI như cổ phiếu.
-
-指数：`VNINDEX`、`VN30`、`VN100`、`HNXIndex`、`HNX30`、`HNXUpcomIndex`。用户输入大小写不敏感，但发往 VCI 的写法**大小写敏感**（`HNXINDEX` 返回空、`HNXIndex` 才有数据），映射表在 `data_provider/base.py:VN_INDEX_SYMBOLS`。
-
-### 已知边界
-
-- **单位不一致是本次接入最大的风险点**：VCI 日线与 SSI 快照用「盾」（21300），而 SSI 图表接口与 `vnstock` 用「千盾」（21.3）。两个后者在归一化时统一乘 1000。口径错了不会抛异常，只会让均线、止损价静默偏离 1000 倍，因此 `tests/test_vn_source_drift.py` 专门断言了跨源收盘价一致性。
-- **Yahoo 只能当第三兜底**：实测 HOSE 覆盖 20/20，HNX 与 UPCOM 各 0/20，且没有可用的指数历史（`^VNINDEX.VN` 请求一年只返回 1 根 K 线）。更关键的是它与 VCI 的**复权基准不一致**——MBB 实测显示除权日之前的历史整体相差固定系数 1.043938，而近期完全一致。因此 Yahoo 为越南标的取回的日线只服务当次分析，不写入 `stock_daily`，避免同一支股票的历史混用两套复权口径。
-- **没有交易日历**：`exchange-calendars` 的 102 个日历里没有 HOSE/HNX/UPCOM。`is_market_open('vn')` 现在只排除周六/周日（Không có lịch sàn: chỉ loại thứ 7/CN），春节等长假仍视为交易日（fail-open）。`market_phase` 对越南返回 `unknown`。
-- **大盘复盘**：已支持，见下方「Điểm lại thị trường Việt Nam」。
-- **没有基本面 / 资金流 / 板块**：这些能力当前只有 A 股实现，越南按 `not_supported` 降级。
-- **选股引擎不支持**：`src/services/screening/pipeline.py` 仍限定 `cn`/`us`。
-- **报告语言**：已切换为**仅越南语**。`REPORT_LANGUAGE` 只接受 `vi`，请求 schema 收敛为 `Literal["vi"]`；`zh`/`en`/`ko` 保留在渲染层以便历史记录按原语言显示。Web UI 语言与报告语言仍是两套独立契约。
-- **权证 / 期货 / 债券不纳入**：VCI 代码表里的 8-9 位代码（`CFPT2314`、`VN30F2512`）当前不参与分析（chứng chỉ quỹ `FU*`/`E1VF*` là ngoại lệ, đã được hỗ trợ）。
-- **同时启用 `vn` 和 `us` 时裸代码有歧义**：`HPG`/`FPT`/`VNM` 同时满足越南代码形状和美股 ticker 正则 `^[A-Z]{1,5}$`。此时按既有美股语义处理（保证回滚行为不变），越南标的需写成 `HPG.VN` 或 `vnHPG`。市场判定发生在 `normalize_stock_code` 之前，因此这两种显式写法不会被归一化抹掉。
-
-### Điểm lại thị trường Việt Nam (`MARKET_REVIEW_REGION=vn`)
-
-`vn` là region điểm lại thị trường thứ sáu, xếp sau `cn,hk,us,jp,kr` trong báo cáo đa thị trường và khi mở rộng `both`. Khi chỉ bật Việt Nam (mặc định `SUPPORTED_MARKETS=vn`) và không đặt `MARKET_REVIEW_REGION`, region mặc định là `vn`. Trước đây trường hợp này bị bỏ qua, và Web UI báo `The market review did not return a persistable report`.
+## Điểm lại thị trường (`MARKET_REVIEW_REGION=vn`)
 
 | Thành phần | Nguồn | Ghi chú |
 | --- | --- | --- |
 | Chỉ số chính | `VciFetcher.get_main_indices(region="vn")` | VN-Index, VN30, HNX-Index, UPCoM-Index, dựng từ nến ngày mới nhất. Một chỉ số lỗi thì chỉ bỏ qua chỉ số đó. |
-| Độ rộng thị trường | `SsiFetcher.get_region_market_stats("vn")` | Tính từ snapshot ba sàn: số mã tăng/giảm/đứng giá, trần/sàn (so giá khớp với giá trần/sàn), giá trị giao dịch (tỷ đồng). |
+| Độ rộng thị trường | `SsiFetcher.get_region_market_stats("vn")` | Tính từ snapshot ba sàn: số mã tăng/giảm/đứng giá, trần/sàn, giá trị giao dịch (tỷ đồng). |
 | Tin tức | `SearchService` | Truy vấn tiếng Việt theo `VN_PROFILE.news_queries`, ngữ cảnh `VNINDEX`. |
-| Ngôn ngữ | Prompt | Khi `REPORT_LANGUAGE=vi`, model được yêu cầu viết toàn bộ bằng tiếng Việt; tiêu đề bao ngoài cũng là tiếng Việt. |
-
-Định tuyến: `DataFetcherManager.get_market_stats(region="vn")` chỉ hỏi các fetcher có cài `get_region_market_stats`. Fetcher A-share bỏ qua tham số region và luôn trả dữ liệu A-share, nên không bao giờ được gọi cho `vn`. Region `cn` giữ nguyên thứ tự TickFlow → các fetcher như trước.
 
 Giới hạn:
 
-- Chỉ tính cổ phiếu/ETF mã 3 ký tự đã có giá khớp; loại chứng quyền, phái sinh, trái phiếu và mã chưa giao dịch.
-- Giá trị giao dịch là giá trị **khớp lệnh** (`nmTotalTradedValue`), không gồm giao dịch thỏa thuận, nên thấp hơn tổng giá trị mà các chỉ số công bố.
-- Chưa có xếp hạng ngành hay dòng tiền khối ngoại cho `vn`. Prompt khai báo rõ giới hạn dữ liệu để model không tự bịa.
-- Market Light và cảnh báo thị trường (`target_scope=market`, `target=vn`) đã hỗ trợ `vn`, và `vn` là region mặc định. `cn/hk/us` chỉ dùng được khi bật trong `SUPPORTED_MARKETS`. Xem [alerts.md](alerts.md) mục P7.
-- Nếu `SUPPORTED_MARKETS` không có thị trường nào hỗ trợ điểm lại (ví dụ chỉ `tw`), `POST /api/v1/analysis/market-review` trả về 400 `market_review_unsupported` thay vì nhận task rồi thất bại.
+- Chỉ tính cổ phiếu/ETF đã có giá khớp; loại chứng quyền, phái sinh, trái phiếu và mã chưa giao dịch.
+- Giá trị giao dịch là giá trị **khớp lệnh** (`nmTotalTradedValue`), không gồm thoả thuận.
+- Không có xếp hạng ngành hay dòng tiền khối ngoại. Prompt khai báo rõ giới hạn dữ liệu để model không tự bịa.
+- Market Light và cảnh báo thị trường (`target_scope=market`, `target=vn`) chỉ hỗ trợ `vn`. Xem [alerts.md](alerts.md).
 
-Rollback: đặt lại `supports_market_review=False` cho `vn` trong `src/core/markets.py`. Không có migration dữ liệu.
+## Ngôn ngữ báo cáo
 
-### 回滚方式
+Chỉ còn `vi` và `en` (`src/report_language.py`); `zh` / `ko` đã bị gỡ. Ngôn ngữ giao diện Web và ngôn ngữ báo cáo là hai hợp đồng độc lập.
 
-设置 `SUPPORTED_MARKETS=all` 即可恢复本次改动前的全部市场行为：所有原有数据源重新实例化，代码归属判定顺序与改动前逐项一致（`tests/test_vn_market_routing.py::MarketTagTestCase::test_enabling_all_markets_preserves_legacy_classification` 覆盖）。没有数据库迁移，没有表结构变更。若需彻底移除，revert 本次改动即可。
+## Tính năng đã gỡ (chỉ dành cho A-share hoặc thị trường khác)
 
-## 台湾个股支持（suffix-only，Issue #1772 / #1777）
+| Tính năng | Ghi chú tương thích |
+| --- | --- |
+| Lọc cổ phiếu (screening engine) | Toàn bộ `/api/v1/screening/*` đã bị xoá. |
+| Phân bố chip (chip distribution) | `ENABLE_CHIP_DISTRIBUTION` bị bỏ qua. |
+| Cấu trúc thị trường / điểm nóng, xếp hạng ngành và concept | Trường `belong_boards`, `sector_rankings`, `concept_rankings`, `market_structure` đã bị xoá khỏi `ReportDetails`. |
+| Dòng tiền / bảng ngành A-share | Khuyến nghị mua của mã Việt Nam không còn bị hạ bậc vì thiếu dữ liệu dòng tiền (vốn chỉ có ở A-share). |
+| Tâm lý mạng xã hội cổ phiếu Mỹ | Đã xoá. |
+| Dòng tiền ba nhóm tổ chức Đài Loan | Đã xoá. |
+| Làm mới chỉ mục cổ phiếu từ xa | Đã xoá; chỉ mục tự động hoàn thành sinh bằng `python scripts/generate_vn_index.py` từ danh sách mã VCI. |
+| Nhập danh mục từ Futu (`--portfolio futu`) | Tuỳ chọn CLI đã bị xoá. |
 
-当前阶段支持手动输入台湾股票的 Yahoo Finance 后缀代码，进入既有个股分析、历史保存、报告渲染、DecisionSignal、Portfolio 和 Intelligence 链路。TWSE 上市股票使用 `.TW` 后缀，TPEx 上柜（柜买）股票使用 `.TWO` 后缀，二者折叠为同一 `tw` 市场标签。
+## Giới hạn đã biết
 
-近期台股链路已从早期 MVP 收敛为一等个股分析市场：市场识别、数据路由、交易日历/市场阶段、YFinance 日线与基础行情、主要指数、服务层/API/Web 市场枚举、TWD 币种标注、三大法人报告区块与 LLM prompt 消费均已接入。仍需保留的边界是：台股股票池种子/自动补全、大盘复盘 `MARKET_REVIEW_REGION=tw`、Market Light 大盘红绿灯告警和完整台股市场宽度/板块排行尚未纳入。
+- **Đơn vị giá không đồng nhất giữa các nguồn**: nến ngày VCI và snapshot SSI dùng "đồng" (21300), còn API biểu đồ SSI và `vnstock` dùng "nghìn đồng" (21.3); hai nguồn sau được nhân 1000 khi chuẩn hoá. Sai đơn vị không ném lỗi mà làm lệch MA / giá cắt lỗ 1000 lần, nên `tests/test_vn_source_drift.py` kiểm tra độ khớp giá đóng cửa giữa các nguồn.
+- **Yahoo chỉ là dự phòng thứ ba**: phủ HOSE nhưng không phủ HNX / UPCoM / chỉ số, và **mốc điều chỉnh giá khác VCI** (ví dụ MBB lệch hệ số cố định 1.043938 trước ngày giao dịch không hưởng quyền). Vì vậy nến ngày lấy từ Yahoo chỉ phục vụ lần phân tích hiện tại, không ghi vào `stock_daily`.
+- **Không có lịch giao dịch sàn**: `exchange-calendars` không có lịch HOSE/HNX/UPCoM. `is_market_open('vn')` chỉ loại thứ Bảy / Chủ nhật; nghỉ lễ dài (Tết) vẫn coi là ngày giao dịch (fail-open). `market_phase` trả `unknown`.
+- **Không có cơ bản / dòng tiền / ngành**: các khối này được hạ cấp `not_supported`.
+- **Chứng quyền / phái sinh / trái phiếu chưa hỗ trợ**: mã 8-9 ký tự trong danh sách VCI (`CFPT2314`, `VN30F2512`) không tham gia phân tích (chứng chỉ quỹ `FU*` / `E1VF*` là ngoại lệ).
 
-支持格式：
+## Rollback
 
-- 上市（TWSE）：`2330.TW`、`0050.TW`
-- 上柜（TPEx / 柜买）：`6488.TWO`、`5483.TWO`
-- 代码 base 为 4-6 位数字（普通股 4 位，ETF/其他至 6 位，如 `00878.TW`、`006208.TW`），较日股 `.T` 的 4-5 位更宽。
-
-约束与边界：
-
-- **严格 suffix-only**：裸 `2330`、`00878` 等不带后缀的代码不会进入台股语义（`detect_market` / `get_market_for_stock` 仅在显式 `.TW`/`.TWO` 后缀时返回 `tw`）。当前未内置台股股票索引/种子解析，Web 自动补全不承诺完整台股股票池；未命中时请手动输入完整 suffix 代码。
-- 台股日线和基础实时/近实时行情只走 `YfinanceFetcher`，不尝试 AkShare、Tushare、Efinance、Pytdx、Baostock 等 A 股专属数据源。
-- 基本面复用既有 offshore yfinance 轻量路径；`institution` 区块额外消费台股三大法人资料并渲染到报告，A 股专属资金流、龙虎榜、板块等能力按 `not_supported` 降级。
-- 报告 Prompt 已增加台股市场语义（新台币、三大法人、TWSE/TPEx ±10% 涨跌停），并将三大法人净买卖超注入 LLM 分析上下文，避免套用 A 股北向资金、龙虎榜等概念。
-- 交易日历注册 `tw: XTAI / Asia/Taipei`。TWSE 为 09:00–13:30 连续交易、无午休；收盘集合竞价 13:25–13:30 已按 5 分钟启发式窗口建模（`_CLOSING_AUCTION_WINDOW_MINUTES["tw"]=5`，`market_phase` 可返回 `closing_auction`）。JP/KR 也已按常规交易时段补齐收盘集合竞价窗口（JP 15:25-15:30、KR 15:20-15:30）。若本地 `exchange-calendars` 版本缺少对应日历，既有 fail-open/fail-closed 语义保持不变。
-- 主要指数提供加权指数 `^TWII` 与柜买指数 `^TWOII`。
-- 三大法人买卖超（institutional flows）资料层：`TwInstitutionalFetcher`（`data_provider/tw_institutional_fetcher.py`）提供上市（TWSE T86，legacy `rwd` 端点）/ 上柜（TPEx OpenAPI）每日外资·投信·自营商·三大法人买卖超（单位：**股数**；按日期+市场做单日全市场缓存再过滤个股，TPEx 民国年转西元有单测覆盖）。接口失败/限流/空响应/字段缺失一律 **fail-open** 返回无数据，不中断分析；仅对 `.TW`/`.TWO` 生效，不改动现有市场流程。资料来源为政府开放资料，采「政府资料开放授权条款第 1 版」(OGDL v1，允许商用与再散布，需标示来源)。
-- 三大法人 fetcher 已具备并发缓存防击穿和按 TWSE/TPEx 分流的熔断保护；TPEx OpenAPI 仅服务最新交易日，传入与服务日期不符的明确日期会 fail-open 返回无数据，避免错日资料静默进入报告。
-- 台股财务金额会使用 TWD -> 「新台币」标注，避免落入 A 股语境下的默认「元」。
-
-不承诺项：
-
-- 不承诺实时行情；Yahoo Finance 数据可能延迟或字段缺失。
-- 不承诺完整基本面、行业/板块、市场宽度、涨跌家数或台股大盘复盘；`MARKET_REVIEW_REGION` 仍只接受 `cn/hk/us/jp/kr/vn/both` 或这些市场的逗号子集。
-- 台股股票索引/种子和 Web 自动补全仍未完整接入；告警 MarketRegion 与后端 Market Light 告警为 `vn/cn/hk/us`（受 `SUPPORTED_MARKETS` 约束），未含 `tw`。
-- 不补齐 Portfolio 的 TWD 汇率、成本、市值完整口径；台股 Portfolio 当前属于 partial valuation 市场。
-
-回滚方式：移除 `tw` 市场识别、交易日历注册、YFinance 路由扩展、三大法人资料层/报告消费、TWD 标注、服务层/API 市场枚举及前端市场类型放行，并删除本文档中的能力声明。
-
-## 日本/韩国 Portfolio 与 Market Light 边界（Issue #1815 Phase 3）
-
-Portfolio 允许 JP/KR 账户、交易和持仓快照进入现有链路，但会将账户/持仓快照标记为 `data_quality=partial`，并通过 `limitations` 明确 `realtime_quote_best_effort`、`fx_and_cost_basis_partial`、`sector_and_risk_metrics_limited`；不承诺 JPY/KRW 汇率、成本、市值、行业集中度或组合风险指标完整口径。
-
-- JP/KR 账户、交易、现金流水和公司行动 API 保持可创建/查询；当前不新增 JPY/KRW 汇率源、税费模型、交易单位/最小变动价位校验或行业映射。
-- Market Light 快照和 Market Light 告警只支持 `vn` / `cn` / `hk` / `us`（且需在 `SUPPORTED_MARKETS` 中启用），不含 `jp` / `kr`。
-- Web 告警市场下拉不展示 `jp` / `kr`；后端 `normalize_market_region()` 对 `jp` / `kr` 返回显式 unsupported 错误。
-- Web 设置页中 `MARKET_REVIEW_REGION` 从固定枚举下拉收敛为自由文本输入，用于保存 `cn,us,jp`、`cn,hk,us` 等逗号分隔子集；该 UI 变化只影响大盘复盘配置，不影响 Market Light 告警市场枚举。
-- `MARKET_REVIEW_REGION` 既有 `cn`、`hk`、`us` 可原样保留；若用户希望维持 JP/KR 扩展前 `both` 对应的三市场复盘边界，应改为 `cn,hk,us`；只有希望纳入五市场复盘时才继续使用 `both` 或显式配置 `cn,hk,us,jp,kr`。
-- 该轮边界收敛不改动 LLM Provider / Model / Base URL 的持久化语义，也不执行默认模型、运行时配置清理或回写；配置更新仍是**原子 upsert**（`ConfigManager.apply_updates`），保存/导入只写入提交的键，未提交的 `LITELLM_MODEL`、`LITELLM_FALLBACK_MODELS`、`AGENT_LITELLM_MODEL`、`VISION_MODEL`、`OPENAI_BASE_URL` 等旧值保留不清空。
-- 可直接核验的配置兼容证据：本轮未新增或替换外部 provider/model/Base URL，仍沿用 LiteLLM OpenAI-compatible 路由（<https://docs.litellm.ai/docs/providers/openai_compatible>）、OpenAI Chat Completions 请求形状（<https://platform.openai.com/docs/api-reference/chat/create>），以及 [LLM 服务商配置指南](llm-providers.md#官方来源与兼容性) 中集中维护的各 provider 官方来源链接。当前运行时依赖窗口以 `requirements.txt` 的 `litellm>=1.80.10,!=1.82.7,!=1.82.8,<1.99.0` 为准；旧配置没有迁移脚本或清理分支，保存/导入仍只通过 `ConfigManager.apply_updates` 写入本次提交键。回退路径是恢复变更前 `.env`/配置备份中的 `MARKET_REVIEW_REGION`，或直接 revert 本 PR；未提交的 `LITELLM_CONFIG`、`LLM_CHANNELS`、`LLM_OPENAI_*`、`LITELLM_MODEL`、`AGENT_LITELLM_MODEL`、`LITELLM_FALLBACK_MODELS`、`VISION_MODEL`、`OPENAI_*` 等既有运行时配置不需要迁移。回归证据为 `tests/test_system_config_service.py::SystemConfigServiceTestCase::test_update_market_review_region_does_not_trigger_runtime_model_cleanup` 与 `tests/test_config_env_compat.py::test_market_review_region_updates_do_not_change_llm_provider_model_contract`。
-- Web UI 可视证据口径：Market Light 告警目标范围切到“大盘市场”时，市场区域下拉只显示 A 股、港股、美股，不显示日股/韩股；设置页 `MARKET_REVIEW_REGION` 渲染为可输入逗号分隔值的文本框。当前仓库不保存一次性截图证据，可替代证据为 `apps/dsa-web/src/components/alerts/__tests__/AlertRuleForm.test.tsx`、`apps/dsa-web/src/components/settings/__tests__/SettingsField.test.tsx` 和 `apps/dsa-web/tests/system_config_i18n.test.ts` 的断言。
-
-回滚方式：移除 Portfolio snapshot 的 `data_quality` / `limitations` 扩展，恢复告警前端/后端对市场枚举的旧边界说明；如需整体回滚，移除 `jp/kr` 市场识别、交易日历注册、YFinance 路由扩展、Web/API 类型放行、`scripts/stock_index_seeds/` 日韩种子索引，并删除本文档中的能力声明。
+Việc gỡ đa thị trường là thay đổi phá vỡ (breaking change), không có công tắc bật lại. Muốn quay lại hành vi cũ thì revert các commit liên quan trên nhánh `refactor/vn-only-market`; không có migration dữ liệu hay thay đổi cấu trúc bảng.

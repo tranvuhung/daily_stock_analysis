@@ -1,16 +1,16 @@
 [
   {
-    "id": "600519_technical",
-    "task_description": "分析贵州茅台（600519）近期技术面走势，输出趋势判断",
-    "stock_code": "600519",
+    "id": "HPG_technical",
+    "task_description": "Phân tích xu hướng kỹ thuật gần đây của Hòa Phát (HPG), đưa ra nhận định xu hướng",
+    "stock_code": "HPG",
     "expected_tools": ["get_realtime_quote", "get_daily_history", "analyze_trend"],
     "allowed_max_steps": 8,
     "allow_optional_tools": true
   },
   {
-    "id": "000001_core_data_strict",
-    "task_description": "获取平安银行（000001）核心行情数据，不做扩展检索",
-    "stock_code": "000001",
+    "id": "VCB_core_data_strict",
+    "task_description": "Lấy dữ liệu giá cốt lõi của Vietcombank (VCB), không tìm kiếm mở rộng",
+    "stock_code": "VCB",
     "expected_tools": ["get_realtime_quote", "get_daily_history"],
     "allowed_max_steps": 6,
     "allow_optional_tools": false

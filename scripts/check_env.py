@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-A-share watchlist intelligent analysis system - environment verification test
+Vietnam stock watchlist analysis system - environment verification test
 ===================================
 
 Verifies that the .env configuration is correct, including:
@@ -99,17 +99,12 @@ def check_config():
     print(f"  调试模式: {config.debug}")
     
     print_section("API 配置")
-    print(f"  Tushare Token: {'已配置 ✓' if config.tushare_token else '未配置 ✗'}")
-    if config.tushare_token:
-        print(f"    Token 前8位: {config.tushare_token[:8]}...")
-    
     print(f"  Gemini API Key: {'已配置 ✓' if config.gemini_api_key else '未配置 ✗'}")
     if config.gemini_api_key:
         print(f"    Key 前8位: {config.gemini_api_key[:8]}...")
     print(f"  Gemini 主模型: {config.gemini_model}")
     print(f"  Gemini 备选模型: {config.gemini_model_fallback}")
     
-    print(f"  企业微信 Webhook: {'已配置 ✓' if config.wechat_webhook_url else '未配置 ✗'}")
     
     print_section("配置验证")
     issues = config.validate_structured()
@@ -203,7 +198,7 @@ def view_database():
     return True
 
 
-def check_data_fetch(stock_code: str = "600519"):
+def check_data_fetch(stock_code: str = "HPG"):
     """Test data fetching"""
     print_header("3. 数据获取测试")
     
@@ -276,19 +271,19 @@ def check_llm():
     
     # Build test context
     test_context = {
-        'code': '600519',
+        'code': 'HPG',
         'date': date.today().isoformat(),
         'today': {
-            'open': 1420.0,
-            'high': 1435.0,
-            'low': 1415.0,
-            'close': 1428.0,
-            'volume': 5000000,
-            'amount': 7140000000,
-            'pct_chg': 0.56,
-            'ma5': 1425.0,
-            'ma10': 1418.0,
-            'ma20': 1410.0,
+            'open': 27.10,
+            'high': 27.45,
+            'low': 26.95,
+            'close': 27.30,
+            'volume': 25000000,
+            'amount': 682500000000,
+            'pct_chg': 0.74,
+            'ma5': 27.15,
+            'ma10': 26.90,
+            'ma20': 26.60,
             'volume_ratio': 1.1,
         },
         'ma_status': '多头排列 📈',
@@ -297,7 +292,7 @@ def check_llm():
     }
     
     print_section("发送测试请求")
-    print(f"  测试股票: 贵州茅台 (600519)")
+    print(f"  Mã thử nghiệm / Test stock: Hòa Phát (HPG)")
     print(f"  正在调用 Gemini API（超时: 60秒）...")
     
     start_time = time.time()
@@ -346,38 +341,35 @@ def check_notification():
     print_header("5. 通知推送测试")
     
     from src.notification import NotificationService
-    from src.config import get_config
-    
-    config = get_config()
+
     service = NotificationService()
     
     print_section("配置检查")
     if service.is_available():
-        print(f"  ✓ 企业微信 Webhook 已配置")
-        webhook_preview = config.wechat_webhook_url[:50] + "..." if len(config.wechat_webhook_url) > 50 else config.wechat_webhook_url
-        print(f"    URL: {webhook_preview}")
+        # Đã cấu hình ít nhất một kênh thông báo / at least one channel configured
+        print(f"  ✓ Kênh thông báo đã cấu hình: {service.get_channel_names()}")
     else:
-        print(f"  ✗ 企业微信 Webhook 未配置")
+        print(f"  ✗ Chưa cấu hình kênh thông báo nào (Telegram/Email/Discord/Slack/...)")
         return False
     
     print_section("发送测试消息")
     
-    test_message = f"""## 🧪 系统测试消息
+    test_message = f"""## 🧪 Tin nhắn kiểm tra hệ thống
 
-这是一条来自 **A股自选股智能分析系统** 的测试消息。
+Đây là tin nhắn kiểm tra từ **hệ thống phân tích cổ phiếu Việt Nam**.
 
-- 测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-- 测试目的: 验证企业微信 Webhook 配置
+- Thời gian: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+- Mục đích: xác minh cấu hình kênh thông báo
 
-如果您收到此消息，说明通知功能配置正确 ✓"""
+Nếu bạn nhận được tin nhắn này, chức năng thông báo đã cấu hình đúng ✓"""
     
     print(f"  正在发送...")
     
     try:
-        success = service.send_to_wechat(test_message)
+        success = service.send(test_message)
         
         if success:
-            print(f"  ✓ 消息发送成功，请检查企业微信")
+            print(f"  ✓ Gửi thành công, hãy kiểm tra kênh thông báo")
         else:
             print(f"  ✗ 消息发送失败")
         
@@ -391,7 +383,7 @@ def check_notification():
 def run_all_tests():
     """Run all tests"""
     print("\n" + "🚀" * 20)
-    print("  A股自选股智能分析系统 - 环境验证")
+    print("  Hệ thống phân tích cổ phiếu Việt Nam - kiểm tra môi trường")
     print("  " + datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     print("🚀" * 20)
     
@@ -466,7 +458,7 @@ def main():
     configure_console_encoding()
 
     parser = argparse.ArgumentParser(
-        description='A股自选股智能分析系统 - 环境验证测试',
+        description='Hệ thống phân tích cổ phiếu Việt Nam - kiểm tra môi trường',
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     
@@ -475,7 +467,7 @@ def main():
     parser.add_argument('--fetch', action='store_true', help='测试数据获取')
     parser.add_argument('--notify', action='store_true', help='测试通知推送')
     parser.add_argument('--config', action='store_true', help='查看配置')
-    parser.add_argument('--stock', type=str, help='查询指定股票数据，如 --stock 600519')
+    parser.add_argument('--stock', type=str, help='查询指定股票数据，如 --stock HPG')
     parser.add_argument('--all', action='store_true', help='运行所有测试（包括 LLM）')
     
     args = parser.parse_args()

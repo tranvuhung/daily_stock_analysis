@@ -87,7 +87,7 @@ npx playwright install chromium
 模板仍接受项目生成的 Markdown；新链路会额外传入 `AnalysisResult.to_dict()` 或 `market_review_payload`。仅调试兼容回退时，可以准备一份最小个股报告：
 
 ```markdown
-## 🟢 贵州茅台 (600519)
+## 🟢 Hòa Phát (HPG)
 
 > 2026-07-31 15:00 | 评分: **72** | 看多
 

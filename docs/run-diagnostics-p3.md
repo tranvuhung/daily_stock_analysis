@@ -40,7 +40,7 @@ GET /api/v1/analysis/tasks/stream
 {
   "task_id": "3f87...",
   "trace_id": "3f87...",
-  "stock_code": "600519",
+  "stock_code": "HPG",
   "status": "processing",
   "progress": 64,
   "message": "LLM 正在生成分析结果",
