@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Tests for src/services/stock_code_utils.py
-Covers: is_code_like, normalize_code - including exchange prefix handling.
+Kiểm thử cho src/services/stock_code_utils.py (chỉ thị trường Việt Nam).
+
+Tests for src/services/stock_code_utils.py (Vietnam market only).
+Covers: is_code_like, normalize_code, daily identity/candidates and the
+analysis-entry index resolver.
 """
 
-import pytest
-
 from unittest.mock import patch
+
+import pytest
 
 from src.services.stock_code_utils import (
     build_daily_code_candidates,
@@ -20,365 +23,99 @@ from src.services.stock_code_utils import (
 class TestBuildDailyCodeCandidates:
     @pytest.mark.parametrize(
         "code",
-        ["600519.SZ", "000001.SH", "920748.SH", "SH920748", "600519.HK"],
+        ["600519", "000001.SZ", "AAPL", "00700.HK", "HPG.HK", "", "Hòa Phát"],
     )
-    def test_rejects_conflicting_explicit_exchange_before_any_candidate(self, code):
+    def test_rejects_non_vn_codes(self, code):
+        # Mã ngoài VN không sinh ứng viên nào. / Non-VN codes yield no candidates.
         assert build_daily_code_candidates(code) == []
 
     @pytest.mark.parametrize(
-        ("code", "required_candidates"),
+        ("code", "expected"),
         [
-            (
-                "600519.SH",
-                {
-                    "600519.SH",
-                    "600519",
-                    "SH600519",
-                    "SH.600519",
-                    "SS600519",
-                },
-            ),
-            ("600519", {"600519", "600519.SH"}),
-            ("000001.SZ", {"000001.SZ", "000001"}),
-            ("920748", {"920748", "BJ920748", "920748.BJ"}),
-            ("1810", {"1810", "01810", "HK01810", "01810.HK"}),
-            ("01810", {"1810", "01810", "HK01810", "01810.HK"}),
-            ("1810.HK", {"1810", "1810.HK", "01810", "HK01810", "01810.HK"}),
-            ("HK.01810", {"1810", "HK.01810", "01810", "HK01810", "01810.HK"}),
-            ("AAPL", {"AAPL", "AAPL.US"}),
-            ("AAPL.US", {"AAPL.US", "AAPL"}),
-            ("NASDAQ", {"NASDAQ"}),
-            ("^GSPC", {"^GSPC"}),
+            ("HPG", ["HPG", "HPG.VN"]),
+            ("hpg", ["HPG", "HPG.VN"]),
+            ("HPG.VN", ["HPG.VN", "HPG"]),
+            ("FUEVN100", ["FUEVN100", "FUEVN100.VN"]),
+            ("VNINDEX", ["VNINDEX", "VNINDEX.VN"]),
         ],
     )
-    def test_preserves_valid_explicit_and_legacy_bare_codes(
-        self,
-        code,
-        required_candidates,
-    ):
-        assert set(build_daily_code_candidates(code)) >= required_candidates
+    def test_candidates_keep_raw_then_normalized_then_vn_suffix(self, code, expected):
+        assert build_daily_code_candidates(code) == expected
 
-    @pytest.mark.parametrize(
-        ("code", "normalized_code", "market", "refill_code"),
-        [
-            ("600519.SH", "600519", "cn", "600519"),
-            ("1810", "01810", "hk", "HK01810"),
-            ("HK.01810", "01810", "hk", "HK01810"),
-            ("AAPL.US", "AAPL", "us", "AAPL"),
-            ("BRK.B", "BRK.B", "us", "BRK.B"),
-            ("NASDAQ", "NASDAQ", "us", "NASDAQ"),
-            ("^GSPC", "^GSPC", "us", "^GSPC"),
-            ("7203.T", "7203.T", "jp", "7203.T"),
-        ],
-    )
-    def test_one_identity_drives_candidates_market_and_refill(
-        self,
-        code,
-        normalized_code,
-        market,
-        refill_code,
-    ):
+    @pytest.mark.parametrize("code", ["HPG", "HPG.VN", "vnHPG", " hpg "])
+    def test_one_identity_drives_candidates_market_and_refill(self, code):
         identity = resolve_daily_stock_identity(code)
 
         assert identity is not None
-        assert identity.normalized_code == normalized_code
-        assert identity.market == market
-        assert identity.refill_code == refill_code
-        assert code in identity.code_candidates
-        assert refill_code in identity.code_candidates
+        assert identity.normalized_code == "HPG"
+        assert identity.market == "vn"
+        assert identity.refill_code == "HPG"
+        assert code.strip().upper() in identity.code_candidates
+        assert "HPG" in identity.code_candidates
+        assert "HPG.VN" in identity.code_candidates
 
-    def test_kr_suffix_adds_only_its_legacy_bare_candidate(self):
-        identity = resolve_daily_stock_identity("005930.KS")
-
+    def test_vn_market_hint_is_accepted_case_insensitively(self):
+        identity = resolve_daily_stock_identity("VCB", market_hint="VN")
         assert identity is not None
-        assert identity.market == "kr"
-        assert identity.code_candidates == ("005930.KS", "005930")
+        assert identity.market == "vn"
 
-    def test_bare_taiwan_code_uses_explicit_market_hint(self):
-        identity = resolve_daily_stock_identity("005930", market_hint="tw")
-
-        assert identity is not None
-        assert identity.normalized_code == "005930"
-        assert identity.market == "tw"
-        assert identity.refill_code == ""
-        assert identity.code_candidates == ("005930",)
-
-    # Ba ca kiểm thử đa thị trường (mã trần 8035 trùng giữa JP và HK) đã bị bỏ
-    # cùng đợt cắt ``apps/dsa-web/public/stocks.index.json`` xuống chỉ còn mã Việt
-    # Nam: bảng mã không còn bản ghi ngoài VN nên không còn tình huống nhập nhằng
-    # giữa các thị trường để kiểm tra. Nếu sau này khôi phục mã đa thị trường,
-    # xem lại lịch sử git để lấy lại chúng.
-
-    def test_trusted_legacy_jp_identity_keeps_its_raw_bare_code(self):
-        identity = resolve_daily_stock_identity("8035", market_hint="jp")
-
-        assert identity is not None
-        assert identity.market == "jp"
-        assert identity.code_candidates[0] == "8035"
-        assert "8035" in identity.code_candidates
-        assert "8035.T" in identity.code_candidates
+    @pytest.mark.parametrize("hint", ["cn", "hk", "us", "jp"])
+    def test_legacy_non_vn_market_hint_returns_none(self, hint):
+        # Dữ liệu cũ gắn thị trường khác bị bỏ qua. / Legacy non-VN rows are ignored.
+        assert resolve_daily_stock_identity("HPG", market_hint=hint) is None
 
 
 class TestIsCodeLike:
-    # --- Plain digit codes ---
-    def test_plain_6_digit(self):
-        assert is_code_like("600519") is True
+    @pytest.mark.parametrize(
+        "value",
+        ["HPG", "hpg", "VCB", "FPT", "HPG.VN", "vnHPG", "FUEVN100", "E1VFVN30", "VNINDEX", "VN30", "HNXINDEX"],
+    )
+    def test_vn_codes(self, value):
+        assert is_code_like(value) is True
 
-    def test_plain_5_digit(self):
-        assert is_code_like("00700") is True
-
-    def test_4_digit_rejected(self):
-        assert is_code_like("6001") is False
-
-    # --- Suffix format ---
-    def test_suffix_sh(self):
-        assert is_code_like("600519.SH") is True
-
-    def test_suffix_sz(self):
-        assert is_code_like("000001.SZ") is True
-
-    def test_suffix_bj(self):
-        assert is_code_like("920493.BJ") is True
-
-    def test_suffix_bj_rejects_non_bse_base(self):
-        assert is_code_like("600519.BJ") is False
-
-    def test_suffix_lowercase(self):
-        assert is_code_like("600519.sh") is True
-
-    # --- HK suffix format ---
-    def test_suffix_hk(self):
-        assert is_code_like("00700.HK") is True
-
-    def test_suffix_hk_lowercase(self):
-        assert is_code_like("00700.hk") is True
-
-    def test_suffix_hk_short_code(self):
-        assert is_code_like("1810.HK") is True
-
-    def test_suffix_hk_rejects_6_digit_base(self):
-        assert is_code_like("600519.HK") is False
-
-    def test_suffix_sh_rejects_5_digit_base(self):
-        assert is_code_like("00700.SH") is False
-
-    def test_suffix_a_share_rejects_wrong_exchange(self):
-        assert is_code_like("600519.SZ") is False
-        assert is_code_like("000001.SH") is False
-        assert is_code_like("920748.SH") is False
-
-    # --- Exchange prefix format (Issue #6 fix) ---
-    def test_prefix_sh_upper(self):
-        assert is_code_like("SH600519") is True
-
-    def test_prefix_sh_lower(self):
-        assert is_code_like("sh600519") is True
-
-    def test_prefix_sz(self):
-        assert is_code_like("SZ000001") is True
-
-    def test_prefix_bj(self):
-        assert is_code_like("BJ920493") is True
-
-    def test_prefix_bj_rejects_non_bse_base(self):
-        assert is_code_like("BJ600519") is False
-
-    def test_prefix_hk(self):
-        assert is_code_like("HK00700") is True
-
-    def test_prefix_hk_lower(self):
-        assert is_code_like("hk00700") is True
-
-    def test_prefix_hk_short_code(self):
-        assert is_code_like("HK700") is True
-
-    def test_prefix_hk_rejects_6_digit_base(self):
-        assert is_code_like("HK600519") is False
-
-    def test_dotted_prefix_cn(self):
-        assert is_code_like("SH.600519") is True
-        assert is_code_like("SZ.000001") is True
-        assert is_code_like("BJ.920493") is True
-
-    def test_dotted_prefix_bj_rejects_non_bse_base(self):
-        assert is_code_like("BJ.600519") is False
-
-    def test_prefix_a_share_rejects_wrong_exchange(self):
-        assert is_code_like("SH000001") is False
-        assert is_code_like("SZ600519") is False
-        assert is_code_like("SH920748") is False
-        assert is_code_like("SH.920748") is False
-
-    # --- US tickers ---
-    def test_us_ticker(self):
-        assert is_code_like("AAPL") is True
-
-    def test_us_ticker_with_exchange(self):
-        assert is_code_like("TSLA.O") is True
-
-    # --- Negative cases ---
-    def test_plain_text(self):
-        assert is_code_like("贵州茅台") is False
-
-    def test_empty(self):
-        assert is_code_like("") is False
-
-    def test_mixed_invalid(self):
-        assert is_code_like("abc123") is False
+    @pytest.mark.parametrize(
+        "value",
+        ["", "Hòa Phát", "abc123", "600519", "00700", "AAPL", "HPG.HK"],
+    )
+    def test_negative_cases(self, value):
+        assert is_code_like(value) is False
 
 
 class TestNormalizeCode:
-    # --- Plain digit codes ---
-    def test_plain_6_digit(self):
-        assert normalize_code("600519") == "600519"
-
-    def test_plain_5_digit(self):
-        assert normalize_code("00700") == "00700"
+    def test_plain_code_uppercased(self):
+        assert normalize_code("hpg") == "HPG"
 
     def test_whitespace_stripped(self):
-        assert normalize_code("  600519  ") == "600519"
+        assert normalize_code("  FPT  ") == "FPT"
 
-    # --- Suffix format ---
-    def test_suffix_sh_strips(self):
-        assert normalize_code("600519.SH") == "600519"
+    def test_vn_suffix_strips(self):
+        assert normalize_code("HPG.VN") == "HPG"
 
-    def test_suffix_sz_strips(self):
-        assert normalize_code("000001.SZ") == "000001"
+    def test_vn_prefix_strips(self):
+        assert normalize_code("vnHPG") == "HPG"
 
-    def test_suffix_bj_strips(self):
-        assert normalize_code("920493.BJ") == "920493"
+    def test_fund_and_index_codes_kept(self):
+        assert normalize_code("FUEVN100") == "FUEVN100"
+        assert normalize_code("VNINDEX") == "VNINDEX"
 
-    def test_suffix_bj_rejects_non_bse_base(self):
-        assert normalize_code("600519.BJ") is None
-
-    def test_suffix_ss_strips(self):
-        assert normalize_code("600000.SS") == "600000"
-
-    def test_suffix_hk_strips(self):
-        assert normalize_code("00700.HK") == "00700"
-
-    def test_suffix_hk_lowercase_strips(self):
-        assert normalize_code("00700.hk") == "00700"
-
-    def test_suffix_hk_short_code_is_zero_padded(self):
-        assert normalize_code("1810.HK") == "01810"
-
-    def test_suffix_hk_rejects_6_digit_base(self):
-        assert normalize_code("600519.HK") is None
-
-    def test_suffix_sh_rejects_5_digit_base(self):
-        assert normalize_code("00700.SH") is None
-
-    def test_suffix_a_share_rejects_wrong_exchange(self):
-        assert normalize_code("600519.SZ") is None
-        assert normalize_code("000001.SH") is None
-        assert normalize_code("920748.SH") is None
-
-    # --- Exchange prefix format (Issue #6 fix) ---
-    def test_prefix_sh_upper(self):
-        assert normalize_code("SH600519") == "600519"
-
-    def test_prefix_sh_lower(self):
-        assert normalize_code("sh600519") == "600519"
-
-    def test_prefix_sz(self):
-        assert normalize_code("SZ000001") == "000001"
-
-    def test_prefix_bj(self):
-        assert normalize_code("BJ920493") == "920493"
-
-    def test_prefix_bj_rejects_non_bse_base(self):
-        assert normalize_code("BJ600519") is None
-
-    def test_prefix_hk(self):
-        assert normalize_code("HK00700") == "00700"
-
-    def test_prefix_hk_lower(self):
-        assert normalize_code("hk00700") == "00700"
-
-    def test_prefix_hk_short_code_is_zero_padded(self):
-        assert normalize_code("HK700") == "00700"
-
-    def test_prefix_hk_rejects_6_digit_base(self):
-        assert normalize_code("HK600519") is None
-
-    def test_dotted_prefix_cn_strips(self):
-        assert normalize_code("SH.600519") == "600519"
-        assert normalize_code("SZ.000001") == "000001"
-        assert normalize_code("BJ.920493") == "920493"
-
-    def test_dotted_prefix_bj_rejects_non_bse_base(self):
-        assert normalize_code("BJ.600519") is None
-
-    def test_prefix_a_share_rejects_wrong_exchange(self):
-        assert normalize_code("SH000001") is None
-        assert normalize_code("SZ600519") is None
-        assert normalize_code("SH920748") is None
-        assert normalize_code("SH.920748") is None
-
-    def test_bse_exchange_prefix_suffix_regression(self):
-        assert normalize_code("920748.BJ") == "920748"
-        assert normalize_code("BJ920748") == "920748"
-        assert is_code_like("920748.BJ") is True
-        assert is_code_like("BJ920748") is True
-        assert normalize_code("bj920748") == "920748"
-        assert is_code_like("bj.920748") is True
-
-    # --- US tickers ---
-    def test_us_ticker(self):
-        assert normalize_code("AAPL") == "AAPL"
-
-    # --- Invalid inputs ---
-    def test_empty_returns_none(self):
-        assert normalize_code("") is None
-
-    def test_plain_text_returns_none(self):
-        assert normalize_code("贵州茅台") is None
-
-    def test_partial_prefix_no_digits_returns_none(self):
-        # SH followed by wrong digit count
-        assert normalize_code("SH6005") is None
+    @pytest.mark.parametrize("value", ["", "Hòa Phát", "600519", "AAPL", "00700.HK"])
+    def test_invalid_returns_none(self, value):
+        assert normalize_code(value) is None
 
 
 class TestResolveIndexStockCodeForAnalysis:
     def test_resolves_via_stock_index(self):
-        with patch("src.data.stock_index_loader.resolve_index_stock_code", return_value="005930.KS"):
-            assert resolve_index_stock_code_for_analysis("005930") == "005930.KS"
-
-    def test_resolves_indexed_4_digit_jp_base(self):
-        assert is_code_like("7203") is False
-        with patch("src.data.stock_index_loader.resolve_index_stock_code", return_value="7203.T"):
-            assert resolve_index_stock_code_for_analysis("7203") == "7203.T"
+        with patch("src.data.stock_index_loader.resolve_index_stock_code", return_value="HPG"):
+            assert resolve_index_stock_code_for_analysis("hpg") == "HPG"
 
     def test_falls_back_to_canonical_when_index_miss(self):
         with patch("src.data.stock_index_loader.resolve_index_stock_code", return_value=None):
-            assert resolve_index_stock_code_for_analysis("005930") == "005930"
-            assert resolve_index_stock_code_for_analysis("AAPL") == "AAPL"
+            assert resolve_index_stock_code_for_analysis("fpt") == "FPT"
 
-    # ------------------------------------------------------------------
-    # PR #2267 review remediation — registered CSI explicit identity
-    # convergence (resolver / task dedupe key / history candidates).
-    #
-    # Ca ``test_registered_csi_forms_converge_to_parser_canonical`` đã bị bỏ cùng
-    # đợt cắt ``apps/dsa-web/public/stocks.index.json`` xuống chỉ còn mã Việt Nam:
-    # nó dựa vào bản ghi chỉ số A-share ``csi930955`` trong bảng mã, nay không còn.
-    # Ca "chưa đăng ký" bên dưới vẫn giữ vì không phụ thuộc dữ liệu đó.
-    # ------------------------------------------------------------------
+    def test_non_code_text_is_only_uppercased(self):
+        # Văn bản không phải mã chỉ được chuẩn hoá chữ hoa để nơi gọi tự kiểm tra.
+        # Non-code text is only canonicalized; callers apply their own validation.
+        assert resolve_index_stock_code_for_analysis("aapl") == "AAPL"
 
-    @pytest.mark.parametrize(
-        "code,expected",
-        [
-            ("csi930956", "CSI930956"),
-            ("930956.CSI", "930956.CSI"),
-            ("CSI930956", "CSI930956"),
-        ],
-    )
-    def test_unregistered_csi_forms_keep_existing_behavior(self, code, expected):
-        """An unregistered CSI form is NOT converged; it keeps its existing
-        canonicalized (uppercased) degradation so it never becomes a guessed
-        index identity."""
-        assert resolve_index_stock_code_for_analysis(code) == expected
-
-    def test_bare_csi_base_remains_stock(self):
-        """A bare numeric base of a CSI index stays a stock (no convergence)."""
-        assert resolve_index_stock_code_for_analysis("930955") == "930955"
+    def test_empty_returns_empty_string(self):
+        assert resolve_index_stock_code_for_analysis("   ") == ""

@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Regression tests for fetcher routing and optional-source pruning."""
+"""Kiểm thử hồi quy định tuyến nguồn nến ngày Việt Nam và cầu chì sức khoẻ nguồn.
+
+Regression tests for Vietnam daily-source routing and source health breaker.
+"""
 
 import sys
 import unittest
@@ -19,7 +22,6 @@ from data_provider.base import (
     DataFetcherManager,
     STANDARD_COLUMNS,
 )
-from data_provider.realtime_types import RealtimeSource, UnifiedRealtimeQuote
 
 
 class _StubFetcher:
@@ -45,23 +47,6 @@ class _DefaultEmptyRawFetcher(_EmptyRawFetcher):
     allow_empty_daily_data = False
 
 
-def _make_quote(code: str = "AAPL") -> UnifiedRealtimeQuote:
-    return UnifiedRealtimeQuote(
-        code=code,
-        name="Apple",
-        source=RealtimeSource.FALLBACK,
-        price=188.8,
-        change_pct=1.2,
-        volume_ratio=1.0,
-        turnover_rate=0.2,
-        pe_ratio=20.0,
-        pb_ratio=3.0,
-        total_mv=1000.0,
-        circ_mv=900.0,
-        amplitude=2.0,
-    )
-
-
 def _make_daily_df() -> pd.DataFrame:
     return pd.DataFrame(
         [
@@ -82,7 +67,7 @@ def _make_daily_df() -> pd.DataFrame:
 class TestFetcherSourceOptimization(unittest.TestCase):
     def test_base_fetcher_returns_opt_in_empty_daily_data_without_error(self):
         df = _EmptyRawFetcher().get_daily_data(
-            "000001",
+            "HPG",
             start_date="2026-05-01",
             end_date="2026-05-08",
         )
@@ -93,260 +78,96 @@ class TestFetcherSourceOptimization(unittest.TestCase):
     def test_base_fetcher_rejects_empty_daily_data_by_default(self):
         with self.assertRaises(DataFetchError):
             _DefaultEmptyRawFetcher().get_daily_data(
-                "000001",
+                "HPG",
                 start_date="2026-05-01",
                 end_date="2026-05-08",
             )
 
-    @patch("src.config.get_config")
-    def test_manager_skips_unconfigured_optional_fetchers(self, mock_get_config):
-        mock_get_config.return_value = SimpleNamespace(
-            tushare_token="",
-            longbridge_app_key="",
-            longbridge_app_secret="",
-            longbridge_access_token="",
-            longbridge_oauth_client_id="",
-        )
+    def test_manager_skips_vnstock_unless_enabled(self):
+        # vnstock là nguồn tuỳ chọn; chưa bật thì không được khởi tạo.
+        # vnstock is optional and must not be instantiated unless enabled.
+        with patch.dict("os.environ", {"VNSTOCK_ENABLED": "false"}), patch(
+            "data_provider.vci_fetcher.VciFetcher", return_value=_StubFetcher("VciFetcher", 0)
+        ), patch(
+            "data_provider.ssi_fetcher.SsiFetcher", return_value=_StubFetcher("SsiFetcher", 1)
+        ), patch(
+            "data_provider.yfinance_fetcher.YfinanceFetcher", return_value=_StubFetcher("YfinanceFetcher", 4)
+        ), patch.dict(
+            sys.modules, {"data_provider.vnstock_fetcher": SimpleNamespace(VnstockFetcher=MagicMock())}
+        ):
+            mock_vnstock = sys.modules["data_provider.vnstock_fetcher"].VnstockFetcher
+            manager = DataFetcherManager()
 
-        with patch.dict(
-            "os.environ",
+        self.assertEqual(manager.available_fetchers, ["VciFetcher", "SsiFetcher", "YfinanceFetcher"])
+        mock_vnstock.assert_not_called()
+
+    def test_manager_registers_vnstock_when_enabled(self):
+        with patch.dict("os.environ", {"VNSTOCK_ENABLED": "true"}), patch(
+            "data_provider.vci_fetcher.VciFetcher", return_value=_StubFetcher("VciFetcher", 0)
+        ), patch(
+            "data_provider.ssi_fetcher.SsiFetcher", return_value=_StubFetcher("SsiFetcher", 1)
+        ), patch(
+            "data_provider.yfinance_fetcher.YfinanceFetcher", return_value=_StubFetcher("YfinanceFetcher", 4)
+        ), patch.dict(
+            sys.modules,
             {
-                "LONGBRIDGE_OAUTH_CLIENT_ID": "",
-                "LONGBRIDGE_APP_KEY": "",
-                "LONGBRIDGE_APP_SECRET": "",
-                "LONGBRIDGE_ACCESS_TOKEN": "",
-                # 本用例断言的是"未配置凭据的可选数据源不会被实例化"，与市场
-                # 白名单无关。固定为 cn 可以把越南数据源排除在断言之外，否则
-                # 列表会随 SUPPORTED_MARKETS 变化。
-                "SUPPORTED_MARKETS": "cn",
+                # vnstock là phụ thuộc tuỳ chọn, không cài trong CI: thay module bằng bản giả.
+                # vnstock is an optional dependency; stub the module.
+                "data_provider.vnstock_fetcher": SimpleNamespace(
+                    VnstockFetcher=MagicMock(return_value=_StubFetcher("VnstockFetcher", 2))
+                )
             },
-        ), patch("data_provider.efinance_fetcher.EfinanceFetcher", return_value=_StubFetcher("EfinanceFetcher", 0)), patch(
-            "data_provider.tencent_fetcher.TencentFetcher",
-            return_value=_StubFetcher("TencentFetcher", 5),
-        ), patch(
-            "data_provider.akshare_fetcher.AkshareFetcher",
-            return_value=_StubFetcher("AkshareFetcher", 1),
-        ), patch(
-            "data_provider.pytdx_fetcher.PytdxFetcher",
-            return_value=_StubFetcher("PytdxFetcher", 2),
-        ), patch(
-            "data_provider.baostock_fetcher.BaostockFetcher",
-            return_value=_StubFetcher("BaostockFetcher", 3),
-        ), patch(
-            "data_provider.yfinance_fetcher.YfinanceFetcher",
-            return_value=_StubFetcher("YfinanceFetcher", 4),
-        ), patch(
-            "data_provider.tushare_fetcher.TushareFetcher",
-            return_value=_StubFetcher("TushareFetcher", -1),
-        ) as mock_tushare, patch(
-            "data_provider.longbridge_fetcher.LongbridgeFetcher",
-            return_value=_StubFetcher("LongbridgeFetcher", 5),
-        ) as mock_longbridge:
-            mock_longbridge.has_configured_credentials.return_value = False
+        ):
+            mock_vnstock = sys.modules["data_provider.vnstock_fetcher"].VnstockFetcher
             manager = DataFetcherManager()
 
         self.assertEqual(
             manager.available_fetchers,
-            [
-                "EfinanceFetcher",
-                "AkshareFetcher",
-                "PytdxFetcher",
-                "BaostockFetcher",
-                "YfinanceFetcher",
-                "TencentFetcher",
-            ],
+            ["VciFetcher", "SsiFetcher", "VnstockFetcher", "YfinanceFetcher"],
         )
-        mock_tushare.assert_not_called()
-        mock_longbridge.assert_not_called()
+        mock_vnstock.assert_called_once()
 
     @patch("src.config.get_config")
-    def test_daily_fallback_tries_akshare_before_tencent(self, mock_get_config):
+    def test_daily_fallback_tries_ssi_before_yfinance(self, mock_get_config):
         mock_get_config.return_value = SimpleNamespace()
         DataFetcherManager.reset_daily_source_health()
         try:
-            efinance = MagicMock()
-            efinance.name = "EfinanceFetcher"
-            efinance.priority = 0
-            efinance.get_daily_data.side_effect = RuntimeError("temporary failure")
+            vci = MagicMock()
+            vci.name = "VciFetcher"
+            vci.priority = 0
+            vci.get_daily_data.side_effect = RuntimeError("temporary failure")
 
-            akshare = MagicMock()
-            akshare.name = "AkshareFetcher"
-            akshare.priority = 1
-            akshare.get_daily_data.return_value = _make_daily_df()
+            ssi = MagicMock()
+            ssi.name = "SsiFetcher"
+            ssi.priority = 1
+            ssi.get_daily_data.return_value = _make_daily_df()
 
-            tencent = MagicMock()
-            tencent.name = "TencentFetcher"
-            tencent.priority = 5
-            tencent.get_daily_data.return_value = _make_daily_df()
+            yfinance = MagicMock()
+            yfinance.name = "YfinanceFetcher"
+            yfinance.priority = 4
+            yfinance.get_daily_data.return_value = _make_daily_df()
 
-            manager = DataFetcherManager(fetchers=[tencent, akshare, efinance])
-            df, source = manager.get_daily_data(
-                "000001",
-                start_date="2026-05-01",
-                end_date="2026-05-08",
-            )
+            manager = DataFetcherManager(fetchers=[yfinance, ssi, vci])
+            df, source = manager.get_daily_data("HPG", start_date="2026-05-01", end_date="2026-05-08")
 
             self.assertFalse(df.empty)
-            self.assertEqual(source, "AkshareFetcher")
-            self.assertEqual(
-                manager.available_fetchers,
-                ["EfinanceFetcher", "AkshareFetcher", "TencentFetcher"],
-            )
-            efinance.get_daily_data.assert_called_once()
-            akshare.get_daily_data.assert_called_once()
-            tencent.get_daily_data.assert_not_called()
+            self.assertEqual(source, "SsiFetcher")
+            self.assertEqual(manager.available_fetchers, ["VciFetcher", "SsiFetcher", "YfinanceFetcher"])
+            vci.get_daily_data.assert_called_once()
+            ssi.get_daily_data.assert_called_once()
+            yfinance.get_daily_data.assert_not_called()
         finally:
             DataFetcherManager.reset_daily_source_health()
 
-    @patch("src.config.get_config")
-    def test_manager_enables_longbridge_with_oauth_client_id(self, mock_get_config):
-        mock_get_config.return_value = SimpleNamespace(
-            tushare_token="",
-            longbridge_app_key="",
-            longbridge_app_secret="",
-            longbridge_access_token="",
-            longbridge_oauth_client_id="client-1",
-        )
-
-        with patch("data_provider.efinance_fetcher.EfinanceFetcher", return_value=_StubFetcher("EfinanceFetcher", 0)), patch(
-            "data_provider.tencent_fetcher.TencentFetcher",
-            return_value=_StubFetcher("TencentFetcher", 5),
-        ), patch(
-            "data_provider.akshare_fetcher.AkshareFetcher",
-            return_value=_StubFetcher("AkshareFetcher", 1),
-        ), patch(
-            "data_provider.pytdx_fetcher.PytdxFetcher",
-            return_value=_StubFetcher("PytdxFetcher", 2),
-        ), patch(
-            "data_provider.baostock_fetcher.BaostockFetcher",
-            return_value=_StubFetcher("BaostockFetcher", 3),
-        ), patch(
-            "data_provider.yfinance_fetcher.YfinanceFetcher",
-            return_value=_StubFetcher("YfinanceFetcher", 4),
-        ), patch(
-            "data_provider.tushare_fetcher.TushareFetcher",
-            return_value=_StubFetcher("TushareFetcher", -1),
-        ), patch(
-            "data_provider.longbridge_fetcher.LongbridgeFetcher",
-            return_value=_StubFetcher("LongbridgeFetcher", 5),
-        ) as mock_longbridge:
-            mock_longbridge.has_configured_credentials.return_value = True
-            manager = DataFetcherManager()
-
-        self.assertIn("LongbridgeFetcher", manager.available_fetchers)
-        self.assertIn("TencentFetcher", manager.available_fetchers)
-        mock_longbridge.assert_called_once()
-
-    @patch("src.config.get_config")
-    def test_us_realtime_route_skips_temporarily_unavailable_longbridge(self, mock_get_config):
-        mock_get_config.return_value = SimpleNamespace(
-            enable_realtime_quote=True,
-            realtime_source_priority="efinance,akshare_em,tushare",
-        )
-
-        longbridge = MagicMock()
-        longbridge.name = "LongbridgeFetcher"
-        longbridge.priority = 5
-        longbridge.is_available_for_request.return_value = False
-
-        yfinance = MagicMock()
-        yfinance.name = "YfinanceFetcher"
-        yfinance.priority = 4
-        yfinance.get_realtime_quote.return_value = _make_quote("AAPL")
-
-        manager = DataFetcherManager(fetchers=[longbridge, yfinance])
-
-        quote = manager.get_realtime_quote("AAPL")
-
-        self.assertIsNotNone(quote)
-        self.assertEqual(quote.code, "AAPL")
-        yfinance.get_realtime_quote.assert_called_once_with("AAPL")
-        longbridge.get_realtime_quote.assert_not_called()
-
-    @patch("src.config.get_config")
-    def test_us_realtime_route_marks_longbridge_fallback_when_secondary_succeeds(self, mock_get_config):
-        mock_get_config.return_value = SimpleNamespace(
-            enable_realtime_quote=True,
-            realtime_source_priority="efinance,akshare_em,tushare",
-            realtime_cache_ttl=600,
-        )
-
-        longbridge = MagicMock()
-        longbridge.name = "LongbridgeFetcher"
-        longbridge.priority = 5
-        longbridge.is_available_for_request.return_value = True
-        longbridge.get_realtime_quote.return_value = None
-
-        yfinance_quote = _make_quote("AAPL")
-        yfinance = MagicMock()
-        yfinance.name = "YfinanceFetcher"
-        yfinance.priority = 4
-        yfinance.get_realtime_quote.return_value = yfinance_quote
-
-        manager = DataFetcherManager(fetchers=[longbridge, yfinance])
-
-        quote = manager.get_realtime_quote("AAPL")
-
-        self.assertIs(quote, yfinance_quote)
-        self.assertEqual(quote.fallback_from, "longbridge")
-        self.assertIsNotNone(quote.fetched_at)
-        longbridge.get_realtime_quote.assert_called_once_with("AAPL")
-        yfinance.get_realtime_quote.assert_called_once_with("AAPL")
-
-    @patch("src.config.get_config")
-    def test_us_daily_route_skips_temporarily_unavailable_longbridge(self, mock_get_config):
-        mock_get_config.return_value = SimpleNamespace(
-            longbridge_app_key="app-key",
-            longbridge_app_secret="app-secret",
-            longbridge_access_token="access-token",
-        )
-
-        longbridge = MagicMock()
-        longbridge.name = "LongbridgeFetcher"
-        longbridge.priority = 5
-        longbridge.is_available_for_request.return_value = False
-
-        yfinance = MagicMock()
-        yfinance.name = "YfinanceFetcher"
-        yfinance.priority = 4
-        yfinance.get_daily_data.return_value = _make_daily_df()
-
-        manager = DataFetcherManager(fetchers=[longbridge, yfinance])
-
-        df, source = manager.get_daily_data("AAPL", start_date="2026-05-01", end_date="2026-05-08")
-
-        self.assertFalse(df.empty)
-        self.assertEqual(source, "YfinanceFetcher")
-        yfinance.get_daily_data.assert_called_once()
-        longbridge.get_daily_data.assert_not_called()
-
-    @patch("src.config.get_config")
-    def test_hk_daily_route_skips_temporarily_unavailable_longbridge(self, mock_get_config):
-        mock_get_config.return_value = SimpleNamespace(
-            longbridge_app_key="app-key",
-            longbridge_app_secret="app-secret",
-            longbridge_access_token="access-token",
-        )
-
-        longbridge = MagicMock()
-        longbridge.name = "LongbridgeFetcher"
-        longbridge.priority = 5
-        longbridge.is_available_for_request.return_value = False
-
-        akshare = MagicMock()
-        akshare.name = "AkshareFetcher"
-        akshare.priority = 1
-        akshare.get_daily_data.return_value = _make_daily_df()
-
-        manager = DataFetcherManager(fetchers=[longbridge, akshare])
-
-        df, source = manager.get_daily_data("HK00700", start_date="2026-05-01", end_date="2026-05-08")
-
-        self.assertFalse(df.empty)
-        self.assertEqual(source, "AkshareFetcher")
-        akshare.get_daily_data.assert_called_once()
-        longbridge.get_daily_data.assert_not_called()
-
+    def test_non_vn_code_is_rejected_before_any_fetcher(self):
+        vci = MagicMock()
+        vci.name = "VciFetcher"
+        vci.priority = 0
+        manager = DataFetcherManager(fetchers=[vci])
+        for code in ("000001", "AAPL", "HK00700"):
+            with self.subTest(code=code), self.assertRaises(DataFetchError):
+                manager.get_daily_data(code, start_date="2026-05-01", end_date="2026-05-08")
+        vci.get_daily_data.assert_not_called()
 
     @patch("src.config.get_config")
     def test_daily_source_health_skips_repeatedly_failing_source(self, mock_get_config):
@@ -354,29 +175,29 @@ class TestFetcherSourceOptimization(unittest.TestCase):
         DataFetcherManager.reset_daily_source_health()
         try:
             flaky = MagicMock()
-            flaky.name = "EfinanceFetcher"
+            flaky.name = "VciFetcher"
             flaky.priority = 0
             flaky.get_daily_data.side_effect = RuntimeError("timeout")
 
             backup = MagicMock()
-            backup.name = "TencentFetcher"
+            backup.name = "SsiFetcher"
             backup.priority = 1
             backup.get_daily_data.return_value = _make_daily_df()
 
             manager = DataFetcherManager(fetchers=[flaky, backup])
 
             for _ in range(3):
-                df, source = manager.get_daily_data("000001", start_date="2026-05-01", end_date="2026-05-08")
+                df, source = manager.get_daily_data("HPG", start_date="2026-05-01", end_date="2026-05-08")
                 self.assertFalse(df.empty)
-                self.assertEqual(source, "TencentFetcher")
+                self.assertEqual(source, "SsiFetcher")
 
             flaky.get_daily_data.reset_mock(side_effect=True)
             flaky.get_daily_data.side_effect = RuntimeError("should be skipped")
 
-            df, source = manager.get_daily_data("000001", start_date="2026-05-01", end_date="2026-05-08")
+            df, source = manager.get_daily_data("HPG", start_date="2026-05-01", end_date="2026-05-08")
 
             self.assertFalse(df.empty)
-            self.assertEqual(source, "TencentFetcher")
+            self.assertEqual(source, "SsiFetcher")
             flaky.get_daily_data.assert_not_called()
         finally:
             DataFetcherManager.reset_daily_source_health()
@@ -387,29 +208,29 @@ class TestFetcherSourceOptimization(unittest.TestCase):
         DataFetcherManager.reset_daily_source_health()
         try:
             primary = MagicMock()
-            primary.name = "EfinanceFetcher"
+            primary.name = "VciFetcher"
             primary.priority = 0
             primary.get_daily_data.return_value = pd.DataFrame()
 
             backup = MagicMock()
-            backup.name = "TencentFetcher"
+            backup.name = "SsiFetcher"
             backup.priority = 1
             backup.get_daily_data.return_value = _make_daily_df()
 
             manager = DataFetcherManager(fetchers=[primary, backup])
 
             for _ in range(3):
-                df, source = manager.get_daily_data("000001", start_date="2026-05-01", end_date="2026-05-08")
+                df, source = manager.get_daily_data("HPG", start_date="2026-05-01", end_date="2026-05-08")
                 self.assertFalse(df.empty)
-                self.assertEqual(source, "TencentFetcher")
+                self.assertEqual(source, "SsiFetcher")
 
             primary.get_daily_data.reset_mock()
             primary.get_daily_data.return_value = _make_daily_df()
 
-            df, source = manager.get_daily_data("000001", start_date="2026-05-01", end_date="2026-05-08")
+            df, source = manager.get_daily_data("HPG", start_date="2026-05-01", end_date="2026-05-08")
 
             self.assertFalse(df.empty)
-            self.assertEqual(source, "EfinanceFetcher")
+            self.assertEqual(source, "VciFetcher")
             primary.get_daily_data.assert_called_once()
         finally:
             DataFetcherManager.reset_daily_source_health()
@@ -420,36 +241,36 @@ class TestFetcherSourceOptimization(unittest.TestCase):
         DataFetcherManager.reset_daily_source_health()
         try:
             primary = MagicMock()
-            primary.name = "EfinanceFetcher"
+            primary.name = "VciFetcher"
             primary.priority = 0
             primary.get_daily_data.return_value = _make_daily_df()
 
             backup = MagicMock()
-            backup.name = "TencentFetcher"
+            backup.name = "SsiFetcher"
             backup.priority = 1
             backup.get_daily_data.return_value = _make_daily_df()
 
             manager = DataFetcherManager(fetchers=[primary, backup])
-            health_key = DataFetcherManager._daily_health_key(backup, "cn")
+            health_key = DataFetcherManager._daily_health_key(backup, "vn")
             breaker = DataFetcherManager._daily_source_health
             for _ in range(breaker.failure_threshold):
                 breaker.record_failure(health_key, error="timeout")
             with breaker._lock:
                 breaker._states[health_key]["last_failure_time"] -= breaker.cooldown_seconds + 1
 
-            df, source = manager.get_daily_data("000001", start_date="2026-05-01", end_date="2026-05-08")
+            df, source = manager.get_daily_data("HPG", start_date="2026-05-01", end_date="2026-05-08")
 
             self.assertFalse(df.empty)
-            self.assertEqual(source, "EfinanceFetcher")
+            self.assertEqual(source, "VciFetcher")
             backup.get_daily_data.assert_not_called()
 
             primary.get_daily_data.reset_mock()
             primary.get_daily_data.side_effect = RuntimeError("primary down")
 
-            df, source = manager.get_daily_data("000001", start_date="2026-05-01", end_date="2026-05-08")
+            df, source = manager.get_daily_data("HPG", start_date="2026-05-01", end_date="2026-05-08")
 
             self.assertFalse(df.empty)
-            self.assertEqual(source, "TencentFetcher")
+            self.assertEqual(source, "SsiFetcher")
             backup.get_daily_data.assert_called_once()
         finally:
             DataFetcherManager.reset_daily_source_health()
@@ -460,41 +281,41 @@ class TestFetcherSourceOptimization(unittest.TestCase):
         DataFetcherManager.reset_daily_source_health()
         try:
             primary = MagicMock()
-            primary.name = "EfinanceFetcher"
+            primary.name = "VciFetcher"
             primary.priority = 0
             primary.get_daily_data.side_effect = RuntimeError("primary down")
 
             half_open = MagicMock()
-            half_open.name = "TencentFetcher"
+            half_open.name = "SsiFetcher"
             half_open.priority = 1
             half_open.get_daily_data.return_value = pd.DataFrame()
 
             backup = MagicMock()
-            backup.name = "AkshareFetcher"
+            backup.name = "YfinanceFetcher"
             backup.priority = 2
             backup.get_daily_data.return_value = _make_daily_df()
 
             manager = DataFetcherManager(fetchers=[primary, half_open, backup])
-            health_key = DataFetcherManager._daily_health_key(half_open, "cn")
+            health_key = DataFetcherManager._daily_health_key(half_open, "vn")
             breaker = DataFetcherManager._daily_source_health
             for _ in range(breaker.failure_threshold):
                 breaker.record_failure(health_key, error="timeout")
             with breaker._lock:
                 breaker._states[health_key]["last_failure_time"] -= breaker.cooldown_seconds + 1
 
-            df, source = manager.get_daily_data("000001", start_date="2026-05-01", end_date="2026-05-08")
+            df, source = manager.get_daily_data("HPG", start_date="2026-05-01", end_date="2026-05-08")
 
             self.assertFalse(df.empty)
-            self.assertEqual(source, "AkshareFetcher")
+            self.assertEqual(source, "YfinanceFetcher")
             half_open.get_daily_data.assert_called_once()
 
             half_open.get_daily_data.reset_mock()
             half_open.get_daily_data.return_value = _make_daily_df()
 
-            df, source = manager.get_daily_data("000001", start_date="2026-05-01", end_date="2026-05-08")
+            df, source = manager.get_daily_data("HPG", start_date="2026-05-01", end_date="2026-05-08")
 
             self.assertFalse(df.empty)
-            self.assertEqual(source, "TencentFetcher")
+            self.assertEqual(source, "SsiFetcher")
             half_open.get_daily_data.assert_called_once()
         finally:
             DataFetcherManager.reset_daily_source_health()

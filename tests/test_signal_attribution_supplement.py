@@ -46,7 +46,7 @@ class TestGenerateSingleStockReport:
         report = notification.generate_single_stock_report(result)
 
         # 验证包含信号归因段落
-        assert "信号归因" in report or "Signal Attribution" in report, "单股报告应包含信号归因段落"
+        assert "Phân rã tín hiệu" in report or "Signal Attribution" in report, "单股报告应包含信号归因段落"
         assert "35%" in report, "单股报告应显示 technical_indicators=35%"
         assert "MACD金叉" in report, "单股报告应显示 strongest_bullish_signal"
         print("  ✅ generate_single_stock_report() 正确渲染 signal_attribution")
@@ -68,8 +68,8 @@ class TestGenerateSingleStockReport:
 
     def _make_result(self, dashboard: Dict[str, Any]) -> "AnalysisResult":
         return AnalysisResult(
-            code="600519",
-            name="贵州茅台",
+            code="HPG",
+            name="Hòa Phát",
             trend_prediction="看多",
             sentiment_score=75,
             operation_advice="持有",
@@ -222,7 +222,7 @@ class TestParseResponseIntegration:
         analyzer.pre_judge = None
 
         # 调用 _parse_response()
-        result = analyzer._parse_response(llm_response_text, "600519", "贵州茅台")
+        result = analyzer._parse_response(llm_response_text, "HPG", "Hòa Phát")
 
         # 验证 result.dashboard 中的 signal_attribution 已归一化
         dashboard = result.dashboard

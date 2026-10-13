@@ -71,26 +71,34 @@ class _FixedSkillWeightService:
 class TestExtractStockCode(unittest.TestCase):
     """Validate stock code extraction from free text."""
 
-    # --- A-share ---
+    # --- Mã Việt Nam (HOSE/HNX/UPCoM) / Vietnam codes ---
 
-    def test_a_share_plain(self):
-        self.assertEqual(_extract_stock_code("600519"), "600519")
+    def test_vn_ticker_plain(self):
+        self.assertEqual(_extract_stock_code("HPG"), "HPG")
 
-    def test_a_share_chinese_prefix(self):
-        """Critical: Chinese char + digits must still match (no \\b)."""
-        self.assertEqual(_extract_stock_code("分析600519"), "600519")
+    def test_vn_ticker_in_vietnamese_sentence(self):
+        self.assertEqual(_extract_stock_code("Phân tích HPG"), "HPG")
+        self.assertEqual(_extract_stock_code("HPG thế nào"), "HPG")
 
-    def test_a_share_chinese_suffix(self):
-        self.assertEqual(_extract_stock_code("600519怎么样"), "600519")
+    def test_vn_ticker_in_english_sentence(self):
+        self.assertEqual(_extract_stock_code("analyze FPT"), "FPT")
+        self.assertEqual(_extract_stock_code("check VNM"), "VNM")
 
-    def test_a_share_in_sentence(self):
-        self.assertEqual(_extract_stock_code("请帮我看看600519的走势"), "600519")
+    def test_vn_ticker_with_suffix(self):
+        self.assertEqual(_extract_stock_code("HPG.VN"), "HPG")
 
-    def test_a_share_with_prefix_0(self):
-        self.assertEqual(_extract_stock_code("分析000858"), "000858")
+    def test_vn_index(self):
+        self.assertEqual(_extract_stock_code("VNINDEX"), "VNINDEX")
 
-    def test_a_share_with_prefix_3(self):
-        self.assertEqual(_extract_stock_code("分析300750"), "300750")
+    def test_lowercase_vn_ticker_with_analysis_hint(self):
+        self.assertEqual(_extract_stock_code("phân tích hpg"), "HPG")
+        self.assertEqual(_extract_stock_code("look at vcb"), "VCB")
+
+    def test_lowercase_vn_ticker_bare(self):
+        self.assertEqual(_extract_stock_code("hpg"), "HPG")
+
+    def test_vn_ticker_not_match_alpha_prefix(self):
+        self.assertEqual(_extract_stock_code("xhpg"), "")
 
     def test_a_share_not_match_7_digits(self):
         """Should not match 7-digit number."""
@@ -99,45 +107,6 @@ class TestExtractStockCode(unittest.TestCase):
     def test_a_share_embedded_in_longer_number(self):
         """Should not extract from within a longer number."""
         self.assertEqual(_extract_stock_code("86006005190001"), "")
-
-    # --- HK ---
-
-    def test_hk_lowercase(self):
-        self.assertEqual(_extract_stock_code("look at hk00700"), "HK00700")
-
-    def test_hk_uppercase(self):
-        self.assertEqual(_extract_stock_code("HK00700 analysis"), "HK00700")
-
-    def test_hk_chinese(self):
-        self.assertEqual(_extract_stock_code("分析hk00700"), "HK00700")
-
-    def test_hk_not_match_alpha_prefix(self):
-        """Letters before 'hk' should not prevent match."""
-        # "xhk00700" has alpha before hk, lookbehind should block
-        self.assertNotEqual(_extract_stock_code("xhk00700"), "HK00700")
-
-    # --- US ---
-
-    def test_us_ticker(self):
-        self.assertEqual(_extract_stock_code("analyze AAPL"), "AAPL")
-
-    def test_us_ticker_in_chinese(self):
-        self.assertEqual(_extract_stock_code("看看TSLA"), "TSLA")
-
-    def test_us_ticker_5_chars(self):
-        self.assertEqual(_extract_stock_code("check GOOGL"), "GOOGL")
-
-    def test_lowercase_us_ticker_with_analysis_hint(self):
-        self.assertEqual(_extract_stock_code("分析tsla"), "TSLA")
-
-    def test_lowercase_us_ticker_bare(self):
-        self.assertEqual(_extract_stock_code("tsla"), "TSLA")
-
-    def test_bse_code_with_8_prefix(self):
-        self.assertEqual(_extract_stock_code("分析830799"), "830799")
-
-    def test_bse_code_with_92_prefix(self):
-        self.assertEqual(_extract_stock_code("看看920748"), "920748")
 
     # --- Common word filtering ---
 
@@ -168,8 +137,8 @@ class TestExtractStockCode(unittest.TestCase):
     def test_finance_abbrev_excluded(self):
         for text in [
             "TTM",
-            "市盈率 TTM 怎么看",
-            "PE 怎么看",
+            "P/E TTM thế nào",
+            "PE thế nào",
             "PE TTM",
             "WHAT IS PE",
             "PE IS HIGH",
@@ -184,15 +153,14 @@ class TestExtractStockCode(unittest.TestCase):
                 self.assertEqual(_extract_stock_code(text), "")
 
     def test_finance_abbrev_before_real_ticker(self):
-        self.assertEqual(_extract_stock_code("PE AAPL 怎么看"), "AAPL")
-        self.assertEqual(_extract_stock_code("TTM AAPL 怎么看"), "AAPL")
-        self.assertEqual(_extract_stock_code("WHAT IS PE AAPL"), "AAPL")
+        self.assertEqual(_extract_stock_code("PE FPT thế nào"), "FPT")
+        self.assertEqual(_extract_stock_code("TTM FPT"), "FPT")
+        self.assertEqual(_extract_stock_code("WHAT IS PE FPT"), "FPT")
 
-    # --- Priority: A-share > HK > US ---
+    # --- Thứ tự xuất hiện / First code wins ---
 
-    def test_a_share_takes_priority_over_us(self):
-        """When both A-share code and US ticker appear, A-share wins."""
-        self.assertEqual(_extract_stock_code("600519 vs AAPL"), "600519")
+    def test_first_code_in_text_wins(self):
+        self.assertEqual(_extract_stock_code("HPG vs FPT"), "HPG")
 
     # --- Empty / irrelevant ---
 
@@ -225,41 +193,40 @@ class TestExtractStockCode(unittest.TestCase):
 # ============================================================
 
 class TestStockScopeResolution(unittest.TestCase):
-    """Validate chat stock-scope state transitions."""
+    """Validate chat stock-scope state transitions (Vietnam codes only)."""
+
+    _CURRENT = {"stock_code": "HPG", "stock_name": "Anonymous stock"}
 
     def test_maintain_keeps_current_stock_for_finance_abbrev_followup(self):
-        result = resolve_stock_scope(
-            "如果不考虑 TTM 呢",
-            {"stock_code": "600519", "stock_name": "匿名标的"},
-        )
+        result = resolve_stock_scope("Nếu bỏ qua chỉ số TTM thì sao?", dict(self._CURRENT))
 
         self.assertEqual(result.stock_scope.mode, "maintain")
-        self.assertEqual(result.effective_context["stock_code"], "600519")
-        self.assertEqual(result.effective_context["stock_name"], "匿名标的")
-        self.assertEqual(result.stock_scope.allowed_stock_codes, {"600519"})
+        self.assertEqual(result.effective_context["stock_code"], "HPG")
+        self.assertEqual(result.effective_context["stock_name"], "Anonymous stock")
+        self.assertEqual(result.stock_scope.allowed_stock_codes, {"HPG"})
 
     def test_switch_clears_old_stock_context_fields(self):
         result = resolve_stock_scope(
-            "换成 AAPL 看看",
+            "Chuyển sang FPT",
             {
-                "stock_code": "600519",
-                "stock_name": "匿名标的",
+                "stock_code": "HPG",
+                "stock_name": "Anonymous stock",
                 "previous_analysis_summary": {"summary": "old"},
                 "previous_strategy": {"action": "hold"},
                 "previous_price": 1800,
                 "previous_change_pct": 1.2,
                 "realtime_quote": {"price": 1800},
                 "analysis_context_pack_summary": "old pack",
-                "report_language": "zh",
+                "report_language": "vi",
             },
         )
 
         self.assertEqual(result.stock_scope.mode, "switch")
-        self.assertEqual(result.stock_scope.expected_stock_code, "AAPL")
-        self.assertEqual(result.stock_scope.allowed_stock_codes, {"AAPL"})
-        self.assertEqual(result.effective_context["stock_code"], "AAPL")
+        self.assertEqual(result.stock_scope.expected_stock_code, "FPT")
+        self.assertEqual(result.stock_scope.allowed_stock_codes, {"FPT"})
+        self.assertEqual(result.effective_context["stock_code"], "FPT")
         self.assertEqual(result.effective_context["stock_name"], "")
-        self.assertEqual(result.effective_context["report_language"], "zh")
+        self.assertEqual(result.effective_context["report_language"], "vi")
         for stale_key in (
             "previous_analysis_summary",
             "previous_strategy",
@@ -271,132 +238,90 @@ class TestStockScopeResolution(unittest.TestCase):
             self.assertNotIn(stale_key, result.effective_context)
 
     def test_switch_allows_single_new_code_when_current_code_is_mentioned(self):
-        result = resolve_stock_scope(
-            "换成 AAPL 看看，不考虑 600519",
-            {"stock_code": "600519", "stock_name": "匿名标的"},
-        )
+        result = resolve_stock_scope("Chuyển sang FPT, không xét HPG", dict(self._CURRENT))
 
         self.assertEqual(result.stock_scope.mode, "switch")
-        self.assertEqual(result.stock_scope.expected_stock_code, "AAPL")
-        self.assertEqual(result.stock_scope.allowed_stock_codes, {"AAPL"})
-        self.assertEqual(result.effective_context["stock_code"], "AAPL")
+        self.assertEqual(result.stock_scope.expected_stock_code, "FPT")
+        self.assertEqual(result.stock_scope.allowed_stock_codes, {"FPT"})
+        self.assertEqual(result.effective_context["stock_code"], "FPT")
         self.assertEqual(result.effective_context["stock_name"], "")
 
     def test_compare_allows_multiple_codes_without_polluting_current_context(self):
-        result = resolve_stock_scope(
-            "比较 600519 和 AAPL",
-            {"stock_code": "600519", "stock_name": "匿名标的"},
-        )
+        result = resolve_stock_scope("So sánh HPG và FPT", dict(self._CURRENT))
 
         self.assertEqual(result.stock_scope.mode, "compare")
-        self.assertEqual(result.effective_context["stock_code"], "600519")
-        self.assertEqual(result.effective_context["stock_name"], "匿名标的")
-        self.assertEqual(result.stock_scope.allowed_stock_codes, {"600519", "AAPL"})
-
-    def test_compare_allows_plain_five_digit_hk_code(self):
-        result = resolve_stock_scope(
-            "比较 01810 和 AAPL",
-            {"stock_code": "600519", "stock_name": "匿名标的"},
-        )
-
-        self.assertEqual(result.stock_scope.mode, "compare")
-        self.assertEqual(result.effective_context["stock_code"], "600519")
-        self.assertEqual(result.effective_context["stock_name"], "匿名标的")
-        self.assertEqual(result.stock_scope.allowed_stock_codes, {"600519", "HK01810", "AAPL"})
+        self.assertEqual(result.effective_context["stock_code"], "HPG")
+        self.assertEqual(result.effective_context["stock_name"], "Anonymous stock")
+        self.assertEqual(result.stock_scope.allowed_stock_codes, {"HPG", "FPT"})
 
     def test_compare_hints_allow_multiple_codes_without_switching_context(self):
         cases = [
-            "分析 600519 和 AAPL 的差异",
-            "AAPL 相比 600519 怎么样",
-            "和 AAPL 的差异怎么看",
+            "Phân tích HPG và FPT khác biệt",
+            "FPT so với HPG",
+            "compare FPT",
         ]
 
         for message in cases:
             with self.subTest(message=message):
-                result = resolve_stock_scope(
-                    message,
-                    {"stock_code": "600519", "stock_name": "匿名标的"},
-                )
+                result = resolve_stock_scope(message, dict(self._CURRENT))
 
                 self.assertEqual(result.stock_scope.mode, "compare")
-                self.assertEqual(result.effective_context["stock_code"], "600519")
-                self.assertEqual(result.effective_context["stock_name"], "匿名标的")
-                self.assertEqual(result.stock_scope.allowed_stock_codes, {"600519", "AAPL"})
+                self.assertEqual(result.effective_context["stock_code"], "HPG")
+                self.assertEqual(result.effective_context["stock_name"], "Anonymous stock")
+                self.assertEqual(result.stock_scope.allowed_stock_codes, {"HPG", "FPT"})
 
     def test_multiple_explicit_codes_are_compare_scope(self):
         cases = [
-            ("AAPL 和 TSLA 哪个更值得买", {"600519", "AAPL", "TSLA"}),
-            ("AAPL 和 TSLA 谁更适合", {"600519", "AAPL", "TSLA"}),
-            ("分析 AAPL 和 TSLA", {"600519", "AAPL", "TSLA"}),
+            ("FPT và VCB, mã nào tốt hơn?", {"HPG", "FPT", "VCB"}),
+            ("FPT và VCB, nên chọn mã nào?", {"HPG", "FPT", "VCB"}),
+            ("Phân tích FPT và VCB", {"HPG", "FPT", "VCB"}),
         ]
 
         for message, expected_allowed in cases:
             with self.subTest(message=message):
-                result = resolve_stock_scope(
-                    message,
-                    {"stock_code": "600519", "stock_name": "匿名标的"},
-                )
+                result = resolve_stock_scope(message, dict(self._CURRENT))
 
                 self.assertEqual(result.stock_scope.mode, "compare")
-                self.assertEqual(result.effective_context["stock_code"], "600519")
-                self.assertEqual(result.effective_context["stock_name"], "匿名标的")
+                self.assertEqual(result.effective_context["stock_code"], "HPG")
+                self.assertEqual(result.effective_context["stock_name"], "Anonymous stock")
                 self.assertEqual(result.stock_scope.allowed_stock_codes, expected_allowed)
 
     def test_multiple_lowercase_explicit_codes_are_compare_scope_with_choice_hint(self):
-        result = resolve_stock_scope(
-            "aapl 和 tsla 哪个更值得买",
-            {"stock_code": "600519", "stock_name": "匿名标的"},
-        )
+        result = resolve_stock_scope("fpt và vcb, mã nào tốt hơn?", dict(self._CURRENT))
 
         self.assertEqual(result.stock_scope.mode, "compare")
-        self.assertEqual(result.effective_context["stock_code"], "600519")
-        self.assertEqual(result.stock_scope.allowed_stock_codes, {"600519", "AAPL", "TSLA"})
+        self.assertEqual(result.effective_context["stock_code"], "HPG")
+        self.assertEqual(result.stock_scope.allowed_stock_codes, {"HPG", "FPT", "VCB"})
 
-    def test_single_stock_difference_phrase_still_switches_context(self):
-        result = resolve_stock_scope(
-            "分析 AAPL 的差异化优势",
-            {"stock_code": "600519", "stock_name": "匿名标的"},
-        )
+    def test_single_stock_phrase_switches_context(self):
+        result = resolve_stock_scope("Phân tích lợi thế cạnh tranh của FPT", dict(self._CURRENT))
 
         self.assertEqual(result.stock_scope.mode, "switch")
-        self.assertEqual(result.stock_scope.expected_stock_code, "AAPL")
-        self.assertEqual(result.effective_context["stock_code"], "AAPL")
+        self.assertEqual(result.stock_scope.expected_stock_code, "FPT")
+        self.assertEqual(result.effective_context["stock_code"], "FPT")
         self.assertEqual(result.effective_context["stock_name"], "")
 
     def test_moving_average_indicator_token_does_not_switch_context(self):
         cases = [
-            "分析 MA 均线",
-            "看看 MA 怎么排列",
-            "分析 KDJ 指标",
-            "KDJ 怎么看",
+            "Phân tích đường MA",
+            "MA xếp thế nào",
+            "Phân tích chỉ báo KDJ",
+            "KDJ thế nào",
         ]
 
         for message in cases:
             with self.subTest(message=message):
-                result = resolve_stock_scope(
-                    message,
-                    {"stock_code": "600519", "stock_name": "匿名标的"},
-                )
+                result = resolve_stock_scope(message, dict(self._CURRENT))
 
                 self.assertEqual(result.stock_scope.mode, "maintain")
-                self.assertEqual(result.stock_scope.expected_stock_code, "600519")
-                self.assertEqual(result.stock_scope.allowed_stock_codes, {"600519"})
-                self.assertEqual(result.effective_context["stock_code"], "600519")
-
-    def test_dotted_us_ticker_stays_intact_in_scope_resolution(self):
-        result = resolve_stock_scope(
-            "比较 BRK.B 和 AAPL",
-            {"stock_code": "600519", "stock_name": "匿名标的"},
-        )
-
-        self.assertEqual(result.stock_scope.mode, "compare")
-        self.assertEqual(result.stock_scope.allowed_stock_codes, {"600519", "BRK.B", "AAPL"})
-        self.assertEqual(result.effective_context["stock_code"], "600519")
+                self.assertEqual(result.stock_scope.expected_stock_code, "HPG")
+                self.assertEqual(result.stock_scope.allowed_stock_codes, {"HPG"})
+                self.assertEqual(result.effective_context["stock_code"], "HPG")
 
     def test_invalid_context_exchange_token_is_not_trusted_as_current_stock(self):
         result = resolve_stock_scope(
-            "继续看",
-            {"stock_code": "HK", "stock_name": "港股"},
+            "Tiếp tục",
+            {"stock_code": "HK", "stock_name": "Legacy market"},
         )
 
         self.assertEqual(result.stock_scope.mode, "maintain")
@@ -405,59 +330,27 @@ class TestStockScopeResolution(unittest.TestCase):
         self.assertNotIn("stock_code", result.effective_context)
         self.assertNotIn("stock_name", result.effective_context)
 
-    def test_compare_does_not_treat_exchange_affixes_as_standalone_tickers(self):
-        cases = [
-            ("比较 01810 和 AAPL", {"600519", "HK01810", "AAPL"}, set()),
-            ("比较 1810.HK 和 AAPL", {"600519", "HK01810", "AAPL"}, {"HK"}),
-            ("比较 0700.HK 和 600519", {"600519", "HK00700"}, {"HK"}),
-            ("比较 600519.SH 和 AAPL", {"600519", "AAPL"}, {"SH"}),
-            ("比较 000001.SZ 和 AAPL", {"600519", "000001", "AAPL"}, {"SZ"}),
-            ("比较 600519.SS 和 AAPL", {"600519", "AAPL"}, {"SS"}),
-            ("比较 1810.hk 和 tsla", {"600519", "HK01810", "TSLA"}, {"HK"}),
-            ("比较 SH600519 和 AAPL", {"600519", "AAPL"}, {"SH"}),
-            ("比较 SZ000001 和 AAPL", {"600519", "000001", "AAPL"}, {"SZ"}),
-            ("比较 BJ920748 和 AAPL", {"600519", "920748", "AAPL"}, {"BJ"}),
-            ("比较 HK01810 和 AAPL", {"600519", "HK01810", "AAPL"}, {"HK"}),
-            ("比较 hk01810 和 tsla", {"600519", "HK01810", "TSLA"}, {"HK"}),
-            ("比较 600519 SH 和 AAPL", {"600519", "AAPL"}, {"SH"}),
-            ("比较 000001 SZ 和 AAPL", {"600519", "000001", "AAPL"}, {"SZ"}),
-            ("比较 920748 BJ 和 AAPL", {"600519", "920748", "AAPL"}, {"BJ"}),
-            ("比较 01810 HK 和 AAPL", {"600519", "HK01810", "AAPL"}, {"HK"}),
-            ("比较 600519 SS 和 AAPL", {"600519", "AAPL"}, {"SS"}),
-        ]
-
-        for message, expected_allowed, forbidden_tokens in cases:
-            with self.subTest(message=message):
-                result = resolve_stock_scope(
-                    message,
-                    {"stock_code": "600519", "stock_name": "匿名标的"},
-                )
-
-                self.assertEqual(result.stock_scope.mode, "compare")
-                self.assertEqual(result.stock_scope.allowed_stock_codes, expected_allowed)
-                for token in forbidden_tokens:
-                    self.assertNotIn(token, result.stock_scope.allowed_stock_codes)
-
-    def test_switch_recognizes_lowercase_us_ticker_with_explicit_hint(self):
-        result = resolve_stock_scope(
-            "分析tsla",
-            {"stock_code": "600519", "stock_name": "匿名标的"},
-        )
-
-        self.assertEqual(result.stock_scope.mode, "switch")
-        self.assertEqual(result.stock_scope.expected_stock_code, "TSLA")
-        self.assertEqual(result.effective_context["stock_code"], "TSLA")
-        self.assertEqual(result.effective_context["stock_name"], "")
-
-    def test_compare_recognizes_lowercase_us_tickers(self):
-        result = resolve_stock_scope(
-            "比较 600519 和 tsla",
-            {"stock_code": "600519", "stock_name": "匿名标的"},
-        )
+    def test_compare_normalizes_vn_suffix(self):
+        result = resolve_stock_scope("So sánh FPT.VN và VCB", dict(self._CURRENT))
 
         self.assertEqual(result.stock_scope.mode, "compare")
-        self.assertEqual(result.effective_context["stock_code"], "600519")
-        self.assertEqual(result.stock_scope.allowed_stock_codes, {"600519", "TSLA"})
+        self.assertEqual(result.stock_scope.allowed_stock_codes, {"HPG", "FPT", "VCB"})
+        self.assertNotIn("VN", result.stock_scope.allowed_stock_codes)
+
+    def test_switch_recognizes_lowercase_vn_ticker_with_explicit_hint(self):
+        result = resolve_stock_scope("phân tích fpt", dict(self._CURRENT))
+
+        self.assertEqual(result.stock_scope.mode, "switch")
+        self.assertEqual(result.stock_scope.expected_stock_code, "FPT")
+        self.assertEqual(result.effective_context["stock_code"], "FPT")
+        self.assertEqual(result.effective_context["stock_name"], "")
+
+    def test_compare_recognizes_lowercase_vn_tickers(self):
+        result = resolve_stock_scope("so sánh HPG và fpt", dict(self._CURRENT))
+
+        self.assertEqual(result.stock_scope.mode, "compare")
+        self.assertEqual(result.effective_context["stock_code"], "HPG")
+        self.assertEqual(result.stock_scope.allowed_stock_codes, {"HPG", "FPT"})
 
 
 # ============================================================
@@ -1158,34 +1051,29 @@ class TestOrchestratorModes(unittest.TestCase):
     def test_build_context_keeps_market_phase_context_in_meta_not_data(self):
         orch = self._make_orchestrator()
         phase_context = {"phase": "intraday", "is_partial_bar": True}
-        pack_summary = "\n## 分析上下文包摘要\n- 数据块状态：行情 available\n"
-        market_structure_context = {
-            "market_theme_context": {"status": "ok", "active_themes": []},
-            "stock_market_position": {"status": "ok", "primary_theme": {"name": "机器人概念"}},
-        }
+        pack_summary = "\n## Analysis Context Pack Summary\n- Data block status: quote available\n"
 
         ctx = orch._build_context(
-            "Analyze 600519",
+            "Analyze HPG",
             context={
-                "stock_code": "600519",
-                "stock_name": "贵州茅台",
+                "stock_code": "HPG",
+                "stock_name": "Hoa Phat Group",
                 "market_phase_context": phase_context,
                 "analysis_context_pack_summary": pack_summary,
-                "market_structure_context": market_structure_context,
             },
         )
 
         self.assertEqual(ctx.meta["market_phase_context"], phase_context)
         self.assertEqual(ctx.meta["analysis_context_pack_summary"], pack_summary)
-        self.assertEqual(ctx.meta["market_structure_context"], market_structure_context)
         self.assertNotIn("market_phase_context", ctx.data)
         self.assertNotIn("analysis_context_pack_summary", ctx.data)
-        self.assertNotIn("market_structure_context", ctx.data)
 
     def test_build_context_extracts_code_from_query(self):
         orch = self._make_orchestrator()
-        ctx = orch._build_context("分析600519的走势")
-        self.assertEqual(ctx.stock_code, "600519")
+        ctx = orch._build_context("Phân tích xu hướng HPG")
+        self.assertEqual(ctx.stock_code, "HPG")
+        # Ngôn ngữ mặc định là tiếng Việt. / Default report language is Vietnamese.
+        self.assertEqual(ctx.meta["report_language"], "vi")
 
     def test_fallback_summary(self):
         orch = self._make_orchestrator()
@@ -1643,8 +1531,8 @@ class TestOrchestratorExecution(unittest.TestCase):
             tool_registry=MagicMock(),
             llm_adapter=MagicMock(),
         ).build_user_message(ctx)
-        self.assertIn("执行超时 1 个", prompt)
-        self.assertIn("signal 无法识别 1 个", prompt)
+        self.assertIn("timed out: 1", prompt)
+        self.assertIn("unrecognized signal: 1", prompt)
 
     def test_specialist_batch_timeout_is_split_across_concurrency_waves(self):
         orch = self._make_orchestrator(config=SimpleNamespace(agent_skill_concurrency=2))
@@ -1694,7 +1582,7 @@ class TestOrchestratorExecution(unittest.TestCase):
         self.assertIsNotNone(result.dashboard)
         self.assertIsNotNone(result.content)
         self.assertIn("insufficient budget", (result.error or "").lower())
-        self.assertIn("[降级结果]", result.dashboard["analysis_summary"])
+        self.assertIn("[Kết quả hạ cấp]", result.dashboard["analysis_summary"])
         technical.run.assert_called_once()
         intel.run.assert_not_called()
 
@@ -1817,7 +1705,7 @@ class TestOrchestratorExecution(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertIn("timed out", result.error)
         self.assertEqual(result.dashboard["decision_type"], "buy")
-        self.assertEqual(result.dashboard["operation_advice"], "买入")
+        self.assertEqual(result.dashboard["operation_advice"], "Mua")
         self.assertEqual(
             result.dashboard["dashboard"]["battle_plan"]["sniper_points"]["stop_loss"],
             1760.0,
@@ -1853,7 +1741,7 @@ class TestOrchestratorExecution(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertIn("timed out", result.error)
         self.assertEqual(result.dashboard["decision_type"], "buy")
-        self.assertIn("降级结果", result.dashboard["analysis_summary"])
+        self.assertIn("Kết quả hạ cấp", result.dashboard["analysis_summary"])
         self.assertEqual(
             result.dashboard["dashboard"]["battle_plan"]["sniper_points"]["stop_loss"],
             295.0,
@@ -2041,21 +1929,21 @@ class TestOrchestratorExecution(unittest.TestCase):
                     with patch("src.agent.conversation.conversation_manager.add_user_message"), \
                          patch("src.agent.conversation.conversation_manager.add_message"):
                         orch.chat(
-                            "换成 AAPL 看看",
+                            "Chuyển sang FPT",
                             "session-1",
                             context={
-                                "stock_code": "600519",
-                                "stock_name": "匿名标的",
+                                "stock_code": "HPG",
+                                "stock_name": "Anonymous stock",
                                 "previous_analysis_summary": {"summary": "old"},
                             },
                         )
 
         ctx = captured["ctx"]
-        self.assertEqual(ctx.stock_code, "AAPL")
+        self.assertEqual(ctx.stock_code, "FPT")
         self.assertEqual(ctx.stock_name, "")
         self.assertNotIn("previous_analysis_summary", ctx.meta)
         self.assertEqual(ctx.meta["stock_scope"].mode, "switch")
-        self.assertEqual(ctx.meta["stock_scope"].expected_stock_code, "AAPL")
+        self.assertEqual(ctx.meta["stock_scope"].expected_stock_code, "FPT")
 
     def test_chat_does_not_read_or_write_provider_trace(self):
         from src.agent.orchestrator import OrchestratorResult
@@ -2175,7 +2063,7 @@ class TestOrchestratorExecution(unittest.TestCase):
                 result = orch.chat("hello", "session-2")
 
         self.assertFalse(result.success)
-        add_message.assert_any_call("session-2", "assistant", "[分析失败] boom")
+        add_message.assert_any_call("session-2", "assistant", "[Phân tích thất bại] boom")
 
     def test_execute_pipeline_fails_when_dashboard_parse_fails(self):
         orch = self._make_orchestrator()
@@ -2366,23 +2254,23 @@ class TestBaseAgentMessageAssembly(unittest.TestCase):
 
     def test_build_messages_injects_market_phase_before_cached_data(self):
         agent = self._make_agent()
-        ctx = AgentContext(query="hello", stock_code="600519")
+        ctx = AgentContext(query="hello", stock_code="HPG")
         ctx.meta["market_phase_context"] = {
-            "market": "cn",
+            "market": "vn",
             "phase": "intraday",
-            "market_local_time": "2026-03-27T10:00:00+08:00",
+            "market_local_time": "2026-03-27T10:00:00+07:00",
             "effective_daily_bar_date": "2026-03-26",
             "is_partial_bar": True,
             "minutes_to_close": 300,
         }
-        ctx.meta["analysis_context_pack_summary"] = "\n## 分析上下文包摘要\n- 数据块状态：行情 available\n"
+        ctx.meta["analysis_context_pack_summary"] = "\n## Analysis Context Pack Summary\n- Data block status: quote available\n"
         ctx.set_data("realtime_quote", {"price": 1880.0})
 
         messages = agent._build_messages(ctx)
 
         phase_indexes = [
             idx for idx, message in enumerate(messages)
-            if "市场阶段上下文" in message.get("content", "")
+            if "Market Phase Context" in message.get("content", "")
         ]
         cached_indexes = [
             idx for idx, message in enumerate(messages)
@@ -2390,7 +2278,7 @@ class TestBaseAgentMessageAssembly(unittest.TestCase):
         ]
         pack_indexes = [
             idx for idx, message in enumerate(messages)
-            if "分析上下文包摘要" in message.get("content", "")
+            if "Analysis Context Pack Summary" in message.get("content", "")
         ]
         self.assertEqual(len(phase_indexes), 1)
         self.assertEqual(len(pack_indexes), 1)
@@ -2399,8 +2287,8 @@ class TestBaseAgentMessageAssembly(unittest.TestCase):
         self.assertLess(pack_indexes[0], cached_indexes[0])
         phase_message = messages[phase_indexes[0]]
         self.assertEqual(phase_message["role"], "user")
-        self.assertIn("盘中", phase_message["content"])
-        self.assertIn("不得当作完整日线复盘", phase_message["content"])
+        self.assertIn("intraday", phase_message["content"])
+        self.assertIn("do not treat it as a complete daily candle", phase_message["content"])
         self.assertNotIn("market_phase_context", phase_message["content"])
         self.assertNotIn("is_partial_bar", phase_message["content"])
         pack_message = messages[pack_indexes[0]]
@@ -2845,7 +2733,7 @@ class TestBaseAgentMemoryIntegration(unittest.TestCase):
             "market_theme_context": {"status": "ok"},
             "stock_market_position": {"status": "ok"},
         }
-        ctx.meta["analysis_context_pack_summary"] = "\n## 分析上下文包摘要\n- 数据块状态：行情 available\n"
+        ctx.meta["analysis_context_pack_summary"] = "\n## Analysis Context Pack Summary\n- Data block status: quote available\n"
         ctx.set_data("realtime_quote", {"price": 1880.0})
 
         injected = agent._inject_cached_data(ctx)
@@ -2857,7 +2745,7 @@ class TestBaseAgentMemoryIntegration(unittest.TestCase):
         self.assertNotIn("[Pre-fetched: market_structure_context]", injected)
         self.assertNotIn("analysis_context_pack_summary", injected)
         self.assertNotIn("[Pre-fetched: analysis_context_pack_summary]", injected)
-        self.assertNotIn("分析上下文包摘要", injected)
+        self.assertNotIn("Analysis Context Pack Summary", injected)
 
     def test_memory_calibration_updates_confidence(self):
         memory = MagicMock(enabled=True)
@@ -2982,7 +2870,7 @@ class TestRiskOverride(unittest.TestCase):
 
         self.assertEqual(dashboard["decision_type"], "hold")
         self.assertLessEqual(dashboard["sentiment_score"], 59)
-        self.assertIn("风控接管", dashboard["risk_warning"])
+        self.assertIn("Quản trị rủi ro can thiệp", dashboard["risk_warning"])
         self.assertEqual(ctx.opinions[0].signal, "hold")
 
     def test_risk_override_normalizes_strong_buy_before_veto(self):
@@ -3099,11 +2987,11 @@ class TestResearchCommandTimeout(unittest.TestCase):
                  error="Deep research timed out after 0.01s",
                  timed_out=True,
              )):
-            response = cmd.execute(msg, ["600519"])
+            response = cmd.execute(msg, ["HPG"])
 
-        self.assertIn("超时", response.text)
+        self.assertIn("quá thời gian", response.text)
 
-    def test_research_recognizes_five_letter_us_ticker(self):
+    def test_research_recognizes_lowercase_vn_code(self):
         from bot.commands.research import ResearchCommand
         from bot.models import BotMessage
 
@@ -3141,12 +3029,12 @@ class TestResearchCommandTimeout(unittest.TestCase):
              patch("src.agent.factory.get_tool_registry", return_value=MagicMock()), \
              patch("src.agent.llm_adapter.LLMToolAdapter", return_value=MagicMock()), \
              patch("src.agent.research.ResearchAgent.research", side_effect=_capture_research):
-            response = cmd.execute(msg, ["googl", "风险"])
+            response = cmd.execute(msg, ["hpg", "rủi ro"])
 
         self.assertIn("Deep Research Report", response.text)
-        self.assertEqual(captured["context"], {"stock_code": "GOOGL", "stock_name": ""})
+        self.assertEqual(captured["context"], {"stock_code": "HPG", "stock_name": ""})
         self.assertEqual(captured["timeout_seconds"], 1)
-        self.assertTrue(captured["query"].startswith("[Stock: GOOGL]"))
+        self.assertTrue(captured["query"].startswith("[Stock: HPG] rủi ro"))
 
 
 # ============================================================
@@ -3664,8 +3552,8 @@ class TestP1SemanticConvergence(unittest.TestCase):
         """
         from src.report_language import get_report_labels
 
-        # zh、en、ko 三语的 none_label 都必须完备
-        for lang, expected in [("zh", "无"), ("en", "None"), ("ko", "없음")]:
+        # Nhãn none_label của vi/en phải đầy đủ. / vi and en none_label must exist.
+        for lang, expected in [("vi", "Không có"), ("en", "None")]:
             labels = get_report_labels(lang)
             self.assertEqual(labels["none_label"], expected)
 
@@ -3688,22 +3576,17 @@ class TestP1SemanticConvergence(unittest.TestCase):
         # 走 notification 的 renderer helper
         from src.notification import _append_strategy_synthesis_block
 
-        for lang, expected_none in [("en", "None"), ("ko", "없음")]:
+        for lang, expected_none, other_none in [("en", "None", "Không có"), ("vi", "Không có", "None")]:
             labels = get_report_labels(lang)
             lines = []
             _append_strategy_synthesis_block(lines, strategy_synthesis, labels, lang)
             rendered = "\n".join(lines)
 
-            # 空阵营必须用 labels.none_label 输出
+            # Phe trống phải dùng labels.none_label. / Empty camps use labels.none_label.
             self.assertIn(expected_none, rendered)
-            # 不得出现其他语言的 none_label
-            for other_lang, other_none in [("zh", "无"), ("en", "None"), ("ko", "없음")]:
-                if other_lang == lang:
-                    continue
-                # zh 的 "无" 有可能出现在其他非阵营的文案中，这里只检查阵营行
-                # 简单起见：只在 en/ko 场景校验中文"无"不出现
-                if lang != "zh" and other_lang == "zh":
-                    self.assertNotIn("无", rendered)
+            # Không lẫn nhãn của ngôn ngữ kia. / No cross-language none label.
+            self.assertNotIn(other_none, rendered)
+            self.assertNotIn("无", rendered)
 
 
 class TestStrategyEngineE2E(unittest.TestCase):
@@ -3931,12 +3814,11 @@ class TestStrategyEngineE2E(unittest.TestCase):
         from src.report_language import localize_consensus_level
 
         cases = [
-            ("insufficient", "zh", "证据不足"),
+            ("insufficient", "vi", "Không đủ bằng chứng"),
             ("insufficient", "en", "Insufficient"),
-            ("insufficient", "ko", "증거 부족"),
             # Display-form inputs should also canonicalize
-            ("证据不足", "en", "Insufficient"),
-            ("Insufficient", "zh", "证据不足"),
+            ("Không đủ bằng chứng", "en", "Insufficient"),
+            ("Insufficient", "vi", "Không đủ bằng chứng"),
         ]
 
         for raw, lang, expected in cases:
@@ -4011,16 +3893,16 @@ class TestStrategyEngineE2E(unittest.TestCase):
         }
 
         result = AnalysisResult(
-            code="600519",
-            name="贵州茅台",
+            code="HPG",
+            name="Hòa Phát",
             sentiment_score=50,
-            trend_prediction="震荡",
-            operation_advice="观望",
+            trend_prediction="Đi ngang",
+            operation_advice="Quan sát",
             decision_type="hold",
-            report_language="zh",
+            report_language="vi",
             dashboard={
                 "strategy_synthesis": synthesis,
-                "core_conclusion": {"one_sentence": "测试样本"},
+                "core_conclusion": {"one_sentence": "Mẫu kiểm thử"},
                 "intelligence": {},
                 "battle_plan": {},
             },
@@ -4030,9 +3912,9 @@ class TestStrategyEngineE2E(unittest.TestCase):
         report = svc.generate_dashboard_report([result])
 
         # invalid count 行必须出现
-        self.assertIn("另有 3 个策略解析失败", report, "invalid count line missing from dashboard report")
-        # consensus_level=insufficient → localize → 证据不足
-        self.assertIn("证据不足", report, "localized 'insufficient' missing from dashboard report")
+        self.assertIn("Có 3 chiến lược khác không tạo được tín hiệu hợp lệ", report, "invalid count line missing from dashboard report")
+        # consensus_level=insufficient → bản địa hoá → Không đủ bằng chứng
+        self.assertIn("Không đủ bằng chứng", report, "localized 'insufficient' missing from dashboard report")
 
     def test_bad_shape_summary_params_never_crashes_renderers(self):
         """OR-COM-34818459 回归：summary_params 为字符串/列表时，所有渲染路径必须静默降级而非崩溃。"""

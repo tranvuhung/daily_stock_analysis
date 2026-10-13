@@ -5,7 +5,7 @@ Bot command trigger system
 ===================================
 
 Triggers stock analysis and other features via @bot mentions or commands.
-Supports multiple platforms such as Feishu, DingTalk, WeCom and Telegram.
+Supports platforms such as Telegram and Discord.
 
 Module layout:
 - models.py: unified message/response models
@@ -18,9 +18,6 @@ Usage:
 1. Configure environment variables (each platform's token, etc.)
 2. Start the WebUI service
 3. Configure the Webhook URL on each platform:
-   - Feishu: http://your-server/bot/feishu
-   - DingTalk: http://your-server/bot/dingtalk
-   - WeCom: http://your-server/bot/wecom
    - Telegram: http://your-server/bot/telegram
 
 Supported commands:

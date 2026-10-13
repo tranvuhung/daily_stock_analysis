@@ -27,7 +27,6 @@ from __future__ import annotations
 import json
 import inspect
 import logging
-import re
 import time
 from dataclasses import dataclass, field
 from math import ceil
@@ -197,7 +196,8 @@ class AgentOrchestrator:
             if parse_dashboard and dashboard is not None:
                 dashboard = self._mark_partial_dashboard(
                     dashboard,
-                    note="多 Agent 超时，以下结论基于已完成阶段自动降级生成。",
+                    note=_fallback_text("timeout_note", _ctx_language(ctx)),
+                    language=_ctx_language(ctx),
                 )
                 ctx.set_data("final_dashboard", dashboard)
                 content = json.dumps(dashboard, ensure_ascii=False, indent=2)
@@ -239,7 +239,8 @@ class AgentOrchestrator:
             if parse_dashboard and dashboard is not None:
                 dashboard = self._mark_partial_dashboard(
                     dashboard,
-                    note="多 Agent 预算不足，以下结论基于已完成阶段自动降级生成。",
+                    note=_fallback_text("budget_note", _ctx_language(ctx)),
+                    language=_ctx_language(ctx),
                 )
                 ctx.set_data("final_dashboard", dashboard)
                 content = json.dumps(dashboard, ensure_ascii=False, indent=2)
@@ -1167,21 +1168,18 @@ class AgentOrchestrator:
                 requested_skills = context.get("strategies", [])
             ctx.meta["skills_requested"] = requested_skills or []
             ctx.meta["strategies_requested"] = requested_skills or []
-            ctx.meta["report_language"] = normalize_report_language(context.get("report_language", "zh"))
+            ctx.meta["report_language"] = normalize_report_language(context.get("report_language", "vi"))
             if context.get("market_phase_context"):
                 ctx.meta["market_phase_context"] = context["market_phase_context"]
             daily_market_context = context.get("daily_market_context")
             if isinstance(daily_market_context, dict) and daily_market_context:
                 ctx.meta["daily_market_context"] = dict(daily_market_context)
-            market_structure_context = context.get("market_structure_context")
-            if isinstance(market_structure_context, dict) and market_structure_context:
-                ctx.meta["market_structure_context"] = dict(market_structure_context)
             analysis_context_pack_summary = context.get("analysis_context_pack_summary")
             if isinstance(analysis_context_pack_summary, str) and analysis_context_pack_summary:
                 ctx.meta["analysis_context_pack_summary"] = analysis_context_pack_summary
 
             # Pre-populate data fields that the caller already has
-            for data_key in ("realtime_quote", "daily_history", "chip_distribution",
+            for data_key in ("realtime_quote", "daily_history",
                              "trend_result", "news_context"):
                 if context.get(data_key):
                     ctx.set_data(data_key, context[data_key])
@@ -1191,7 +1189,7 @@ class AgentOrchestrator:
             ctx.stock_code = _extract_stock_code(task)
 
         if "report_language" not in ctx.meta:
-            ctx.meta["report_language"] = "zh"
+            ctx.meta["report_language"] = "vi"
 
         return ctx
 
@@ -1291,7 +1289,6 @@ class AgentOrchestrator:
         meaningful_data_keys = (
             "realtime_quote",
             "daily_history",
-            "chip_distribution",
             "trend_result",
             "news_context",
             "intel_opinion",
@@ -1320,7 +1317,6 @@ class AgentOrchestrator:
         meaningful_data_keys = (
             "realtime_quote",
             "daily_history",
-            "chip_distribution",
             "trend_result",
             "news_context",
             "intel_opinion",
@@ -1342,6 +1338,8 @@ class AgentOrchestrator:
             )
         )
         confidence = float(base_opinion.confidence if base_opinion is not None else 0.5)
+        # Ngôn ngữ cho các câu mặc định do hệ thống tự điền. / Language of system-filled defaults.
+        lang = _ctx_language(ctx)
         sentiment_score = payload.get("sentiment_score")
         try:
             sentiment_score = int(sentiment_score)
@@ -1382,11 +1380,13 @@ class AgentOrchestrator:
             getattr(base_opinion, "reasoning", ""),
         )
         if not analysis_summary:
-            analysis_summary = f"多 Agent 未生成完整仪表盘，当前按{_signal_to_operation(decision_type)}处理。"
+            analysis_summary = _fallback_text("incomplete_summary", lang).format(
+                operation=_signal_to_operation(decision_type, lang)
+            )
         if risk_applied:
-            transition_prefix = (
-                f"[风控下调: {application.from_signal.value} -> "
-                f"{application.post_risk_signal.value}]"
+            transition_prefix = _fallback_text("risk_transition_prefix", lang).format(
+                from_signal=application.from_signal.value,
+                to_signal=application.post_risk_signal.value,
             )
             if not analysis_summary.startswith(transition_prefix):
                 analysis_summary = f"{transition_prefix} {analysis_summary}"
@@ -1403,29 +1403,35 @@ class AgentOrchestrator:
             ma_alignment = tech_raw.get("ma_alignment")
             trend_score = tech_raw.get("trend_score")
             if ma_alignment or trend_score is not None:
-                trend_prediction = f"技术面{ma_alignment or 'neutral'}，趋势评分 {trend_score if trend_score is not None else 'N/A'}"
+                trend_prediction = _fallback_text("trend_technical", lang).format(
+                    alignment=ma_alignment or "neutral",
+                    score=trend_score if trend_score is not None else "N/A",
+                )
             else:
-                trend_prediction = "待结合更多阶段结果确认"
+                trend_prediction = _fallback_text("trend_pending", lang)
 
         operation_advice_raw = payload.get("operation_advice")
         if risk_applied:
             pre_risk_advice = _normalize_operation_advice_value(
                 operation_advice_raw,
                 application.from_signal.value,
+                lang,
             )
             operation_advice = _adjust_operation_advice(
                 pre_risk_advice,
                 decision_type,
+                lang,
             )
         else:
             operation_advice = _normalize_operation_advice_value(
                 operation_advice_raw,
                 decision_type,
+                lang,
             )
 
         existing_position = core.get("position_advice")
         if risk_applied:
-            position_advice = _post_risk_position_advice(decision_type)
+            position_advice = _post_risk_position_advice(decision_type, lang)
         else:
             position_advice = (
                 dict(existing_position)
@@ -1445,7 +1451,7 @@ class AgentOrchestrator:
                     position_advice["no_position"] = no_position
                 if has_position and "has_position" not in position_advice:
                     position_advice["has_position"] = has_position
-            defaults = _default_position_advice(decision_type)
+            defaults = _default_position_advice(decision_type, lang)
             position_advice.setdefault("no_position", defaults["no_position"])
             position_advice.setdefault("has_position", defaults["has_position"])
 
@@ -1479,7 +1485,7 @@ class AgentOrchestrator:
             "stop_loss",
             key_levels.get("stop_loss")
             or key_levels.get("strong_support_stop_loss")
-            or "待补充",
+            or _fallback_text("to_be_added", lang),
         )
         sniper.setdefault(
             "take_profit",
@@ -1509,9 +1515,9 @@ class AgentOrchestrator:
             one_sentence = f"{transition_prefix} {one_sentence}"
         core["one_sentence"] = _truncate_text(one_sentence, 60)
         if not core.get("time_sensitivity"):
-            core["time_sensitivity"] = "本周内"
+            core["time_sensitivity"] = _fallback_text("this_week", lang)
         if risk_applied or not core.get("signal_type"):
-            core["signal_type"] = _signal_to_signal_type(decision_type)
+            core["signal_type"] = _signal_to_signal_type(decision_type, lang)
         core["position_advice"] = position_advice
 
         battle["sniper_points"] = sniper
@@ -1524,18 +1530,22 @@ class AgentOrchestrator:
                 if isinstance(position_strategy, dict)
                 else {}
             )
-            position_strategy["suggested_position"] = _default_position_size(decision_type)
+            position_strategy["suggested_position"] = _default_position_size(decision_type, lang)
             position_strategy["entry_plan"] = position_advice["no_position"]
             position_strategy.setdefault(
                 "risk_control",
-                f"止损参考：{sniper.get('stop_loss', '待补充')}",
+                _fallback_text("stop_loss_ref", lang).format(
+                    stop_loss=sniper.get("stop_loss", _fallback_text("to_be_added", lang))
+                ),
             )
             battle["position_strategy"] = position_strategy
         elif not isinstance(position_strategy, dict) or not position_strategy:
             battle["position_strategy"] = {
-                "suggested_position": _default_position_size(decision_type),
+                "suggested_position": _default_position_size(decision_type, lang),
                 "entry_plan": position_advice["no_position"],
-                "risk_control": f"止损参考 {sniper.get('stop_loss', '待补充')}",
+                "risk_control": _fallback_text("stop_loss_ref", lang).format(
+                    stop_loss=sniper.get("stop_loss", _fallback_text("to_be_added", lang))
+                ),
             }
 
         data_perspective = dashboard_block.get("data_perspective")
@@ -1566,11 +1576,11 @@ class AgentOrchestrator:
 
         risk_warning = _first_non_empty_text(
             payload.get("risk_warning"),
-            "；".join(risk_alerts[:3]),
+            "; ".join(risk_alerts[:3]),
             getattr(self._latest_opinion(ctx, {"risk"}), "reasoning", ""),
         )
         if not risk_warning:
-            risk_warning = "暂无额外风险提示"
+            risk_warning = _fallback_text("no_extra_risk", lang)
         if risk_applied:
             risk_opinion = self._latest_opinion(ctx, {"risk"})
             risk_raw = (
@@ -1583,6 +1593,7 @@ class AgentOrchestrator:
                 risk_raw,
                 ctx.risk_flags,
                 decision_type,
+                lang,
             )
 
         payload["stock_name"] = _first_non_empty_text(payload.get("stock_name"), ctx.stock_name, ctx.stock_code)
@@ -1590,7 +1601,7 @@ class AgentOrchestrator:
         payload["trend_prediction"] = trend_prediction
         payload["operation_advice"] = operation_advice
         payload["decision_type"] = decision_type
-        payload["confidence_level"] = _confidence_label(confidence)
+        payload["confidence_level"] = _confidence_label(confidence, lang)
         payload["analysis_summary"] = analysis_summary
         payload["key_points"] = key_points
         payload["risk_warning"] = risk_warning
@@ -1663,7 +1674,6 @@ class AgentOrchestrator:
     ) -> Dict[str, Any]:
         """Build a lightweight data_perspective block from cached market data."""
         realtime = ctx.get_data("realtime_quote")
-        chip = ctx.get_data("chip_distribution")
         trend = ctx.get_data("trend_result")
         technical = self._latest_opinion(ctx, {"technical"})
         tech_raw = technical.raw_data if technical and isinstance(technical.raw_data, dict) else {}
@@ -1682,15 +1692,16 @@ class AgentOrchestrator:
         def _bias_label(bias):
             if not isinstance(bias, (int, float)):
                 return ""
+            lang = _ctx_language(ctx)
             if bias > 5:
-                return "超买"
+                return _fallback_text("bias_overbought", lang)
             elif bias > 2:
-                return "偏高"
+                return _fallback_text("bias_high", lang)
             elif bias < -5:
-                return "超卖"
+                return _fallback_text("bias_oversold", lang)
             elif bias < -2:
-                return "偏低"
-            return "中性"
+                return _fallback_text("bias_low", lang)
+            return _fallback_text("bias_neutral", lang)
 
         def _r(val, n=2):
             """Round numeric values for display."""
@@ -1720,17 +1731,6 @@ class AgentOrchestrator:
                 "turnover_rate": (realtime or {}).get("turnover_rate", "N/A"),
                 "volume_status": trend_dict.get("volume_status") or tech_raw.get("volume_status", "N/A"),
                 "volume_meaning": tech_raw.get("reasoning", "") if tech_raw else "",
-            }
-
-        if isinstance(chip, dict):
-            concentration = chip.get("concentration_90")
-            if concentration is None:
-                concentration = chip.get("concentration")
-            data_perspective["chip_structure"] = {
-                "profit_ratio": chip.get("profit_ratio", "N/A"),
-                "avg_cost": chip.get("avg_cost", "N/A"),
-                "concentration": concentration if concentration is not None else "N/A",
-                "chip_health": chip.get("chip_health", "一般"),
             }
 
         return data_perspective
@@ -1816,10 +1816,11 @@ class AgentOrchestrator:
         dashboard: Dict[str, Any],
         *,
         note: str,
+        language: str = "vi",
     ) -> Dict[str, Any]:
         tagged = dict(dashboard)
         summary = _first_non_empty_text(tagged.get("analysis_summary"))
-        prefix = "[降级结果] "
+        prefix = _fallback_text("degraded_prefix", language)
         if summary and not summary.startswith(prefix):
             tagged["analysis_summary"] = prefix + summary
         elif not summary:
@@ -1892,6 +1893,7 @@ class AgentOrchestrator:
         risk_raw: Dict[str, Any],
         risk_flags: List[Dict[str, Any]],
         signal: str,
+        language: str = "vi",
     ) -> str:
         """Build a concise risk warning after a forced downgrade."""
         warnings: List[str] = []
@@ -1904,7 +1906,7 @@ class AgentOrchestrator:
             severity = str(flag.get("severity", "")).lower()
             if description:
                 warnings.append(f"[{severity or 'risk'}] {description}")
-        prefix = f"风控接管：最终信号已下调为 {signal}。"
+        prefix = _fallback_text("risk_takeover", language).format(signal=signal)
         merged = " ".join(dict.fromkeys([prefix] + warnings))
         return merged[:500]
 
@@ -1945,48 +1947,25 @@ _COMMON_WORDS: set[str] = {
     "WHY", "WHEN", "HOWDY", "HEY", "HI",
 }
 
-_LOWERCASE_TICKER_HINTS = re.compile(
-    r"分析|看看|查一?下|研究|诊断|走势|趋势|股价|股票|个股",
-)
-
-
 def _is_denied_ticker_candidate(candidate: str) -> bool:
     """Return whether a text token should not be auto-treated as a ticker."""
     return (candidate or "").strip().upper() in _COMMON_WORDS
 
 
 def _extract_stock_code(text: str) -> str:
-    """Best-effort stock code extraction from free text."""
-    # A-share 6-digit — use lookarounds instead of \b because Python's \b
-    # does not fire at Chinese-character / digit boundaries.
-    m = re.search(r'(?<!\d)((?:[03648]\d{5}|92\d{4}))(?!\d)', text)
-    if m:
-        return m.group(1)
-    # HK — same lookaround approach
-    m = re.search(r'(?<![a-zA-Z])(hk\d{5})(?!\d)', text, re.IGNORECASE)
-    if m:
-        return m.group(1).upper()
-    # US ticker — require 2+ uppercase letters bounded by non-alpha chars.
-    for match in re.finditer(r'(?<![a-zA-Z])([A-Z]{2,5}(?:\.[A-Z]{1,2})?)(?![a-zA-Z])', text):
-        candidate = match.group(1)
-        if not _is_denied_ticker_candidate(candidate):
-            return candidate
+    """Trích mã Việt Nam đầu tiên trong câu (best-effort).
 
+    Best-effort extraction of the first Vietnam stock code from free text.
+    """
+    from src.agent.stock_scope import extract_stock_codes, normalize_vn_stock_code
+
+    candidates = extract_stock_codes(text or "")
+    if candidates:
+        return candidates[0]
+    # Cả câu chỉ là một mã viết thường (``hpg``). / The whole text is one lowercase code.
     stripped = (text or "").strip()
-    bare_match = re.fullmatch(r'([A-Za-z]{2,5}(?:\.[A-Za-z]{1,2})?)', stripped)
-    if bare_match:
-        candidate = bare_match.group(1).upper()
-        if not _is_denied_ticker_candidate(candidate):
-            return candidate
-
-    if not _LOWERCASE_TICKER_HINTS.search(stripped):
-        return ""
-
-    for match in re.finditer(r'(?<![a-zA-Z])([A-Za-z]{2,5}(?:\.[A-Za-z]{1,2})?)(?![a-zA-Z])', text):
-        raw_candidate = match.group(1)
-        candidate = raw_candidate.upper()
-        if _is_denied_ticker_candidate(candidate):
-            continue
+    candidate = normalize_vn_stock_code(stripped)
+    if candidate and not _is_denied_ticker_candidate(candidate):
         return candidate
     return ""
 
@@ -2002,92 +1981,192 @@ def _adjust_sentiment_score(score: int, signal: str) -> int:
     return max(low, min(high, score))
 
 
-def _adjust_operation_advice(advice: str, signal: str) -> str:
+# Câu mặc định do orchestrator tự điền khi model thiếu trường (chỉ vi/en).
+# Default texts filled in by the orchestrator when the model omits fields (vi/en only).
+_FALLBACK_TEXTS: Dict[str, Dict[str, str]] = {
+    "vi": {
+        "timeout_note": "Đa Agent quá thời gian, kết luận dưới đây được tự động hạ cấp dựa trên các giai đoạn đã hoàn thành.",
+        "budget_note": "Đa Agent không đủ ngân sách thời gian, kết luận dưới đây được tự động hạ cấp dựa trên các giai đoạn đã hoàn thành.",
+        "incomplete_summary": "Đa Agent chưa tạo được bảng quyết định đầy đủ, tạm xử lý theo khuyến nghị {operation}.",
+        "risk_transition_prefix": "[Hạ bậc do quản trị rủi ro: {from_signal} -> {to_signal}]",
+        "trend_technical": "Kỹ thuật {alignment}, điểm xu hướng {score}",
+        "trend_pending": "Cần xác nhận thêm từ kết quả các giai đoạn khác",
+        "to_be_added": "Chưa rõ",
+        "this_week": "Trong tuần này",
+        "stop_loss_ref": "Tham chiếu cắt lỗ: {stop_loss}",
+        "no_extra_risk": "Chưa có cảnh báo rủi ro bổ sung",
+        "bias_overbought": "Quá mua",
+        "bias_high": "Hơi cao",
+        "bias_oversold": "Quá bán",
+        "bias_low": "Hơi thấp",
+        "bias_neutral": "Trung tính",
+        "degraded_prefix": "[Kết quả hạ cấp] ",
+        "risk_takeover": "Quản trị rủi ro can thiệp: tín hiệu cuối cùng đã được hạ xuống {signal}.",
+        "advice_downgraded": "{advice} (khuyến nghị ban đầu đã bị quản trị rủi ro hạ bậc)",
+    },
+    "en": {
+        "timeout_note": "Multi-agent run timed out; the conclusion below was auto-degraded from the completed stages.",
+        "budget_note": "Multi-agent time budget ran out; the conclusion below was auto-degraded from the completed stages.",
+        "incomplete_summary": "Multi-agent run did not produce a complete dashboard; treating it as {operation} for now.",
+        "risk_transition_prefix": "[Risk downgrade: {from_signal} -> {to_signal}]",
+        "trend_technical": "Technicals {alignment}, trend score {score}",
+        "trend_pending": "Pending confirmation from more stage results",
+        "to_be_added": "TBD",
+        "this_week": "This week",
+        "stop_loss_ref": "Stop-loss reference: {stop_loss}",
+        "no_extra_risk": "No additional risk alerts",
+        "bias_overbought": "Overbought",
+        "bias_high": "Elevated",
+        "bias_oversold": "Oversold",
+        "bias_low": "Depressed",
+        "bias_neutral": "Neutral",
+        "degraded_prefix": "[Degraded result] ",
+        "risk_takeover": "Risk control took over: the final signal was downgraded to {signal}.",
+        "advice_downgraded": "{advice} (original advice downgraded by risk control)",
+    },
+}
+
+_SIGNAL_OPERATION: Dict[str, Dict[str, str]] = {
+    "vi": {"buy": "Mua", "hold": "Quan sát", "sell": "Giảm tỷ trọng/Bán"},
+    "en": {"buy": "Buy", "hold": "Watch", "sell": "Reduce/Sell"},
+}
+
+_SIGNAL_TYPE: Dict[str, Dict[str, str]] = {
+    "vi": {"buy": "🟢 Tín hiệu mua", "hold": "🟡 Nắm giữ/Quan sát", "sell": "🔴 Tín hiệu bán", "alert": "⚠️ Cảnh báo rủi ro"},
+    "en": {"buy": "🟢 Buy Signal", "hold": "🟡 Hold and Watch", "sell": "🔴 Sell Signal", "alert": "⚠️ Risk Alert"},
+}
+
+_DEFAULT_POSITION_ADVICE: Dict[str, Dict[str, Dict[str, str]]] = {
+    "vi": {
+        "buy": {
+            "no_position": "Có thể giải ngân thăm dò từng phần quanh vùng hỗ trợ, tránh mua đuổi một lần.",
+            "has_position": "Có thể tiếp tục nắm giữ; chỉ cân nhắc mua thêm khi giá điều chỉnh về vùng then chốt mà không thủng.",
+        },
+        "hold": {
+            "no_position": "Chưa mua đuổi, chờ điều kiện vào lệnh rõ ràng hơn.",
+            "has_position": "Chủ yếu quan sát; chỉ thực hiện quản trị rủi ro khi giá thủng mức cắt lỗ.",
+        },
+        "sell": {
+            "no_position": "Tạm thời đứng ngoài, chờ rủi ro được giải toả.",
+            "has_position": "Ưu tiên kiểm soát sụt giảm, giảm tỷ trọng hoặc thoát vị thế theo kế hoạch.",
+        },
+    },
+    "en": {
+        "buy": {
+            "no_position": "Consider scaling in near support; avoid chasing with a full position at once.",
+            "has_position": "Keep holding; only consider adding if a pullback to the key level holds.",
+        },
+        "hold": {
+            "no_position": "Do not chase; wait for clearer entry conditions.",
+            "has_position": "Mainly watch; apply risk control only if the stop-loss level breaks.",
+        },
+        "sell": {
+            "no_position": "Stay out for now and wait for the risk to clear.",
+            "has_position": "Prioritise limiting drawdown; reduce or exit as planned.",
+        },
+    },
+}
+
+_POST_RISK_POSITION_ADVICE: Dict[str, Dict[str, Dict[str, str]]] = {
+    "vi": {
+        "hold": {
+            "no_position": "Đứng ngoài quan sát cho tới khi rủi ro được giải toả, chờ điều kiện vào lệnh rõ ràng hơn.",
+            "has_position": "Nắm giữ thận trọng và nâng mức cắt lỗ; chỉ cân nhắc mua thêm khi rủi ro giảm bớt.",
+        },
+        "sell": {
+            "no_position": "Rủi ro đang cao rõ rệt, chưa mở vị thế mới.",
+            "has_position": "Ưu tiên kiểm soát sụt giảm, nên giảm tỷ trọng hoặc thoát các vị thế rủi ro cao.",
+        },
+    },
+    "en": {
+        "hold": {
+            "no_position": "Stay on the sidelines until the risk clears; wait for clearer entry conditions.",
+            "has_position": "Hold cautiously with a tighter stop-loss; only consider adding once the risk eases.",
+        },
+        "sell": {
+            "no_position": "Risk is clearly elevated; do not open new positions.",
+            "has_position": "Prioritise limiting drawdown; reduce or exit high-risk positions.",
+        },
+    },
+}
+
+_DEFAULT_POSITION_SIZE: Dict[str, Dict[str, str]] = {
+    "vi": {"buy": "Thăm dò với tỷ trọng nhỏ", "hold": "Kiểm soát tỷ trọng", "sell": "Hạ tỷ trọng để phòng thủ"},
+    "en": {"buy": "Small starter position", "hold": "Keep position size controlled", "sell": "Cut exposure defensively"},
+}
+
+_CONFIDENCE_LABELS: Dict[str, Dict[str, str]] = {
+    "vi": {"high": "Cao", "medium": "Trung bình", "low": "Thấp"},
+    "en": {"high": "High", "medium": "Medium", "low": "Low"},
+}
+
+
+def _lang_key(language: Optional[str]) -> str:
+    """Chuẩn hoá ngôn ngữ về 'vi' hoặc 'en'. / Normalize language to 'vi' or 'en'."""
+    return "en" if normalize_report_language(language or "vi") == "en" else "vi"
+
+
+def _ctx_language(ctx: Optional[AgentContext]) -> str:
+    """Lấy ngôn ngữ báo cáo từ context. / Read the report language from the context."""
+    meta = getattr(ctx, "meta", None) or {}
+    return _lang_key(meta.get("report_language"))
+
+
+def _fallback_text(key: str, language: Optional[str] = "vi") -> str:
+    return _FALLBACK_TEXTS[_lang_key(language)][key]
+
+
+def _adjust_operation_advice(advice: str, signal: str, language: Optional[str] = "vi") -> str:
     """Normalize action wording to the overridden decision signal."""
-    mapping = {
-        "buy": "买入",
-        "hold": "观望",
-        "sell": "减仓/卖出",
-    }
+    mapping = _SIGNAL_OPERATION[_lang_key(language)]
     if signal not in mapping:
         return advice
     if advice == mapping[signal]:
         return advice
-    return f"{mapping[signal]}（原建议已被风控下调）"
+    return _fallback_text("advice_downgraded", language).format(advice=mapping[signal])
 
 
-def _signal_to_operation(signal: str) -> str:
-    mapping = {
-        "buy": "买入",
-        "hold": "观望",
-        "sell": "减仓/卖出",
-    }
-    return mapping.get(signal, "观望")
-
-
-def _signal_to_signal_type(signal: str) -> str:
-    mapping = {
-        "buy": "🟢买入信号",
-        "hold": "🟡持有观望",
-        "sell": "🔴卖出信号",
-    }
-    return mapping.get(signal, "⚠️风险警告")
-
-
-def _default_position_advice(signal: str) -> Dict[str, str]:
-    mapping = {
-        "buy": {
-            "no_position": "可结合支撑位分批试仓，避免一次性追高。",
-            "has_position": "可继续持有，回踩关键位不破再考虑加仓。",
-        },
-        "hold": {
-            "no_position": "暂不追高，等待更清晰的入场条件。",
-            "has_position": "以观察为主，跌破止损位再执行风控。",
-        },
-        "sell": {
-            "no_position": "暂不参与，等待风险充分释放。",
-            "has_position": "优先控制回撤，按计划减仓或离场。",
-        },
-    }
+def _signal_to_operation(signal: str, language: Optional[str] = "vi") -> str:
+    mapping = _SIGNAL_OPERATION[_lang_key(language)]
     return mapping.get(signal, mapping["hold"])
 
 
-def _post_risk_position_advice(signal: str) -> Dict[str, str]:
+def _signal_to_signal_type(signal: str, language: Optional[str] = "vi") -> str:
+    mapping = _SIGNAL_TYPE[_lang_key(language)]
+    return mapping.get(signal, mapping["alert"])
+
+
+def _default_position_advice(signal: str, language: Optional[str] = "vi") -> Dict[str, str]:
+    mapping = _DEFAULT_POSITION_ADVICE[_lang_key(language)]
+    return dict(mapping.get(signal, mapping["hold"]))
+
+
+def _post_risk_position_advice(signal: str, language: Optional[str] = "vi") -> Dict[str, str]:
     """Return authoritative position advice after an applied risk transition."""
-    mapping = {
-        "hold": {
-            "no_position": "风险未解除前先观望，等待更清晰的入场条件。",
-            "has_position": "谨慎持有并收紧止损，待风险缓解后再考虑加仓。",
-        },
-        "sell": {
-            "no_position": "风险明显偏高，暂不新开仓。",
-            "has_position": "优先控制回撤，建议减仓或退出高风险仓位。",
-        },
-    }
-    return dict(mapping.get(signal, _default_position_advice(signal)))
+    mapping = _POST_RISK_POSITION_ADVICE[_lang_key(language)]
+    if signal in mapping:
+        return dict(mapping[signal])
+    return _default_position_advice(signal, language)
 
 
-def _default_position_size(signal: str) -> str:
-    mapping = {
-        "buy": "轻仓试仓",
-        "hold": "控制仓位",
-        "sell": "降仓防守",
-    }
-    return mapping.get(signal, "控制仓位")
+def _default_position_size(signal: str, language: Optional[str] = "vi") -> str:
+    mapping = _DEFAULT_POSITION_SIZE[_lang_key(language)]
+    return mapping.get(signal, mapping["hold"])
 
 
-def _normalize_operation_advice_value(value: Any, signal: str) -> str:
+def _normalize_operation_advice_value(value: Any, signal: str, language: Optional[str] = "vi") -> str:
     if isinstance(value, str) and value.strip():
         return value.strip()
-    return _signal_to_operation(signal)
+    return _signal_to_operation(signal, language)
 
 
-def _confidence_label(confidence: float) -> str:
+def _confidence_label(confidence: float, language: Optional[str] = "vi") -> str:
+    labels = _CONFIDENCE_LABELS[_lang_key(language)]
     if confidence >= 0.75:
-        return "高"
+        return labels["high"]
     if confidence >= 0.45:
-        return "中"
-    return "低"
+        return labels["medium"]
+    return labels["low"]
 
 
 def _estimate_sentiment_score(signal: str, confidence: float) -> int:

@@ -69,7 +69,7 @@ class GracefulShutdown:
         """Signal handler function"""
         with self._lock:
             if not self.shutdown_requested:
-                logger.info(f"收到退出信号 ({signum})，等待当前任务完成...")
+                logger.info(f"Nhận tín hiệu thoát ({signum}), đang chờ tác vụ hiện tại hoàn tất...")
                 self.shutdown_requested = True
 
     @property
@@ -107,8 +107,8 @@ class Scheduler:
             import schedule
             self.schedule = schedule
         except ImportError:
-            logger.error("schedule 库未安装，请执行: pip install schedule")
-            raise ImportError("请安装 schedule 库: pip install schedule")
+            logger.error("Chưa cài thư viện schedule, hãy chạy: pip install schedule")
+            raise ImportError("Hãy cài thư viện schedule: pip install schedule")
 
         self.schedule_time = schedule_time
         self.schedule_times = (
@@ -137,10 +137,10 @@ class Scheduler:
         """
         self._task_callback = task
         if not self._configure_daily_tasks(self.schedule_times):
-            raise ValueError(f"无效的定时执行时间: {self.schedule_time!r}")
+            raise ValueError(f"Thời gian chạy định kỳ không hợp lệ: {self.schedule_time!r}")
 
         if run_immediately:
-            logger.info("立即执行一次任务...")
+            logger.info("Chạy ngay tác vụ một lần...")
             self._safe_run_task()
 
     @staticmethod
@@ -174,7 +174,7 @@ class Scheduler:
         candidate = (schedule_time or "").strip()
         if not self._is_valid_schedule_time(candidate):
             logger.warning(
-                "检测到无效的定时执行时间 %r，继续沿用当前时间 %s",
+                "Phát hiện thời gian chạy định kỳ không hợp lệ %r, tiếp tục dùng thời gian hiện tại %s",
                 schedule_time,
                 self.schedule_time,
             )
@@ -186,10 +186,10 @@ class Scheduler:
         self.schedule_time = candidate
 
         if previous_time == candidate:
-            logger.info("已设置每日定时任务，执行时间: %s", self.schedule_time)
+            logger.info("Đã đặt tác vụ định kỳ hằng ngày, thời gian chạy: %s", self.schedule_time)
         else:
             logger.info(
-                "检测到 SCHEDULE_TIME 变更，已将每日定时任务从 %s 更新为 %s",
+                "Phát hiện SCHEDULE_TIME thay đổi, đã cập nhật tác vụ hằng ngày từ %s sang %s",
                 previous_time,
                 self.schedule_time,
             )
@@ -203,14 +203,14 @@ class Scheduler:
         try:
             latest_schedule_time = (self._schedule_time_provider() or "").strip()
         except Exception as exc:  # pragma: no cover - defensive branch
-            logger.warning("读取最新 SCHEDULE_TIME 失败，继续沿用 %s: %s", self.schedule_time, exc)
+            logger.warning("Đọc SCHEDULE_TIME mới nhất thất bại, tiếp tục dùng %s: %s", self.schedule_time, exc)
             return
 
         if not latest_schedule_time or latest_schedule_time == self.schedule_time:
             return
 
         if self._configure_daily_task(latest_schedule_time):
-            logger.info("更新后的下次执行时间: %s", self._get_next_run_time())
+            logger.info("Thời gian chạy kế tiếp sau cập nhật: %s", self._get_next_run_time())
 
     def _configure_daily_tasks(self, schedule_times: Union[Sequence[str], str]) -> bool:
         """(Re)register daily jobs at the requested times."""
@@ -287,15 +287,15 @@ class Scheduler:
 
         try:
             logger.info("=" * 50)
-            logger.info(f"定时任务开始执行 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Tác vụ định kỳ bắt đầu chạy - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             logger.info("=" * 50)
 
             self._task_callback()
 
-            logger.info(f"定时任务执行完成 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Tác vụ định kỳ chạy xong - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
         except Exception as e:
-            logger.exception(f"定时任务执行失败: {e}")
+            logger.exception(f"Tác vụ định kỳ chạy thất bại: {e}")
 
     def add_background_task(
         self,
@@ -312,7 +312,7 @@ class Scheduler:
         clamped_interval = max(30, int(interval_seconds))
         if int(interval_seconds) < 30:
             logger.warning(
-                "后台任务 %s 请求间隔 %ds，但调度循环每 30s 轮询一次，已自动调整为 30s",
+                "Tác vụ nền %s yêu cầu chu kỳ %ds, nhưng vòng lặp lập lịch kiểm tra mỗi 30s, đã tự điều chỉnh thành 30s",
                 name or getattr(task, "__name__", "background_task"),
                 interval_seconds,
             )
@@ -328,7 +328,7 @@ class Scheduler:
             entry["last_run"] = time.time()
         self._background_tasks.append(entry)
         logger.info(
-            "已注册后台任务: %s（间隔 %s 秒，立即执行=%s）",
+            "Đã đăng ký tác vụ nền: %s (chu kỳ %s giây, chạy ngay=%s)",
             entry["name"],
             entry["interval_seconds"],
             run_immediately,
@@ -344,10 +344,10 @@ class Scheduler:
 
         def _runner() -> None:
             try:
-                logger.info("后台任务开始执行: %s", entry["name"])
+                logger.info("Tác vụ nền bắt đầu chạy: %s", entry["name"])
                 entry["task"]()
             except Exception as exc:
-                logger.exception("后台任务执行失败 [%s]: %s", entry["name"], exc)
+                logger.exception("Tác vụ nền chạy thất bại [%s]: %s", entry["name"], exc)
             finally:
                 entry["running"] = False
                 entry["thread"] = None
@@ -396,11 +396,11 @@ class Scheduler:
         """
         with self._lifecycle_lock:
             if self._stop_requested:
-                logger.info("调度器已停止，忽略迟到的启动请求")
+                logger.info("Bộ lập lịch đã dừng, bỏ qua yêu cầu khởi động đến muộn")
                 return
             self._running = True
-        logger.info("调度器开始运行...")
-        logger.info(f"下次执行时间: {self._get_next_run_time()}")
+        logger.info("Bộ lập lịch bắt đầu chạy...")
+        logger.info(f"Thời gian chạy kế tiếp: {self._get_next_run_time()}")
 
         while self._running and not self.shutdown_handler.should_shutdown:
             self._refresh_daily_schedule_if_needed()
@@ -411,9 +411,9 @@ class Scheduler:
 
             # Print a heartbeat once per hour
             if datetime.now().minute == 0 and datetime.now().second < 30:
-                logger.info(f"调度器运行中... 下次执行: {self._get_next_run_time()}")
+                logger.info(f"Bộ lập lịch đang chạy... lần chạy kế tiếp: {self._get_next_run_time()}")
 
-        logger.info("调度器已停止")
+        logger.info("Bộ lập lịch đã dừng")
 
     def _get_next_run_time(self) -> str:
         """Get the next run time"""
@@ -421,7 +421,7 @@ class Scheduler:
         if jobs:
             next_run = min(job.next_run for job in jobs)
             return next_run.strftime('%Y-%m-%d %H:%M:%S')
-        return "未设置"
+        return "Chưa đặt"
 
     def stop(self):
         """Stop the scheduler"""
@@ -481,9 +481,9 @@ if __name__ == "__main__":
     )
 
     def test_task():
-        print(f"任务执行中... {datetime.now()}")
+        print(f"Tác vụ đang chạy... {datetime.now()}")
         time.sleep(2)
-        print("任务完成!")
+        print("Tác vụ hoàn tất!")
 
-    print("启动测试调度器（按 Ctrl+C 退出）")
+    print("Khởi động bộ lập lịch thử nghiệm (nhấn Ctrl+C để thoát)")
     run_with_schedule(test_task, schedule_time="23:59", run_immediately=True)

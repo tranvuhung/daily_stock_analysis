@@ -36,10 +36,6 @@ from src.notification_noise import (
     parse_notification_quiet_hours,
     validate_notification_timezone,
 )
-from src.notification_contracts import (
-    is_feishu_app_bot_configured,
-    is_feishu_static_configured,
-)
 from src.services.stock_list_parser import split_stock_list
 from src.llm.backend_registry import (
     AUTO_AGENT_BACKEND_ID,
@@ -126,7 +122,10 @@ _FALLBACK_LITELLM_MODEL_PROVIDERS = _MANAGED_LITELLM_KEY_PROVIDERS | set(SUPPORT
 _FALSEY_ENV_VALUES = {"0", "false", "no", "off"}
 PROMPT_CACHE_DIAGNOSTICS_LEVELS = {"off", "basic", "debug"}
 SUPPORTED_AGENT_BACKENDS = {"auto", "litellm", "codex_app_server"}
-TICKFLOW_KLINE_ADJUST_VALUES = {"none", "forward", "backward", "forward_additive", "backward_additive"}
+# Thứ tự nguồn giá realtime mặc định (chỉ ssi / vci) / Default realtime quote source priority (ssi / vci only)
+DEFAULT_REALTIME_SOURCE_PRIORITY = "ssi,vci"
+# Trạng thái mặc định của Discord bot / Default Discord bot presence text
+DEFAULT_DISCORD_BOT_STATUS = "Phân tích cổ phiếu VN | Vietnam stock analysis | /help"
 # Fallback defaults used when ANSPIRE_API_KEYS is reused as legacy OpenAI-compatible source.
 # These are compatibility examples; actual availability should be validated by Anspire console/model entitlement.
 ANSPIRE_LLM_BASE_URL_DEFAULT = "https://open-gateway.anspire.cn/v6"
@@ -156,18 +155,6 @@ def _has_gotify_base_url(value: Optional[str]) -> bool:
         return False
     path_segments = [segment for segment in parsed.path.split("/") if segment]
     return not (path_segments and path_segments[-1].lower() == "message")
-
-
-def normalize_tickflow_kline_adjust(value: Optional[str]) -> str:
-    """Normalize TickFlow daily K-line adjustment mode."""
-    normalized = (value or "none").strip().lower()
-    if normalized in TICKFLOW_KLINE_ADJUST_VALUES:
-        return normalized
-    logger.warning(
-        "Invalid TICKFLOW_KLINE_ADJUST=%r; falling back to none",
-        value,
-    )
-    return "none"
 
 
 def parse_prompt_cache_diagnostics_level(value: Optional[str]) -> str:
@@ -876,35 +863,6 @@ class Config:
     # === Watchlist configuration ===
     stock_list: List[str] = field(default_factory=list)
 
-    # === Feishu cloud docs configuration ===
-    feishu_app_id: Optional[str] = None
-    feishu_app_secret: Optional[str] = None
-    feishu_folder_token: Optional[str] = None  # Target folder token
-
-    # === Data source API tokens ===
-    tushare_token: Optional[str] = None
-    tickflow_api_key: Optional[str] = None
-    tickflow_kline_adjust: str = "none"
-    tickflow_priority: int = 2
-    tickflow_batch_daily_enabled: bool = True
-    tickflow_batch_size: int = 100
-    futu_opend_host: Optional[str] = None
-    futu_opend_port: int = 11111
-    futu_hk_realtime_source_priority: str = "futu,longbridge,akshare,yfinance"
-    finnhub_api_key: Optional[str] = None
-    alphavantage_api_key: Optional[str] = None
-    longbridge_app_key: Optional[str] = None
-    longbridge_app_secret: Optional[str] = None
-    longbridge_access_token: Optional[str] = None
-    longbridge_oauth_client_id: Optional[str] = None
-    # Mặc định TẮT, khớp với ``_load_from_env``, ``config_registry`` và ``.env.example``:
-    # nguồn remote mặc định là chỉ mục A-share không có mã Việt Nam nào.
-    # Off by default, matching _load_from_env / config_registry / .env.example.
-    stock_index_remote_update_enabled: bool = False
-
-    # === Built-in stock screening ===
-    screening_enabled: bool = False
-
     # === AI analysis configuration ===
     generation_backend: str = LITELLM_BACKEND_ID
     generation_fallback_backend: str = LITELLM_BACKEND_ID
@@ -983,18 +941,12 @@ class Config:
 
     # === Search engine configuration (multi-key load balancing) ===
     anspire_api_keys: List[str] = field(default_factory=list)  # Anspire Search API Keys
-    bocha_api_keys: List[str] = field(default_factory=list)  # Bocha API Keys
-    minimax_api_keys: List[str] = field(default_factory=list)  # MiniMax API Keys
     tavily_api_keys: List[str] = field(default_factory=list)  # Tavily API Keys
     brave_api_keys: List[str] = field(default_factory=list)  # Brave Search API Keys
     serpapi_keys: List[str] = field(default_factory=list)  # SerpAPI Keys
     searxng_base_urls: List[str] = field(default_factory=list)  # SearXNG instance URLs (self-hosted, no quota)
     searxng_public_instances_enabled: bool = False  # Opt in to public discovery when base URLs are absent
     searxng_timeout_seconds: int = 10  # Self-hosted SearXNG per-search timeout (seconds)
-
-    # === Social Sentiment (US stocks only, api.adanos.org) ===
-    social_sentiment_api_key: Optional[str] = None
-    social_sentiment_api_url: str = "https://api.adanos.org"
 
     # === News and analysis filtering configuration ===
     news_max_age_days: int = 3   # Max news age (days)
@@ -1049,21 +1001,6 @@ class Config:
 
     # === Notification configuration (multiple channels allowed, all receive pushes) ===
     
-    # WeCom webhook
-    wechat_webhook_url: Optional[str] = None
-    
-    # Feishu webhook
-    feishu_webhook_url: Optional[str] = None
-    feishu_webhook_secret: Optional[str] = None  # Custom bot signing secret (optional)
-    feishu_webhook_keyword: Optional[str] = None  # Custom bot keyword (optional)
-    dingtalk_webhook_url: Optional[str] = None
-    dingtalk_secret: Optional[str] = None
-
-    # Feishu App Bot notifications
-    feishu_chat_id: Optional[str] = None  # Target group chat_id (group mode), or user open_id (P2P mode)
-    feishu_receive_id_type: str = "chat_id"  # Receiver ID type: "chat_id" (group chat) / "open_id" (direct message)
-    feishu_domain: str = "feishu"  # Feishu domain: "feishu" (feishu.cn) / "lark" (larksuite.com)
-    
     # Telegram configuration (requires both Bot Token and Chat ID)
     telegram_bot_token: Optional[str] = None  # Bot Token (obtained from @BotFather)
     telegram_chat_id: Optional[str] = None  # Chat ID
@@ -1071,7 +1008,7 @@ class Config:
     
     # Email configuration (only address and auth code needed; SMTP auto-detected)
     email_sender: Optional[str] = None  # Sender email address
-    email_sender_name: str = "daily_stock_analysis股票分析助手"  # Sender display name
+    email_sender_name: str = "daily_stock_analysis - Trợ lý phân tích cổ phiếu"  # Sender display name
     email_password: Optional[str] = None  # Email password / auth code
     email_receivers: List[str] = field(default_factory=list)  # Recipient list (empty means send to self)
 
@@ -1092,7 +1029,7 @@ class Config:
     gotify_token: Optional[str] = None
     
     # Custom webhooks (multiple, comma-separated)
-    # Works with DingTalk, Discord, Slack, self-hosted services, or any webhook accepting POST JSON
+    # Works with Discord, Slack, self-hosted services, or any webhook accepting POST JSON
     custom_webhook_urls: List[str] = field(default_factory=list)
     custom_webhook_bearer_token: Optional[str] = None  # Bearer token (for webhooks that require authentication)
     custom_webhook_body_template: Optional[str] = None  # Custom webhook JSON body template
@@ -1108,10 +1045,6 @@ class Config:
     slack_webhook_url: Optional[str] = None  # Slack Incoming Webhook URL
     slack_bot_token: Optional[str] = None  # Slack Bot Token (xoxb-...)
     slack_channel_id: Optional[str] = None  # Slack channel ID (required in Bot mode)
-
-    # AstrBot notification configuration
-    astrbot_token: Optional[str] = None
-    astrbot_url: Optional[str] = None
 
     # Notification routing policy (Issue #1200 P3): empty means this type uses all configured channels
     notification_report_channels: List[str] = field(default_factory=list)
@@ -1144,13 +1077,6 @@ class Config:
     report_integrity_retry: int = 1  # Retry count when mandatory fields missing (0 = placeholder only)
     report_history_compare_n: int = 0  # History comparison count (0 = disabled)
 
-    # PushPlus push configuration
-    pushplus_token: Optional[str] = None  # PushPlus Token
-    pushplus_topic: Optional[str] = None  # PushPlus group code (one-to-many push)
-
-    # ServerChan3 push configuration
-    serverchan3_sendkey: Optional[str] = None  # ServerChan3 SendKey
-
     # Analysis interval (seconds) - to avoid API rate limiting
     analysis_delay: float = 0.0  # Delay between per-stock analysis and market analysis
 
@@ -1158,14 +1084,10 @@ class Config:
     merge_email_notification: bool = False
 
     # Message length limit (bytes) - overlong messages are sent in batches automatically
-    feishu_max_bytes: int = 20000  # Feishu limit is about 20KB, default 20000 bytes
-    feishu_send_as_file: bool = False  # Whether Feishu sends the report as a file (default: text message)
-    wechat_max_bytes: int = 4000   # WeCom limit is 4096 bytes, default 4000 bytes
     discord_max_words: int = 2000  # Discord limit is 2000 characters, default 2000
-    wechat_msg_type: str = "markdown"  # WeCom message type, default markdown
 
     # Markdown to image (Issue #289): send as image to channels that do not support Markdown
-    markdown_to_image_channels: List[str] = field(default_factory=list)  # Comma-separated: telegram,wechat,custom,email
+    markdown_to_image_channels: List[str] = field(default_factory=list)  # Comma-separated: telegram,custom,email,slack
     markdown_to_image_max_chars: int = 15000  # Skip conversion beyond this length to avoid oversized images
     md2img_engine: str = "wkhtmltoimage"  # wkhtmltoimage | markdown-to-file | playwright
     share_image_xiaohongshu_url: Optional[str] = None
@@ -1173,7 +1095,7 @@ class Config:
     share_image_xiaohongshu_id: Optional[str] = None
     share_image_xiaohongshu_qr_path: Optional[str] = None
 
-    # Realtime quote prefetch (Issue #455): set false to disable and avoid efinance/akshare_em full-market fetches
+    # Realtime quote prefetch (Issue #455): set false to disable batch realtime quote prefetching
     prefetch_realtime_quotes: bool = True
 
     # === Database configuration ===
@@ -1211,12 +1133,12 @@ class Config:
     run_immediately: bool = True              # Whether to run once immediately on startup (non-scheduled mode)
     market_review_enabled: bool = True        # Whether to enable market review
     daily_market_context_enabled: bool = True   # Whether to use the market environment summary in per-stock analysis prompts and conservative guardrails
-    # Enabled market allowlist (single source of truth: src/core/markets.py). Only the Vietnam market is enabled by default;
-    # set to all or a comma list (e.g. vn,cn) to re-enable other markets; this is the rollback switch for this change.
+    # Danh sách thị trường được bật (nguồn duy nhất: src/core/markets.py). Chỉ hỗ trợ thị trường Việt Nam ("vn");
+    # giá trị khác bị bỏ qua kèm cảnh báo.
+    # Enabled market allowlist (single source of truth: src/core/markets.py). Only "vn" is supported.
     supported_markets: str = DEFAULT_SUPPORTED_MARKETS
-    # Market review region: cn (A-shares), hk (HK stocks), us (US stocks), jp (Japan), kr (Korea), both (all markets)
-    # Actual allowed values are constrained by supported_markets
-    market_review_region: str = "cn"
+    # Vùng tổng quan thị trường: chỉ "vn" / Market review region: only "vn"
+    market_review_region: str = "vn"
     market_review_color_scheme: str = "green_up"
     # Trading day check: enabled by default, skips non-trading days; set false or use --force-run to force execution (Issue #373)
     trading_day_check_enabled: bool = True
@@ -1226,17 +1148,9 @@ class Config:
     enable_realtime_quote: bool = True
     # Intraday realtime technicals: when on, compute MA/bullish alignment from realtime price (Issue #234); when off, use previous close
     enable_realtime_technical_indicators: bool = True
-    # Chip distribution switch (this API is unstable; disabling is recommended for cloud deployments)
-    enable_chip_distribution: bool = True
-    # Eastmoney API patch switch
-    enable_eastmoney_patch: bool = False
-    # Realtime quote source priority (comma-separated)
-    # Recommended order: tencent > akshare_sina > efinance > akshare_em > tushare
-    # - tencent: Tencent Finance, has volume ratio/turnover/PE etc., stable single-stock queries (recommended)
-    # - akshare_sina: Sina Finance, stable basic quotes but no volume ratio
-    # - efinance/akshare_em: Eastmoney full-market API, most complete data but easily banned
-    # - tushare: Tushare Pro, requires 2000 points, comprehensive data (paid users may prioritize it)
-    realtime_source_priority: str = "tencent,akshare_sina,efinance,akshare_em"
+    # Thứ tự nguồn giá realtime (phân tách bằng dấu phẩy); chỉ ssi / vci có ý nghĩa
+    # Realtime quote source priority (comma-separated); only ssi / vci are meaningful
+    realtime_source_priority: str = DEFAULT_REALTIME_SOURCE_PRIORITY
     # Realtime quote cache TTL (seconds)
     realtime_cache_ttl: int = 600
     # Circuit breaker cooldown (seconds)
@@ -1274,19 +1188,11 @@ class Config:
     portfolio_risk_stop_loss_alert_pct: float = 10.0
     portfolio_risk_stop_loss_near_ratio: float = 0.8
     portfolio_risk_lookback_days: int = 180
-    portfolio_fx_update_enabled: bool = True
 
     # Discord bot status
-    discord_bot_status: str = "A股智能分析 | /help"
+    discord_bot_status: str = DEFAULT_DISCORD_BOT_STATUS
 
     # === Rate limiting configuration (key anti-ban parameters) ===
-    # Akshare request interval range (seconds)
-    akshare_sleep_min: float = 2.0
-    akshare_sleep_max: float = 5.0
-    
-    # Tushare max requests per minute (free quota)
-    tushare_rate_limit_per_minute: int = 80
-    
     # Retry configuration
     max_retries: int = 3
     retry_base_delay: float = 1.0
@@ -1303,22 +1209,6 @@ class Config:
     bot_rate_limit_requests: int = 10     # Rate limit: max requests per window
     bot_rate_limit_window: int = 60       # Rate limit: window duration (seconds)
     bot_admin_users: List[str] = field(default_factory=list)  # Admin user ID list
-    
-    # Feishu bot (event subscription) - feishu_app_id and feishu_app_secret already exist
-    feishu_verification_token: Optional[str] = None  # Event subscription verification token
-    feishu_encrypt_key: Optional[str] = None         # Message encryption key (optional)
-    feishu_stream_enabled: bool = False              # Whether to enable Stream long-connection mode (no public IP needed)
-    
-    # DingTalk bot
-    dingtalk_app_key: Optional[str] = None      # App AppKey
-    dingtalk_app_secret: Optional[str] = None   # App AppSecret
-    dingtalk_stream_enabled: bool = False       # Whether to enable Stream mode (no public IP needed)
-    
-    # WeCom bot (callback mode)
-    wecom_corpid: Optional[str] = None              # Corp ID
-    wecom_token: Optional[str] = None               # Callback token
-    wecom_encoding_aes_key: Optional[str] = None    # Message encryption/decryption key
-    wecom_agent_id: Optional[str] = None            # App AgentId
     
     # Telegram bot - telegram_bot_token and telegram_chat_id already exist
     telegram_webhook_secret: Optional[str] = None   # Webhook secret
@@ -1710,12 +1600,6 @@ class Config:
         )
 
         # Parse search engine API keys (multiple keys, comma-separated)
-        bocha_keys_str = os.getenv('BOCHA_API_KEYS', '')
-        bocha_api_keys = [k.strip() for k in bocha_keys_str.split(',') if k.strip()]
-
-        minimax_keys_str = os.getenv('MINIMAX_API_KEYS', '')
-        minimax_api_keys = [k.strip() for k in minimax_keys_str.split(',') if k.strip()]
-        
         tavily_keys_str = os.getenv('TAVILY_API_KEYS', '')
         tavily_api_keys = [k.strip() for k in tavily_keys_str.split(',') if k.strip()]
         
@@ -1736,28 +1620,13 @@ class Config:
                 invalid_searxng_urls.append(u)
         if invalid_searxng_urls:
             logger.warning(
-                "SEARXNG_BASE_URLS 中存在无效 URL，已忽略: %s",
+                "SEARXNG_BASE_URLS có URL không hợp lệ, đã bỏ qua: %s",
                 ", ".join(invalid_searxng_urls[:3]),
             )
         searxng_public_instances_enabled = parse_env_bool(
             os.getenv('SEARXNG_PUBLIC_INSTANCES_ENABLED'),
             default=False,
         )
-
-        # WeCom message type and max bytes logic
-        wechat_msg_type = os.getenv('WECHAT_MSG_TYPE', 'markdown')
-        wechat_msg_type_lower = wechat_msg_type.lower()
-        wechat_max_bytes_env = os.getenv('WECHAT_MAX_BYTES')
-        if wechat_max_bytes_env not in (None, ''):
-            wechat_max_bytes = parse_env_int(
-                wechat_max_bytes_env,
-                2048 if wechat_msg_type_lower == 'text' else 4000,
-                field_name='WECHAT_MAX_BYTES',
-                minimum=1,
-            )
-        else:
-            # When not explicitly configured, choose default bytes by message type
-            wechat_max_bytes = 2048 if wechat_msg_type_lower == 'text' else 4000
 
         # Preserve historical semantics for startup flags: only an explicit
         # literal "true" enables immediate execution; empty strings stay False.
@@ -1812,33 +1681,6 @@ class Config:
 
         return cls(
             stock_list=stock_list,
-            feishu_app_id=os.getenv('FEISHU_APP_ID'),
-            feishu_app_secret=os.getenv('FEISHU_APP_SECRET'),
-            feishu_folder_token=os.getenv('FEISHU_FOLDER_TOKEN'),
-            tushare_token=os.getenv('TUSHARE_TOKEN'),
-            tickflow_api_key=os.getenv('TICKFLOW_API_KEY'),
-            tickflow_kline_adjust=normalize_tickflow_kline_adjust(os.getenv('TICKFLOW_KLINE_ADJUST')),
-            tickflow_priority=parse_env_int(os.getenv('TICKFLOW_PRIORITY'), 2, field_name='TICKFLOW_PRIORITY', minimum=0),
-            tickflow_batch_daily_enabled=parse_env_bool(os.getenv('TICKFLOW_BATCH_DAILY_ENABLED'), default=True),
-            tickflow_batch_size=parse_env_int(os.getenv('TICKFLOW_BATCH_SIZE'), 100, field_name='TICKFLOW_BATCH_SIZE', minimum=1),
-            futu_opend_host=os.getenv('FUTU_OPEND_HOST') or None,
-            futu_opend_port=parse_env_int(os.getenv('FUTU_OPEND_PORT'), 11111, field_name='FUTU_OPEND_PORT', minimum=1, maximum=65535),
-            futu_hk_realtime_source_priority=os.getenv('FUTU_HK_REALTIME_SOURCE_PRIORITY', 'futu,longbridge,akshare,yfinance'),
-            finnhub_api_key=os.getenv('FINNHUB_API_KEY') or None,
-            alphavantage_api_key=os.getenv('ALPHAVANTAGE_API_KEY') or None,
-            longbridge_app_key=os.getenv('LONGBRIDGE_APP_KEY') or None,
-            longbridge_app_secret=os.getenv('LONGBRIDGE_APP_SECRET') or None,
-            longbridge_access_token=os.getenv('LONGBRIDGE_ACCESS_TOKEN') or None,
-            longbridge_oauth_client_id=os.getenv('LONGBRIDGE_OAUTH_CLIENT_ID') or None,
-            # Mặc định TẮT: địa chỉ remote mặc định trỏ tới stocks.index.json của
-            # dự án A-share gốc, không chứa mã Việt Nam nào, nên bật lên sẽ ghi đè
-            # bảng mã nội bộ và làm autocomplete của Web UI không tìm thấy HPG /
-            # FPT / VNINDEX — hỏng âm thầm, không báo lỗi. Muốn bật lại thì trỏ
-            # STOCK_INDEX_REMOTE_URL sang nhánh có bảng mã Việt Nam trước.
-            stock_index_remote_update_enabled=parse_env_bool(
-                os.getenv('STOCK_INDEX_REMOTE_UPDATE_ENABLED'),
-                default=False,
-            ),
             generation_backend=generation_backend,
             generation_fallback_backend=generation_fallback_backend,
             generation_backend_timeout_seconds=generation_backend_timeout_seconds,
@@ -1902,8 +1744,6 @@ class Config:
             ),
             vision_provider_priority=os.getenv('VISION_PROVIDER_PRIORITY', 'gemini,anthropic,openai'),
             anspire_api_keys=anspire_api_keys,
-            bocha_api_keys=bocha_api_keys,
-            minimax_api_keys=minimax_api_keys,
             tavily_api_keys=tavily_api_keys,
             brave_api_keys=brave_api_keys,
             serpapi_keys=serpapi_keys,
@@ -1912,8 +1752,6 @@ class Config:
             searxng_timeout_seconds=parse_env_int(
                 os.getenv('SEARXNG_TIMEOUT_SECONDS'), 10, field_name='SEARXNG_TIMEOUT_SECONDS', minimum=1
             ),
-            social_sentiment_api_key=os.getenv('SOCIAL_SENTIMENT_API_KEY') or None,
-            social_sentiment_api_url=os.getenv('SOCIAL_SENTIMENT_API_URL', 'https://api.adanos.org').rstrip('/'),
             news_max_age_days=parse_env_int(os.getenv('NEWS_MAX_AGE_DAYS'), 3, field_name='NEWS_MAX_AGE_DAYS', minimum=1),
             news_strategy_profile=cls._parse_news_strategy_profile(
                 os.getenv('NEWS_STRATEGY_PROFILE', 'short')
@@ -2051,22 +1889,11 @@ class Config:
                 minimum=1,
             ),
             agent_event_alert_rules_json=os.getenv('AGENT_EVENT_ALERT_RULES_JSON', ''),
-            wechat_webhook_url=os.getenv('WECHAT_WEBHOOK_URL'),
-            feishu_webhook_url=os.getenv('FEISHU_WEBHOOK_URL'),
-            feishu_webhook_secret=os.getenv('FEISHU_WEBHOOK_SECRET'),
-            feishu_webhook_keyword=os.getenv('FEISHU_WEBHOOK_KEYWORD'),
-            dingtalk_webhook_url=os.getenv('DINGTALK_WEBHOOK_URL'),
-            dingtalk_secret=os.getenv('DINGTALK_SECRET'),
-            
-
-            feishu_chat_id=os.getenv('FEISHU_CHAT_ID'),
-            feishu_receive_id_type=os.getenv('FEISHU_RECEIVE_ID_TYPE', 'chat_id'),
-            feishu_domain=os.getenv('FEISHU_DOMAIN', 'feishu'),
             telegram_bot_token=os.getenv('TELEGRAM_BOT_TOKEN'),
             telegram_chat_id=os.getenv('TELEGRAM_CHAT_ID'),
             telegram_message_thread_id=os.getenv('TELEGRAM_MESSAGE_THREAD_ID'),
             email_sender=os.getenv('EMAIL_SENDER'),
-            email_sender_name=os.getenv('EMAIL_SENDER_NAME', 'daily_stock_analysis股票分析助手'),
+            email_sender_name=os.getenv('EMAIL_SENDER_NAME', 'daily_stock_analysis - Trợ lý phân tích cổ phiếu'),
             email_password=os.getenv('EMAIL_PASSWORD'),
             email_receivers=[r.strip() for r in os.getenv('EMAIL_RECEIVERS', '').split(',') if r.strip()],
             stock_email_groups=cls._parse_stock_email_groups(),
@@ -2076,9 +1903,6 @@ class Config:
             ntfy_token=os.getenv('NTFY_TOKEN'),
             gotify_url=os.getenv('GOTIFY_URL'),
             gotify_token=os.getenv('GOTIFY_TOKEN'),
-            pushplus_token=os.getenv('PUSHPLUS_TOKEN'),
-            pushplus_topic=os.getenv('PUSHPLUS_TOPIC'),
-            serverchan3_sendkey=os.getenv('SERVERCHAN3_SENDKEY'),
             custom_webhook_urls=[u.strip() for u in os.getenv('CUSTOM_WEBHOOK_URLS', '').split(',') if u.strip()],
             custom_webhook_bearer_token=os.getenv('CUSTOM_WEBHOOK_BEARER_TOKEN'),
             custom_webhook_body_template=unescape_compose_sensitive_env_value(
@@ -2096,8 +1920,6 @@ class Config:
             slack_webhook_url=os.getenv('SLACK_WEBHOOK_URL'),
             slack_bot_token=os.getenv('SLACK_BOT_TOKEN'),
             slack_channel_id=os.getenv('SLACK_CHANNEL_ID'),
-            astrbot_url=os.getenv('ASTRBOT_URL'),
-            astrbot_token=os.getenv('ASTRBOT_TOKEN'),
             notification_report_channels=parse_notification_route_channels(
                 os.getenv('NOTIFICATION_REPORT_CHANNELS')
             ),
@@ -2138,10 +1960,6 @@ class Config:
             report_history_compare_n=parse_env_int(os.getenv('REPORT_HISTORY_COMPARE_N'), 0, field_name='REPORT_HISTORY_COMPARE_N', minimum=0),
             analysis_delay=parse_env_float(os.getenv('ANALYSIS_DELAY'), 0.0, field_name='ANALYSIS_DELAY', minimum=0.0),
             merge_email_notification=os.getenv('MERGE_EMAIL_NOTIFICATION', 'false').lower() == 'true',
-            feishu_max_bytes=parse_env_int(os.getenv('FEISHU_MAX_BYTES'), 20000, field_name='FEISHU_MAX_BYTES', minimum=1),
-            feishu_send_as_file=os.getenv('FEISHU_SEND_AS_FILE', '').lower() in ('true', '1', 'yes'),
-            wechat_max_bytes=wechat_max_bytes,
-            wechat_msg_type=wechat_msg_type_lower,
             discord_max_words=parse_env_int(os.getenv('DISCORD_MAX_WORDS'), 2000, field_name='DISCORD_MAX_WORDS', minimum=1),
             markdown_to_image_channels=[
                 c.strip().lower()
@@ -2214,8 +2032,8 @@ class Config:
             daily_market_context_enabled=os.getenv('DAILY_MARKET_CONTEXT_ENABLED', 'true').lower() == 'true',
             supported_markets=",".join(enabled_markets()),
             market_review_region=cls._parse_market_review_region(
-                # Không đặt -> để trống, parser lấy region đầu tiên đang bật
-                # (ví dụ chỉ bật vn thì là vn) thay vì ép 'cn' rồi cảnh báo sai.
+                # Không đặt -> để trống, parser lấy region đầu tiên đang bật (vn).
+                # Unset -> empty; the parser falls back to the first enabled region (vn).
                 os.getenv('MARKET_REVIEW_REGION', '')
             ),
             market_review_color_scheme=cls._parse_market_review_color_scheme(
@@ -2231,37 +2049,19 @@ class Config:
             bot_rate_limit_requests=parse_env_int(os.getenv('BOT_RATE_LIMIT_REQUESTS'), 10, field_name='BOT_RATE_LIMIT_REQUESTS', minimum=1),
             bot_rate_limit_window=parse_env_int(os.getenv('BOT_RATE_LIMIT_WINDOW'), 60, field_name='BOT_RATE_LIMIT_WINDOW', minimum=1),
             bot_admin_users=[u.strip() for u in os.getenv('BOT_ADMIN_USERS', '').split(',') if u.strip()],
-            # Feishu bot
-            feishu_verification_token=os.getenv('FEISHU_VERIFICATION_TOKEN'),
-            feishu_encrypt_key=os.getenv('FEISHU_ENCRYPT_KEY'),
-            feishu_stream_enabled=os.getenv('FEISHU_STREAM_ENABLED', 'false').lower() == 'true',
-            # DingTalk bot
-            dingtalk_app_key=os.getenv('DINGTALK_APP_KEY'),
-            dingtalk_app_secret=os.getenv('DINGTALK_APP_SECRET'),
-            dingtalk_stream_enabled=os.getenv('DINGTALK_STREAM_ENABLED', 'false').lower() == 'true',
-            # WeCom bot
-            wecom_corpid=os.getenv('WECOM_CORPID'),
-            wecom_token=os.getenv('WECOM_TOKEN'),
-            wecom_encoding_aes_key=os.getenv('WECOM_ENCODING_AES_KEY'),
-            wecom_agent_id=os.getenv('WECOM_AGENT_ID'),
             # Telegram
             telegram_webhook_secret=os.getenv('TELEGRAM_WEBHOOK_SECRET'),
             # Discord bot extended configuration
-            discord_bot_status=os.getenv('DISCORD_BOT_STATUS', 'A股智能分析 | /help'),
+            discord_bot_status=os.getenv('DISCORD_BOT_STATUS', DEFAULT_DISCORD_BOT_STATUS),
             # Realtime quote enhancement configuration
             enable_realtime_quote=os.getenv('ENABLE_REALTIME_QUOTE', 'true').lower() == 'true',
             enable_realtime_technical_indicators=os.getenv(
                 'ENABLE_REALTIME_TECHNICAL_INDICATORS', 'true'
             ).lower() == 'true',
-            enable_chip_distribution=os.getenv('ENABLE_CHIP_DISTRIBUTION', 'true').lower() == 'true',
-            # Eastmoney API patch switch
-            enable_eastmoney_patch=os.getenv('ENABLE_EASTMONEY_PATCH', 'false').lower() == 'true',
-            # Realtime quote source priority:
-            # - tencent: Tencent Finance, has volume ratio/turnover/PE/PB etc., stable single-stock queries (recommended)
-            # - akshare_sina: Sina Finance, stable basic quotes but no volume ratio
-            # - efinance/akshare_em: Eastmoney full-market API, most complete data but easily banned
-            # - tushare: Tushare Pro, requires 2000 points, comprehensive data
-            realtime_source_priority=cls._resolve_realtime_source_priority(),
+            # Thứ tự nguồn giá realtime (ssi / vci) / Realtime quote source priority (ssi / vci)
+            realtime_source_priority=(
+                os.getenv('REALTIME_SOURCE_PRIORITY') or ''
+            ).strip() or DEFAULT_REALTIME_SOURCE_PRIORITY,
             realtime_cache_ttl=parse_env_int(os.getenv('REALTIME_CACHE_TTL'), 600, field_name='REALTIME_CACHE_TTL', minimum=0),
             circuit_breaker_cooldown=parse_env_int(os.getenv('CIRCUIT_BREAKER_COOLDOWN'), 300, field_name='CIRCUIT_BREAKER_COOLDOWN', minimum=0),
             realtime_feed_enabled=os.getenv('REALTIME_FEED_ENABLED', 'false').lower() == 'true',
@@ -2331,8 +2131,6 @@ class Config:
                 field_name='PORTFOLIO_RISK_LOOKBACK_DAYS',
                 minimum=1,
             ),
-            portfolio_fx_update_enabled=os.getenv('PORTFOLIO_FX_UPDATE_ENABLED', 'true').lower() == 'true',
-            screening_enabled=parse_env_bool(os.getenv('SCREENING_ENABLED'), default=False),
         )
     
     @classmethod
@@ -2925,13 +2723,13 @@ class Config:
 
         Reports are produced only in Vietnamese, so this validates against
         ``SELECTABLE_REPORT_LANGUAGES`` rather than every language the renderer
-        knows: ``zh``/``en``/``ko`` can still render history records, but can no
-        longer be configured as the output language.
+        knows. Legacy values (``zh``/``ko``/...) are not selectable and fall back
+        to the default (``vi``) instead of crashing.
         """
         raw = (value or "").strip()
         if raw and not is_selectable_report_language_value(raw):
             logging.getLogger(__name__).warning(
-                "REPORT_LANGUAGE '%s' 不可选，已回退为 '%s'（当前仅支持：%s）",
+                "REPORT_LANGUAGE '%s' không được hỗ trợ, đã dùng mặc định '%s' (chỉ hỗ trợ: %s)",
                 value,
                 DEFAULT_REPORT_LANGUAGE,
                 "/".join(SELECTABLE_REPORT_LANGUAGES),
@@ -2961,7 +2759,7 @@ class Config:
 
     @classmethod
     def _parse_market_review_region(cls, value: str) -> str:
-        """Parse the market review region; invalid values log a warning and fall back to cn"""
+        """Parse the market review region; invalid values log a warning and fall back to the first enabled region (vn)"""
         from src.utils.market_review_region import enabled_market_review_regions
 
         normalized = normalize_market_review_region_lenient(value)
@@ -2971,20 +2769,19 @@ class Config:
         logger = logging.getLogger(__name__)
         enabled = enabled_market_review_regions()
         if not enabled:
-            # No market under the current SUPPORTED_MARKETS supports market review (e.g. only
-            # Taiwan enabled). Fall back to an empty string rather than 'cn': 'cn' would make the review chain call
-            # data sources of disabled markets, producing a review report with no data behind it.
+            # Không có thị trường nào hỗ trợ tổng quan -> trả về chuỗi rỗng để bỏ qua bước tổng quan.
+            # No enabled market supports market review; return an empty string so the review step is skipped.
             logger.info(
-                "MARKET_REVIEW_REGION=%r 被忽略：当前 SUPPORTED_MARKETS 下没有"
-                "支持大盘复盘的市场，大盘复盘将跳过。",
+                "MARKET_REVIEW_REGION=%r bị bỏ qua: SUPPORTED_MARKETS hiện tại không có "
+                "thị trường hỗ trợ tổng quan thị trường, bước tổng quan sẽ bị bỏ qua.",
                 value,
             )
             return ''
 
         fallback = enabled[0]
         logger.warning(
-            f"MARKET_REVIEW_REGION 配置值 '{value}' 无效，已回退为默认值 '{fallback}'"
-            f"（合法值：{' / '.join((*enabled, 'both'))}；支持逗号分隔有效值）"
+            f"MARKET_REVIEW_REGION '{value}' không hợp lệ, đã dùng mặc định '{fallback}'"
+            f" (giá trị hợp lệ: {' / '.join(enabled)})"
         )
         return fallback
 
@@ -2996,7 +2793,7 @@ class Config:
         if v in ('green_up', 'red_up'):
             return v
         logging.getLogger(__name__).warning(
-            "MARKET_REVIEW_COLOR_SCHEME 配置值 '%s' 无效，已回退为默认值 'green_up'（合法值：green_up / red_up）",
+            "MARKET_REVIEW_COLOR_SCHEME '%s' không hợp lệ, đã dùng mặc định 'green_up' (giá trị hợp lệ: green_up / red_up)",
             value,
         )
         return 'green_up'
@@ -3016,36 +2813,6 @@ class Config:
         return 'wkhtmltoimage'
 
     @classmethod
-    def _resolve_realtime_source_priority(cls) -> str:
-        """
-        Resolve realtime source priority with automatic tushare injection.
-
-        When TUSHARE_TOKEN is configured but REALTIME_SOURCE_PRIORITY is not
-        explicitly set, automatically prepend 'tushare' to the default priority
-        so that the paid data source is utilized for realtime quotes as well.
-        """
-        explicit = os.getenv('REALTIME_SOURCE_PRIORITY')
-        default_priority = 'tencent,akshare_sina,efinance,akshare_em'
-
-        if explicit:
-            # User explicitly set priority, respect it
-            return explicit
-
-        tushare_token = os.getenv('TUSHARE_TOKEN', '').strip()
-        if tushare_token:
-            # Token configured but no explicit priority override
-            # Prepend tushare so the paid source is tried first
-            import logging
-            logger = logging.getLogger(__name__)
-            resolved = f'tushare,{default_priority}'
-            logger.info(
-                f"TUSHARE_TOKEN detected, auto-injecting tushare into realtime priority: {resolved}"
-            )
-            return resolved
-
-        return default_priority
-
-    @classmethod
     def reset_instance(cls) -> None:
         """Reset the singleton (mainly for tests)"""
         cls._instance = None
@@ -3061,8 +2828,6 @@ class Config:
         """Whether any search provider is configured or SearXNG fallback is enabled."""
         return bool(
             self.anspire_api_keys
-            or self.bocha_api_keys
-            or self.minimax_api_keys
             or self.tavily_api_keys
             or self.brave_api_keys
             or self.serpapi_keys
@@ -3156,7 +2921,7 @@ class Config:
         if not self.stock_list:
             issues.append(ConfigIssue(
                 severity="error",
-                message="STOCK_LIST is not configured. Set at least one stock code, e.g. 600519,hk00700,AAPL.",
+                message="STOCK_LIST is not configured. Set at least one stock code, e.g. HPG,FPT,VCB.",
                 field="STOCK_LIST",
             ))
         elif self.stock_email_groups:
@@ -3190,14 +2955,6 @@ class Config:
                     ),
                     field="STOCK_GROUP_N",
                 ))
-
-        # --- Data sources (informational only) ---
-        if not self.tushare_token:
-            issues.append(ConfigIssue(
-                severity="info",
-                message="Tushare Token is not configured; other data sources will be used",
-                field="TUSHARE_TOKEN",
-            ))
 
         # --- Generation backend selection ---
         generation_backend = (self.generation_backend or LITELLM_BACKEND_ID).strip().lower()
@@ -3497,21 +3254,13 @@ class Config:
         if not self.has_search_capability_enabled():
             issues.append(ConfigIssue(
                 severity="info",
-                message="No search engine is configured (Bocha/MiniMax/Tavily/Brave/SerpAPI/SearXNG); news search will be unavailable",
-                field="BOCHA_API_KEYS",
+                message="No search engine is configured (Anspire/Tavily/Brave/SerpAPI/SearXNG); news search will be unavailable",
+                field="TAVILY_API_KEYS",
             ))
 
         # --- Notification channels ---
         has_notification = bool(
-            self.wechat_webhook_url
-            or self.dingtalk_webhook_url
-            or self.feishu_webhook_url
-            or (
-                (self.feishu_app_id or "")
-                and (self.feishu_app_secret or "")
-                and (self.feishu_chat_id or "")
-            )
-            or (self.telegram_bot_token and self.telegram_chat_id)
+            (self.telegram_bot_token and self.telegram_chat_id)
             or (self.email_sender and self.email_password)
             or (self.pushover_user_key and self.pushover_api_token)
             or _has_ntfy_topic_endpoint(self.ntfy_url)
@@ -3520,10 +3269,7 @@ class Config:
                 and (self.gotify_token or "").strip()
                 and _has_gotify_base_url(self.gotify_url)
             )
-            or self.pushplus_token
-            or self.serverchan3_sendkey
             or self.custom_webhook_urls
-            or self.astrbot_url
             or (self.discord_bot_token and self.discord_main_channel_id)
             or self.discord_webhook_url
             or self.slack_webhook_url
@@ -3534,7 +3280,7 @@ class Config:
             issues.append(ConfigIssue(
                 severity="warning",
                 message="No notification channel is configured; no push notifications will be sent",
-                field="WECHAT_WEBHOOK_URL",
+                field="TELEGRAM_BOT_TOKEN",
             ))
 
         has_telegram_token = bool((self.telegram_bot_token or "").strip())
@@ -3569,12 +3315,8 @@ class Config:
             ))
 
         for field, value in (
-            ("WECHAT_WEBHOOK_URL", self.wechat_webhook_url),
-            ("FEISHU_WEBHOOK_URL", self.feishu_webhook_url),
-            ("DINGTALK_WEBHOOK_URL", self.dingtalk_webhook_url),
             ("DISCORD_WEBHOOK_URL", self.discord_webhook_url),
             ("SLACK_WEBHOOK_URL", self.slack_webhook_url),
-            ("ASTRBOT_URL", self.astrbot_url),
         ):
             _warn_if_webhook_url_invalid(field, value)
 
@@ -3644,39 +3386,6 @@ class Config:
                     "P4 does not send or persist daily digests."
                 ),
                 field="NOTIFICATION_DAILY_DIGEST_ENABLED",
-            ))
-
-        has_feishu_app_id = bool((self.feishu_app_id or "").strip())
-        has_feishu_app_secret = bool((self.feishu_app_secret or "").strip())
-        has_feishu_app_credentials_complete = has_feishu_app_id and has_feishu_app_secret
-        has_feishu_app_credentials = has_feishu_app_id or has_feishu_app_secret
-        has_feishu_doc_token = bool((self.feishu_folder_token or "").strip())
-        has_feishu_full_cloud_doc_credentials = (
-            has_feishu_app_credentials_complete
-            and has_feishu_doc_token
-        )
-        has_feishu_stream_route = bool(self.feishu_stream_enabled and has_feishu_app_credentials_complete)
-        has_feishu_app_notification_route = is_feishu_app_bot_configured(self)
-        if (
-            has_feishu_app_credentials
-            and not has_feishu_full_cloud_doc_credentials
-            and not is_feishu_static_configured(self)
-            and not has_feishu_stream_route
-            and not has_feishu_app_notification_route
-        ):
-            suggestions = []
-            if has_feishu_app_credentials_complete:
-                suggestions.append("set FEISHU_CHAT_ID to enable App Bot push")
-                suggestions.append("enable FEISHU_STREAM_ENABLED to use app bot event subscription")
-            else:
-                suggestions.append("complete FEISHU_APP_ID / FEISHU_APP_SECRET, then set FEISHU_CHAT_ID to enable App Bot push")
-            suggestions.append("set FEISHU_WEBHOOK_URL to push via a custom bot webhook")
-            issues.append(ConfigIssue(
-                severity="warning",
-                message="Setting only FEISHU_APP_ID / FEISHU_APP_SECRET does not enable Feishu static notifications."
-                        + " Choose one of: "
-                        + "; ".join(suggestions) + ".",
-                field="FEISHU_CHAT_ID",
             ))
 
         # --- Deprecated field migration hints ---
@@ -3812,15 +3521,15 @@ def extra_litellm_params(model: str, config: Config) -> Dict[str, Any]:
 if __name__ == "__main__":
     # Test config loading
     config = get_config()
-    print("=== 配置加载测试 ===")
-    print(f"自选股列表: {config.stock_list}")
-    print(f"数据库路径: {config.database_path}")
-    print(f"最大并发数: {config.max_workers}")
-    print(f"调试模式: {config.debug}")
+    print("=== Kiểm tra tải cấu hình ===")
+    print(f"Danh sách mã theo dõi: {config.stock_list}")
+    print(f"Đường dẫn cơ sở dữ liệu: {config.database_path}")
+    print(f"Số luồng tối đa: {config.max_workers}")
+    print(f"Chế độ debug: {config.debug}")
     
     # Validate config
     warnings = config.validate()
     if warnings:
-        print("\n配置验证结果:")
+        print("\nKết quả kiểm tra cấu hình:")
         for w in warnings:
             print(f"  - {w}")

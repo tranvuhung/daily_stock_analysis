@@ -61,9 +61,9 @@ def isolated_db(tmp_path):
 
 def _payload(**overrides):
     payload = {
-        "stock_code": "SH600519",
-        "stock_name": "贵州茅台",
-        "market": "cn",
+        "stock_code": "HPG.VN",
+        "stock_name": "Hòa Phát",
+        "market": "vn",
         "source_type": "analysis",
         "source_report_id": 101,
         "trace_id": "trace-101",
@@ -73,7 +73,7 @@ def _payload(**overrides):
         "confidence": 0.72,
         "score": 83,
         "horizon": "3d",
-        "reason": "放量突破",
+        "reason": "Bứt phá với khối lượng lớn",
     }
     payload.update(overrides)
     return payload
@@ -83,23 +83,23 @@ def _history_result(**overrides):
     from src.analyzer import AnalysisResult
 
     result = AnalysisResult(
-        code="600519",
-        name="贵州茅台",
+        code="HPG",
+        name="Hòa Phát",
         sentiment_score=68,
-        trend_prediction="震荡偏强",
-        operation_advice="持有观察",
+        trend_prediction="Dao động nghiêng tăng",
+        operation_advice="Nắm giữ và quan sát",
         decision_type="hold",
-        confidence_level="中",
-        analysis_summary="趋势仍在，但等待量能确认。",
-        report_language="zh",
+        confidence_level="Trung bình",
+        analysis_summary="Xu hướng vẫn còn, nhưng chờ khối lượng xác nhận.",
+        report_language="vi",
     )
     result.dashboard = {
         "battle_plan": {
             "sniper_points": {
-                "ideal_buy": "1680",
-                "stop_loss": "1600",
+                "ideal_buy": "27300",
+                "stop_loss": "26000",
             },
-            "action_checklist": ["回踩不破支撑"],
+            "action_checklist": ["Điều chỉnh không thủng hỗ trợ"],
         }
     }
     for key, value in overrides.items():
@@ -119,8 +119,8 @@ def test_service_normalizes_fields_and_partial_plan_quality(isolated_db) -> None
 
     item = result["item"]
     assert result["created"] is True
-    assert item["stock_code"] == "600519"
-    assert item["market"] == "cn"
+    assert item["stock_code"] == "HPG"
+    assert item["market"] == "vn"
     assert item["action"] == "buy"
     assert item["action_label"] == "Mua"
     assert item["confidence"] == 0.72
@@ -247,25 +247,26 @@ def test_service_defaults_lifecycle_and_preserves_explicit_values(isolated_db) -
     opening = service.create_signal(opening_payload)["item"]
     opening_expiry = datetime.fromisoformat(opening["expires_at"])
     assert opening["horizon"] == "intraday"
-    assert before_opening + timedelta(hours=4, minutes=9) <= opening_expiry
-    assert opening_expiry <= utc_naive_now() + timedelta(hours=4, minutes=11)
+    # Phiên VN mặc định 4,5 giờ + 10 phút chờ mở cửa / VN session TTL 4.5h + 10 minutes to open.
+    assert before_opening + timedelta(hours=4, minutes=39) <= opening_expiry
+    assert opening_expiry <= utc_naive_now() + timedelta(hours=4, minutes=41)
 
-    hk_alert_payload = _payload(
+    vn_alert_payload = _payload(
         source_report_id=152,
-        trace_id="trace-lifecycle-hk-alert",
-        stock_code="00700",
-        stock_name="Tencent",
-        market="hk",
+        trace_id="trace-lifecycle-vn-alert",
+        stock_code="FPT",
+        stock_name="FPT",
+        market="vn",
         action="alert",
     )
-    hk_alert_payload.pop("horizon")
-    hk_alert_payload.pop("market_phase")
+    vn_alert_payload.pop("horizon")
+    vn_alert_payload.pop("market_phase")
     before_alert = utc_naive_now()
-    hk_alert = service.create_signal(hk_alert_payload)["item"]
-    hk_alert_expiry = datetime.fromisoformat(hk_alert["expires_at"])
-    assert hk_alert["horizon"] == "intraday"
-    assert before_alert + timedelta(hours=5, minutes=29) <= hk_alert_expiry
-    assert hk_alert_expiry <= utc_naive_now() + timedelta(hours=5, minutes=31)
+    vn_alert = service.create_signal(vn_alert_payload)["item"]
+    vn_alert_expiry = datetime.fromisoformat(vn_alert["expires_at"])
+    assert vn_alert["horizon"] == "intraday"
+    assert before_alert + timedelta(hours=4, minutes=29) <= vn_alert_expiry
+    assert vn_alert_expiry <= utc_naive_now() + timedelta(hours=4, minutes=31)
 
     postmarket_payload = _payload(
         source_report_id=153,
@@ -332,7 +333,7 @@ def test_list_signals_lazily_backfills_analysis_history_signal(isolated_db) -> N
         result=_history_result(),
         query_id="query-lazy-signal",
         report_type="simple",
-        news_content="新闻摘要",
+        news_content="Tóm tắt tin tức",
         context_snapshot={"market_phase_summary": {"phase": "postmarket"}},
         save_snapshot=True,
     )
@@ -353,9 +354,9 @@ def test_list_signals_lazily_backfills_analysis_history_signal(isolated_db) -> N
     assert item["trace_id"] == "query-lazy-signal"
     assert item["trigger_source"] == "history"
     assert item["action"] == "hold"
-    assert item["action_label"] == "持有"
-    assert item["reason"] == "趋势仍在，但等待量能确认。"
-    assert item["watch_conditions"] == '["回踩不破支撑"]'
+    assert item["action_label"] == "Nắm giữ"
+    assert item["reason"] == "Xu hướng vẫn còn, nhưng chờ khối lượng xác nhận."
+    assert item["watch_conditions"] == '["Điều chỉnh không thủng hỗ trợ"]'
     assert item["status"] == "expired"
     assert item["metadata"]["decision_profile"] == "balanced"
     assert item["metadata"]["profile_source"] == "backfill_defaulted"
@@ -377,7 +378,7 @@ def test_list_signals_profile_filter_controls_lazy_backfill(isolated_db) -> None
         result=_history_result(),
         query_id="query-lazy-signal-profile-filter",
         report_type="simple",
-        news_content="新闻摘要",
+        news_content="Tóm tắt tin tức",
         context_snapshot={"market_phase_summary": {"phase": "postmarket"}},
         save_snapshot=True,
     )
@@ -408,56 +409,12 @@ def test_list_signals_profile_filter_controls_lazy_backfill(isolated_db) -> None
     assert balanced["items"][0]["decision_profile"] == "balanced"
     with isolated_db.get_session() as session:
         assert session.query(DecisionSignalRecord).count() == 1
-def test_list_signals_backfill_uses_raw_result_market_structure_without_snapshot(isolated_db) -> None:
-    market_structure = {
-        "schema_version": "market-structure-v1",
-        "status": "partial",
-        "market": "cn",
-        "market_theme_context": {
-            "schema_version": "market-theme-v1",
-            "status": "partial",
-            "market": "cn",
-        },
-        "stock_market_position": {
-            "schema_version": "stock-market-position-v1",
-            "status": "partial",
-            "stock_code": "300024",
-            "market": "cn",
-            "primary_theme": {"name": "机器人概念"},
-            "theme_phase": "accelerating",
-            "stock_role": "follower",
-            "risk_tags": [{"code": "theme_data_partial"}],
-        },
-    }
-    record_id = isolated_db.save_analysis_history(
-        result=_history_result(code="300024", name="机器人", market_structure_context=market_structure),
-        query_id="query-lazy-signal-market-structure",
-        report_type="simple",
-        news_content="新闻摘要",
-        context_snapshot={"market_structure_context": {"ignored": True}},
-        save_snapshot=False,
-    )
-    service = DecisionSignalService(db_manager=isolated_db)
-
-    listed = service.list_signals(source_type="analysis", source_report_id=record_id)
-
-    assert listed["total"] == 1
-    metadata = listed["items"][0]["metadata"]
-    assert metadata["market_structure_version"] == "market-structure-v1"
-    assert metadata["market_theme_version"] == "market-theme-v1"
-    assert metadata["stock_market_position_version"] == "stock-market-position-v1"
-    assert metadata["market_structure_status"] == "partial"
-    assert metadata["primary_theme"] == "机器人概念"
-    assert metadata["theme_phase"] == "accelerating"
-    assert metadata["stock_role"] == "follower"
-    assert metadata["market_structure_risk_tags"] == ["theme_data_partial"]
-
 
 @pytest.mark.parametrize(
     ("market_phase_summary", "created_offset", "expected_ttl"),
     (
         ({"phase": "intraday", "minutes_to_close": 5}, timedelta(minutes=10), timedelta(minutes=5)),
-        ({"phase": "premarket", "minutes_to_open": 10}, timedelta(hours=5), timedelta(hours=4, minutes=10)),
+        ({"phase": "premarket", "minutes_to_open": 10}, timedelta(hours=5), timedelta(hours=4, minutes=40)),
     ),
 )
 def test_list_signals_backfill_uses_saved_intraday_ttl_metadata(
@@ -471,7 +428,7 @@ def test_list_signals_backfill_uses_saved_intraday_ttl_metadata(
         result=_history_result(),
         query_id=f"query-lazy-signal-ttl-{market_phase_summary['phase']}",
         report_type="simple",
-        news_content="新闻摘要",
+        news_content="Tóm tắt tin tức",
         context_snapshot={"market_phase_summary": market_phase_summary},
         save_snapshot=True,
     )
@@ -497,14 +454,14 @@ def test_list_signals_backfill_converts_naive_history_created_at_for_invalidatio
 ) -> None:
     record_id = isolated_db.save_analysis_history(
         result=_history_result(
-            operation_advice="买入",
+            operation_advice="Mua",
             decision_type="buy",
             action="buy",
-            action_label="买入",
+            action_label="Mua",
         ),
         query_id="query-lazy-signal-local-tz",
         report_type="simple",
-        news_content="新闻摘要",
+        news_content="Tóm tắt tin tức",
         context_snapshot={"market_phase_summary": {"phase": "postmarket"}},
         save_snapshot=True,
     )
@@ -547,15 +504,15 @@ def test_list_signals_backfill_converts_naive_history_created_at_for_invalidatio
 def test_list_signals_invalidates_stale_backfill_when_newer_opposing_signal_exists(isolated_db) -> None:
     record_id = isolated_db.save_analysis_history(
         result=_history_result(
-            operation_advice="买入",
+            operation_advice="Mua",
             decision_type="buy",
             action="buy",
-            action_label="买入",
-            analysis_summary="旧报告建议买入。",
+            action_label="Mua",
+            analysis_summary="Báo cáo cũ khuyến nghị mua.",
         ),
         query_id="query-stale-backfill-buy",
         report_type="simple",
-        news_content="新闻摘要",
+        news_content="Tóm tắt tin tức",
         context_snapshot={"market_phase_summary": {"phase": "postmarket"}},
         save_snapshot=True,
     )
@@ -586,22 +543,22 @@ def test_list_signals_invalidates_stale_backfill_when_newer_opposing_signal_exis
     assert backfilled["metadata"]["invalidated_reason"] == "opposite_active_signal:buy->sell"
     assert service.get_signal(newer_sell["id"])["status"] == "active"
 
-    latest = service.get_latest_active(stock_code="600519", limit=5)
+    latest = service.get_latest_active(stock_code="HPG", limit=5)
     assert [item["id"] for item in latest["items"]] == [newer_sell["id"]]
 
 
 def test_list_signals_stale_backfill_invalidation_does_not_cross_profile(isolated_db) -> None:
     record_id = isolated_db.save_analysis_history(
         result=_history_result(
-            operation_advice="买入",
+            operation_advice="Mua",
             decision_type="buy",
             action="buy",
-            action_label="买入",
-            analysis_summary="旧报告建议买入。",
+            action_label="Mua",
+            analysis_summary="Báo cáo cũ khuyến nghị mua.",
         ),
         query_id="query-stale-backfill-profile-buy",
         report_type="simple",
-        news_content="新闻摘要",
+        news_content="Tóm tắt tin tức",
         context_snapshot={"market_phase_summary": {"phase": "postmarket"}},
         save_snapshot=True,
     )
@@ -632,10 +589,10 @@ def test_list_signals_stale_backfill_invalidation_does_not_cross_profile(isolate
 
 def test_list_signals_does_not_backfill_market_review_history(isolated_db) -> None:
     record_id = isolated_db.save_analysis_history(
-        result=_history_result(code="MARKET", name="大盘复盘", operation_advice="查看复盘"),
+        result=_history_result(code="MARKET", name="Tổng quan thị trường", operation_advice="Xem tổng quan"),
         query_id="query-lazy-market-review",
         report_type="market_review",
-        news_content="复盘正文",
+        news_content="Nội dung tổng quan",
         context_snapshot=None,
         save_snapshot=False,
     )
@@ -654,7 +611,7 @@ def test_list_signals_does_not_backfill_ambiguous_history_advice(isolated_db) ->
         result=_history_result(operation_advice="", decision_type="", action=None, action_label=None),
         query_id="query-lazy-ambiguous-signal",
         report_type="simple",
-        news_content="新闻摘要",
+        news_content="Tóm tắt tin tức",
         context_snapshot=None,
         save_snapshot=False,
     )
@@ -673,7 +630,7 @@ def test_list_signals_does_not_backfill_ambiguous_history_default_decision_type_
         result=_history_result(operation_advice="", action=None, action_label=None),
         query_id="query-lazy-ambiguous-hold",
         report_type="simple",
-        news_content="新闻摘要",
+        news_content="Tóm tắt tin tức",
         context_snapshot=None,
         save_snapshot=False,
     )
@@ -692,14 +649,14 @@ def test_list_signals_does_not_backfill_ambiguous_history_default_decision_type_
 ) -> None:
     record_id = isolated_db.save_analysis_history(
         result=_history_result(
-            operation_advice="买盘增强，继续观察",
+            operation_advice="Mua vào hoặc bán ra tùy diễn biến",
             decision_type="hold",
             action=None,
             action_label=None,
         ),
         query_id="query-lazy-ambiguous-noisy-hold",
         report_type="simple",
-        news_content="新闻摘要",
+        news_content="Tóm tắt tin tức",
         context_snapshot=None,
         save_snapshot=False,
     )
@@ -718,35 +675,35 @@ def test_list_signals_explicit_stock_identities_override_holding_only_and_inters
     service.create_signal(
         _payload(
             source_report_id=171501,
-            trace_id="trace-explicit-identity-000001",
-            stock_code="000001",
-            stock_name="平安银行",
+            trace_id="trace-explicit-identity-VCB",
+            stock_code="VCB",
+            stock_name="Vietcombank",
             action="sell",
         )
     )
     service.create_signal(
         _payload(
             source_report_id=171502,
-            trace_id="trace-explicit-identity-600519",
-            stock_code="600519",
+            trace_id="trace-explicit-identity-HPG",
+            stock_code="HPG",
             action="reduce",
         )
     )
 
     listed = service.list_signals(
-        stock_identities=[("cn", "000001")],
+        stock_identities=[("vn", "VCB")],
         holding_only=True,
         status="active",
     )
 
     assert listed["total"] == 1
-    assert listed["items"][0]["stock_code"] == "000001"
+    assert listed["items"][0]["stock_code"] == "VCB"
     assert listed["items"][0]["action"] == "sell"
 
     mismatched_stock_filter = service.list_signals(
-        stock_code="600519",
-        market="cn",
-        stock_identities=[("cn", "000001")],
+        stock_code="HPG",
+        market="vn",
+        stock_identities=[("vn", "VCB")],
         status="active",
     )
 
@@ -759,7 +716,7 @@ def test_list_signals_explicit_empty_stock_identities_returns_empty_without_wide
         _payload(
             source_report_id=171503,
             trace_id="trace-empty-identity-600519",
-            stock_code="600519",
+            stock_code="HPG",
             action="sell",
         )
     )
@@ -771,10 +728,10 @@ def test_list_signals_explicit_empty_stock_identities_returns_empty_without_wide
 
 def test_list_signals_explicit_stock_identities_do_not_trigger_history_backfill(isolated_db) -> None:
     record_id = isolated_db.save_analysis_history(
-        result=_history_result(operation_advice="卖出", decision_type="sell", action="sell", action_label="卖出"),
+        result=_history_result(operation_advice="Bán", decision_type="sell", action="sell", action_label="Bán"),
         query_id="query-explicit-identity-no-backfill",
         report_type="simple",
-        news_content="新闻摘要",
+        news_content="Tóm tắt tin tức",
         context_snapshot={"market_phase_summary": {"phase": "postmarket"}},
         save_snapshot=True,
     )
@@ -783,7 +740,7 @@ def test_list_signals_explicit_stock_identities_do_not_trigger_history_backfill(
     listed = service.list_signals(
         source_type="analysis",
         source_report_id=record_id,
-        stock_identities=[("cn", "600519")],
+        stock_identities=[("vn", "HPG")],
     )
 
     assert listed == {"items": [], "total": 0, "page": 1, "page_size": 20}
@@ -805,7 +762,7 @@ def test_service_plan_quality_slots_and_explicit_override(isolated_db) -> None:
             entry_high=1700,
             stop_loss=1600,
             target_price=1850,
-            invalidation="跌破 1600",
+            invalidation="Thủng 26000",
         )
     )
     assert complete["item"]["plan_quality"] == "complete"
@@ -818,7 +775,7 @@ def test_service_plan_quality_slots_and_explicit_override(isolated_db) -> None:
             entry_low=1680,
             stop_loss=1600,
             target_price=1850,
-            invalidation="跌破 1600",
+            invalidation="Thủng 26000",
         )
     )
     assert explicit["item"]["plan_quality"] == "unknown"
@@ -1278,7 +1235,7 @@ def test_service_invalidates_opposing_active_signals(isolated_db) -> None:
     assert old_after["metadata"]["invalidated_reason"] == "opposite_active_signal:buy->sell"
     assert old_after["metadata"]["previous_status"] == "active"
 
-    latest = service.get_latest_active(stock_code="600519", limit=5)
+    latest = service.get_latest_active(stock_code="HPG", limit=5)
     assert [item["id"] for item in latest["items"]] == [new_sell["id"]]
 
 
@@ -1394,7 +1351,7 @@ def test_service_expired_refresh_invalidates_later_opposing_active_signal(isolat
     sell_after = service.get_signal(active_sell["id"])
     assert sell_after["status"] == "invalidated"
     assert sell_after["metadata"]["invalidated_by_signal_id"] == old_buy["id"]
-    latest = service.get_latest_active(stock_code="600519", limit=5)
+    latest = service.get_latest_active(stock_code="HPG", limit=5)
     assert [item["id"] for item in latest["items"]] == [old_buy["id"]]
 
 

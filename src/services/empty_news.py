@@ -25,23 +25,13 @@ from typing import Any, Optional, Tuple
 
 from src.report_language import SUPPORTED_REPORT_LANGUAGES
 
-_ZH_NOT_CONFIGURED = "⚠️ 未配置搜索渠道，本次分析未纳入新闻面证据。"
 _EN_NOT_CONFIGURED = (
     "⚠️ No news search channel is configured; "
     "this analysis does not incorporate news-based evidence."
 )
-_ZH_ZERO_RESULTS = "⚠️ 本次未获取到可用的新闻面数据，以下结论未纳入新闻维度证据。"
 _EN_ZERO_RESULTS = (
     "⚠️ No news data could be retrieved for this run; "
     "the conclusions below do not incorporate news-based evidence."
-)
-_KO_NOT_CONFIGURED = (
-    "⚠️ 뉴스 검색 채널이 설정되지 않아 이번 분석에는 "
-    "뉴스 근거를 반영하지 않았습니다."
-)
-_KO_ZERO_RESULTS = (
-    "⚠️ 이번 분석에서 사용 가능한 뉴스 데이터를 가져오지 못해 "
-    "아래 결론에는 뉴스 근거를 반영하지 않았습니다."
 )
 
 _VI_NOT_CONFIGURED = (
@@ -55,9 +45,7 @@ _VI_ZERO_RESULTS = (
 
 _DISCLOSURES = {
     "vi": (_VI_NOT_CONFIGURED, _VI_ZERO_RESULTS),
-    "zh": (_ZH_NOT_CONFIGURED, _ZH_ZERO_RESULTS),
     "en": (_EN_NOT_CONFIGURED, _EN_ZERO_RESULTS),
-    "ko": (_KO_NOT_CONFIGURED, _KO_ZERO_RESULTS),
 }
 
 if set(_DISCLOSURES) != set(SUPPORTED_REPORT_LANGUAGES):
@@ -92,12 +80,12 @@ def news_evidence_present(*sources: Any) -> bool:
     """Whether this analysis actually received news evidence. True if any source is truthy.
 
     Each source is either a real item count (int) or a content string **with placeholder text
-    already removed**. Realtime search, social sentiment and the local news pool each count as one
+    already removed**. Realtime search and the local news pool each count as one
     source; both pipeline paths use this function — do not write a separate check elsewhere.
 
     **Do not pass in the whole news_context assembled by the pipeline.**
     `format_intel_report()` in `src/search_service.py` still emits the
-    `【XX 情报搜索结果】` header and a "未找到相关信息" placeholder per dimension on zero hits, so
+    per-dimension result header and a "not found" placeholder per dimension on zero hits, so
     the whole block is never empty; using it would turn "searched but got nothing" into "has
     evidence", swallowing exactly the disclosure this module adds (review OR-COR-8f4c2d1b). The
     check must register each source individually, never sniff strings.
@@ -140,7 +128,7 @@ def _disclosure_for_state(
     return None
 
 
-def empty_news_disclosure(result: Any, language: str = "zh") -> Optional[str]:
+def empty_news_disclosure(result: Any, language: str = "vi") -> Optional[str]:
     """Return the matching notice when search did not run or got zero hits; return None on normal hits.
 
     The decision must be independent of whether the model produced news-related text: the
@@ -166,7 +154,7 @@ def empty_news_disclosure(result: Any, language: str = "zh") -> Optional[str]:
 def empty_news_disclosure_from_stored(
     raw_result: Any,
     context_snapshot: Any,
-    language: str = "zh",
+    language: str = "vi",
 ) -> Optional[str]:
     """Build the disclosure from the persisted payload for history/API entry points; stay silent when old records lack fields."""
     news_result_count, known = persisted_news_result_state(raw_result, context_snapshot)

@@ -229,8 +229,8 @@ def _warnings_for_guardrail(guardrail: GuardrailResult) -> list[dict[str, object
             {
                 "code": "action_adjusted_by_guardrail",
                 "message": (
-                    f"原始动作 {guardrail.raw_action} 已由风控调整为 "
-                    f"{guardrail.final_action}。"
+                    f"Hành động gốc {guardrail.raw_action} đã được kiểm soát rủi ro điều chỉnh thành "
+                    f"{guardrail.final_action}."
                 ),
                 "params": {
                     "raw_action": guardrail.raw_action,
@@ -242,7 +242,7 @@ def _warnings_for_guardrail(guardrail: GuardrailResult) -> list[dict[str, object
         warnings.append(
             {
                 "code": "action_blocked_by_guardrail",
-                "message": "重评估结果未通过持久化风控，未保存为决策信号。",
+                "message": "Kết quả đánh giá lại không qua kiểm soát rủi ro khi lưu trữ, không được lưu thành tín hiệu quyết định.",
                 "params": {
                     "raw_action": guardrail.raw_action,
                     "final_action": guardrail.final_action,

@@ -25,14 +25,13 @@ def _bash_path(path: Path) -> str:
     return f"/mnt/{drive}/{relative}"
 
 
-def test_windows_backend_build_script_collects_builtin_screening_engine() -> None:
+def test_windows_backend_build_script_verifies_packaged_runtime() -> None:
     script = _read_text(REPO_ROOT / "scripts" / "build-backend.ps1")
     main_py = _read_text(REPO_ROOT / "main.py")
 
-    assert "Checking built-in screening engine availability" in script
-    assert "import src.services.screening.pipeline" in script
-    assert "--collect-all" in script
-    assert "src.services.screening" in script
+    # Engine sàng lọc A-share đã bị loại bỏ: script không còn đóng gói nó.
+    # The A-share screening engine was removed and must not be packaged.
+    assert "src.services.screening" not in script
     assert "hiddenImports" in script
     assert "Verifying packaged runtime imports" in script
     assert "DSA_PACKAGED_IMPORT_PROBE" in script
@@ -42,21 +41,16 @@ def test_windows_backend_build_script_collects_builtin_screening_engine() -> Non
     assert "Packaged backend cannot import $module" in script
     assert "pyinstaller_runtime_compat.py" in script
     assert "--runtime-hook" in script
-    assert "Verifying packaged screening strategies" in script
-    assert "_internal\\src\\services\\screening\\strategies" in script
-    assert "packagedScreeningStrategyCount" in script
+    assert "Verifying packaged built-in strategies" in script
     assert "DSA_PACKAGED_IMPORT_PROBE" in main_py
     assert "importlib.import_module(_packaged_import_probe)" in main_py
 
 
-def test_macos_backend_build_script_collects_builtin_screening_engine() -> None:
+def test_macos_backend_build_script_verifies_packaged_runtime() -> None:
     script = _read_text(REPO_ROOT / "scripts" / "build-backend-macos.sh")
     main_py = _read_text(REPO_ROOT / "main.py")
 
-    assert "Checking built-in screening engine availability..." in script
-    assert "import src.services.screening.pipeline" in script
-    assert "--collect-all" in script
-    assert 'cmd+=("--collect-all" "src.services.screening")' in script
+    assert "src.services.screening" not in script
     assert "packaged_entry=\"${packaged_root}/stock_analysis\"" in script
     assert "--help" in script
     assert 'DSA_PACKAGED_IMPORT_PROBE="${module}"' in script
@@ -64,9 +58,7 @@ def test_macos_backend_build_script_collects_builtin_screening_engine() -> None:
     assert '--runtime-hook "${SCRIPT_DIR}/pyinstaller_runtime_compat.py"' in script
     assert "PathFinder.find_spec(" not in script
     assert "zipfile" not in script
-    assert "Verifying packaged screening strategies..." in script
-    assert "_internal/src/services/screening/strategies" in script
-    assert "packaged_screening_strategy_count" in script
+    assert "Verifying packaged built-in strategies..." in script
     assert "DSA_PACKAGED_IMPORT_PROBE" in main_py
     assert "importlib.import_module(_packaged_import_probe)" in main_py
 
@@ -93,7 +85,6 @@ def test_macos_unsigned_packaging_contract_is_explicit() -> None:
     )
     backend_script = _read_text(REPO_ROOT / "scripts" / "build-backend-macos.sh")
     desktop_script = _read_text(REPO_ROOT / "scripts" / "build-desktop-macos.sh")
-    workflow = _read_text(REPO_ROOT / ".github" / "workflows" / "ci.yml")
 
     assert package["build"]["mac"]["identity"] is None
     assert package["build"]["mac"]["hardenedRuntime"] is False
@@ -115,9 +106,6 @@ def test_macos_unsigned_packaging_contract_is_explicit() -> None:
     assert "code has no resources but signature indicates they must be present" in (
         desktop_script
     )
-    assert "scripts/macos-signature-audit.sh" in workflow
-    assert "run: bash scripts/build-backend-macos.sh" in workflow
-    assert "run: bash scripts/build-desktop-macos.sh" in workflow
 
 
 def _write_fake_macos_signature_tools(fake_bin: Path) -> None:

@@ -67,104 +67,68 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
-    def test_load_from_env_reads_tickflow_api_key(
+    def test_market_review_region_legacy_values_normalize_to_vn(
         self, _mock_parse_litellm_yaml, _mock_setup_env
     ):
+        # Vùng cũ (cn/us/jp...) không còn được hỗ trợ -> quy về vn
+        # Legacy regions are no longer supported and normalize to vn.
         with patch.dict(
             os.environ,
-            {
-                "STOCK_LIST": "600519",
-                "TICKFLOW_API_KEY": "tf-secret",
-            },
+            {"STOCK_LIST": "HPG", "MARKET_REVIEW_REGION": "cn,us,jp"},
             clear=True,
         ):
             config = Config._load_from_env()
 
-        self.assertEqual(config.tickflow_api_key, "tf-secret")
+        self.assertEqual(config.market_review_region, "vn")
+
+    def test_market_review_region_legacy_both_normalizes_to_vn(self) -> None:
+        self.assertEqual(Config._parse_market_review_region("both,us"), "vn")
+        self.assertEqual(Config._parse_market_review_region("vn"), "vn")
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
-    def test_market_review_region_accepts_comma_separated_supported_values(
+    def test_market_review_region_falls_back_to_vn_when_no_supported_tokens(
         self, _mock_parse_litellm_yaml, _mock_setup_env
     ):
         with patch.dict(
             os.environ,
-            {
-                "STOCK_LIST": "600519",
-                "MARKET_REVIEW_REGION": "cn,us,jp",
-                # clear=True 会连 SUPPORTED_MARKETS 一起清掉，而市场白名单默认
-                # 只启用越南；这里显式声明本用例依赖的多市场 allowlist。
-                "SUPPORTED_MARKETS": "all",
-            },
+            {"STOCK_LIST": "HPG", "MARKET_REVIEW_REGION": "eu,apac"},
             clear=True,
         ):
             config = Config._load_from_env()
 
-        self.assertEqual(config.market_review_region, "cn,us,jp")
+        self.assertEqual(config.market_review_region, "vn")
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
-    def test_market_review_region_filters_invalid_values_in_comma_subset(
+    def test_load_from_env_defaults_realtime_source_priority_to_vn_sources(
         self, _mock_parse_litellm_yaml, _mock_setup_env
     ):
+        # Mặc định chỉ dùng nguồn VN (ssi, vci); TUSHARE_TOKEN cũ không còn được tự chèn
+        # Default uses VN sources only; a legacy TUSHARE_TOKEN is no longer auto-injected.
         with patch.dict(
             os.environ,
-            {
-                "STOCK_LIST": "600519",
-                "MARKET_REVIEW_REGION": "cn,eu,us,kr,xx",
-                # clear=True 会连 SUPPORTED_MARKETS 一起清掉，而市场白名单默认
-                # 只启用越南；这里显式声明本用例依赖的多市场 allowlist。
-                "SUPPORTED_MARKETS": "all",
-            },
+            {"STOCK_LIST": "HPG", "TUSHARE_TOKEN": "legacy-token"},
             clear=True,
         ):
             config = Config._load_from_env()
 
-        self.assertEqual(config.market_review_region, "cn,us,kr")
-
-    def test_market_review_region_keeps_legacy_mixed_both_and_empty_token_compatibility(self) -> None:
-        self.assertEqual(Config._parse_market_review_region("both,us"), "cn,hk,us,jp,kr,vn")
-        self.assertEqual(Config._parse_market_review_region("cn,,us"), "cn,us")
+        self.assertEqual(config.realtime_source_priority, "ssi,vci")
+        self.assertFalse(hasattr(config, "tushare_token"))
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
-    def test_market_review_region_falls_back_to_cn_when_no_supported_tokens(
+    def test_load_from_env_keeps_explicit_realtime_source_priority(
         self, _mock_parse_litellm_yaml, _mock_setup_env
     ):
         with patch.dict(
             os.environ,
-            {
-                "STOCK_LIST": "600519",
-                "MARKET_REVIEW_REGION": "eu,apac",
-                # clear=True 会连 SUPPORTED_MARKETS 一起清掉，而市场白名单默认
-                # 只启用越南；这里显式声明本用例依赖的多市场 allowlist。
-                "SUPPORTED_MARKETS": "all",
-            },
+            {"STOCK_LIST": "HPG", "REALTIME_SOURCE_PRIORITY": "vci,ssi"},
             clear=True,
         ):
             config = Config._load_from_env()
 
-        self.assertEqual(config.market_review_region, "cn")
-
-    @patch("src.config.setup_env")
-    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
-    def test_load_from_env_keeps_default_behavior_without_tickflow_api_key(
-        self, _mock_parse_litellm_yaml, _mock_setup_env
-    ):
-        with patch.dict(
-            os.environ,
-            {
-                "STOCK_LIST": "600519",
-            },
-            clear=True,
-        ):
-            config = Config._load_from_env()
-
-        self.assertIsNone(config.tickflow_api_key)
-        self.assertEqual(
-            config.realtime_source_priority,
-            "tencent,akshare_sina,efinance,akshare_em",
-        )
+        self.assertEqual(config.realtime_source_priority, "vci,ssi")
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
@@ -942,28 +906,22 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
 
         self.assertEqual(parsed, "vi")
 
-    def test_parse_report_language_rejects_legacy_languages_with_warning(self) -> None:
-        """zh/en/ko 仍用于渲染历史记录，但不能再被配置成输出语言。"""
-        for legacy in ("zh", "zh-cn", "en", "ko"):
+    def test_parse_report_language_maps_legacy_languages_to_vi(self) -> None:
+        """Giá trị cũ zh/ko quy về vi mà không làm hỏng cấu hình / legacy zh/ko normalize to vi."""
+        for legacy in ("zh", "zh-cn", "ko", "cn"):
             with self.subTest(language=legacy):
-                with self.assertLogs("src.config", level="WARNING"):
-                    self.assertEqual(Config._parse_report_language(legacy), "vi")
+                self.assertEqual(Config._parse_report_language(legacy), "vi")
 
-    def test_parse_market_review_region_accepts_jp_kr_values_and_comma_lists(self) -> None:
-        self.assertEqual(Config._parse_market_review_region("jp"), "jp")
-        self.assertEqual(Config._parse_market_review_region("KR"), "kr")
-        self.assertEqual(
-            Config._parse_market_review_region("kr,jp,us"),
-            "us,jp,kr",
-        )
-        self.assertEqual(
-            Config._parse_market_review_region("cn,eu,us"),
-            "cn,us",
-        )
-        self.assertEqual(
-            Config._parse_market_review_region("both"),
-            "cn,hk,us,jp,kr,vn",
-        )
+    def test_parse_report_language_rejects_non_selectable_en_with_warning(self) -> None:
+        with self.assertLogs("src.config", level="WARNING"):
+            self.assertEqual(Config._parse_report_language("en"), "vi")
+
+    def test_parse_market_review_region_only_accepts_vn(self) -> None:
+        self.assertEqual(Config._parse_market_review_region("vn"), "vn")
+        self.assertEqual(Config._parse_market_review_region("VN"), "vn")
+        for legacy in ("jp", "kr,jp,us", "cn,eu,us", "both"):
+            with self.subTest(region=legacy):
+                self.assertEqual(Config._parse_market_review_region(legacy), "vn")
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
@@ -1024,8 +982,8 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
         runtime email routing matches the same equivalence used in
         validate_structured()."""
         env = {
-            "STOCK_LIST": "600519,HK00700",
-            "STOCK_GROUP_1": "SH600519,1810.HK",
+            "STOCK_LIST": "HPG,VCB",
+            "STOCK_GROUP_1": "hpg.vn,vnFPT",
             "EMAIL_GROUP_1": "user@example.com",
         }
 
@@ -1033,7 +991,7 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
             config = Config._load_from_env()
 
         stocks, emails = config.stock_email_groups[0]
-        self.assertEqual(stocks, ["600519", "HK01810"])
+        self.assertEqual(stocks, ["HPG", "FPT"])
         self.assertEqual(emails, ["user@example.com"])
 
 

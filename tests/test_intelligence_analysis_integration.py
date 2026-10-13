@@ -37,8 +37,8 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
                 "published_at": now,
                 "fetched_at": now,
                 "scope_type": "symbol",
-                "scope_value": "600519",
-                "market": "cn",
+                "scope_value": "HPG",
+                "market": "vn",
             },
             {
                 "source_name": "market-feed",
@@ -51,7 +51,7 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
                 "fetched_at": now,
                 "scope_type": "market",
                 "scope_value": None,
-                "market": "cn",
+                "market": "vn",
             },
         ])
 
@@ -65,15 +65,15 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
         pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)
         pipeline.config = self.config
         context = pipeline._load_persisted_intelligence_context(
-            code="600519",
-            stock_name="贵州茅台",
-            market="cn",
+            code="HPG",
+            stock_name="Hòa Phát",
+            market="vn",
         )
         self.assertIsNotNone(context)
         assert context is not None
         # Tiêu đề khối bằng chứng nay theo REPORT_LANGUAGE (repo này chỉ chọn được
         # `vi`), nên khẳng định theo ý nghĩa thay vì theo chuỗi tiếng Trung cũ.
-        self.assertRegex(context, r"^## .+600519")
+        self.assertRegex(context, r"^## .+HPG")
         self.assertIn("Company wins major AI order", context)
         self.assertIn("https://news.example.com/symbol", context)
 
@@ -84,9 +84,9 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
 
         with patch("src.core.pipeline.IntelligenceService.refresh_auto_sources", return_value={"ok": True}) as refresh:
             context = pipeline._load_persisted_intelligence_context(
-                code="600519",
-                stock_name="贵州茅台",
-                market="cn",
+                code="HPG",
+                stock_name="Hòa Phát",
+                market="vn",
             )
 
         refresh.assert_called_once()
@@ -102,9 +102,9 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
             service.refresh_auto_sources.return_value = {"ok": True}
             service.list_items.return_value = {"items": [], "total": 0}
             context = pipeline._load_persisted_intelligence_context(
-                code="600519",
-                stock_name="贵州茅台",
-                market="cn",
+                code="HPG",
+                stock_name="Hòa Phát",
+                market="vn",
             )
 
         service_cls.assert_called_once_with(config=pipeline.config)
@@ -117,93 +117,46 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
             {
                 "source_name": "symbol-feed",
                 "source_type": "rss",
-                "title": "SH-prefixed symbol feed",
-                "summary": "Prefixed source should match normalized analysis code.",
-                "url": "https://news.example.com/symbol-sh-prefix",
+                "title": "Lowercase symbol feed",
+                "summary": "Lowercase source should match normalized analysis code.",
+                "url": "https://news.example.com/symbol-lower",
                 "source": "symbol-feed",
                 "published_at": now,
                 "fetched_at": now,
                 "scope_type": "symbol",
-                "scope_value": "SH600519",
-                "market": "cn",
+                "scope_value": "hpg",
+                "market": "vn",
             },
             {
                 "source_name": "symbol-feed",
                 "source_type": "rss",
-                "title": "SH-suffixed symbol feed",
+                "title": "VN-suffixed symbol feed",
                 "summary": "Suffixed source should match normalized analysis code.",
-                "url": "https://news.example.com/symbol-sh-suffix",
+                "url": "https://news.example.com/symbol-vn-suffix",
                 "source": "symbol-feed",
                 "published_at": now,
                 "fetched_at": now,
                 "scope_type": "symbol",
-                "scope_value": "600519.SH",
-                "market": "cn",
+                "scope_value": "HPG.VN",
+                "market": "vn",
             },
         ])
 
         pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)
         pipeline.config = self.config
         context = pipeline._load_persisted_intelligence_context(
-            code="600519",
-            stock_name="贵州茅台",
-            market="cn",
+            code="HPG",
+            stock_name="Hòa Phát",
+            market="vn",
         )
 
         self.assertIsNotNone(context)
         assert context is not None
-        self.assertIn("SH-prefixed symbol feed", context)
-        self.assertIn("SH-suffixed symbol feed", context)
-
-    def test_pipeline_loads_hk_symbol_intelligence_with_plain_code_scope(self) -> None:
-        repo = IntelligenceRepository()
-        now = datetime.now()
-        repo.upsert_items([
-            {
-                "source_name": "hk-symbol-feed",
-                "source_type": "rss",
-                "title": "Plain HK code symbol feed",
-                "summary": "Plain five-digit HK source should match canonical and suffixed analysis codes.",
-                "url": "https://news.example.com/hk-plain-code",
-                "source": "hk-symbol-feed",
-                "published_at": now,
-                "fetched_at": now,
-                "scope_type": "symbol",
-                "scope_value": "00700",
-                "market": "hk",
-            },
-            {
-                "source_name": "hk-trimmed-symbol-feed",
-                "source_type": "rss",
-                "title": "Trimmed HK code symbol feed",
-                "summary": "Trimmed HK source should match canonical analysis code.",
-                "url": "https://news.example.com/hk-trimmed-code",
-                "source": "hk-trimmed-symbol-feed",
-                "published_at": now,
-                "fetched_at": now,
-                "scope_type": "symbol",
-                "scope_value": "HK700",
-                "market": "hk",
-            },
-        ])
-
-        pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)
-        pipeline.config = self.config
-        for code in ("HK00700", "00700.HK"):
-            with self.subTest(code=code):
-                context = pipeline._load_persisted_intelligence_context(
-                    code=code,
-                    stock_name="腾讯控股",
-                    market="hk",
-                )
-
-                self.assertIsNotNone(context)
-                assert context is not None
-                self.assertIn("Plain HK code symbol feed", context)
-                self.assertIn("Trimmed HK code symbol feed", context)
+        self.assertIn("Lowercase symbol feed", context)
+        self.assertIn("VN-suffixed symbol feed", context)
 
     def test_market_review_merges_persisted_market_intelligence(self) -> None:
-        analyzer = MarketAnalyzer(config=self.config, region="cn")
+        analyzer = MarketAnalyzer(config=self.config, region="vn")
         merged = analyzer._merge_persisted_market_intelligence([])
         self.assertTrue(any(item.get("title") == "Policy support lifts market sentiment" for item in merged))
         item = next(item for item in merged if item.get("title") == "Policy support lifts market sentiment")
@@ -212,7 +165,7 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
 
     def test_market_review_refreshes_auto_sources_before_merging_local_intelligence(self) -> None:
         self.config.news_intel_auto_fetch_enabled = True
-        analyzer = MarketAnalyzer(config=self.config, region="cn")
+        analyzer = MarketAnalyzer(config=self.config, region="vn")
 
         with patch("src.market_analyzer.IntelligenceService.refresh_auto_sources", return_value={"ok": True}) as refresh:
             merged = analyzer._merge_persisted_market_intelligence([])
@@ -222,7 +175,7 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
 
     def test_market_review_refreshes_auto_sources_with_analyzer_config(self) -> None:
         self.config.news_intel_auto_fetch_enabled = True
-        analyzer = MarketAnalyzer(config=replace(self.config, news_intel_auto_fetch_enabled=False), region="cn")
+        analyzer = MarketAnalyzer(config=replace(self.config, news_intel_auto_fetch_enabled=False), region="vn")
 
         with patch("src.market_analyzer.IntelligenceService") as service_cls:
             service = service_cls.return_value
@@ -234,7 +187,7 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
         self.assertEqual(merged, [])
 
     def test_market_review_local_intelligence_kept_in_top_payload_when_search_news_filled(self) -> None:
-        analyzer = MarketAnalyzer(config=self.config, region="cn")
+        analyzer = MarketAnalyzer(config=self.config, region="vn")
         search_news = [
             {
                 "title": f"Search headline {i}",
@@ -254,16 +207,16 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
                 date="2026-06-17",
                 indices=[
                     MarketIndex(
-                        code="000001",
-                        name="SSE Composite",
-                        current=3200.0,
-                        change=10.0,
+                        code="VNINDEX",
+                        name="VN-Index",
+                        current=1280.0,
+                        change=3.2,
                         change_pct=0.25,
                     )
                 ],
             ),
             news=merged,
-            report="复盘正文",
+            report="Nội dung điểm lại thị trường",
             market_light_snapshot={"dimensions": {"breadth": {"available": True}}},
         )
         self.assertEqual(payload["news"][0]["url"], "https://news.example.com/market")
@@ -285,11 +238,11 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
                     "fetched_at": now + timedelta(minutes=index + 1),
                     "scope_type": "market",
                     "scope_value": None,
-                    "market": "cn",
+                    "market": "vn",
                 }
             ])
 
-        analyzer = MarketAnalyzer(config=self.config, region="cn")
+        analyzer = MarketAnalyzer(config=self.config, region="vn")
         search_news = [
             {
                 "title": f"Search headline {i}",
@@ -319,16 +272,16 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
                 date="2026-06-17",
                 indices=[
                     MarketIndex(
-                        code="000001",
-                        name="SSE Composite",
-                        current=3200.0,
-                        change=10.0,
+                        code="VNINDEX",
+                        name="VN-Index",
+                        current=1280.0,
+                        change=3.2,
                         change_pct=0.25,
                     )
                 ],
             ),
             news=merged,
-            report="复盘正文",
+            report="Nội dung điểm lại thị trường",
             market_light_snapshot={"dimensions": {"breadth": {"available": True}}},
         )
         self.assertGreaterEqual(len(payload["news"]), 8)
@@ -351,8 +304,8 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
                 "published_at": old_time,
                 "fetched_at": now,
                 "scope_type": "symbol",
-                "scope_value": "600519",
-                "market": "cn",
+                "scope_value": "HPG",
+                "market": "vn",
             },
             {
                 "source_name": "symbol-feed",
@@ -364,8 +317,8 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
                 "published_at": None,
                 "fetched_at": now,
                 "scope_type": "symbol",
-                "scope_value": "600519",
-                "market": "cn",
+                "scope_value": "HPG",
+                "market": "vn",
             },
             {
                 "source_name": "market-feed",
@@ -378,7 +331,7 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
                 "fetched_at": now,
                 "scope_type": "market",
                 "scope_value": None,
-                "market": "cn",
+                "market": "vn",
             },
             {
                 "source_name": "market-feed",
@@ -391,16 +344,16 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
                 "fetched_at": now,
                 "scope_type": "market",
                 "scope_value": None,
-                "market": "cn",
+                "market": "vn",
             },
         ])
 
         pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)
         pipeline.config = self.config
         context = pipeline._load_persisted_intelligence_context(
-            code="600519",
-            stock_name="贵州茅台",
-            market="cn",
+            code="HPG",
+            stock_name="Hòa Phát",
+            market="vn",
         )
         assert context is not None
         self.assertIn("Company wins major AI order", context)
@@ -409,7 +362,7 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
         self.assertNotIn("Stale market item fetched today", context)
         self.assertNotIn("Undated market item fetched today", context)
 
-        analyzer = MarketAnalyzer(config=self.config, region="cn")
+        analyzer = MarketAnalyzer(config=self.config, region="vn")
         merged = analyzer._merge_persisted_market_intelligence([])
         titles = {item.get("title") for item in merged}
         self.assertIn("Policy support lifts market sentiment", titles)

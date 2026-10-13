@@ -23,6 +23,12 @@ RSS_FIXTURE = b'<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><chan
 class IntelligenceApiTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self._temp_dir = tempfile.TemporaryDirectory()
+        # File .env cô lập: tránh cấu hình cục bộ (ADMIN_AUTH_ENABLED=true) làm API trả 401.
+        # Isolated .env so a local admin-auth config cannot turn these calls into 401s.
+        env_path = Path(self._temp_dir.name) / ".env"
+        env_path.write_text("ADMIN_AUTH_ENABLED=false\n", encoding="utf-8")
+        self._old_env_file = os.environ.get("ENV_FILE")
+        os.environ["ENV_FILE"] = str(env_path)
         os.environ["DATABASE_PATH"] = os.path.join(self._temp_dir.name, "api_intel.db")
         Config._instance = None
         DatabaseManager.reset_instance()
@@ -38,6 +44,10 @@ class IntelligenceApiTestCase(unittest.TestCase):
         DatabaseManager.reset_instance()
         Config._instance = None
         os.environ.pop("DATABASE_PATH", None)
+        if self._old_env_file is None:
+            os.environ.pop("ENV_FILE", None)
+        else:
+            os.environ["ENV_FILE"] = self._old_env_file
         self._temp_dir.cleanup()
 
     def _mock_response(self):
@@ -61,14 +71,14 @@ class IntelligenceApiTestCase(unittest.TestCase):
         return response
 
     def test_create_fetch_and_query_items(self) -> None:
-        create_resp = self.client.post("/api/v1/intelligence/sources", json={"name": "api-feed", "url": "https://feeds.example.com/rss.xml", "source_type": "rss", "scope_type": "market", "market": "cn"})
+        create_resp = self.client.post("/api/v1/intelligence/sources", json={"name": "api-feed", "url": "https://feeds.example.com/rss.xml", "source_type": "rss", "scope_type": "market", "market": "vn"})
         self.assertEqual(create_resp.status_code, 200)
         source_id = create_resp.json()["id"]
         with patch("src.services.intelligence_service.requests.get", return_value=self._mock_response()):
             fetch_resp = self.client.post(f"/api/v1/intelligence/sources/{source_id}/fetch")
         self.assertEqual(fetch_resp.status_code, 200)
         self.assertEqual(fetch_resp.json()["saved_count"], 1)
-        list_resp = self.client.get("/api/v1/intelligence/items", params={"scope_type": "market", "market": "cn"})
+        list_resp = self.client.get("/api/v1/intelligence/items", params={"scope_type": "market", "market": "vn"})
         self.assertEqual(list_resp.status_code, 200)
         body = list_resp.json()
         self.assertEqual(body["total"], 1)
@@ -88,18 +98,18 @@ class IntelligenceApiTestCase(unittest.TestCase):
         self.assertEqual(second.json()["error"], "validation_error")
 
     def test_list_and_create_from_builtin_source_template(self) -> None:
-        templates = self.client.get("/api/v1/intelligence/sources/templates", params={"market": "hk"})
+        templates = self.client.get("/api/v1/intelligence/sources/templates", params={"market": "vn"})
         self.assertEqual(templates.status_code, 200)
         body = templates.json()
         self.assertGreaterEqual(body["total"], 1)
-        self.assertTrue(any(item["template_id"] == "hkex-news" for item in body["items"]))
+        self.assertTrue(any(item["template_id"] == "vn-cafef-chung-khoan" for item in body["items"]))
 
         created = self.client.post(
-            "/api/v1/intelligence/sources/templates/hkex-news",
-            json={"name": "hkex-copy", "enabled": False},
+            "/api/v1/intelligence/sources/templates/vn-cafef-chung-khoan",
+            json={"name": "cafef-copy", "enabled": False},
         )
         self.assertEqual(created.status_code, 200)
-        self.assertEqual(created.json()["name"], "hkex-copy")
+        self.assertEqual(created.json()["name"], "cafef-copy")
         self.assertFalse(created.json()["enabled"])
 
     def test_create_builtin_default_sources_is_idempotent(self) -> None:
@@ -111,15 +121,15 @@ class IntelligenceApiTestCase(unittest.TestCase):
         self.assertGreaterEqual(first.json()["created_count"], 5)
         self.assertEqual(second.json()["created_count"], 0)
         self.assertEqual(first.json()["total"], second.json()["total"])
-        newsnow_sources = [
+        vn_sources = [
             item["source"] for item in first.json()["items"]
-            if item["source"]["source_type"] == "newsnow"
+            if item["source"]["market"] == "vn"
         ]
-        self.assertGreaterEqual(len(newsnow_sources), 5)
-        self.assertTrue(all(not item["enabled"] for item in newsnow_sources))
+        self.assertGreaterEqual(len(vn_sources), 5)
+        self.assertTrue(all(not item["enabled"] for item in vn_sources))
 
     def test_fetch_source_internal_error_is_sanitized(self) -> None:
-        create_resp = self.client.post("/api/v1/intelligence/sources", json={"name": "api-feed", "url": "https://feeds.example.com/rss.xml", "source_type": "rss", "scope_type": "market", "market": "cn"})
+        create_resp = self.client.post("/api/v1/intelligence/sources", json={"name": "api-feed", "url": "https://feeds.example.com/rss.xml", "source_type": "rss", "scope_type": "market", "market": "vn"})
         self.assertEqual(create_resp.status_code, 200)
         source_id = create_resp.json()["id"]
         with patch("src.services.intelligence_service.IntelligenceService.fetch_source", side_effect=RuntimeError("token=secret api_key=abc12345")):
@@ -131,7 +141,7 @@ class IntelligenceApiTestCase(unittest.TestCase):
         self.assertEqual(body["message"], "Fetch intelligence source failed: internal intelligence service error")
 
     def test_fetch_source_internal_error_without_sensitive_pattern_is_generic(self) -> None:
-        create_resp = self.client.post("/api/v1/intelligence/sources", json={"name": "api-feed", "url": "https://feeds.example.com/rss.xml", "source_type": "rss", "scope_type": "market", "market": "cn"})
+        create_resp = self.client.post("/api/v1/intelligence/sources", json={"name": "api-feed", "url": "https://feeds.example.com/rss.xml", "source_type": "rss", "scope_type": "market", "market": "vn"})
         self.assertEqual(create_resp.status_code, 200)
         source_id = create_resp.json()["id"]
         with patch("src.services.intelligence_service.IntelligenceService.fetch_source", side_effect=RuntimeError("unexpected runtime assertion failure: pipeline context exhausted")):
@@ -146,12 +156,9 @@ class IntelligenceApiTestCase(unittest.TestCase):
     def test_create_builtin_default_sources_are_disabled_by_default(self) -> None:
         default_resp = self.client.post("/api/v1/intelligence/sources/defaults")
         self.assertEqual(default_resp.status_code, 200)
-        newsnow_sources = [
-            item["source"] for item in default_resp.json()["items"]
-            if item["source"]["source_type"] == "newsnow"
-        ]
-        self.assertGreaterEqual(len(newsnow_sources), 5)
-        self.assertTrue(all(not item["enabled"] for item in newsnow_sources))
+        sources = [item["source"] for item in default_resp.json()["items"]]
+        self.assertGreaterEqual(len(sources), 5)
+        self.assertTrue(all(not item["enabled"] for item in sources))
 
     def test_upstream_fetch_errors_do_not_expose_query_secret(self) -> None:
         secret_url = "https://feeds.example.com/rss.xml?token=super-secret"
@@ -160,7 +167,7 @@ class IntelligenceApiTestCase(unittest.TestCase):
             "url": secret_url,
             "source_type": "rss",
             "scope_type": "market",
-            "market": "cn",
+            "market": "vn",
         }
         create_resp = self.client.post("/api/v1/intelligence/sources", json=payload)
         self.assertEqual(create_resp.status_code, 200)
@@ -192,7 +199,7 @@ class IntelligenceApiTestCase(unittest.TestCase):
             "url": secret_url,
             "source_type": "newsnow",
             "scope_type": "market",
-            "market": "cn",
+            "market": "vn",
         }
 
         create_resp = self.client.post("/api/v1/intelligence/sources", json=payload)

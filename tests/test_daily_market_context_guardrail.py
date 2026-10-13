@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Tests for Issue #1381 daily market context decision guardrail."""
+"""Tests for Issue #1381 daily market context decision guardrail (chỉ vi/en)."""
 
 from __future__ import annotations
 
@@ -7,36 +7,49 @@ from src.analyzer import AnalysisResult
 from src.daily_market_context_guardrail import apply_daily_market_context_guardrail
 
 
+_CONSERVATIVE_VN_CONTEXT = {
+    "region": "vn",
+    "trade_date": "2026-06-06",
+    "summary": "Thị trường hạ nhiệt, rủi ro cao, nên quan sát, giới hạn tỷ trọng 30%.",
+    "risk_tags": ["high_risk", "low_position_cap"],
+}
+
+_SOFTENED_POSITION_ADVICE = {
+    "no_position": "Do not open a new position until market risk eases or confirmation appears.",
+    "has_position": "Hold only a small position; do not increase exposure, and reduce if risk controls break.",
+}
+
+
 def _result() -> AnalysisResult:
     return AnalysisResult(
-        code="600519",
-        name="贵州茅台",
+        code="FPT",
+        name="FPT Corp",
         sentiment_score=82,
-        trend_prediction="看多",
-        operation_advice="立即买入并积极加仓",
+        trend_prediction="Tăng",
+        operation_advice="Mua ngay và gia tăng tỷ trọng mạnh",
         decision_type="buy",
-        confidence_level="高",
-        analysis_summary="个股信号强势",
+        confidence_level="Cao",
+        analysis_summary="Tín hiệu cổ phiếu mạnh",
         dashboard={
-            "operation_advice": "立即买入并积极加仓",
+            "operation_advice": "Mua ngay và gia tăng tỷ trọng mạnh",
             "decision_type": "buy",
             "core_conclusion": {
-                "one_sentence": "立即买入并积极加仓",
+                "one_sentence": "Mua ngay và gia tăng tỷ trọng mạnh",
                 "position_advice": {
-                    "no_position": "立即买入并积极加仓",
-                    "has_position": "继续加仓",
+                    "no_position": "Mua ngay",
+                    "has_position": "Tiếp tục gia tăng tỷ trọng",
                 },
             },
             "battle_plan": {
                 "position_strategy": {
-                    "suggested_position": "满仓买入",
-                    "entry_plan": "突破后立即买入",
-                    "risk_control": "回踩继续加仓",
+                    "suggested_position": "Toàn bộ tỷ trọng",
+                    "entry_plan": "Mua ngay khi bứt phá",
+                    "risk_control": "Điều chỉnh thì mua thêm",
                 },
             },
             "phase_decision": {
                 "data_limitations": [],
-                "confidence_reason": "趋势强",
+                "confidence_reason": "Xu hướng mạnh",
             },
         },
     )
@@ -47,44 +60,50 @@ def test_conservative_market_context_softens_aggressive_buy() -> None:
 
     adjustments = apply_daily_market_context_guardrail(
         result,
-        daily_market_context={
-            "region": "cn",
-            "trade_date": "2026-06-06",
-            "summary": "大盘退潮，高风险，建议观望，仓位上限30%。",
-            "risk_tags": ["high_risk", "low_position_cap"],
-        },
-        report_language="zh",
+        daily_market_context=dict(_CONSERVATIVE_VN_CONTEXT),
+        report_language="vi",
     )
 
     assert "daily_market_context_buy_softened" in adjustments
     assert result.decision_type == "hold"
-    assert result.operation_advice == "观望"
+    assert result.operation_advice == "Quan sát"
     assert len(result.operation_advice) <= 20
-    assert result.confidence_level == "中"
+    assert result.confidence_level == "Trung bình"
     assert result.sentiment_score == 52
     assert result.dashboard["operation_advice"] == result.operation_advice
     assert result.dashboard["decision_type"] == "hold"
     assert result.dashboard["sentiment_score"] == 52
     core = result.dashboard["core_conclusion"]
     assert core["one_sentence"] == result.operation_advice
-    assert core["position_advice"] == {
-        "no_position": "大盘环境偏谨慎，暂不开新仓，等待风险缓解或确认信号。",
-        "has_position": "仅保留小仓观察，暂不扩大仓位；若跌破风控位优先降低仓位。",
-    }
+    assert core["position_advice"] == _SOFTENED_POSITION_ADVICE
     position_strategy = result.dashboard["battle_plan"]["position_strategy"]
     assert position_strategy == {
-        "suggested_position": "小仓/低仓位",
-        "entry_plan": "大盘环境偏谨慎，暂不开新仓，等待风险缓解或确认信号。",
-        "risk_control": "大盘风险未缓解前不扩大仓位，严格控制回撤。",
+        "suggested_position": "Small/defensive position",
+        "entry_plan": _SOFTENED_POSITION_ADVICE["no_position"],
+        "risk_control": "Do not increase exposure before market risk eases; control drawdown strictly.",
     }
     phase_decision = result.dashboard["phase_decision"]
-    assert any("大盘环境" in item for item in phase_decision["data_limitations"])
-    assert "大盘环境" in phase_decision["confidence_reason"]
+    assert any("Daily market context" in item for item in phase_decision["data_limitations"])
+    assert "Market context requires conservative sizing." in phase_decision["confidence_reason"]
+
+
+def test_legacy_zh_language_falls_back_to_vietnamese() -> None:
+    result = _result()
+
+    adjustments = apply_daily_market_context_guardrail(
+        result,
+        daily_market_context=dict(_CONSERVATIVE_VN_CONTEXT),
+        report_language="zh",
+    )
+
+    assert "daily_market_context_buy_softened" in adjustments
+    assert result.operation_advice == "Quan sát"
+    assert result.confidence_level == "Trung bình"
 
 
 def test_position_cap_only_market_context_softens_aggressive_buy() -> None:
     cases = [
-        ("zh", "市场震荡，仓位不超过30%。", "立即买入并积极加仓", "高", "观望"),
+        ("vi", "Thị trường giằng co, tỷ trọng tối đa 30%.", "Mua ngay và gia tăng tỷ trọng mạnh", "Cao", "Quan sát"),
         ("en", "Major indices are mixed. Position limit 30%.", "Buy now and add aggressively.", "High", "Watch"),
     ]
     for language, summary, advice, confidence, expected_advice in cases:
@@ -95,7 +114,7 @@ def test_position_cap_only_market_context_softens_aggressive_buy() -> None:
         adjustments = apply_daily_market_context_guardrail(
             result,
             daily_market_context={
-                "region": "us" if language == "en" else "cn",
+                "region": "vn",
                 "trade_date": "2026-06-06",
                 "summary": summary,
                 "risk_tags": [],
@@ -112,45 +131,40 @@ def test_position_cap_only_market_context_softens_aggressive_buy() -> None:
 def test_neutral_market_context_leaves_hold_unchanged() -> None:
     result = _result()
     result.decision_type = "hold"
-    result.operation_advice = "持有观察"
-    result.confidence_level = "中"
+    result.operation_advice = "Nắm giữ và theo dõi"
+    result.confidence_level = "Trung bình"
 
     adjustments = apply_daily_market_context_guardrail(
         result,
         daily_market_context={
-            "region": "cn",
+            "region": "vn",
             "trade_date": "2026-06-06",
-            "summary": "市场震荡，结构分化。",
+            "summary": "Thị trường giằng co, phân hóa.",
             "risk_tags": [],
         },
-        report_language="zh",
+        report_language="vi",
     )
 
     assert adjustments == []
     assert result.decision_type == "hold"
-    assert result.operation_advice == "持有观察"
+    assert result.operation_advice == "Nắm giữ và theo dõi"
 
 
 def test_conservative_market_context_does_not_soften_negative_buy_language() -> None:
     result = _result()
     result.decision_type = "buy"
-    result.operation_advice = "暂不加仓，继续持有观察。"
-    result.confidence_level = "高"
+    result.operation_advice = "Chưa mua ngay, tiếp tục nắm giữ."
+    result.confidence_level = "Cao"
 
     adjustments = apply_daily_market_context_guardrail(
         result,
-        daily_market_context={
-            "region": "cn",
-            "trade_date": "2026-06-06",
-            "summary": "大盘退潮，高风险，建议观望，仓位上限30%。",
-            "risk_tags": ["high_risk", "low_position_cap"],
-        },
-        report_language="zh",
+        daily_market_context=dict(_CONSERVATIVE_VN_CONTEXT),
+        report_language="vi",
     )
 
     assert adjustments == []
     assert result.decision_type == "buy"
-    assert result.operation_advice == "暂不加仓，继续持有观察。"
+    assert result.operation_advice == "Chưa mua ngay, tiếp tục nắm giữ."
 
 
 def test_conservative_market_context_does_not_soften_no_action_in_english() -> None:
@@ -161,9 +175,9 @@ def test_conservative_market_context_does_not_soften_no_action_in_english() -> N
     adjustments = apply_daily_market_context_guardrail(
         result,
         daily_market_context={
-            "region": "us",
+            "region": "vn",
             "trade_date": "2026-06-06",
-            "summary": "Market cooling and elevated risk. Cautious on new positions."
+            "summary": "Market cooling and elevated risk. Cautious on new positions.",
         },
         report_language="en",
     )
@@ -173,91 +187,38 @@ def test_conservative_market_context_does_not_soften_no_action_in_english() -> N
     assert result.operation_advice == "No add now; keep watching for confirmation."
 
 
-def test_conservative_market_context_does_not_soften_explicit_negative_add_position() -> None:
+def test_conservative_market_context_does_not_soften_explicit_negative_chase() -> None:
     result = _result()
     result.decision_type = "buy"
-    result.operation_advice = "不建议加仓，等待窗口更清晰。"
-    result.confidence_level = "高"
+    result.operation_advice = "Không mua đuổi, chờ tín hiệu rõ hơn."
+    result.confidence_level = "Cao"
 
     adjustments = apply_daily_market_context_guardrail(
         result,
-        daily_market_context={
-            "region": "cn",
-            "trade_date": "2026-06-06",
-            "summary": "大盘退潮，高风险，建议观望，仓位上限30%。",
-            "risk_tags": ["high_risk", "low_position_cap"],
-        },
-        report_language="zh",
+        daily_market_context=dict(_CONSERVATIVE_VN_CONTEXT),
+        report_language="vi",
     )
 
     assert adjustments == []
     assert result.decision_type == "buy"
-    assert result.operation_advice == "不建议加仓，等待窗口更清晰。"
+    assert result.operation_advice == "Không mua đuổi, chờ tín hiệu rõ hơn."
 
 
-def test_conservative_market_context_softens_generic_buy_advice_phrase() -> None:
-    result = _result()
-    result.operation_advice = "回踩买入，强支撑上攻。"
-    result.confidence_level = "高"
-
-    adjustments = apply_daily_market_context_guardrail(
-        result,
-        daily_market_context={
-            "region": "cn",
-            "trade_date": "2026-06-06",
-            "summary": "大盘退潮，高风险，建议观望，仓位上限30%。",
-            "risk_tags": ["high_risk", "low_position_cap"],
-        },
-        report_language="zh",
-    )
-
-    assert "daily_market_context_buy_softened" in adjustments
-    assert result.decision_type == "hold"
-    assert result.operation_advice == "观望"
-
-
-def test_conservative_market_context_softens_when_risk_warning_then_recommend_buy() -> None:
+def test_conservative_market_context_softens_when_negated_chase_then_buy_now() -> None:
     result = _result()
     result.decision_type = "buy"
-    result.operation_advice = "风险不能忽视，但建议买入等待确认信号。"
-    result.confidence_level = "高"
+    result.operation_advice = "Không mua đuổi, nhưng mua ngay khi điều chỉnh."
+    result.confidence_level = "Cao"
 
     adjustments = apply_daily_market_context_guardrail(
         result,
-        daily_market_context={
-            "region": "cn",
-            "trade_date": "2026-06-06",
-            "summary": "大盘退潮，高风险，建议观望，仓位上限30%。",
-            "risk_tags": ["high_risk", "low_position_cap"],
-        },
-        report_language="zh",
+        daily_market_context=dict(_CONSERVATIVE_VN_CONTEXT),
+        report_language="vi",
     )
 
     assert "daily_market_context_buy_softened" in adjustments
     assert result.decision_type == "hold"
-    assert result.operation_advice == "观望"
-
-
-def test_conservative_market_context_softens_when_negated_chase_then_recommend_buy() -> None:
-    result = _result()
-    result.decision_type = "buy"
-    result.operation_advice = "不建议追高，但建议分批买入。"
-    result.confidence_level = "高"
-
-    adjustments = apply_daily_market_context_guardrail(
-        result,
-        daily_market_context={
-            "region": "cn",
-            "trade_date": "2026-06-06",
-            "summary": "大盘退潮，高风险，建议观望，仓位上限30%。",
-            "risk_tags": ["high_risk", "low_position_cap"],
-        },
-        report_language="zh",
-    )
-
-    assert "daily_market_context_buy_softened" in adjustments
-    assert result.decision_type == "hold"
-    assert result.operation_advice == "观望"
+    assert result.operation_advice == "Quan sát"
 
 
 def test_conservative_market_context_does_not_soften_buy_when_negated_explicitly_in_english() -> None:
@@ -267,12 +228,7 @@ def test_conservative_market_context_does_not_soften_buy_when_negated_explicitly
 
     adjustments = apply_daily_market_context_guardrail(
         result,
-        daily_market_context={
-            "region": "cn",
-            "trade_date": "2026-06-06",
-            "summary": "大盘退潮，高风险，建议观望，仓位上限30%。",
-            "risk_tags": ["high_risk", "low_position_cap"],
-        },
+        daily_market_context=dict(_CONSERVATIVE_VN_CONTEXT),
         report_language="en",
     )
 
@@ -289,7 +245,7 @@ def test_conservative_market_context_does_not_soften_do_not_buy_in_english() -> 
     adjustments = apply_daily_market_context_guardrail(
         result,
         daily_market_context={
-            "region": "us",
+            "region": "vn",
             "trade_date": "2026-06-06",
             "summary": "Market cooling and elevated risk. Cautious on new positions.",
         },

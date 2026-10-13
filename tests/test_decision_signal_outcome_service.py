@@ -36,8 +36,8 @@ def isolated_db(tmp_path):
 def _add_signal(
     db: DatabaseManager,
     *,
-    code: str = "600519",
-    market: str = "cn",
+    code: str = "HPG",
+    market: str = "vn",
     action: str = "buy",
     horizon: str = "3d",
     session_date: str = "2024-01-02",
@@ -58,7 +58,7 @@ def _add_signal(
     with db.session_scope() as session:
         row = DecisionSignalRecord(
             stock_code=code,
-            stock_name="贵州茅台",
+            stock_name="Hòa Phát",
             market=market,
             source_type="analysis",
             source_report_id=1001,
@@ -98,7 +98,7 @@ def _seed_calibration_outcomes(
             signal = DecisionSignalRecord(
                 stock_code=f"T{index:05d}",
                 stock_name="Calibration fixture",
-                market="cn",
+                market="vn",
                 source_type="analysis",
                 source_report_id=10_000 + index,
                 trace_id=f"calibration-{decision_profile}-{action}-{horizon}-{profile_source}-{index}",
@@ -133,7 +133,7 @@ def _seed_calibration_outcomes(
                 min_low=94.0,
                 stock_return_pct=stock_return_pct,
                 action=action,
-                market="cn",
+                market="vn",
                 market_phase=market_phase,
                 source_type="analysis",
                 source_agent="fixture",
@@ -146,7 +146,7 @@ def _seed_calibration_outcomes(
 def _seed_bars(
     db: DatabaseManager,
     *,
-    code: str = "600519",
+    code: str = "HPG",
     anchor: date = date(2024, 1, 2),
     start_close: float = 100.0,
     closes: list[float],
@@ -441,13 +441,13 @@ def test_max_adverse_excursion_returns_none_for_incomplete_or_invalid_rows(row) 
 def test_stats_default_statuses_exclude_archived(isolated_db) -> None:
     service = DecisionSignalOutcomeService(db_manager=isolated_db)
     signal_ids = [
-        _add_signal(isolated_db, code="600519", status="active", horizon="1d"),
-        _add_signal(isolated_db, code="000001", status="expired", horizon="1d"),
+        _add_signal(isolated_db, code="HPG", status="active", horizon="1d"),
+        _add_signal(isolated_db, code="VCB", status="expired", horizon="1d"),
         _add_signal(isolated_db, code="000002", status="invalidated", horizon="1d"),
         _add_signal(isolated_db, code="000003", status="closed", horizon="1d"),
         _add_signal(isolated_db, code="000004", status="archived", horizon="1d"),
     ]
-    for signal_id, code in zip(signal_ids, ["600519", "000001", "000002", "000003", "000004"]):
+    for signal_id, code in zip(signal_ids, ["HPG", "VCB", "000002", "000003", "000004"]):
         _seed_bars(isolated_db, code=code, closes=[103.0])
         service.run_outcomes(signal_id=signal_id, horizons=["1d"])
 
@@ -461,28 +461,28 @@ def test_stats_default_statuses_exclude_archived(isolated_db) -> None:
     assert archived_stats["total"] == 1
 
 
-def test_stock_code_filter_uses_hk_aliases_without_widening_market_filter(isolated_db) -> None:
-    hk_id = _add_signal(isolated_db, code="HK00700", market="hk", horizon="1d")
-    cn_id = _add_signal(isolated_db, code="00700", market="cn", horizon="1d")
-    _seed_bars(isolated_db, code="HK00700", closes=[104.0])
-    _seed_bars(isolated_db, code="00700", closes=[102.0])
+def test_stock_code_filter_matches_vn_code_shapes(isolated_db) -> None:
+    # "HPG.VN" / "hpg" phải khớp tín hiệu lưu dưới mã chuẩn "HPG".
+    # "HPG.VN" / "hpg" must match signals stored under the canonical "HPG" code.
+    hpg_id = _add_signal(isolated_db, code="HPG", market="vn", horizon="1d")
+    _add_signal(isolated_db, code="VCB", market="vn", horizon="1d")
+    _seed_bars(isolated_db, code="HPG", closes=[104.0])
+    _seed_bars(isolated_db, code="VCB", closes=[102.0])
     service = DecisionSignalOutcomeService(db_manager=isolated_db)
 
-    broad = service.run_outcomes(stock_code="00700", horizons=["1d"], limit=10)
-    forced = service.run_outcomes(stock_code="00700", horizons=["1d"], force=True, limit=10)
-    hk_only = service.run_outcomes(stock_code="00700", market="hk", horizons=["1d"], force=True, limit=10)
+    suffixed = service.run_outcomes(stock_code="HPG.VN", horizons=["1d"], limit=10)
+    lower = service.run_outcomes(stock_code="hpg", market="vn", horizons=["1d"], force=True, limit=10)
 
-    assert {item["signal_id"] for item in broad["items"]} == {hk_id, cn_id}
-    assert {item["signal_id"] for item in forced["items"]} == {hk_id, cn_id}
-    assert [item["signal_id"] for item in hk_only["items"]] == [hk_id]
-    assert hk_only["evaluated"] == 1
+    assert [item["signal_id"] for item in suffixed["items"]] == [hpg_id]
+    assert [item["signal_id"] for item in lower["items"]] == [hpg_id]
+    assert lower["evaluated"] == 1
 
 
 def test_not_up_uses_defensive_direction_not_down_direction(isolated_db) -> None:
-    reduce_hit_id = _add_signal(isolated_db, code="600519", action="reduce", horizon="3d")
-    reduce_miss_id = _add_signal(isolated_db, code="000001", action="reduce", horizon="3d")
-    _seed_bars(isolated_db, code="600519", closes=[100.5, 101.0, 101.5])
-    _seed_bars(isolated_db, code="000001", closes=[101.0, 102.0, 103.0])
+    reduce_hit_id = _add_signal(isolated_db, code="HPG", action="reduce", horizon="3d")
+    reduce_miss_id = _add_signal(isolated_db, code="VCB", action="reduce", horizon="3d")
+    _seed_bars(isolated_db, code="HPG", closes=[100.5, 101.0, 101.5])
+    _seed_bars(isolated_db, code="VCB", closes=[101.0, 102.0, 103.0])
     service = DecisionSignalOutcomeService(db_manager=isolated_db)
 
     hit = service.run_outcomes(signal_id=reduce_hit_id)["items"][0]
@@ -496,9 +496,9 @@ def test_not_up_uses_defensive_direction_not_down_direction(isolated_db) -> None
 
 def test_unable_reasons_are_persisted_for_non_directional_and_unsupported_horizon(isolated_db) -> None:
     watch_id = _add_signal(isolated_db, action="watch", horizon="3d")
-    intraday_buy_id = _add_signal(isolated_db, code="000001", action="buy", horizon="intraday")
-    _seed_bars(isolated_db, code="600519", closes=[103, 104, 105])
-    _seed_bars(isolated_db, code="000001", closes=[103, 104, 105])
+    intraday_buy_id = _add_signal(isolated_db, code="VCB", action="buy", horizon="intraday")
+    _seed_bars(isolated_db, code="HPG", closes=[103, 104, 105])
+    _seed_bars(isolated_db, code="VCB", closes=[103, 104, 105])
     service = DecisionSignalOutcomeService(db_manager=isolated_db)
 
     watch = service.run_outcomes(signal_id=watch_id)["items"][0]
@@ -560,10 +560,10 @@ def test_watch_and_alert_outcomes_remain_unable_without_market_reads(isolated_db
 def test_missing_anchor_price_is_retried_after_data_arrives(isolated_db) -> None:
     signal_id = _add_signal(isolated_db, action="buy", horizon="3d", session_date="2024-01-03")
     with isolated_db.session_scope() as session:
-        session.add(StockDaily(code="600519", date=date(2024, 1, 2), close=100.0, high=101.0, low=99.0))
-        session.add(StockDaily(code="600519", date=date(2024, 1, 4), close=105.0, high=106.0, low=104.0))
-        session.add(StockDaily(code="600519", date=date(2024, 1, 5), close=106.0, high=107.0, low=105.0))
-        session.add(StockDaily(code="600519", date=date(2024, 1, 6), close=107.0, high=108.0, low=106.0))
+        session.add(StockDaily(code="HPG", date=date(2024, 1, 2), close=100.0, high=101.0, low=99.0))
+        session.add(StockDaily(code="HPG", date=date(2024, 1, 4), close=105.0, high=106.0, low=104.0))
+        session.add(StockDaily(code="HPG", date=date(2024, 1, 5), close=106.0, high=107.0, low=105.0))
+        session.add(StockDaily(code="HPG", date=date(2024, 1, 6), close=107.0, high=108.0, low=106.0))
     service = DecisionSignalOutcomeService(db_manager=isolated_db)
 
     item = service.run_outcomes(signal_id=signal_id)["items"][0]
@@ -573,7 +573,7 @@ def test_missing_anchor_price_is_retried_after_data_arrives(isolated_db) -> None
     assert item["anchor_date"] == "2024-01-03"
 
     with isolated_db.session_scope() as session:
-        session.add(StockDaily(code="600519", date=date(2024, 1, 3), close=100.0, high=101.0, low=99.0))
+        session.add(StockDaily(code="HPG", date=date(2024, 1, 3), close=100.0, high=101.0, low=99.0))
     retried = service.run_outcomes(signal_id=signal_id)
 
     assert retried["evaluated"] == 1
@@ -586,8 +586,8 @@ def test_missing_anchor_price_is_retried_after_data_arrives(isolated_db) -> None
 def test_insufficient_forward_bars_and_force_idempotency(isolated_db) -> None:
     insufficient_id = _add_signal(isolated_db, action="buy", horizon="3d", session_date="2024-01-10")
     with isolated_db.session_scope() as session:
-        session.add(StockDaily(code="600519", date=date(2024, 1, 10), close=100.0, high=101.0, low=99.0))
-        session.add(StockDaily(code="600519", date=date(2024, 1, 11), close=103.0, high=104.0, low=102.0))
+        session.add(StockDaily(code="HPG", date=date(2024, 1, 10), close=100.0, high=101.0, low=99.0))
+        session.add(StockDaily(code="HPG", date=date(2024, 1, 11), close=103.0, high=104.0, low=102.0))
     service = DecisionSignalOutcomeService(db_manager=isolated_db)
 
     insufficient = service.run_outcomes(signal_id=insufficient_id)["items"][0]
@@ -599,8 +599,8 @@ def test_insufficient_forward_bars_and_force_idempotency(isolated_db) -> None:
     assert retried_still_unable["items"][0]["unable_reason"] == "insufficient_forward_bars"
 
     with isolated_db.session_scope() as session:
-        session.add(StockDaily(code="600519", date=date(2024, 1, 12), close=104.0, high=105.0, low=103.0))
-        session.add(StockDaily(code="600519", date=date(2024, 1, 13), close=105.0, high=106.0, low=104.0))
+        session.add(StockDaily(code="HPG", date=date(2024, 1, 12), close=104.0, high=105.0, low=103.0))
+        session.add(StockDaily(code="HPG", date=date(2024, 1, 13), close=105.0, high=106.0, low=104.0))
     retried_completed = service.run_outcomes(signal_id=insufficient_id)
 
     assert retried_completed["evaluated"] == 1
@@ -608,12 +608,12 @@ def test_insufficient_forward_bars_and_force_idempotency(isolated_db) -> None:
     assert retried_completed["items"][0]["eval_status"] == "completed"
     assert retried_completed["items"][0]["stock_return_pct"] == 5.0
 
-    complete_id = _add_signal(isolated_db, code="000001", action="buy", horizon="3d", session_date="2024-01-02")
-    _seed_bars(isolated_db, code="000001", closes=[103, 104, 105])
+    complete_id = _add_signal(isolated_db, code="VCB", action="buy", horizon="3d", session_date="2024-01-02")
+    _seed_bars(isolated_db, code="VCB", closes=[103, 104, 105])
     first = service.run_outcomes(signal_id=complete_id)["items"][0]
     repeated = service.run_outcomes(signal_id=complete_id)
     with isolated_db.session_scope() as session:
-        row = session.query(StockDaily).filter_by(code="000001", date=date(2024, 1, 5)).one()
+        row = session.query(StockDaily).filter_by(code="VCB", date=date(2024, 1, 5)).one()
         row.close = 110.0
         row.high = 111.0
     forced = service.run_outcomes(signal_id=complete_id, force=True)["items"][0]

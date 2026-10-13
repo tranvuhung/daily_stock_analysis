@@ -32,11 +32,11 @@ class StatusCommand(BotCommand):
     
     @property
     def aliases(self) -> List[str]:
-        return ["s", "状态", "info"]
+        return ["s", "trangthai", "info"]
     
     @property
     def description(self) -> str:
-        return "显示系统状态"
+        return "Hiển thị trạng thái hệ thống"
     
     @property
     def usage(self) -> str:
@@ -74,7 +74,7 @@ class StatusCommand(BotCommand):
         llm_model = (getattr(config, "litellm_model", "") or "").strip()
         agent_model = (getattr(config, "agent_litellm_model", "") or "").strip()
         status["ai_primary_model"] = llm_model
-        status["ai_agent_model"] = agent_model or ("继承主模型" if llm_model else "")
+        status["ai_agent_model"] = agent_model or ("Kế thừa mô hình chính" if llm_model else "")
         status["ai_channels"] = [
             str(channel.get("name") or "").strip()
             for channel in llm_channels
@@ -104,16 +104,12 @@ class StatusCommand(BotCommand):
         )
         
         # Search service status
-        status["search_bocha"] = len(config.bocha_api_keys) > 0
         status["search_tavily"] = len(config.tavily_api_keys) > 0
         status["search_brave"] = len(config.brave_api_keys) > 0
         status["search_serpapi"] = len(config.serpapi_keys) > 0
-        status["search_minimax"] = len(config.minimax_api_keys) > 0
         status["search_searxng"] = config.has_searxng_enabled()
         
         # Notification channel status
-        status["notify_wechat"] = bool(config.wechat_webhook_url)
-        status["notify_feishu"] = bool(config.feishu_webhook_url)
         status["notify_telegram"] = bool(config.telegram_bot_token and config.telegram_chat_id)
         status["notify_email"] = bool(config.email_sender and config.email_password)
         status["notify_custom"] = bool(getattr(config, "custom_webhook_urls", []))
@@ -132,12 +128,8 @@ class StatusCommand(BotCommand):
             )
         )
         status["notify_push"] = bool(
-            getattr(config, "pushplus_token", None)
-            or (
-                getattr(config, "pushover_user_key", None)
-                and getattr(config, "pushover_api_token", None)
-            )
-            or getattr(config, "serverchan3_sendkey", None)
+            getattr(config, "pushover_user_key", None)
+            and getattr(config, "pushover_api_token", None)
         )
         
         return status
@@ -149,30 +141,30 @@ class StatusCommand(BotCommand):
             return "✅" if enabled else "❌"
         
         lines = [
-            "📊 **股票分析助手 - 系统状态**",
+            "📊 **Trợ lý phân tích chứng khoán - Trạng thái hệ thống**",
             "",
-            f"🕐 时间: {status['timestamp']}",
+            f"🕐 Thời gian: {status['timestamp']}",
             f"🐍 Python: {status['python_version']}",
-            f"💻 平台: {status['platform']}",
+            f"💻 Nền tảng: {status['platform']}",
             "",
             "---",
             "",
-            "**📈 自选股配置**",
-            f"• 股票数量: {status['stock_count']} 只",
+            "**📈 Danh mục theo dõi**",
+            f"• Số lượng mã: {status['stock_count']}",
         ]
         
         if status['stock_list']:
             stocks_preview = ", ".join(status['stock_list'])
             if status['stock_count'] > 5:
-                stocks_preview += f" ... 等 {status['stock_count']} 只"
-            lines.append(f"• 股票列表: {stocks_preview}")
+                stocks_preview += f" ... (tổng {status['stock_count']} mã)"
+            lines.append(f"• Danh sách mã: {stocks_preview}")
         
         lines.extend([
             "",
-            "**🤖 AI 分析服务**",
-            f"• 主模型: {status['ai_primary_model'] or '未配置'}",
-            f"• Agent 模型: {status['ai_agent_model'] or '未配置'}",
-            f"• LLM 渠道: {', '.join(status['ai_channels']) if status['ai_channels'] else '未配置'}",
+            "**🤖 Dịch vụ phân tích AI**",
+            f"• Mô hình chính: {status['ai_primary_model'] or 'Chưa cấu hình'}",
+            f"• Mô hình Agent: {status['ai_agent_model'] or 'Chưa cấu hình'}",
+            f"• Kênh LLM: {', '.join(status['ai_channels']) if status['ai_channels'] else 'Chưa cấu hình'}",
             f"• LiteLLM YAML: {icon(status['ai_yaml'])}",
             "• Legacy Key: "
             + ", ".join(
@@ -180,23 +172,19 @@ class StatusCommand(BotCommand):
                 for name, enabled in status["ai_legacy_keys"].items()
             ),
             "",
-            "**🔍 搜索服务**",
-            f"• Bocha: {icon(status['search_bocha'])}",
+            "**🔍 Dịch vụ tìm kiếm**",
             f"• Tavily: {icon(status['search_tavily'])}",
             f"• Brave: {icon(status['search_brave'])}",
             f"• SerpAPI: {icon(status['search_serpapi'])}",
-            f"• MiniMax: {icon(status['search_minimax'])}",
             f"• SearXNG: {icon(status['search_searxng'])}",
             "",
-            "**📢 通知渠道**",
-            f"• 企业微信: {icon(status['notify_wechat'])}",
-            f"• 飞书: {icon(status['notify_feishu'])}",
+            "**📢 Kênh thông báo**",
             f"• Telegram: {icon(status['notify_telegram'])}",
-            f"• 邮件: {icon(status['notify_email'])}",
-            f"• 自定义 Webhook: {icon(status['notify_custom'])}",
+            f"• Email: {icon(status['notify_email'])}",
+            f"• Webhook tuỳ chỉnh: {icon(status['notify_custom'])}",
             f"• Discord: {icon(status['notify_discord'])}",
             f"• Slack: {icon(status['notify_slack'])}",
-            f"• PushPlus/Pushover/Server酱3: {icon(status['notify_push'])}",
+            f"• Pushover: {icon(status['notify_push'])}",
         ])
         
         # Overall AI service status
@@ -204,14 +192,14 @@ class StatusCommand(BotCommand):
             lines.extend([
                 "",
                 "---",
-                "✅ **系统就绪，可以开始分析！**",
+                "✅ **Hệ thống sẵn sàng, có thể bắt đầu phân tích!**",
             ])
         else:
             lines.extend([
                 "",
                 "---",
-                "⚠️ **AI 服务未配置，分析功能不可用**",
-                "请配置 LITELLM_MODEL、LLM_CHANNELS、LITELLM_CONFIG 或任一 provider API Key",
+                "⚠️ **Chưa cấu hình dịch vụ AI, tính năng phân tích không khả dụng**",
+                "Vui lòng cấu hình LITELLM_MODEL, LLM_CHANNELS, LITELLM_CONFIG hoặc API Key của một provider bất kỳ",
             ])
         
         return "\n".join(lines)

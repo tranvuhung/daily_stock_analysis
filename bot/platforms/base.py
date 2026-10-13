@@ -47,7 +47,7 @@ class BotPlatform(ABC):
         """
         Platform identifier name
         
-        Used for route matching and log identification, e.g. "feishu", "dingtalk"
+        Used for route matching and log identification, e.g. "telegram", "discord"
         """
         pass
     

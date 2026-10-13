@@ -17,8 +17,8 @@ Usage:
 import logging
 import time
 from threading import RLock
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, Union
+from dataclasses import dataclass
+from typing import Optional, Dict, Any
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -92,18 +92,7 @@ def safe_int(val: Any, default: Optional[int] = None) -> Optional[int]:
 
 
 class RealtimeSource(Enum):
-    """Real-time quote data source"""
-    EFINANCE = "efinance"           # East Money (efinance library)
-    AKSHARE_EM = "akshare_em"       # East Money (akshare library)
-    AKSHARE_SINA = "akshare_sina"   # Sina Finance
-    AKSHARE_QQ = "akshare_qq"       # Tencent Finance
-    TUSHARE = "tushare"             # Tushare Pro
-    TICKFLOW = "tickflow"           # TickFlow
-    TENCENT = "tencent"             # Tencent direct connection
-    SINA = "sina"                   # Sina direct connection
-    STOOQ = "stooq"                 # Stooq US-stock fallback
-    LONGBRIDGE = "longbridge"       # Longbridge (US/HK stock fallback)
-    FUTU = "futu"                   # Futu OpenD (HK stocks)
+    """Nguồn giá realtime. / Real-time quote data source."""
     TVSI_MQTT = "tvsi_mqtt"         # Feed push MQTT của TVSI (Việt Nam)
     FALLBACK = "fallback"           # Degraded fallback
 
@@ -194,95 +183,6 @@ class UnifiedRealtimeQuote:
         return self.volume_ratio is not None or self.turnover_rate is not None
 
 
-@dataclass
-class ChipDistribution:
-    """
-    Chip distribution data
-
-    Reflects the holding-cost distribution and profit status
-    """
-    code: str
-    date: str = ""
-    source: str = "akshare"
-    
-    # Profit status
-    profit_ratio: float = 0.0     # Profit ratio (0-1)
-    avg_cost: float = 0.0         # Average cost
-    
-    # Chip concentration
-    cost_90_low: float = 0.0      # Lower bound of the 90% chip cost
-    cost_90_high: float = 0.0     # Upper bound of the 90% chip cost
-    concentration_90: float = 0.0  # 90% chip concentration (smaller means more concentrated)
-    
-    cost_70_low: float = 0.0      # Lower bound of the 70% chip cost
-    cost_70_high: float = 0.0     # Upper bound of the 70% chip cost
-    concentration_70: float = 0.0  # 70% chip concentration
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to a dict"""
-        return {
-            'code': self.code,
-            'date': self.date,
-            'source': self.source,
-            'profit_ratio': self.profit_ratio,
-            'avg_cost': self.avg_cost,
-            'cost_90_low': self.cost_90_low,
-            'cost_90_high': self.cost_90_high,
-            'concentration_90': self.concentration_90,
-            'concentration_70': self.concentration_70,
-        }
-    
-    def get_chip_status(self, current_price: float) -> str:
-        """
-        Get a description of the chip status
-
-        Args:
-            current_price: current stock price
-
-        Returns:
-            Chip status description
-        """
-        status_parts = []
-        
-        # Profit ratio analysis
-        if self.profit_ratio >= 0.9:
-            status_parts.append("获利盘极高(获利盘>90%)")
-        elif self.profit_ratio >= 0.7:
-            status_parts.append("获利盘较高(获利盘70-90%)")
-        elif self.profit_ratio >= 0.5:
-            status_parts.append("获利盘中等(获利盘50-70%)")
-        elif self.profit_ratio >= 0.3:
-            status_parts.append("套牢盘中等(套牢盘50-70%)")
-        elif self.profit_ratio >= 0.1:
-            status_parts.append("套牢盘较高(套牢盘70-90%)")
-        else:
-            status_parts.append("套牢盘极高(套牢盘>90%)")
-        
-        # Chip concentration analysis (90% concentration < 10% means concentrated)
-        if self.concentration_90 < 0.08:
-            status_parts.append("筹码高度集中")
-        elif self.concentration_90 < 0.15:
-            status_parts.append("筹码较集中")
-        elif self.concentration_90 < 0.25:
-            status_parts.append("筹码分散度中等")
-        else:
-            status_parts.append("筹码较分散")
-        
-        # Relationship between cost and current price
-        if current_price > 0 and self.avg_cost > 0:
-            cost_diff = (current_price - self.avg_cost) / self.avg_cost * 100
-            if cost_diff > 20:
-                status_parts.append(f"现价高于平均成本{cost_diff:.1f}%")
-            elif cost_diff > 5:
-                status_parts.append(f"现价略高于成本{cost_diff:.1f}%")
-            elif cost_diff > -5:
-                status_parts.append("现价接近平均成本")
-            else:
-                status_parts.append(f"现价低于平均成本{abs(cost_diff):.1f}%")
-        
-        return "，".join(status_parts)
-
-
 class CircuitBreaker:
     """
     Circuit breaker - manages the circuit-breaker/cooldown state of data sources
@@ -351,11 +251,11 @@ class CircuitBreaker:
                     state['state'] = self.HALF_OPEN
                     state['half_open_calls'] = 0
                     state['last_failure_time'] = current_time
-                    logger.info(f"[熔断器] {source} 冷却完成，进入半开状态")
+                    logger.info(f"[CircuitBreaker] {source} hết thời gian nghỉ, chuyển sang trạng thái nửa mở")
                     # Fall through to HALF_OPEN check below
                 else:
                     remaining = self.cooldown_seconds - time_since_failure
-                    logger.debug(f"[熔断器] {source} 处于熔断状态，剩余冷却时间: {remaining:.0f}s")
+                    logger.debug(f"[CircuitBreaker] {source} đang ngắt mạch, thời gian nghỉ còn lại: {remaining:.0f}s")
                     return False
 
             if state['state'] == self.HALF_OPEN:
@@ -369,7 +269,7 @@ class CircuitBreaker:
                 if time_since_failure >= self.cooldown_seconds:
                     state['half_open_calls'] = 1
                     state['last_failure_time'] = current_time
-                    logger.info(f"[熔断器] {source} 半开状态探测超时，重新探测")
+                    logger.info(f"[CircuitBreaker] {source} thăm dò ở trạng thái nửa mở quá hạn, thăm dò lại")
                     return True
                 return False
 
@@ -387,7 +287,7 @@ class CircuitBreaker:
                 state['state'] = self.OPEN
                 state['half_open_calls'] = 0
                 state['last_failure_time'] = time.time()
-                logger.info(f"[熔断器] {source} 半开探测结果不确定，重新进入冷却")
+                logger.info(f"[CircuitBreaker] {source} kết quả thăm dò nửa mở không xác định, quay lại thời gian nghỉ")
 
     def record_success(self, source: str) -> None:
         """Record a successful request"""
@@ -396,7 +296,7 @@ class CircuitBreaker:
 
             if state['state'] == self.HALF_OPEN:
                 # Success in half-open state, fully recover
-                logger.info(f"[熔断器] {source} 半开状态请求成功，恢复正常")
+                logger.info(f"[CircuitBreaker] {source} yêu cầu ở trạng thái nửa mở thành công, khôi phục bình thường")
 
             # Reset state
             state['state'] = self.CLOSED
@@ -416,14 +316,14 @@ class CircuitBreaker:
                 # Failure in half-open state, keep the circuit open
                 state['state'] = self.OPEN
                 state['half_open_calls'] = 0
-                logger.warning(f"[熔断器] {source} 半开状态请求失败，继续熔断 {self.cooldown_seconds}s")
+                logger.warning(f"[CircuitBreaker] {source} yêu cầu ở trạng thái nửa mở thất bại, tiếp tục ngắt mạch {self.cooldown_seconds}s")
             elif state['failures'] >= self.failure_threshold:
                 # Threshold reached, open the circuit
                 state['state'] = self.OPEN
-                logger.warning(f"[熔断器] {source} 连续失败 {state['failures']} 次，进入熔断状态 "
-                              f"(冷却 {self.cooldown_seconds}s)")
+                logger.warning(f"[CircuitBreaker] {source} thất bại liên tiếp {state['failures']} lần, chuyển sang ngắt mạch "
+                              f"(nghỉ {self.cooldown_seconds}s)")
                 if error:
-                    logger.warning(f"[熔断器] 最后错误: {error}")
+                    logger.warning(f"[CircuitBreaker] Lỗi cuối cùng: {error}")
     
     def get_status(self) -> Dict[str, str]:
         """Get the state of all data sources"""

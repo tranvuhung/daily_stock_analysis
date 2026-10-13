@@ -1,5 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Read-only data capability and dataset quality overview service."""
+"""Dịch vụ tổng quan năng lực nguồn dữ liệu và chất lượng dataset (chỉ đọc).
+
+Hệ thống chỉ còn phục vụ thị trường Việt Nam (``vn``), nên ma trận nguồn chỉ gồm
+VCI, SSI, vnstock (tuỳ chọn) và Yahoo Finance (dự phòng nến ngày HOSE).
+
+Read-only data capability and dataset quality overview service. Only the Vietnam
+market (``vn``) is supported, so the provider matrix is limited to VCI, SSI,
+optional vnstock and Yahoo Finance (HOSE daily fallback).
+"""
 
 from __future__ import annotations
 
@@ -12,6 +20,9 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Seque
 from src.config import get_config
 
 logger = logging.getLogger(__name__)
+
+# Thị trường duy nhất còn được hỗ trợ / The only supported market
+_VN = "vn"
 
 
 @dataclass(frozen=True)
@@ -33,7 +44,7 @@ class _ProviderDefinition:
             for markets in self.dataset_markets.values()
             for market in markets
         }
-        # Order comes from the market registry; adding a market does not require changes here
+        # Thứ tự lấy từ registry thị trường / Order comes from the market registry
         from src.core.markets import ALL_MARKET_CODES
 
         return tuple(market for market in ALL_MARKET_CODES if market in supported)
@@ -41,122 +52,20 @@ class _ProviderDefinition:
 
 _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
     _ProviderDefinition(
-        name="efinance",
-        label="Efinance",
-        fetcher_name="EfinanceFetcher",
-        dataset_markets={
-            "quote.realtime": ("cn",),
-            "kline.daily": ("cn",),
-            "market.overview": ("cn",),
-        },
-        builtin=True,
-    ),
-    _ProviderDefinition(
-        name="akshare",
-        label="AkShare",
-        fetcher_name="AkshareFetcher",
-        dataset_markets={
-            "quote.realtime": ("cn", "hk"),
-            "kline.daily": ("cn", "hk"),
-            "index.daily": ("cn",),
-            "market.overview": ("cn",),
-            "financial.snapshot": ("cn",),
-        },
-        builtin=True,
-    ),
-    _ProviderDefinition(
-        name="tencent",
-        label="Tencent",
-        fetcher_name="TencentFetcher",
-        dataset_markets={
-            "kline.daily": ("cn",),
-            "index.daily": ("cn",),
-        },
-        builtin=True,
-    ),
-    _ProviderDefinition(
-        name="yfinance",
-        label="YFinance",
-        fetcher_name="YfinanceFetcher",
-        dataset_markets={
-            "quote.realtime": ("hk", "us", "jp", "kr", "tw"),
-            # ``vn`` chỉ có ở kline.daily: Yahoo là dự phòng cấp 3 cho cổ phiếu
-            # Việt Nam, và chỉ phủ sàn HOSE. Không khai quote.realtime,
-            # index.daily hay market.overview cho ``vn`` — Yahoo không có lịch sử
-            # chỉ số Việt Nam, khai thêm sẽ thành pseudo-fallback.
-            "kline.daily": ("cn", "hk", "us", "jp", "kr", "tw", "vn"),
-            "index.daily": ("cn", "us"),
-            "market.overview": ("cn", "hk", "us", "jp", "kr", "tw"),
-            "financial.snapshot": ("hk", "us", "jp", "kr", "tw"),
-        },
-        builtin=True,
-    ),
-    _ProviderDefinition(
-        name="pytdx",
-        label="PyTDX",
-        fetcher_name="PytdxFetcher",
-        dataset_markets={
-            "kline.daily": ("cn",),
-        },
-        builtin=True,
-    ),
-    _ProviderDefinition(
-        name="baostock",
-        label="Baostock",
-        fetcher_name="BaostockFetcher",
-        dataset_markets={"kline.daily": ("cn",)},
-        builtin=True,
-    ),
-    _ProviderDefinition(
-        name="tushare",
-        label="Tushare",
-        fetcher_name="TushareFetcher",
-        dataset_markets={
-            "quote.realtime": ("cn",),
-            "kline.daily": ("cn", "hk"),
-            "market.overview": ("cn",),
-        },
-    ),
-    _ProviderDefinition(
-        name="tickflow",
-        label="TickFlow",
-        fetcher_name="TickFlowFetcher",
-        dataset_markets={
-            "quote.realtime": ("cn",),
-            "kline.daily": ("cn",),
-            "index.daily": ("cn",),
-            "market.overview": ("cn",),
-        },
-    ),
-    _ProviderDefinition(
-        name="longbridge",
-        label="Longbridge",
-        fetcher_name="LongbridgeFetcher",
-        dataset_markets={
-            "quote.realtime": ("hk", "us"),
-            "kline.daily": ("hk", "us"),
-        },
-    ),
-    _ProviderDefinition(
-        name="futu",
-        label="Futu OpenD",
-        fetcher_name="FutuFetcher",
-        dataset_markets={
-            "quote.realtime": ("hk",),
-            "kline.daily": ("hk",),
-            "financial.snapshot": ("hk",),
-        },
-    ),
-    _ProviderDefinition(
         name="vci",
         label="VCI (Vietcap)",
         fetcher_name="VciFetcher",
         dataset_markets={
-            "kline.daily": ("vn",),
+            # Giá realtime cho chỉ số đã đăng ký (suy ra từ nến ngày mới nhất), đứng sau SSI
+            # Realtime quotes for registered indices (derived from latest daily bar), after SSI
+            "quote.realtime": (_VN,),
+            "kline.daily": (_VN,),
+            # VNINDEX / VN30 / HNXIndex / HNX30 / HNXUpcomIndex dùng chung endpoint nến ngày
             # VNINDEX / VN30 / HNXIndex / HNX30 / HNXUpcomIndex share the same daily endpoint
-            "index.daily": ("vn",),
-            # Chỉ số chính cho điểm lại thị trường Việt Nam (get_main_indices)
-            "market.overview": ("vn",),
+            "index.daily": (_VN,),
+            # Chỉ số chính cho điểm lại thị trường (get_main_indices)
+            # Main indices for the market review (get_main_indices)
+            "market.overview": (_VN,),
         },
         builtin=True,
     ),
@@ -165,11 +74,13 @@ _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
         label="SSI iBoard",
         fetcher_name="SsiFetcher",
         dataset_markets={
+            # Snapshot toàn thị trường (mỗi sàn HOSE/HNX/UPCOM một request)
             # Full-market snapshot (one request each for HOSE/HNX/UPCOM)
-            "quote.realtime": ("vn",),
-            "kline.daily": ("vn",),
-            # Độ rộng thị trường (tăng/giảm/trần/sàn) tính từ snapshot
-            "market.overview": ("vn",),
+            "quote.realtime": (_VN,),
+            "kline.daily": (_VN,),
+            # Độ rộng thị trường (tăng/giảm/trần/sàn) và chỉ số chính dự phòng sau VCI
+            # Market breadth (up/down/ceiling/floor) plus main-index fallback after VCI
+            "market.overview": (_VN,),
         },
         builtin=True,
     ),
@@ -178,26 +89,25 @@ _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
         label="vnstock (optional)",
         fetcher_name="VnstockFetcher",
         dataset_markets={
-            # Only instantiated when VNSTOCK_ENABLED=true and vnstock is installed,
-            # so no realtime-quote capability is declared, to avoid becoming a pseudo-fallback.
-            "kline.daily": ("vn",),
+            # Chỉ khởi tạo khi VNSTOCK_ENABLED=true và đã cài vnstock; không khai báo giá
+            # realtime để tránh thành nguồn dự phòng giả.
+            # Only instantiated when VNSTOCK_ENABLED=true and vnstock is installed; no
+            # realtime capability is declared, to avoid a pseudo-fallback.
+            "kline.daily": (_VN,),
         },
     ),
     _ProviderDefinition(
-        name="finnhub",
-        label="Finnhub",
-        fetcher_name="FinnhubFetcher",
+        name="yfinance",
+        label="YFinance",
+        fetcher_name="YfinanceFetcher",
         dataset_markets={
-            "kline.daily": ("us",),
+            # Dự phòng cấp cuối cho nến ngày, chỉ phủ sàn HOSE và không ghi vào DB.
+            # Yahoo không có lịch sử chỉ số Việt Nam nên không khai index.daily.
+            # Last-resort daily fallback, HOSE only and never persisted. Yahoo has no
+            # Vietnam index history, so index.daily is not declared.
+            "kline.daily": (_VN,),
         },
-    ),
-    _ProviderDefinition(
-        name="alphavantage",
-        label="Alpha Vantage",
-        fetcher_name="AlphaVantageFetcher",
-        dataset_markets={
-            "kline.daily": ("us",),
-        },
+        builtin=True,
     ),
 )
 
@@ -212,47 +122,11 @@ _FETCHER_TO_PROVIDER = {
     if definition.fetcher_name
 }
 
-_REALTIME_SOURCE_PROVIDER = {
-    "efinance": "efinance",
-    "akshare_em": "akshare",
-    "akshare_sina": "akshare",
-    "akshare_qq": "akshare",
-    "tencent": "akshare",
-    "tushare": "tushare",
-    "tickflow": "tickflow",
-    "futu": "futu",
-    "longbridge": "longbridge",
-    "akshare": "akshare",
-    "yfinance": "yfinance",
-    "finnhub": "finnhub",
-    "alphavantage": "alphavantage",
-}
-
-_AKSHARE_REALTIME_CIRCUIT_KEYS = {
-    "tencent": "akshare_tencent",
-    "akshare_qq": "akshare_tencent",
-    "akshare_sina": "akshare_sina",
-    "akshare_em": "akshare_em",
-}
-
-_CN_REALTIME_SOURCES = {
-    "efinance",
-    "akshare_em",
-    "akshare_sina",
-    "akshare_qq",
-    "tencent",
-    "tushare",
-    "tickflow",
-}
-
-_SCREENING_SOURCES = {"tushare", "sina", "efinance", "akshare_em", "em_datacenter"}
-_MARKET_OVERVIEW_PROVIDER_MARKETS = {
-    "tickflow": {"cn"},
-    "efinance": {"cn"},
-    "akshare": {"cn"},
-    "tushare": {"cn"},
-    "yfinance": {"cn", "hk", "us", "jp", "kr", "tw"},
-}
+# Token cấu hình REALTIME_SOURCE_PROVIDER mà DataFetcherManager thực sự xử lý, theo
+# thứ tự mặc định (khớp ``DataFetcherManager._vn_realtime_source_order``).
+# Realtime tokens that DataFetcherManager actually handles, in default order
+# (mirrors ``DataFetcherManager._vn_realtime_source_order``).
+_VN_REALTIME_SOURCES: Sequence[str] = ("ssi", "vci")
 
 
 def _truthy(value: Any) -> bool:
@@ -289,7 +163,7 @@ class DataCapabilityService:
         provider_map = {item["name"]: item for item in providers}
         priorities = self._build_priority_views(fetchers)
         datasets = self._build_dataset_quality(provider_map, priorities, fetchers)
-        warnings = self._build_global_warnings(provider_map, priorities)
+        warnings = self._build_global_warnings(priorities)
 
         return {
             "as_of": datetime.now(timezone.utc).astimezone().isoformat(),
@@ -299,6 +173,9 @@ class DataCapabilityService:
             "warnings": warnings,
         }
 
+    # ------------------------------------------------------------------
+    # Fetcher snapshot
+    # ------------------------------------------------------------------
     def _fetchers_snapshot(self) -> List[Any]:
         manager = self.fetcher_manager
         if manager is None:
@@ -319,6 +196,9 @@ class DataCapabilityService:
                 return []
         return list(getattr(manager, "_fetchers", []) or [])
 
+    # ------------------------------------------------------------------
+    # Providers
+    # ------------------------------------------------------------------
     def _build_provider_capabilities(self, fetchers: Sequence[Any]) -> List[Dict[str, Any]]:
         fetcher_map = {str(getattr(fetcher, "name", "")): fetcher for fetcher in fetchers}
         providers: List[Dict[str, Any]] = []
@@ -328,9 +208,10 @@ class DataCapabilityService:
         for definition in _PROVIDER_DEFINITIONS:
             fetcher = fetcher_map.get(definition.fetcher_name or "")
             configured = self._is_provider_configured(definition)
-            # Providers whose served markets are all disabled by SUPPORTED_MARKETS are never
-            # instantiated at runtime. If we still reported enabled=true / unavailable, the dashboard would misread "market
-            # disabled" as "data source broken".
+            # Nguồn mà mọi thị trường phục vụ đều bị tắt sẽ không được khởi tạo; báo
+            # "unavailable" sẽ khiến dashboard hiểu nhầm là nguồn hỏng.
+            # Providers whose markets are all disabled are never instantiated; reporting
+            # "unavailable" would make dashboards misread it as a broken source.
             market_enabled = any(
                 is_market_enabled(market) for market in definition.markets
             ) if definition.markets else True
@@ -338,10 +219,8 @@ class DataCapabilityService:
             warnings: List[str] = []
 
             if not market_enabled:
-                # Reuse the existing unconfigured status instead of adding an enum value:
-                # ProviderCapabilityStatus is an external contract that Web/Desktop match
-                # exhaustively; a new value would silently break existing clients. The concrete reason is passed via
-                # market_disabled in warnings, which is already a free-form list of codes.
+                # Dùng lại trạng thái unconfigured thay vì thêm enum mới (hợp đồng ngoài).
+                # Reuse unconfigured instead of a new enum value (external contract).
                 status = "unconfigured"
                 warnings.append("market_disabled")
             elif not configured and not definition.builtin:
@@ -363,7 +242,7 @@ class DataCapabilityService:
                     "enabled": enabled,
                     "configured": configured,
                     "status": status,
-                    "priority": self._provider_priority(definition, fetcher),
+                    "priority": self._provider_priority(fetcher),
                     "markets": list(definition.markets),
                     "datasets": list(definition.datasets),
                     "dataset_markets": {
@@ -406,38 +285,20 @@ class DataCapabilityService:
             logger.debug("Failed to probe fetcher availability for capability overview: %s", exc)
         return None
 
-    def _is_provider_configured(self, definition: _ProviderDefinition) -> bool:
+    @staticmethod
+    def _is_provider_configured(definition: _ProviderDefinition) -> bool:
         if definition.builtin:
             return True
-        name = definition.name
-        if name == "tushare":
-            return _truthy(getattr(self.config, "tushare_token", None))
-        if name == "tickflow":
-            return _truthy(getattr(self.config, "tickflow_api_key", None))
-        if name == "futu":
-            return _truthy(getattr(self.config, "futu_opend_host", None))
-        if name == "longbridge":
-            app_key = getattr(self.config, "longbridge_app_key", None)
-            app_secret = getattr(self.config, "longbridge_app_secret", None)
-            access_token = getattr(self.config, "longbridge_access_token", None)
-            oauth_client_id = getattr(self.config, "longbridge_oauth_client_id", None)
-            has_legacy_credentials = _truthy(app_key) and _truthy(app_secret) and _truthy(access_token)
-            has_oauth_credentials = _truthy(oauth_client_id) or (_truthy(app_key) and not _truthy(access_token))
-            return has_legacy_credentials or has_oauth_credentials
-        if name == "finnhub":
-            return _truthy(getattr(self.config, "finnhub_api_key", None))
-        if name == "alphavantage":
-            return _truthy(getattr(self.config, "alphavantage_api_key", None))
+        if definition.name == "vnstock":
+            # Khớp điều kiện khởi tạo trong DataFetcherManager._init_default_fetchers
+            # Mirrors the opt-in check in DataFetcherManager._init_default_fetchers
+            return str(os.getenv("VNSTOCK_ENABLED", "false")).strip().lower() == "true"
         return False
 
-    def _provider_priority(self, definition: _ProviderDefinition, fetcher: Any) -> Optional[int]:
+    @staticmethod
+    def _provider_priority(fetcher: Any) -> Optional[int]:
         value = getattr(fetcher, "priority", None)
-        if isinstance(value, int):
-            return value
-        if definition.name == "tickflow":
-            priority = getattr(self.config, "tickflow_priority", None)
-            return priority if isinstance(priority, int) else None
-        return None
+        return value if isinstance(value, int) else None
 
     @staticmethod
     def _safe_last_error(fetcher: Any) -> Optional[str]:
@@ -449,43 +310,44 @@ class DataCapabilityService:
                 return " ".join(str(value).split())
         return None
 
+    # ------------------------------------------------------------------
+    # Priorities
+    # ------------------------------------------------------------------
     def _build_priority_views(self, fetchers: Sequence[Any]) -> List[Dict[str, Any]]:
+        ordered_fetchers = sorted(fetchers, key=lambda item: getattr(item, "priority", 99))
         generic_daily = [
             _FETCHER_TO_PROVIDER.get(str(getattr(fetcher, "name", "")), str(getattr(fetcher, "name", "")).lower())
-            for fetcher in sorted(fetchers, key=lambda item: getattr(item, "priority", 99))
+            for fetcher in ordered_fetchers
             if getattr(fetcher, "name", None)
             and self._fetcher_available_for_capability(fetcher, capability="daily_data")
         ]
-        cn_index_daily = ["tencent", "akshare", "tickflow", "yfinance"]
-        market_overview = self._market_overview_priority(generic_daily)
-        screening_priority = self._screening_snapshot_priority()
-        hk_realtime_priority = _split_priority(
-            getattr(self.config, "futu_hk_realtime_source_priority", "")
+        # Chỉ số đi qua cùng chuỗi nến ngày, nhưng chỉ nguồn khai báo index.daily phục vụ được
+        # Indices share the daily chain, but only providers declaring index.daily can serve them
+        index_daily = [
+            token
+            for token in generic_daily
+            if self._provider_supports_market_dataset(token, dataset="index.daily", market=_VN)
+        ]
+        # get_main_indices / get_market_stats lặp fetcher theo thứ tự ưu tiên
+        # get_main_indices / get_market_stats iterate fetchers in priority order
+        market_overview = [
+            provider
+            for fetcher in ordered_fetchers
+            if (provider := _FETCHER_TO_PROVIDER.get(str(getattr(fetcher, "name", ""))))
+            and self._provider_supports_market_dataset(provider, dataset="market.overview", market=_VN)
+        ]
+
+        realtime_providers, realtime_warnings = self._vn_realtime_priority()
+        realtime_view = self._priority_view(
+            "vn.realtime",
+            realtime_providers,
+            "Config.realtime_source_priority",
+            known_sources=_VN_REALTIME_SOURCES,
         )
-        if not self._is_provider_configured(_PROVIDER_DEFINITION_MAP["futu"]):
-            hk_realtime_priority = [
-                provider for provider in hk_realtime_priority if provider != "futu"
-            ]
+        realtime_view["warnings"].extend(realtime_warnings)
 
         return [
-            self._priority_view(
-                "cn.realtime",
-                _split_priority(getattr(self.config, "realtime_source_priority", "")),
-                "Config.realtime_source_priority",
-                known_sources=_CN_REALTIME_SOURCES,
-            ),
-            self._priority_view(
-                "hk.realtime",
-                hk_realtime_priority,
-                "Config.futu_hk_realtime_source_priority",
-                known_sources={"futu", "longbridge", "akshare", "yfinance"},
-            ),
-            self._priority_view(
-                "us.realtime",
-                self._us_realtime_priority(fetchers),
-                "DataFetcherManager US realtime route",
-                known_sources={"longbridge", "yfinance"},
-            ),
+            realtime_view,
             self._priority_view(
                 "daily.generic",
                 generic_daily,
@@ -493,22 +355,16 @@ class DataCapabilityService:
                 known_sources=set(_FETCHER_TO_PROVIDER.values()),
             ),
             self._priority_view(
-                "cn.index.daily",
-                cn_index_daily,
-                "DataFetcherManager._CN_INDEX_DAILY_SOURCE_ORDER",
+                "vn.index.daily",
+                index_daily,
+                "DataFetcherManager.fetchers (index.daily)",
                 known_sources=set(_FETCHER_TO_PROVIDER.values()),
             ),
             self._priority_view(
                 "market.overview",
                 market_overview,
                 "DataFetcherManager market overview route",
-                known_sources=set(_REALTIME_SOURCE_PROVIDER),
-            ),
-            self._priority_view(
-                "screening.snapshot",
-                screening_priority,
-                "ScreeningService snapshot priority",
-                known_sources=_SCREENING_SOURCES,
+                known_sources=set(_FETCHER_TO_PROVIDER.values()),
             ),
             self._priority_view(
                 "news.events",
@@ -518,36 +374,29 @@ class DataCapabilityService:
             ),
         ]
 
-    def _market_overview_priority(self, generic_daily: Sequence[str]) -> List[str]:
-        tokens: List[str] = []
-        if _truthy(getattr(self.config, "tickflow_api_key", None)):
-            tokens.append("tickflow")
-        for token in generic_daily:
-            if token in _MARKET_OVERVIEW_PROVIDER_MARKETS and token not in tokens:
-                tokens.append(token)
-        return tokens
+    def _vn_realtime_priority(self) -> tuple[List[str], List[str]]:
+        """Thứ tự realtime thực thi được, khớp ``_vn_realtime_source_order``.
 
-    def _screening_snapshot_priority(self) -> List[str]:
-        explicit = os.getenv("SNAPSHOT_SOURCE_PRIORITY")
-        if explicit not in (None, ""):
-            return _split_priority(explicit)
-        try:
-            from src.services.screening_service import _resolve_screening_snapshot_source_priority
+        Token không xử lý được bị bỏ qua lúc chạy nên chỉ báo cảnh báo; các nguồn mặc
+        định còn thiếu được nối vào cuối.
 
-            return _split_priority(_resolve_screening_snapshot_source_priority(self.config))
-        except Exception as exc:  # noqa: BLE001 - diagnostics must fail open.
-            logger.debug("Failed to resolve screening snapshot priority: %s", exc)
-            return _split_priority("sina,efinance,akshare_em,em_datacenter")
+        Effective realtime order mirroring ``_vn_realtime_source_order``: unhandled
+        tokens are ignored at runtime (surfaced as warnings), missing defaults are appended.
+        """
 
-    def _us_realtime_priority(self, fetchers: Sequence[Any]) -> List[str]:
-        fetcher_map = {str(getattr(fetcher, "name", "")): fetcher for fetcher in fetchers}
-        longbridge = fetcher_map.get("LongbridgeFetcher")
-        if longbridge is not None and self._fetcher_available_for_capability(
-            longbridge,
-            capability="realtime_quote",
-        ):
-            return ["longbridge", "yfinance"]
-        return ["yfinance", "longbridge"]
+        configured = _split_priority(getattr(self.config, "realtime_source_priority", ""))
+        ordered: List[str] = []
+        warnings: List[str] = []
+        for token in configured:
+            if token in _VN_REALTIME_SOURCES:
+                if token not in ordered:
+                    ordered.append(token)
+            else:
+                warnings.append(f"ignored_source:{token}")
+        for token in _VN_REALTIME_SOURCES:
+            if token not in ordered:
+                ordered.append(token)
+        return ordered, warnings
 
     @staticmethod
     def _priority_view(
@@ -566,6 +415,9 @@ class DataCapabilityService:
             "warnings": warnings,
         }
 
+    # ------------------------------------------------------------------
+    # Datasets
+    # ------------------------------------------------------------------
     def _build_dataset_quality(
         self,
         provider_map: Dict[str, Dict[str, Any]],
@@ -573,200 +425,85 @@ class DataCapabilityService:
         fetchers: Sequence[Any],
     ) -> List[Dict[str, Any]]:
         priority_map = {item["scenario"]: item for item in priorities}
-        daily_market_priorities = self._daily_market_priorities(
-            fetchers,
-            priority_map.get("daily.generic", {}),
-        )
-        datasets = [
+        fetcher_map = {
+            str(getattr(fetcher, "name", "")): fetcher
+            for fetcher in fetchers
+            if getattr(fetcher, "name", None)
+        }
+        daily_resolver = self._daily_status_resolver(provider_map=provider_map, fetcher_map=fetcher_map)
+
+        def scoped(scenario: str, *, empty_unavailable: bool = False) -> Dict[str, Any]:
+            priority = priority_map.get(scenario, {})
+            result = {
+                "providers": list(priority.get("providers") or []),
+                "warnings": list(priority.get("warnings") or []),
+            }
+            if empty_unavailable and not result["providers"]:
+                result["empty_status"] = "unavailable"
+            return result
+
+        realtime_disabled = not bool(getattr(self.config, "enable_realtime_quote", True))
+        fundamental_priority = scoped("vn.realtime")
+        # Việt Nam chỉ có khối định giá (PE/PB/vốn hoá) lấy từ snapshot realtime
+        # Vietnam only has the valuation block (PE/PB/market cap) from the realtime snapshot
+        fundamental_priority["warnings"].append("valuation_only")
+
+        return [
             self._aggregate_market_dataset(
                 dataset="quote.realtime",
-                market_priorities={
-                    "cn": priority_map.get("cn.realtime", {}),
-                    "cn.index.exchange": {
-                        "providers": ["tencent", "akshare_sina", "efinance", "tickflow"],
-                        "warnings": [],
-                    },
-                    "cn.index.csi": {"providers": ["efinance"], "warnings": []},
-                    "hk": priority_map.get("hk.realtime", {}),
-                    "us": priority_map.get("us.realtime", {}),
-                    "us.index": {"providers": ["yfinance"], "warnings": []},
-                    "jp": {"providers": ["yfinance"], "warnings": []},
-                    "kr": {"providers": ["yfinance"], "warnings": []},
-                    "tw": {"providers": ["yfinance"], "warnings": []},
-                },
+                market_priorities={_VN: scoped("vn.realtime")},
                 provider_map=provider_map,
-                status_resolvers={
-                    "cn": self._cn_realtime_status_resolver(
-                        provider_map,
-                        efinance_circuit_key="efinance",
-                    ),
-                    "cn.index.exchange": self._cn_realtime_status_resolver(
-                        provider_map,
-                        efinance_circuit_key="efinance_index",
-                    ),
-                    "cn.index.csi": self._cn_realtime_status_resolver(
-                        provider_map,
-                        efinance_circuit_key="efinance_index",
-                    ),
-                    "hk": self._hk_realtime_status_resolver(provider_map),
-                },
-                disabled=not bool(getattr(self.config, "enable_realtime_quote", True)),
+                disabled=realtime_disabled,
                 disabled_warning="realtime_quote_disabled",
             ),
             self._aggregate_market_dataset(
                 dataset="kline.daily",
-                market_priorities=daily_market_priorities,
+                market_priorities={_VN: scoped("daily.generic", empty_unavailable=True)},
                 provider_map=provider_map,
-                status_resolvers=self._daily_status_resolvers(fetchers, provider_map),
+                status_resolvers={_VN: daily_resolver},
             ),
             self._aggregate_market_dataset(
                 dataset="index.daily",
-                market_priorities={
-                    "cn.exchange": priority_map.get("cn.index.daily", {}),
-                    "cn.csi": {"providers": ["akshare"], "warnings": []},
-                    "us": {"providers": ["yfinance"], "warnings": []},
-                },
+                market_priorities={_VN: scoped("vn.index.daily", empty_unavailable=True)},
                 provider_map=provider_map,
-                status_resolvers={
-                    "cn.exchange": self._index_daily_status_resolver(fetchers, provider_map),
-                    "cn.csi": self._index_daily_status_resolver(fetchers, provider_map),
-                    "us": self._us_index_daily_status_resolver(fetchers, provider_map),
-                },
+                status_resolvers={_VN: daily_resolver},
             ),
             self._aggregate_market_dataset(
                 dataset="market.overview",
-                market_priorities=self._market_overview_market_priorities(
-                    priority_map.get("market.overview", {}),
-                ),
+                market_priorities={_VN: scoped("market.overview")},
                 provider_map=provider_map,
             ),
             self._aggregate_market_dataset(
                 dataset="financial.snapshot",
-                market_priorities=self._fundamental_market_priorities(),
+                market_priorities={_VN: fundamental_priority},
                 provider_map=provider_map,
-                disabled=not bool(getattr(self.config, "enable_fundamental_pipeline", True)),
-                disabled_warning="fundamental_pipeline_disabled",
+                disabled=(
+                    not bool(getattr(self.config, "enable_fundamental_pipeline", True))
+                    or realtime_disabled
+                ),
+                disabled_warning=(
+                    "fundamental_pipeline_disabled"
+                    if not bool(getattr(self.config, "enable_fundamental_pipeline", True))
+                    else "realtime_quote_disabled"
+                ),
             ),
             self._news_events_dataset(),
-            self._screening_dataset(priority_map.get("screening.snapshot", {})),
             self._alert_monitor_dataset(),
             self._local_dataset("portfolio.account", "portfolio"),
         ]
-        return datasets
 
-    def _daily_market_priorities(
-        self,
-        fetchers: Sequence[Any],
-        generic_priority: Dict[str, Any],
-    ) -> Dict[str, Dict[str, Any]]:
-        generic_providers = list(generic_priority.get("providers") or [])
-        generic_warnings = list(generic_priority.get("warnings") or [])
-
-        def generic_market_priority(market: str) -> Dict[str, Any]:
-            priority = self._filter_market_dataset_priority(
-                providers=generic_providers,
-                dataset="kline.daily",
-                market=market,
-                warnings=generic_warnings,
-            )
-            if not priority["providers"]:
-                priority["empty_status"] = "unavailable"
-            return priority
-
-        return {
-            "cn": generic_market_priority("cn"),
-            "hk": generic_market_priority("hk"),
-            "us": {
-                "providers": self._us_daily_priority(fetchers),
-                "warnings": [],
-                "empty_status": "unavailable",
-            },
-            **{
-                market: generic_market_priority(market)
-                for market in ("jp", "kr", "tw")
-            },
-        }
-
-    def _market_overview_market_priorities(
-        self,
-        priority: Dict[str, Any],
-    ) -> Dict[str, Dict[str, Any]]:
-        providers = list(priority.get("providers") or [])
-        warnings = list(priority.get("warnings") or [])
-        return {
-            market: self._filter_market_dataset_priority(
-                providers=providers,
-                dataset="market.overview",
-                market=market,
-                warnings=warnings,
-            )
-            for market in ("cn", "hk", "us", "jp", "kr", "tw")
-        }
-
-    def _daily_status_resolvers(
-        self,
-        fetchers: Sequence[Any],
-        provider_map: Dict[str, Dict[str, Any]],
-    ) -> Dict[str, Callable[[str], str]]:
-        fetcher_map = {
-            str(getattr(fetcher, "name", "")): fetcher
-            for fetcher in fetchers
-            if getattr(fetcher, "name", None)
-        }
-        return {
-            market: self._market_daily_status_resolver(
-                market=market,
-                provider_map=provider_map,
-                fetcher_map=fetcher_map,
-            )
-            for market in ("cn", "hk", "us", "jp", "kr", "tw")
-        }
-
-    def _index_daily_status_resolver(
-        self,
-        fetchers: Sequence[Any],
-        provider_map: Dict[str, Dict[str, Any]],
-    ) -> Callable[[str], str]:
-        fetcher_map = {
-            str(getattr(fetcher, "name", "")): fetcher
-            for fetcher in fetchers
-            if getattr(fetcher, "name", None)
-        }
-        return self._market_daily_status_resolver(
-            market="cn_index",
-            provider_map=provider_map,
-            fetcher_map=fetcher_map,
-        )
-
-    def _us_index_daily_status_resolver(
-        self,
-        fetchers: Sequence[Any],
-        provider_map: Dict[str, Dict[str, Any]],
-    ) -> Callable[[str], str]:
-        fetcher_map = {
-            str(getattr(fetcher, "name", "")): fetcher
-            for fetcher in fetchers
-            if getattr(fetcher, "name", None)
-        }
-        return self._market_daily_status_resolver(
-            market="us",
-            provider_map=provider_map,
-            fetcher_map=fetcher_map,
-        )
-
-    def _market_daily_status_resolver(
+    def _daily_status_resolver(
         self,
         *,
-        market: str,
         provider_map: Dict[str, Dict[str, Any]],
         fetcher_map: Dict[str, Any],
     ) -> Callable[[str], str]:
         def resolve(token: str) -> str:
-            provider_status = self._provider_token_status(token, provider_map)
+            provider_status = self._source_token_status(token, provider_map)
             definition = _PROVIDER_DEFINITION_MAP.get(token)
             fetcher_name = definition.fetcher_name if definition is not None else None
             fetcher = fetcher_map.get(fetcher_name or "")
-            if fetcher is not None and not self._daily_source_available(fetcher, market):
+            if fetcher is not None and not self._daily_source_available(fetcher, _VN):
                 return "cooldown"
             return provider_status
 
@@ -782,28 +519,6 @@ class DataCapabilityService:
             logger.debug("Failed to probe daily source health for capability overview: %s", exc)
             return True
 
-    def _filter_market_dataset_priority(
-        self,
-        *,
-        providers: Sequence[str],
-        dataset: str,
-        market: str,
-        warnings: Sequence[str],
-    ) -> Dict[str, Any]:
-        filtered = [
-            provider
-            for provider in providers
-            if self._provider_supports_market_dataset(
-                provider,
-                dataset=dataset,
-                market=market,
-            )
-        ]
-        return {
-            "providers": filtered,
-            "warnings": list(warnings),
-        }
-
     @staticmethod
     def _provider_supports_market_dataset(
         provider: str,
@@ -811,96 +526,10 @@ class DataCapabilityService:
         dataset: str,
         market: str,
     ) -> bool:
-        if dataset == "market.overview":
-            return market in _MARKET_OVERVIEW_PROVIDER_MARKETS.get(provider, set())
         definition = _PROVIDER_DEFINITION_MAP.get(provider)
         if definition is None:
-            return True
+            return False
         return market in definition.dataset_markets.get(dataset, ())
-
-    def _fundamental_market_priorities(self) -> Dict[str, Dict[str, Any]]:
-        hk_providers = (
-            ["futu", "yfinance"]
-            if self._is_provider_configured(
-                next(item for item in _PROVIDER_DEFINITIONS if item.name == "futu")
-            )
-            else ["yfinance"]
-        )
-        return {
-            "cn": {"providers": ["akshare"], "warnings": []},
-            "hk": {"providers": hk_providers, "warnings": []},
-            "us": {"providers": ["yfinance"], "warnings": []},
-            "jp": {"providers": ["yfinance"], "warnings": []},
-            "kr": {"providers": ["yfinance"], "warnings": []},
-            "tw": {"providers": ["yfinance"], "warnings": []},
-        }
-
-    def _cn_realtime_status_resolver(
-        self,
-        provider_map: Dict[str, Dict[str, Any]],
-        *,
-        efinance_circuit_key: str,
-    ) -> Callable[[str], str]:
-        def resolve(token: str) -> str:
-            if token not in _CN_REALTIME_SOURCES:
-                return "unsupported"
-            circuit_key = (
-                efinance_circuit_key
-                if token == "efinance"
-                else _AKSHARE_REALTIME_CIRCUIT_KEYS.get(token)
-            )
-            if circuit_key is not None:
-                try:
-                    from data_provider.realtime_types import get_realtime_circuit_breaker
-
-                    circuit_status = get_realtime_circuit_breaker().get_status().get(circuit_key)
-                    if circuit_status == "open":
-                        return "cooldown"
-                except Exception as exc:  # noqa: BLE001 - diagnostics must fail open.
-                    logger.debug("Failed to read realtime source circuit status: %s", exc)
-            return self._source_token_status(token, provider_map)
-
-        return resolve
-
-    def _hk_realtime_status_resolver(
-        self,
-        provider_map: Dict[str, Dict[str, Any]],
-    ) -> Callable[[str], str]:
-        supported_sources = {"futu", "longbridge", "akshare", "yfinance"}
-
-        def resolve(token: str) -> str:
-            if token not in supported_sources:
-                return "unsupported"
-            if token == "akshare":
-                try:
-                    from data_provider.realtime_types import get_realtime_circuit_breaker
-
-                    circuit_status = get_realtime_circuit_breaker().get_status()
-                    if all(
-                        circuit_status.get(key) == "open"
-                        for key in ("akshare_hk_em", "akshare_hk_sina")
-                    ):
-                        return "cooldown"
-                except Exception as exc:  # noqa: BLE001 - diagnostics must fail open.
-                    logger.debug("Failed to read HK realtime circuit status: %s", exc)
-            return DataCapabilityService._source_token_status(token, provider_map)
-
-        return resolve
-
-    def _us_daily_priority(self, fetchers: Sequence[Any]) -> List[str]:
-        available = {
-            provider
-            for fetcher in fetchers
-            if (provider := _FETCHER_TO_PROVIDER.get(str(getattr(fetcher, "name", ""))))
-            in {"longbridge", "finnhub", "alphavantage", "yfinance"}
-            and self._fetcher_available_for_capability(fetcher, capability="daily_data")
-        }
-        preferred = (
-            ["longbridge", "finnhub", "alphavantage", "yfinance"]
-            if "longbridge" in available
-            else ["finnhub", "alphavantage", "yfinance", "longbridge"]
-        )
-        return [provider for provider in preferred if provider in available]
 
     @staticmethod
     def _fetcher_available_for_capability(fetcher: Any, *, capability: str) -> bool:
@@ -949,7 +578,7 @@ class DataCapabilityService:
         unique_sources = sorted(set(selected_sources))
         warnings: List[str] = []
         fallback_from: List[str] = []
-        coverage = {"markets": {}}
+        coverage: Dict[str, Any] = {"markets": {}}
 
         for market, result in market_results.items():
             coverage["markets"][market] = {
@@ -990,6 +619,20 @@ class DataCapabilityService:
             return "unknown"
         return "unavailable"
 
+    @staticmethod
+    def _empty_dataset(dataset: str, status: str, warnings: Sequence[str], fallback_from: Sequence[str] = ()) -> Dict[str, Any]:
+        return {
+            "dataset": dataset,
+            "status": status,
+            "source": None,
+            "stale": None,
+            "last_success": None,
+            "last_error": None,
+            "fallback_from": list(fallback_from),
+            "coverage": None,
+            "warnings": list(warnings),
+        }
+
     def _dataset_from_priority(
         self,
         *,
@@ -999,37 +642,24 @@ class DataCapabilityService:
         status_resolver: Optional[Callable[[str], str]] = None,
         disabled: bool = False,
         disabled_warning: str = "",
-        stop_on_unknown: bool = True,
     ) -> Dict[str, Any]:
         if disabled:
-            return {
-                "dataset": dataset,
-                "status": "unavailable",
-                "source": None,
-                "stale": None,
-                "last_success": None,
-                "last_error": None,
-                "fallback_from": [],
-                "coverage": None,
-                "warnings": [disabled_warning] if disabled_warning else [],
-            }
+            return self._empty_dataset(
+                dataset,
+                "unavailable",
+                [disabled_warning] if disabled_warning else [],
+            )
 
         providers = list(priority.get("providers") or [])
         warnings = list(priority.get("warnings") or [])
         if not providers:
             if priority.get("empty_status") == "unavailable":
-                return {
-                    "dataset": dataset,
-                    "status": "unavailable",
-                    "source": None,
-                    "stale": None,
-                    "last_success": None,
-                    "last_error": None,
-                    "fallback_from": [],
-                    "coverage": None,
-                    "warnings": ["request_available_priority_empty", *warnings],
-                }
-            return self._unknown_dataset(dataset, warnings=["priority_empty", *warnings])
+                return self._empty_dataset(
+                    dataset,
+                    "unavailable",
+                    ["request_available_priority_empty", *warnings],
+                )
+            return self._empty_dataset(dataset, "unknown", ["priority_empty", *warnings])
 
         selected: Optional[str] = None
         fallback_from: List[str] = []
@@ -1044,51 +674,19 @@ class DataCapabilityService:
             if token_status == "ok":
                 selected = token
                 break
-            if token_status == "unknown" and stop_on_unknown:
-                warnings.append(f"source_status:{token}:{token_status}")
-                return {
-                    "dataset": dataset,
-                    "status": "unknown",
-                    "source": None,
-                    "stale": None,
-                    "last_success": None,
-                    "last_error": None,
-                    "fallback_from": fallback_from,
-                    "coverage": None,
-                    "warnings": warnings,
-                }
-            fallback_from.append(token)
             warnings.append(f"source_status:{token}:{token_status}")
+            if token_status == "unknown":
+                # Không bỏ qua nguồn ưu tiên chưa được kiểm tra / never skip an unprobed preferred source
+                return self._empty_dataset(dataset, "unknown", warnings, fallback_from)
+            fallback_from.append(token)
 
         if selected is None:
-            if token_statuses and any(status == "unknown" for status in token_statuses):
-                return {
-                    "dataset": dataset,
-                    "status": "unknown",
-                    "source": None,
-                    "stale": None,
-                    "last_success": None,
-                    "last_error": None,
-                    "fallback_from": fallback_from,
-                    "coverage": None,
-                    "warnings": warnings,
-                }
-            return {
-                "dataset": dataset,
-                "status": "unavailable",
-                "source": None,
-                "stale": None,
-                "last_success": None,
-                "last_error": None,
-                "fallback_from": fallback_from,
-                "coverage": None,
-                "warnings": warnings,
-            }
+            status = "unknown" if "unknown" in token_statuses else "unavailable"
+            return self._empty_dataset(dataset, status, warnings, fallback_from)
 
-        status = "ok" if not fallback_from else "degraded"
         return {
             "dataset": dataset,
-            "status": status,
+            "status": "ok" if not fallback_from else "degraded",
             "source": selected,
             "stale": None,
             "last_success": None,
@@ -1099,38 +697,17 @@ class DataCapabilityService:
         }
 
     @staticmethod
-    def _provider_token_status(token: str, provider_map: Dict[str, Dict[str, Any]]) -> str:
-        provider = provider_map.get(token)
-        if provider is None:
-            return "unknown"
-        return str(provider.get("status") or "unknown")
-
-    @staticmethod
     def _source_token_status(token: str, provider_map: Dict[str, Dict[str, Any]]) -> str:
-        provider_name = _REALTIME_SOURCE_PROVIDER.get(token, token)
-        provider = provider_map.get(provider_name)
+        provider = provider_map.get(token)
         if provider is None:
             if token in {"intelligence", "search"}:
                 return "ok"
             return "unknown"
         return str(provider.get("status") or "unknown")
 
-    @staticmethod
-    def _unknown_dataset(dataset: str, *, warnings: Optional[List[str]] = None) -> Dict[str, Any]:
-        return {
-            "dataset": dataset,
-            "status": "unknown",
-            "source": None,
-            "stale": None,
-            "last_success": None,
-            "last_error": None,
-            "fallback_from": [],
-            "coverage": None,
-            "warnings": list(warnings or []),
-        }
-
-    @staticmethod
+    @classmethod
     def _local_dataset(
+        cls,
         dataset: str,
         source: str,
         *,
@@ -1138,17 +715,11 @@ class DataCapabilityService:
         disabled_warning: str = "",
     ) -> Dict[str, Any]:
         if not enabled:
-            return {
-                "dataset": dataset,
-                "status": "unavailable",
-                "source": None,
-                "stale": None,
-                "last_success": None,
-                "last_error": None,
-                "fallback_from": [],
-                "coverage": None,
-                "warnings": [disabled_warning] if disabled_warning else [],
-            }
+            return cls._empty_dataset(
+                dataset,
+                "unavailable",
+                [disabled_warning] if disabled_warning else [],
+            )
         return {
             "dataset": dataset,
             "status": "ok",
@@ -1183,108 +754,13 @@ class DataCapabilityService:
             disabled_warning="agent_event_monitor_not_running",
         )
 
-    @staticmethod
-    def _news_events_dataset() -> Dict[str, Any]:
-        return {
-            "dataset": "news.events",
-            "status": "unknown",
-            "source": None,
-            "stale": None,
-            "last_success": None,
-            "last_error": None,
-            "fallback_from": [],
-            "coverage": None,
-            "warnings": ["runtime_probe_not_performed"],
-        }
-
-    def _screening_dataset(self, priority: Dict[str, Any]) -> Dict[str, Any]:
-        if not bool(getattr(self.config, "screening_enabled", False)):
-            return {
-                "dataset": "strategy.screening",
-                "status": "unconfigured",
-                "source": None,
-                "stale": None,
-                "last_success": None,
-                "last_error": None,
-                "fallback_from": [],
-                "coverage": None,
-                "warnings": ["screening_disabled"],
-            }
-        providers = list(priority.get("providers") or [])
-        warnings = list(priority.get("warnings") or [])
-        if not providers:
-            return self._unknown_dataset("strategy.screening", warnings=["priority_empty", *warnings])
-
-        screening_available, source_health = self._screening_runtime_health()
-        if not screening_available:
-            return {
-                "dataset": "strategy.screening",
-                "status": "unavailable",
-                "source": None,
-                "stale": None,
-                "last_success": None,
-                "last_error": None,
-                "fallback_from": [],
-                "coverage": None,
-                "warnings": [*warnings, "screening_engine_unavailable"],
-            }
-
-        return self._dataset_from_priority(
-            dataset="strategy.screening",
-            priority={"providers": providers, "warnings": warnings},
-            provider_map={},
-            status_resolver=self._screening_source_status_resolver(source_health),
-            stop_on_unknown=True,
-        )
-
-    def _screening_runtime_health(self) -> tuple[bool, Dict[str, Any]]:
-        try:
-            from src.services.screening_service import (
-                _get_screening_source_health_snapshot,
-                _get_screening_status_snapshot,
-            )
-
-            _, available, _ = _get_screening_status_snapshot()
-            return bool(available), _get_screening_source_health_snapshot()
-        except Exception as exc:  # noqa: BLE001 - diagnostics must fail open.
-            logger.debug("Failed to read screening runtime health for capability overview: %s", exc)
-            return True, {}
+    @classmethod
+    def _news_events_dataset(cls) -> Dict[str, Any]:
+        return cls._empty_dataset("news.events", "unknown", ["runtime_probe_not_performed"])
 
     @staticmethod
-    def _screening_source_status_resolver(source_health: Dict[str, Any]) -> Callable[[str], str]:
-        snapshot_health = source_health.get("snapshot") if isinstance(source_health, dict) else {}
-
-        def resolve(token: str) -> str:
-            if token not in _SCREENING_SOURCES:
-                return "unsupported"
-            state = snapshot_health.get(token) if isinstance(snapshot_health, dict) else None
-            if not isinstance(state, dict):
-                return "unknown"
-            if bool(state.get("disabled")):
-                return "cooldown"
-            if float(state.get("failures") or 0) > 0:
-                return "unavailable"
-            if (
-                float(state.get("successes") or 0) > 0
-                or float(state.get("last_success_at") or 0) > 0
-            ):
-                return "ok"
-            return "unknown"
-
-        return resolve
-
-    def _build_global_warnings(
-        self,
-        provider_map: Dict[str, Dict[str, Any]],
-        priorities: Sequence[Dict[str, Any]],
-    ) -> List[str]:
+    def _build_global_warnings(priorities: Sequence[Dict[str, Any]]) -> List[str]:
         warnings: List[str] = []
-        priority_map = {item["scenario"]: item for item in priorities}
-        cn_realtime = set(priority_map.get("cn.realtime", {}).get("providers") or [])
-        tickflow = provider_map.get("tickflow")
-        if tickflow and tickflow.get("configured") and "tickflow" not in cn_realtime:
-            warnings.append("tickflow_configured_but_not_in_realtime_priority")
-
         for priority in priorities:
             for warning in priority.get("warnings") or []:
                 scoped = f"{priority['scenario']}:{warning}"

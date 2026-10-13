@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """Bảo đảm câu trả lời Hỏi đáp tiếng Việt không còn chữ Hán.
 
-System prompt và hướng dẫn chiến lược (`strategies/*.yaml`) phần lớn là tiếng Trung
-(nhãn công cụ phân tích kỹ thuật đã chuyển sang tiếng Anh), nên model đôi khi vẫn chép
-thuật ngữ vào câu trả lời dù đã được dặn trả lời tiếng Việt. Module này chạy trên câu
-trả lời cuối:
+Hệ thống chỉ xuất tiếng Việt hoặc tiếng Anh, nhưng model (nhất là model đa ngôn ngữ)
+đôi khi vẫn chèn thuật ngữ tiếng Trung vào câu trả lời, hoặc dữ liệu cũ/nguồn bên ngoài
+còn lẫn chữ Hán. Module này phát hiện rò rỉ đó và làm sạch câu trả lời cuối:
 
 1. Không có chữ Hán → giữ nguyên.
 2. Có chữ Hán → nhờ LLM dịch các đoạn tiếng Trung sang tiếng Việt (một lần gọi).
@@ -12,8 +11,9 @@ trả lời cuối:
    ngữ quen thuộc theo bảng từ vựng, rồi loại bỏ chữ Hán còn sót. Bước này bảo đảm
    kết quả không còn chữ Hán kể cả khi LLM lỗi hoặc không có LLM (backend Codex).
 
-Ensures Vietnamese chat answers contain no Han characters: optional LLM rewrite,
-then a deterministic glossary + strip pass that always runs.
+Ensures Vietnamese chat answers contain no leaked Han characters: optional LLM rewrite,
+then a deterministic glossary + strip pass that always runs. The Han ranges and the
+glossary below exist only to detect and clean leakage; Chinese is not an output language.
 """
 
 from __future__ import annotations
@@ -25,10 +25,10 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 # Chữ Hán (CJK Unified Ideographs + Extension A + Compatibility Ideographs).
-_HAN_CHARS = "㐀-䶿一-鿿豈-﫿"
+_HAN_CHARS = "\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff"
 _HAN_RE = re.compile(f"[{_HAN_CHARS}]")
 # Dấu câu CJK đi kèm chữ Hán (、。〈〉《》「」『』【】〔〕 ...).
-_CJK_PUNCT = "　-〿"
+_CJK_PUNCT = "\u3000-\u303f"
 _HAN_RUN_RE = re.compile(f"[{_HAN_CHARS}][{_HAN_CHARS}{_CJK_PUNCT}·]*")
 # Ngoặc chỉ chứa chữ Hán / dấu câu / khoảng trắng — thường là chú thích của từ tiếng Việt ngay trước.
 _HAN_ONLY_PARENS_RE = re.compile(
@@ -54,8 +54,9 @@ _FULLWIDTH_PUNCT = {
     "～": "~",
 }
 
-# Thuật ngữ thường gặp từ công cụ phân tích (src/stock_analyzer.py), chiến lược
-# (strategies/*.yaml) và văn phong phân tích. Khớp cụm dài trước.
+# Bảng dịch thuật ngữ tiếng Trung hay bị rò rỉ sang tiếng Việt (chỉ dùng để làm sạch,
+# không phải ngôn ngữ đầu ra). Khớp cụm dài trước.
+# Chinese terms that commonly leak into answers, mapped to Vietnamese (cleanup only).
 VI_GLOSSARY = {
     # TrendStatus
     "强势多头": "xu hướng tăng mạnh",
@@ -233,7 +234,7 @@ def enforce_vietnamese_output(
     """Return ``text`` with no Han characters when the report language is Vietnamese."""
     from src.report_language import normalize_report_language
 
-    if not text or normalize_report_language(report_language or "zh") != "vi" or not contains_han(text):
+    if not text or normalize_report_language(report_language or "vi") != "vi" or not contains_han(text):
         return text
     han_count = len(_HAN_RE.findall(text))
     candidate = text

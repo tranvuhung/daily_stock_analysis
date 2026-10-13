@@ -37,7 +37,6 @@ instructions: |
 
   4. **Confirmation conditions** (related principle 5: risk screening):
      - `search_stock_news` shows no negative news.
-     - Healthy chip distribution (holder cost structure), with a profit ratio of 50-80%.
 
   Score adjustments:
   - Low-volume pullback to MA5: sentiment_score +10

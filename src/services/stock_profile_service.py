@@ -12,13 +12,11 @@ from src.repositories.portfolio_repo import PortfolioRepository
 from src.services.alert_service import AlertService
 from src.services.history_service import HistoryService
 from src.services.intelligence_service import IntelligenceService
-from src.services.market_symbol_utils import get_suffix_market
 from src.services.research_artifact_service import build_research_artifact
 from src.services.stock_code_utils import resolve_daily_stock_identity
 from src.services.stock_service import StockService
 from src.utils.data_processing import (
     extract_fundamental_detail_fields,
-    extract_market_structure_detail_field,
 )
 
 _BLOCK_NAMES = ("quote", "history", "research", "intelligence", "portfolio", "monitors")
@@ -73,20 +71,12 @@ class StockProfileService:
         if identity is None:
             raise InvalidStockProfileCode("stock code has no unambiguous market identity")
         normalized = canonical_stock_code(identity.refill_code or identity.normalized_code)
-        if normalized.isdigit() and len(normalized) == 5:
-            return f"HK{normalized.zfill(5)}"
         return normalized.upper()
 
     @staticmethod
     def market_for_code(canonical_code: str) -> str:
-        if canonical_code.startswith("HK"):
-            return "hk"
-        suffix_market = get_suffix_market(canonical_code)
-        if suffix_market:
-            return suffix_market
-        if canonical_code.isdigit() and len(canonical_code) == 6:
-            return "cn"
-        return "us"
+        # Hệ thống chỉ hỗ trợ thị trường Việt Nam. / Vietnam is the only market.
+        return "vn"
 
     def _quote_block(self, code: str) -> Dict[str, Any]:
         try:
@@ -121,8 +111,6 @@ class StockProfileService:
                 "limit": 5,
                 "market_hint": market,
             }
-            if market in {"jp", "kr", "tw"}:
-                query_options["include_ambiguous_numeric_aliases"] = False
             result = self._history_service().get_history_list(**query_options)
             reports = list(result.get("items") or [])
         except Exception:
@@ -263,12 +251,7 @@ class StockProfileService:
             str(profile_identity.normalized_code or "").strip().upper(),
             str(profile_identity.refill_code or "").strip().upper(),
         } - {""}
-        if position_codes & profile_codes:
-            return True
-        if position_identity.market in {"kr", "tw"} and not position_identity.refill_code:
-            profile_base = str(profile_identity.normalized_code or "").split(".", 1)[0]
-            return position_identity.normalized_code == profile_base
-        return False
+        return bool(position_codes & profile_codes)
 
     def _monitor_block(self, code: str, *, market: str) -> Dict[str, Any]:
         rules_by_id: Dict[Any, Dict[str, Any]] = {}
@@ -329,30 +312,10 @@ class StockProfileService:
         market = str(market_hint or StockProfileService.market_for_code(code)).strip().lower()
         identity = resolve_daily_stock_identity(code, market_hint=market)
         candidates = list(identity.code_candidates) if identity is not None and identity.market == market else [code]
-        if include_ambiguous_numeric and market in {"jp", "kr", "tw"} and "." in code:
-            numeric_base = code.split(".", 1)[0]
-            if numeric_base.isdigit():
-                candidates.append(numeric_base)
         aliases: List[str] = []
         seen_aliases = set()
         for candidate in candidates or [code]:
             candidate_text = str(candidate).strip()
-            if not include_ambiguous_numeric and candidate_text.isdigit():
-                unhinted_identity = resolve_daily_stock_identity(candidate_text)
-                same_market = unhinted_identity is not None and unhinted_identity.market == market
-                legacy_short_hk = (
-                    market == "hk"
-                    and len(candidate_text) <= 3
-                    and (
-                        hinted_identity := resolve_daily_stock_identity(
-                            candidate_text,
-                            market_hint="hk",
-                        )
-                    ) is not None
-                    and hinted_identity.market == "hk"
-                )
-                if not same_market and not legacy_short_hk:
-                    continue
             alias_key = candidate_text.casefold()
             if candidate_text and alias_key not in seen_aliases:
                 seen_aliases.add(alias_key)
@@ -385,10 +348,6 @@ class StockProfileService:
             persisted_fundamental,
         )
         context_overview = extract_analysis_context_pack_overview(context_snapshot)
-        market_structure = extract_market_structure_detail_field(
-            context_snapshot,
-            raw_result,
-        )
         return {
             "meta": {
                 "id": detail.get("id"),
@@ -421,7 +380,6 @@ class StockProfileService:
                 "dividend_metrics": detail.get("dividend_metrics")
                 or extracted_fundamental.get("dividend_metrics")
                 or persisted_fields.get("dividend_metrics"),
-                "market_structure": detail.get("market_structure") or market_structure,
             },
         }
 

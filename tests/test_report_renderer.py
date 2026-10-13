@@ -21,26 +21,26 @@ from src.services.report_renderer import render
 
 
 def _make_result(
-    code: str = "600519",
-    name: str = "贵州茅台",
+    code: str = "HPG",
+    name: str = "Hòa Phát",
     sentiment_score: int = 72,
-    operation_advice: str = "持有",
-    analysis_summary: str = "稳健",
+    operation_advice: str = "Nắm giữ",
+    analysis_summary: str = "Ổn định",
     decision_type: str = "hold",
     dashboard: dict = None,
-    report_language: str = "zh",
+    report_language: str = "vi",
     model_used: str = None,
 ) -> AnalysisResult:
     if dashboard is None:
         dashboard = {
-            "core_conclusion": {"one_sentence": "持有观望"},
+            "core_conclusion": {"one_sentence": "Nắm giữ và quan sát"},
             "intelligence": {"risk_alerts": []},
             "battle_plan": {"sniper_points": {"stop_loss": "110"}},
         }
     return AnalysisResult(
         code=code,
         name=name,
-        trend_prediction="看多",
+        trend_prediction="Tăng",
         sentiment_score=sentiment_score,
         operation_advice=operation_advice,
         analysis_summary=analysis_summary,
@@ -54,7 +54,7 @@ def _make_result(
 def _make_renderer_config(show_llm_model: bool = True) -> MagicMock:
     config = MagicMock()
     config.report_templates_dir = "templates"
-    config.report_language = "zh"
+    config.report_language = "vi"
     config.report_show_llm_model = show_llm_model
     return config
 
@@ -62,9 +62,9 @@ def _make_renderer_config(show_llm_model: bool = True) -> MagicMock:
 def _with_decision_signal_summary(result: AnalysisResult) -> AnalysisResult:
     result.decision_signal_summary = {
         "action": "sell",
-        "action_label": "卖出",
+        "action_label": "Bán",
         "horizon": "1d",
-        "reason": "技术面走弱",
+        "reason": "Kỹ thuật suy yếu",
     }
     return result
 
@@ -77,24 +77,24 @@ class TestReportRenderer(unittest.TestCase):
         r = _make_result()
         out = render("markdown", [r], summary_only=True)
         self.assertIsNotNone(out)
-        self.assertIn("决策仪表盘", out)
-        self.assertIn("贵州茅台", out)
-        self.assertIn("买入", out)
-        self.assertIn("🟢买入:1", out)
+        self.assertIn("Bảng điều khiển quyết định", out)
+        self.assertIn("Hòa Phát", out)
+        self.assertIn("Mua", out)
+        self.assertIn("🟢Mua:1", out)
 
     def test_render_markdown_preserves_guardrailed_neutral_action(self) -> None:
         r = _make_result(
             dashboard={
-                "core_conclusion": {"one_sentence": "等待确认"},
-                "decision_stability": {"applied": True, "reason": "等待回踩确认"},
+                "core_conclusion": {"one_sentence": "Chờ xác nhận"},
+                "decision_stability": {"applied": True, "reason": "Chờ xác nhận điều chỉnh về hỗ trợ"},
             }
         )
 
         out = render("markdown", [r], summary_only=True)
 
         self.assertIsNotNone(out)
-        self.assertIn("持有", out)
-        self.assertIn("🟡观望:1", out)
+        self.assertIn("Nắm giữ", out)
+        self.assertIn("🟡Quan sát:1", out)
 
     def test_render_markdown_uses_explicit_avoid_and_alert_text(self) -> None:
         avoid = _make_result(
@@ -131,9 +131,9 @@ class TestReportRenderer(unittest.TestCase):
         r = _make_result()
         out = render("markdown", [r], summary_only=False)
         self.assertIsNotNone(out)
-        self.assertIn("核心结论", out)
-        self.assertIn("作战计划", out)
-        self.assertNotIn("盘中决策护栏", out)
+        self.assertIn("Kết luận cốt lõi", out)
+        self.assertIn("Kế hoạch giao dịch", out)
+        self.assertNotIn("Hàng rào quyết định theo phiên", out)
 
     def test_render_markdown_omits_decision_signal_excerpt(self) -> None:
         """Markdown reports omit the duplicated DecisionSignal excerpt."""
@@ -141,25 +141,24 @@ class TestReportRenderer(unittest.TestCase):
 
         summary_out = render("markdown", [r], summary_only=True)
         self.assertIsNotNone(summary_out)
-        self.assertNotIn("AI 决策信号", summary_out)
+        self.assertNotIn("Kỹ thuật suy yếu", summary_out)
 
         full_out = render("markdown", [r], summary_only=False)
         self.assertIsNotNone(full_out)
-        self.assertNotIn("AI 决策信号", full_out)
-        self.assertNotIn("理由: 技术面走弱", full_out)
+        self.assertNotIn("Kỹ thuật suy yếu", full_out)
 
     def test_render_markdown_phase_decision_section(self) -> None:
         """Markdown renders phase_decision when present."""
         r = _make_result(
             dashboard={
-                "core_conclusion": {"one_sentence": "等待确认"},
+                "core_conclusion": {"one_sentence": "Chờ xác nhận"},
                 "intelligence": {"risk_alerts": []},
                 "phase_decision": {
-                    "action_window": "盘中跟踪",
-                    "immediate_action": "等待确认",
-                    "watch_conditions": ["放量突破"],
+                    "action_window": "Theo dõi trong phiên",
+                    "immediate_action": "Chờ xác nhận",
+                    "watch_conditions": ["Bứt phá kèm khối lượng"],
                     "next_check_time": "14:30",
-                    "confidence_reason": "数据质量可用",
+                    "confidence_reason": "Chất lượng dữ liệu dùng được",
                     "data_limitations": ["quote: stale"],
                 },
                 "battle_plan": {"sniper_points": {"stop_loss": "110"}},
@@ -169,19 +168,19 @@ class TestReportRenderer(unittest.TestCase):
         out = render("markdown", [r], summary_only=False)
 
         self.assertIsNotNone(out)
-        self.assertIn("盘中决策护栏", out)
-        self.assertIn("盘中跟踪", out)
-        self.assertIn("放量突破", out)
+        self.assertIn("Hàng rào quyết định theo phiên", out)
+        self.assertIn("Theo dõi trong phiên", out)
+        self.assertIn("Bứt phá kèm khối lượng", out)
         self.assertIn("quote: stale", out)
 
     def test_render_markdown_skips_context_only_phase_decision_shape(self) -> None:
         """Markdown skips mechanically shaped phase_decision without actionable content."""
         r = _make_result(
             dashboard={
-                "core_conclusion": {"one_sentence": "持有观望"},
+                "core_conclusion": {"one_sentence": "Nắm giữ và quan sát"},
                 "intelligence": {"risk_alerts": []},
                 "phase_decision": {
-                    "phase_context": {"phase": "intraday", "market": "cn"},
+                    "phase_context": {"phase": "intraday", "market": "vn"},
                     "action_window": None,
                     "immediate_action": None,
                     "watch_conditions": [],
@@ -196,35 +195,15 @@ class TestReportRenderer(unittest.TestCase):
         out = render("markdown", [r], summary_only=False)
 
         self.assertIsNotNone(out)
-        self.assertNotIn("盘中决策护栏", out)
-
-    def test_render_wechat(self) -> None:
-        """Wechat platform renders."""
-        r = _make_result()
-        out = render("wechat", [r])
-        self.assertIsNotNone(out)
-        self.assertIn("贵州茅台", out)
-
-    def test_render_wechat_omits_decision_signal_excerpt(self) -> None:
-        """Wechat reports omit the duplicated DecisionSignal excerpt."""
-        r = _with_decision_signal_summary(_make_result())
-
-        summary_out = render("wechat", [r], summary_only=True)
-        self.assertIsNotNone(summary_out)
-        self.assertNotIn("AI 决策信号", summary_out)
-
-        full_out = render("wechat", [r], summary_only=False)
-        self.assertIsNotNone(full_out)
-        self.assertNotIn("AI 决策信号", full_out)
-        self.assertNotIn("理由: 技术面走弱", full_out)
+        self.assertNotIn("Hàng rào quyết định theo phiên", out)
 
     def test_render_brief(self) -> None:
         """Brief platform renders 3-5 sentence summary."""
         r = _make_result()
         out = render("brief", [r])
         self.assertIsNotNone(out)
-        self.assertIn("决策简报", out)
-        self.assertIn("贵州茅台", out)
+        self.assertIn("Bản tin quyết định", out)
+        self.assertIn("Hòa Phát", out)
 
     def test_render_brief_omits_decision_signal_excerpt(self) -> None:
         r = _with_decision_signal_summary(_make_result())
@@ -232,7 +211,7 @@ class TestReportRenderer(unittest.TestCase):
         out = render("brief", [r])
 
         self.assertIsNotNone(out)
-        self.assertNotIn("AI 决策信号", out)
+        self.assertNotIn("Kỹ thuật suy yếu", out)
 
     def test_render_brief_respects_model_visibility_toggle(self) -> None:
         r = _make_result(model_used="gemini/gemini-2.5-flash")
@@ -244,15 +223,15 @@ class TestReportRenderer(unittest.TestCase):
 
         self.assertIsNotNone(visible)
         self.assertIsNotNone(hidden)
-        self.assertIn("分析模型: gemini/gemini-2.5-flash", visible)
-        self.assertNotIn("分析模型", hidden)
+        self.assertIn("Mô hình phân tích: gemini/gemini-2.5-flash", visible)
+        self.assertNotIn("Mô hình phân tích", hidden)
         self.assertNotIn("gemini/gemini-2.5-flash", hidden)
 
     def test_render_templates_show_compact_market_status_only(self) -> None:
         r = _make_result()
         r.market_phase_summary = {
             "phase": "intraday",
-            "market": "cn",
+            "market": "vn",
             "trigger_source": "api",
             "is_partial_bar": True,
         }
@@ -267,12 +246,11 @@ class TestReportRenderer(unittest.TestCase):
         out = render("brief", [r])
 
         self.assertIsNotNone(out)
-        self.assertIn("市场状态：A股 · 盘中", out)
-        self.assertNotIn("阶段：intraday", out)
-        self.assertNotIn("盘中数据提示", out)
-        self.assertNotIn("数据质量: limited", out)
-        self.assertNotIn("限制: quote: stale", out)
-        self.assertNotIn("限制: news: missing", out)
+        self.assertIn("Trạng thái thị trường: Việt Nam · Trong phiên", out)
+        self.assertNotIn("intraday", out)
+        self.assertNotIn("limited", out)
+        self.assertNotIn("quote: stale", out)
+        self.assertNotIn("news: missing", out)
         self.assertNotIn("technical: fallback", out)
         self.assertNotIn("raw context pack", out)
 
@@ -282,28 +260,22 @@ class TestReportRenderer(unittest.TestCase):
         out = render("brief", [r])
 
         self.assertIsNotNone(out)
-        self.assertNotIn("摘要来源", out)
+        self.assertNotIn("summary source", out)
         self.assertNotIn("evaluator snapshot", out)
 
-    def test_render_market_status_preserves_input_order(self) -> None:
-        cn = _make_result(
-            code="600519",
-            name="贵州茅台",
-            sentiment_score=60,
-        )
-        cn.market_phase_summary = {"market": "cn", "phase": "postmarket"}
-        us = _make_result(
-            code="AAPL",
-            name="Apple",
-            sentiment_score=90,
-        )
-        us.market_phase_summary = {"market": "us", "phase": "premarket"}
+    def test_render_market_status_uses_first_result_phase(self) -> None:
+        # Chỉ hiển thị một dòng trạng thái thị trường, lấy theo kết quả đầu tiên.
+        # A single market-status line is rendered, taken from the first result.
+        first = _make_result(code="HPG", name="Hòa Phát", sentiment_score=60)
+        first.market_phase_summary = {"market": "vn", "phase": "postmarket"}
+        second = _make_result(code="FPT", name="FPT Corp", sentiment_score=90)
+        second.market_phase_summary = {"market": "vn", "phase": "premarket"}
 
-        out = render("markdown", [cn, us], summary_only=True)
+        out = render("markdown", [first, second], summary_only=True)
 
         self.assertIsNotNone(out)
-        self.assertIn("市场状态：A股 · 盘后", out)
-        self.assertNotIn("市场状态：美股 · 盘前", out)
+        self.assertIn("Trạng thái thị trường: Việt Nam · Sau phiên", out)
+        self.assertEqual(out.count("Trạng thái thị trường"), 1)
 
     def test_render_markdown_footer_uses_consistent_separator(self) -> None:
         r = _make_result(model_used="gemini/gemini-2.5-flash")
@@ -312,14 +284,16 @@ class TestReportRenderer(unittest.TestCase):
             out = render("markdown", [r], summary_only=True)
 
         self.assertIsNotNone(out)
-        self.assertIn("报告生成时间：", out)
-        self.assertIn("分析模型：gemini/gemini-2.5-flash", out)
-        self.assertNotIn("分析模型: gemini/gemini-2.5-flash", out)
+        # Tiếng Việt dùng dấu hai chấm nửa độ rộng + khoảng trắng.
+        # Vietnamese uses a half-width colon followed by a space.
+        self.assertIn("Thời điểm tạo báo cáo: ", out)
+        self.assertIn("Mô hình phân tích: gemini/gemini-2.5-flash", out)
+        self.assertNotIn("：", out)
 
     def test_render_markdown_in_english(self) -> None:
         """Markdown renderer switches headings and summary labels for English reports."""
         r = _make_result(
-            name="Kweichow Moutai",
+            name="Hoa Phat Group",
             operation_advice="Buy",
             analysis_summary="Momentum remains constructive.",
             report_language="en",
@@ -333,8 +307,8 @@ class TestReportRenderer(unittest.TestCase):
     def test_render_markdown_market_snapshot_uses_template_context(self) -> None:
         """Market snapshot macro should render localized labels with template context."""
         r = _make_result(
-            code="AAPL",
-            name="Apple",
+            code="FPT",
+            name="FPT Corp",
             operation_advice="Buy",
             report_language="en",
         )
@@ -352,7 +326,7 @@ class TestReportRenderer(unittest.TestCase):
             "price": "180.35",
             "volume_ratio": "1.2",
             "turnover_rate": "0.8%",
-            "source": "polygon",
+            "source": "vci",
         }
 
         out = render("markdown", [r], summary_only=False)
@@ -361,31 +335,10 @@ class TestReportRenderer(unittest.TestCase):
         self.assertIn("Market Snapshot", out)
         self.assertIn("Volume Ratio", out)
 
-    def test_render_markdown_collapses_unavailable_chip_structure(self) -> None:
-        r = _make_result(
-            dashboard={
-                "core_conclusion": {"one_sentence": "持有观望"},
-                "data_perspective": {
-                    "chip_structure": {
-                        "profit_ratio": "数据缺失，无法判断",
-                        "avg_cost": "数据缺失，无法判断",
-                        "concentration": "数据缺失，无法判断",
-                        "chip_health": "数据缺失，无法判断",
-                    }
-                },
-            }
-        )
-
-        out = render("markdown", [r], summary_only=False)
-
-        self.assertIsNotNone(out)
-        self.assertIn("**筹码**: 筹码分布未启用或数据源暂不可用，未纳入筹码判断。", out)
-        self.assertEqual(out.count("数据缺失，无法判断"), 0)
-
     def test_render_markdown_renders_strategy_synthesis_with_localized_labels(self) -> None:
         r = _make_result(
             dashboard={
-                "core_conclusion": {"one_sentence": "持有观望"},
+                "core_conclusion": {"one_sentence": "Nắm giữ và quan sát"},
                 "strategy_synthesis": {
                     "final_signal": "buy",
                     "confidence": 0.8,
@@ -401,13 +354,13 @@ class TestReportRenderer(unittest.TestCase):
                         "conflict_count": 1,
                     },
                     "supporting_skills": [{"skill_id": "bull_trend", "signal": "buy", "confidence": 0.8}],
-                    "opposing_skills": [{"skill_id": "hot_theme", "signal": "sell", "confidence": 0.75}],
+                    "opposing_skills": [{"skill_id": "box_oscillation", "signal": "sell", "confidence": 0.75}],
                     "conflicts": [
                         {
                             "conflict_type": "directional_opposition",
                             "severity": "medium",
                             "description_key": "strategy_conflict.directional_opposition",
-                            "participants": ["bull_trend", "hot_theme"],
+                            "participants": ["bull_trend", "box_oscillation"],
                         }
                     ],
                 },
@@ -417,18 +370,18 @@ class TestReportRenderer(unittest.TestCase):
         out = render("markdown", [r], summary_only=False)
 
         self.assertIsNotNone(out)
-        self.assertIn("多策略综合", out)
-        self.assertIn("综合信号: 买入", out)
-        self.assertIn("默认多头趋势/买入/80%", out)
-        self.assertIn("热点题材/卖出/75%", out)
-        self.assertNotIn("bull_trend/买入", out)
+        self.assertIn("Tổng hợp chiến lược", out)
+        self.assertIn("Tín hiệu tổng hợp: Mua", out)
+        self.assertIn("Xu hướng tăng mặc định/Mua/80%", out)
+        self.assertIn("Dao động trong hộp/Bán/75%", out)
+        self.assertNotIn("bull_trend/Mua", out)
 
     def test_render_templates_handle_legacy_strategy_synthesis_shapes(self) -> None:
-        for platform in ("markdown", "wechat"):
+        for platform in ("markdown",):
             for malformed in ("bad-shape", ["bad-shape"], 42, True):
                 result = _make_result(
                     dashboard={
-                        "core_conclusion": {"one_sentence": "持有观望"},
+                        "core_conclusion": {"one_sentence": "Nắm giữ và quan sát"},
                         "intelligence": {},
                         "battle_plan": {},
                         "strategy_synthesis": malformed,
@@ -438,11 +391,11 @@ class TestReportRenderer(unittest.TestCase):
                 out = render(platform, [result], summary_only=False)
 
                 self.assertIsNotNone(out)
-                self.assertNotIn("多策略综合", out)
+                self.assertNotIn("Tổng hợp chiến lược", out)
 
             result = _make_result(
                 dashboard={
-                    "core_conclusion": {"one_sentence": "持有观望"},
+                    "core_conclusion": {"one_sentence": "Nắm giữ và quan sát"},
                     "intelligence": {},
                     "battle_plan": {},
                     "strategy_synthesis": {
@@ -461,8 +414,8 @@ class TestReportRenderer(unittest.TestCase):
             out = render(platform, [result], summary_only=False)
 
             self.assertIsNotNone(out)
-            self.assertIn("多策略综合", out)
-            self.assertIn("另有 3 个策略解析失败", out)
+            self.assertIn("Tổng hợp chiến lược", out)
+            self.assertIn("Có 3 chiến lược khác không tạo được tín hiệu hợp lệ", out)
 
     def test_render_unknown_platform_returns_none(self) -> None:
         """Unknown platform returns None (caller fallback)."""

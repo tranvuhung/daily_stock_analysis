@@ -10,12 +10,12 @@ from data_provider.realtime_types import CircuitBreaker, RealtimeSource, Unified
 
 class UnifiedRealtimeQuoteMetadataTestCase(unittest.TestCase):
     def test_metadata_defaults_are_filtered_from_to_dict(self):
-        quote = UnifiedRealtimeQuote(code="600519", source=RealtimeSource.AKSHARE_EM)
+        quote = UnifiedRealtimeQuote(code="HPG", source=RealtimeSource.TVSI_MQTT)
 
         data = quote.to_dict()
 
-        self.assertEqual(data["code"], "600519")
-        self.assertEqual(data["source"], "akshare_em")
+        self.assertEqual(data["code"], "HPG")
+        self.assertEqual(data["source"], "tvsi_mqtt")
         self.assertNotIn("fetched_at", data)
         self.assertNotIn("provider_timestamp", data)
         self.assertNotIn("is_stale", data)
@@ -24,14 +24,14 @@ class UnifiedRealtimeQuoteMetadataTestCase(unittest.TestCase):
 
     def test_metadata_is_included_when_present(self):
         quote = UnifiedRealtimeQuote(
-            code="600519",
-            source=RealtimeSource.TENCENT,
-            price=1688.0,
+            code="HPG",
+            source=RealtimeSource.FALLBACK,
+            price=27500.0,
             fetched_at="2026-05-31T10:00:05+00:00",
             provider_timestamp="2026-05-31T10:00:00+00:00",
             is_stale=False,
             stale_seconds=5,
-            fallback_from="efinance",
+            fallback_from="ssi",
         )
 
         data = quote.to_dict()
@@ -40,7 +40,7 @@ class UnifiedRealtimeQuoteMetadataTestCase(unittest.TestCase):
         self.assertEqual(data["provider_timestamp"], "2026-05-31T10:00:00+00:00")
         self.assertIs(data["is_stale"], False)
         self.assertEqual(data["stale_seconds"], 5)
-        self.assertEqual(data["fallback_from"], "efinance")
+        self.assertEqual(data["fallback_from"], "ssi")
 
 
 class CircuitBreakerConcurrencyTestCase(unittest.TestCase):
@@ -50,7 +50,7 @@ class CircuitBreakerConcurrencyTestCase(unittest.TestCase):
             cooldown_seconds=0.01,
             half_open_max_calls=1,
         )
-        breaker.record_failure("akshare_em", "boom")
+        breaker.record_failure("ssi", "boom")
         time.sleep(0.02)
 
         barrier = threading.Barrier(2)
@@ -60,7 +60,7 @@ class CircuitBreakerConcurrencyTestCase(unittest.TestCase):
         def worker():
             try:
                 barrier.wait(timeout=1)
-                allowed.append(breaker.is_available("akshare_em"))
+                allowed.append(breaker.is_available("ssi"))
             except Exception as exc:  # pragma: no cover - thread collection
                 errors.append(exc)
 
@@ -72,7 +72,7 @@ class CircuitBreakerConcurrencyTestCase(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertCountEqual(allowed, [True, False])
-        self.assertEqual(breaker.get_status()["akshare_em"], CircuitBreaker.HALF_OPEN)
+        self.assertEqual(breaker.get_status()["ssi"], CircuitBreaker.HALF_OPEN)
 
     def test_concurrent_record_updates_keep_state_consistent(self):
         breaker = CircuitBreaker(
@@ -87,7 +87,7 @@ class CircuitBreakerConcurrencyTestCase(unittest.TestCase):
             try:
                 barrier.wait(timeout=1)
                 for _ in range(100):
-                    breaker.record_success("tushare")
+                    breaker.record_success("vci")
             except Exception as exc:  # pragma: no cover - thread collection
                 errors.append(exc)
 
@@ -95,7 +95,7 @@ class CircuitBreakerConcurrencyTestCase(unittest.TestCase):
             try:
                 barrier.wait(timeout=1)
                 for _ in range(100):
-                    breaker.record_failure("tushare", "network")
+                    breaker.record_failure("vci", "network")
             except Exception as exc:  # pragma: no cover - thread collection
                 errors.append(exc)
 
@@ -111,7 +111,7 @@ class CircuitBreakerConcurrencyTestCase(unittest.TestCase):
             thread.join(timeout=2)
 
         self.assertEqual(errors, [])
-        state = breaker._states["tushare"]
+        state = breaker._states["vci"]
         self.assertIn(state["state"], {CircuitBreaker.CLOSED, CircuitBreaker.OPEN, CircuitBreaker.HALF_OPEN})
         self.assertGreaterEqual(state["failures"], 0)
         self.assertGreaterEqual(state["half_open_calls"], 0)

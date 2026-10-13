@@ -16,7 +16,7 @@ def test_status_command_reports_unified_llm_and_notification_channels():
         }
     ]
     config = Config(
-        stock_list=["600519", "AAPL"],
+        stock_list=["HPG", "FPT"],
         litellm_model="deepseek/deepseek-v4-flash",
         agent_litellm_model="openai/gpt-4o-mini",
         llm_channels=[
@@ -29,7 +29,8 @@ def test_status_command_reports_unified_llm_and_notification_channels():
         llm_model_list=model_list,
         custom_webhook_urls=["https://example.com/webhook"],
         slack_webhook_url="https://hooks.slack.com/services/T/B/C",
-        serverchan3_sendkey="SCT123",
+        pushover_user_key="user",
+        pushover_api_token="token",
     )
     command = StatusCommand()
 
@@ -37,31 +38,35 @@ def test_status_command_reports_unified_llm_and_notification_channels():
     text = command._format_status(status, "telegram")
 
     assert status["ai_available"] is True
-    assert "主模型: deepseek/deepseek-v4-flash" in text
-    assert "Agent 模型: openai/gpt-4o-mini" in text
-    assert "LLM 渠道: deepseek" in text
-    assert "自定义 Webhook: ✅" in text
+    assert "Mô hình chính: deepseek/deepseek-v4-flash" in text
+    assert "Mô hình Agent: openai/gpt-4o-mini" in text
+    assert "Kênh LLM: deepseek" in text
+    assert "Webhook tuỳ chỉnh: ✅" in text
     assert "Slack: ✅" in text
-    assert "PushPlus/Pushover/Server酱3: ✅" in text
-    assert "系统就绪" in text
+    assert "Pushover: ✅" in text
+    # Kênh Trung Quốc đã gỡ không còn hiển thị / Removed Chinese channels are no longer listed
+    assert "WeCom" not in text
+    assert "Feishu" not in text
+    assert "Bocha" not in text
+    assert "Hệ thống sẵn sàng" in text
 
 
 def test_status_command_warns_when_no_llm_source_configured():
-    config = Config(stock_list=["600519"])
+    config = Config(stock_list=["HPG"])
     command = StatusCommand()
 
     status = command._collect_status(config)
     text = command._format_status(status, "telegram")
 
     assert status["ai_available"] is False
-    assert "主模型: 未配置" in text
-    assert "AI 服务未配置" in text
+    assert "Mô hình chính: Chưa cấu hình" in text
+    assert "Chưa cấu hình dịch vụ AI" in text
     assert "LITELLM_MODEL" in text
 
 
 def test_status_command_does_not_treat_managed_model_name_as_ready():
     config = Config(
-        stock_list=["600519"],
+        stock_list=["HPG"],
         litellm_model="openai/gpt-4o-mini",
         llm_model_list=[],
     )
@@ -71,12 +76,12 @@ def test_status_command_does_not_treat_managed_model_name_as_ready():
     text = command._format_status(status, "telegram")
 
     assert status["ai_available"] is False
-    assert "AI 服务未配置" in text
+    assert "Chưa cấu hình dịch vụ AI" in text
 
 
 def test_status_command_keeps_channel_mode_priority_over_legacy_keys():
     config = Config(
-        stock_list=["600519"],
+        stock_list=["HPG"],
         litellm_model="openai/gpt-4o-mini",
         llm_channels=[
             {
@@ -102,13 +107,13 @@ def test_status_command_keeps_channel_mode_priority_over_legacy_keys():
     text = command._format_status(status, "telegram")
 
     assert status["ai_available"] is False
-    assert "AI 服务未配置" in text
-    assert "主模型: openai/gpt-4o-mini" in text
+    assert "Chưa cấu hình dịch vụ AI" in text
+    assert "Mô hình chính: openai/gpt-4o-mini" in text
 
 
 def test_status_command_requires_primary_model_in_configured_router_models():
     config = Config(
-        stock_list=["600519"],
+        stock_list=["HPG"],
         litellm_model="openai/gpt-4o-mini",
         llm_channels=[
             {
@@ -133,13 +138,13 @@ def test_status_command_requires_primary_model_in_configured_router_models():
     text = command._format_status(status, "telegram")
 
     assert status["ai_available"] is False
-    assert "AI 服务未配置" in text
-    assert "系统就绪" not in text
+    assert "Chưa cấu hình dịch vụ AI" in text
+    assert "Hệ thống sẵn sàng" not in text
 
 
 def test_status_command_requires_primary_model_for_yaml_router_models():
     config = Config(
-        stock_list=["600519"],
+        stock_list=["HPG"],
         litellm_model="",
         llm_models_source="litellm_config",
         llm_model_list=[
@@ -159,14 +164,14 @@ def test_status_command_requires_primary_model_for_yaml_router_models():
 
     assert status["ai_yaml"] is True
     assert status["ai_available"] is False
-    assert "主模型: 未配置" in text
-    assert "AI 服务未配置" in text
-    assert "系统就绪" not in text
+    assert "Mô hình chính: Chưa cấu hình" in text
+    assert "Chưa cấu hình dịch vụ AI" in text
+    assert "Hệ thống sẵn sàng" not in text
 
 
 def test_status_command_does_not_treat_invalid_yaml_path_as_active():
     config = Config(
-        stock_list=["600519"],
+        stock_list=["HPG"],
         litellm_config_path="missing.yaml",
         llm_models_source="legacy_env",
         llm_model_list=[],
@@ -179,12 +184,12 @@ def test_status_command_does_not_treat_invalid_yaml_path_as_active():
     assert status["ai_yaml"] is False
     assert status["ai_available"] is False
     assert "LiteLLM YAML: ❌" in text
-    assert "AI 服务未配置" in text
+    assert "Chưa cấu hình dịch vụ AI" in text
 
 
 def test_status_command_treats_direct_env_provider_model_as_ready():
     config = Config(
-        stock_list=["600519"],
+        stock_list=["HPG"],
         litellm_model="cohere/command-r-plus",
         llm_model_list=[],
     )
@@ -194,7 +199,7 @@ def test_status_command_treats_direct_env_provider_model_as_ready():
     text = command._format_status(status, "telegram")
 
     assert status["ai_available"] is True
-    assert "系统就绪" in text
+    assert "Hệ thống sẵn sàng" in text
 
 
 def test_status_command_supports_legacy_key_compatibility_without_explicit_litellm_model(monkeypatch, tmp_path):
@@ -231,7 +236,7 @@ def test_status_command_supports_legacy_key_compatibility_without_explicit_litel
         text = command._format_status(status, "telegram")
 
         assert status["ai_available"] is True
-        assert "主模型: openai/gpt-4o-mini" in text
-        assert "AI 服务未配置" not in text
+        assert "Mô hình chính: openai/gpt-4o-mini" in text
+        assert "Chưa cấu hình dịch vụ AI" not in text
     finally:
         Config.reset_instance()

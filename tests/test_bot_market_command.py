@@ -19,7 +19,7 @@ from bot.models import BotMessage, ChatType
 
 def _make_message() -> BotMessage:
     return BotMessage(
-        platform="feishu",
+        platform="telegram",
         message_id="m1",
         user_id="u1",
         user_name="tester",
@@ -101,12 +101,11 @@ class MarketCommandRegionFilterTestCase(unittest.TestCase):
             notifier,
         )
 
-    def test_both_with_cn_us_open_passes_override_region_cn_us(self) -> None:
-        """MARKET_REVIEW_REGION=both + open markets {cn, us} -> override_region='cn,us'."""
+    def _assert_review_called_with_region(self, region_config: str, expected: str) -> None:
         message = _make_message()
         config, notifier, runtime_analyzer, runtime_search, market_review_module, runtime_module, _ = self._patch_dependencies(
-            market_review_region="both",
-            open_markets={"cn", "us"},
+            market_review_region=region_config,
+            open_markets={"vn"},
         )
 
         cmd = MarketCommand()
@@ -121,44 +120,34 @@ class MarketCommandRegionFilterTestCase(unittest.TestCase):
             analyzer=runtime_analyzer,
             search_service=runtime_search,
             send_notification=True,
-            override_region="cn,us",
+            override_region=expected,
             trigger_source="bot",
         )
-        kwargs = market_review_module.run_market_review.call_args.kwargs
-        self.assertEqual(kwargs.get("override_region"), "cn,us")
 
-    def test_both_with_cn_hk_open_passes_override_region_cn_hk(self) -> None:
-        """MARKET_REVIEW_REGION=both + open markets {cn, hk} -> override_region='cn,hk'."""
-        message = _make_message()
-        config, notifier, runtime_analyzer, runtime_search, market_review_module, runtime_module, _ = self._patch_dependencies(
-            market_review_region="both",
-            open_markets={"cn", "hk"},
-        )
+    def test_vn_open_passes_override_region_vn(self) -> None:
+        """MARKET_REVIEW_REGION=vn + thị trường VN mở cửa -> override_region='vn'."""
+        self._assert_review_called_with_region("vn", "vn")
 
+    def test_legacy_region_config_is_normalized_to_vn(self) -> None:
+        """Giá trị vùng cũ (cn/both) được chuẩn hoá về 'vn'."""
+        for legacy in ("cn", "both"):
+            with self.subTest(region=legacy):
+                self._assert_review_called_with_region(legacy, "vn")
+
+    def test_missing_region_config_defaults_to_vn(self) -> None:
+        self._assert_review_called_with_region("", "vn")
+
+    def test_aliases_are_vietnamese_only(self) -> None:
         cmd = MarketCommand()
-        cmd._run_market_review(message, config, None)
-
-        runtime_module.build_market_review_runtime.assert_called_once_with(
-            config,
-            source_message=message,
-        )
-        market_review_module.run_market_review.assert_called_once_with(
-            notifier=notifier,
-            analyzer=runtime_analyzer,
-            search_service=runtime_search,
-            send_notification=True,
-            override_region="cn,hk",
-            trigger_source="bot",
-        )
-        market_review_module.run_market_review.assert_called_once()
-        kwargs = market_review_module.run_market_review.call_args.kwargs
-        self.assertEqual(kwargs.get("override_region"), "cn,hk")
+        self.assertEqual(cmd.aliases, ["m", "thitruong", "diemlai", "tongquan"])
+        for alias in cmd.aliases:
+            self.assertTrue(alias.isascii())
 
     def test_all_relevant_markets_closed_skips_review(self) -> None:
         """If compute_effective_region returns '', skip review and notify."""
         message = _make_message()
         config, notifier, runtime_analyzer, runtime_search, market_review_module, runtime_module, notify_notifier = self._patch_dependencies(
-            market_review_region="cn",
+            market_review_region="vn",
             open_markets=set(),
         )
 
@@ -169,15 +158,15 @@ class MarketCommandRegionFilterTestCase(unittest.TestCase):
         runtime_module.build_market_review_runtime.assert_not_called()
         notify_notifier.send.assert_called_once()
         sent = notify_notifier.send.call_args.args[0]
-        self.assertIn("休市", sent)
+        self.assertIn("nghỉ giao dịch", sent)
         self.assertEqual(notify_notifier.send.call_args.kwargs["route_type"], "report")
 
     def test_trading_day_check_disabled_does_not_pass_override(self) -> None:
         """When TRADING_DAY_CHECK_ENABLED=false, override_region stays None."""
         message = _make_message()
         config, notifier, runtime_analyzer, runtime_search, market_review_module, runtime_module, _ = self._patch_dependencies(
-            market_review_region="both",
-            open_markets={"cn"},
+            market_review_region="vn",
+            open_markets={"vn"},
             trading_day_check_enabled=False,
         )
 
@@ -204,8 +193,8 @@ class MarketCommandRegionFilterTestCase(unittest.TestCase):
         """Runtime construction failure should still release the command-level lock token."""
         message = _make_message()
         config, notifier, runtime_analyzer, runtime_search, market_review_module, runtime_module, _ = self._patch_dependencies(
-            market_review_region="cn",
-            open_markets={"cn"},
+            market_review_region="vn",
+            open_markets={"vn"},
         )
 
         cmd = MarketCommand()
@@ -222,8 +211,8 @@ class MarketCommandRegionFilterTestCase(unittest.TestCase):
         """Thread start failure in execute() should release lock and return an error."""
         message = _make_message()
         config, _, _, _, _, _, _ = self._patch_dependencies(
-            market_review_region="cn",
-            open_markets={"cn"},
+            market_review_region="vn",
+            open_markets={"vn"},
         )
 
         cmd = MarketCommand()
@@ -237,7 +226,7 @@ class MarketCommandRegionFilterTestCase(unittest.TestCase):
             response = cmd.execute(message, [])
 
         release_market_review_lock.assert_called_once_with(lock_token)
-        self.assertEqual(response.text, "❌ 错误：大盘复盘启动失败，已释放运行锁；请稍后重试")
+        self.assertEqual(response.text, "❌ Lỗi: Khởi động điểm lại thị trường thất bại, đã giải phóng khoá chạy; vui lòng thử lại sau")
 
 
 

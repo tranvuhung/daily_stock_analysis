@@ -93,12 +93,10 @@ def build_market_review_runtime(
     has_search_capability = getattr(config, "has_search_capability_enabled", None)
     if callable(has_search_capability) and has_search_capability():
         search_service = SearchService(
-            bocha_keys=getattr(config, "bocha_api_keys", None),
             tavily_keys=getattr(config, "tavily_api_keys", None),
             anspire_keys=getattr(config, "anspire_api_keys", None),
             brave_keys=getattr(config, "brave_api_keys", None),
             serpapi_keys=getattr(config, "serpapi_keys", None),
-            minimax_keys=getattr(config, "minimax_api_keys", None),
             searxng_base_urls=getattr(config, "searxng_base_urls", None),
             searxng_public_instances_enabled=getattr(
                 config,
@@ -115,15 +113,15 @@ def build_market_review_runtime(
         analyzer = GeminiAnalyzer(config=config)
         backend_error = _get_analyzer_generation_backend_config_error(analyzer)
         if backend_error is not None:
-            logger.error("AI 分析器生成后端配置错误: %s", backend_error)
+            logger.error("Cấu hình backend sinh nội dung của bộ phân tích AI bị lỗi: %s", backend_error)
         elif not analyzer.is_available():
-            logger.warning("AI 分析器初始化后不可用，请检查 LLM 配置")
+            logger.warning("Bộ phân tích AI không khả dụng sau khi khởi tạo, hãy kiểm tra cấu hình LLM")
             analyzer = None
     else:
         backend_error = _get_config_generation_backend_error(config)
         if backend_error is not None:
-            logger.error("AI 分析器生成后端配置错误: %s", backend_error)
+            logger.error("Cấu hình backend sinh nội dung của bộ phân tích AI bị lỗi: %s", backend_error)
         else:
-            logger.warning("未检测到 LLM 模型配置，将仅使用模板生成报告")
+            logger.warning("Không phát hiện cấu hình mô hình LLM, sẽ chỉ dùng template để tạo báo cáo")
 
     return notifier, analyzer, search_service

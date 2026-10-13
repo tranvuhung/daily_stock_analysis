@@ -52,10 +52,10 @@ def test_prepare_webui_frontend_assets_reuses_prebuilt_static_without_source(tmp
     with caplog.at_level(logging.INFO):
         assert webui_frontend.prepare_webui_frontend_assets() is True
 
-    assert "检测到可直接复用的前端静态产物" in caplog.text
-    assert "未找到前端项目，无法自动构建" not in caplog.text
-    assert "未检测到 npm，无法自动构建前端" not in caplog.text
-    assert "assets/ 目录不存在或无 CSS/JS 文件" not in caplog.text
+    assert "Phát hiện sản phẩm tĩnh frontend có thể dùng lại" in caplog.text
+    assert "Không tìm thấy dự án frontend, không thể tự build" not in caplog.text
+    assert "Không phát hiện npm, không thể tự build frontend" not in caplog.text
+    assert "không tồn tại hoặc không có file CSS/JS" not in caplog.text
 
 
 def test_prepare_webui_frontend_assets_fails_without_static_or_source(tmp_path, monkeypatch, caplog):
@@ -67,11 +67,11 @@ def test_prepare_webui_frontend_assets_fails_without_static_or_source(tmp_path, 
     with caplog.at_level(logging.WARNING):
         assert webui_frontend.prepare_webui_frontend_assets() is False
 
-    assert "未找到前端项目，无法自动构建" in caplog.text
+    assert "Không tìm thấy dự án frontend, không thể tự build" in caplog.text
 
 
 def test_prepare_webui_frontend_assets_warns_when_assets_missing(tmp_path, monkeypatch, caplog):
-    """index.html 存在但 static/assets/ 缺失时应发出 WebUI 显示异常警告（Issue #944）。"""
+    """Cảnh báo WebUI hiển thị lỗi khi có index.html nhưng thiếu static/assets/ (Issue #944)."""
     repo_root = _prepare_fake_repo(tmp_path, monkeypatch)
     static_index = repo_root / "static" / "index.html"
     static_index.parent.mkdir(parents=True)
@@ -86,12 +86,12 @@ def test_prepare_webui_frontend_assets_warns_when_assets_missing(tmp_path, monke
         result = webui_frontend.prepare_webui_frontend_assets()
 
     assert result is True  # function still returns True (index.html present)
-    assert "目录不存在或无 CSS/JS 文件" in caplog.text
-    assert "WebUI 将因缺少样式与脚本而显示异常" in caplog.text
+    assert "không tồn tại hoặc không có file CSS/JS" in caplog.text
+    assert "WebUI sẽ hiển thị lỗi do thiếu style và script" in caplog.text
 
 
 def test_prepare_webui_frontend_assets_auto_build_disabled_warns_when_assets_missing(tmp_path, monkeypatch, caplog):
-    """WEBUI_AUTO_BUILD=false 且 assets 缺失时也应发出警告。"""
+    """Cũng phải cảnh báo khi WEBUI_AUTO_BUILD=false và thiếu assets."""
     repo_root = _prepare_fake_repo(tmp_path, monkeypatch)
     static_index = repo_root / "static" / "index.html"
     static_index.parent.mkdir(parents=True)
@@ -105,7 +105,7 @@ def test_prepare_webui_frontend_assets_auto_build_disabled_warns_when_assets_mis
         result = webui_frontend.prepare_webui_frontend_assets()
 
     assert result is True  # index.html present, still returns True
-    assert "目录不存在或无 CSS/JS 文件" in caplog.text
+    assert "không tồn tại hoặc không có file CSS/JS" in caplog.text
 
 
 def test_needs_frontend_build_uses_content_fingerprint_when_mtime_is_preserved(tmp_path):
@@ -173,7 +173,7 @@ def test_source_input_discovery_errors_fall_back_without_aborting(tmp_path, monk
     with caplog.at_level(logging.WARNING):
         assert webui_frontend._calculate_source_fingerprint(frontend_dir) is None
 
-    assert "回退到文件时间检查" in caplog.text
+    assert "quay về kiểm tra theo thời gian file" in caplog.text
 
 
 def test_undecodable_build_metadata_is_treated_as_stale(tmp_path, monkeypatch, caplog):
@@ -189,7 +189,7 @@ def test_undecodable_build_metadata_is_treated_as_stale(tmp_path, monkeypatch, c
     with caplog.at_level(logging.WARNING):
         assert webui_frontend.prepare_webui_frontend_assets() is True
 
-    assert "源码与现有静态产物不一致" in caplog.text
+    assert "không khớp sản phẩm tĩnh hiện có" in caplog.text
 
 
 def test_has_static_assets_returns_false_for_missing_dir(tmp_path):

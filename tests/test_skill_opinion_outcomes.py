@@ -56,7 +56,7 @@ def _add_sample(
     *,
     signal: str = "buy",
     skill_id: str = "alpha",
-    code: str = "600519",
+    code: str = "HPG",
     context_snapshot=None,
     created_at: datetime = datetime(2024, 1, 2, 18, 0, 0),
     operation_advice: str = "hold",
@@ -114,7 +114,7 @@ def _effective_snapshot(day: str) -> dict:
         "enhanced_context": {"date": day},
         "market_phase_summary": {
             "phase": "postmarket",
-            "market": "cn",
+            "market": "vn",
             "effective_daily_bar_date": day,
         }
     }
@@ -184,7 +184,7 @@ def test_effective_daily_bar_date_requires_exact_start_bar(isolated_db) -> None:
     )
     _seed_bars(
         isolated_db,
-        code="600519",
+        code="HPG",
         bars=[
             (date(2024, 1, 2), 100.0),
             (date(2024, 1, 4), 105.0),
@@ -207,7 +207,7 @@ def test_effective_daily_bar_date_requires_exact_start_bar(isolated_db) -> None:
         (
             {
                 "phase": "postmarket",
-                "market": "cn",
+                "market": "vn",
                 "effective_daily_bar_date": "invalid",
             },
             "invalid_effective_daily_bar_date",
@@ -215,7 +215,7 @@ def test_effective_daily_bar_date_requires_exact_start_bar(isolated_db) -> None:
         (
             {
                 "phase": "postmarket",
-                "market": "cn",
+                "market": "vn",
                 "effective_daily_bar_date": "2024-01-09",
             },
             "future_effective_daily_bar_date",
@@ -223,17 +223,19 @@ def test_effective_daily_bar_date_requires_exact_start_bar(isolated_db) -> None:
         (
             {
                 "phase": "postmarket",
-                "market": "cn",
+                "market": "vn",
                 "effective_daily_bar_date": "2024-01-06",
             },
             "invalid_effective_daily_bar_date",
         ),
         (
+            # Ngữ cảnh phiên của thị trường đã loại bỏ không còn định danh được mã.
+            # A phase context from a removed market no longer resolves the stock identity.
             {"phase": "postmarket", "market": "us"},
-            "invalid_market_phase_context",
+            "invalid_stock_code",
         ),
         (
-            {"phase": "unknown", "market": "cn"},
+            {"phase": "unknown", "market": "vn"},
             "unresolvable_expected_start_date",
         ),
     ],
@@ -245,7 +247,7 @@ def test_permanently_invalid_start_metadata_is_terminal_unable(
 ) -> None:
     _, sample_id = _add_sample(
         isolated_db,
-        code="600519.SH",
+        code="HPG.VN",
         context_snapshot={
             "enhanced_context": {"date": "2024-01-08"},
             "market_phase_summary": phase_summary,
@@ -269,51 +271,6 @@ def test_permanently_invalid_start_metadata_is_terminal_unable(
     )["processed_keys"] == 0
 
 
-def test_outcome_rebuilds_legacy_cn_snapshot_before_using_effective_date(
-    isolated_db,
-) -> None:
-    _, sample_id = _add_sample(
-        isolated_db,
-        code="7203.T",
-        context_snapshot={
-            "enhanced_context": {"date": "2026-01-01"},
-            "market_phase_summary": {
-                "market": "cn",
-                "phase": "postmarket",
-                "market_local_time": "2026-01-01T10:00:00+08:00",
-                "session_date": "2026-01-01",
-                "effective_daily_bar_date": "2025-12-31",
-                "is_trading_day": True,
-                "is_market_open_now": False,
-                "is_partial_bar": False,
-                "trigger_source": "scheduled_job",
-                "analysis_intent": "postmarket",
-                "warnings": ["legacy_snapshot"],
-            },
-        },
-        created_at=datetime(2026, 1, 1, 0, 0, 0),
-    )
-    _seed_bars(
-        isolated_db,
-        code="7203.T",
-        bars=[
-            (date(2025, 12, 30), 100.0),
-            (date(2026, 1, 5), 105.0),
-        ],
-    )
-
-    item = SkillOpinionOutcomeService(db_manager=isolated_db).run_outcomes(
-        sample_id=sample_id,
-        horizons=["1d"],
-    )["items"][0]
-
-    assert item["eval_status"] == "evaluated"
-    assert item["start_trade_date"] == "2025-12-30"
-    assert item["end_trade_date"] == "2026-01-05"
-    assert item["start_price"] == pytest.approx(100.0)
-    assert item["end_close"] == pytest.approx(105.0)
-
-
 def test_outcome_reuses_resolver_to_choose_newest_complete_equivalent_window(
     isolated_db,
 ) -> None:
@@ -321,23 +278,26 @@ def test_outcome_reuses_resolver_to_choose_newest_complete_equivalent_window(
 
     _, sample_id = _add_sample(
         isolated_db,
-        code="600519.SH",
+        code="HPG.VN",
         context_snapshot={
             "enhanced_context": {"date": "2024-01-07"},
             "market_phase_summary": {
                 "phase": "non_trading",
-                "market": "cn",
+                "market": "vn",
+                # VN không có lịch giao dịch nên cần ngày nến đã lưu.
+                # Vietnam has no exchange calendar, so the persisted bar date is required.
+                "effective_daily_bar_date": "2024-01-05",
             },
         },
     )
     _seed_bars(
         isolated_db,
-        code="600519.SH",
+        code="HPG.VN",
         bars=[(date(2024, 1, 2), 50.0)],
     )
     _seed_bars(
         isolated_db,
-        code="600519",
+        code="HPG",
         bars=[
             (date(2024, 1, 5), 100.0),
             (date(2024, 1, 8), 105.0),
@@ -359,19 +319,19 @@ def test_outcome_reuses_resolver_to_choose_newest_complete_equivalent_window(
 def test_outcome_rejects_all_stale_equivalent_windows(isolated_db) -> None:
     _, sample_id = _add_sample(
         isolated_db,
-        code="600517.SH",
+        code="HSG.VN",
         context_snapshot={
             "enhanced_context": {"date": "2024-01-07"},
             "market_phase_summary": {
                 "phase": "non_trading",
-                "market": "cn",
+                "market": "vn",
                 "effective_daily_bar_date": "2024-01-05",
             },
         },
     )
     _seed_bars(
         isolated_db,
-        code="600517.SH",
+        code="HSG.VN",
         bars=[
             (date(2020, 1, 2), 50.0),
             (date(2024, 1, 8), 55.0),
@@ -379,7 +339,7 @@ def test_outcome_rejects_all_stale_equivalent_windows(isolated_db) -> None:
     )
     _seed_bars(
         isolated_db,
-        code="600517",
+        code="HSG",
         bars=[
             (date(2021, 1, 4), 60.0),
             (date(2024, 1, 9), 65.0),
@@ -404,7 +364,7 @@ def test_outcome_rejects_all_stale_equivalent_windows(isolated_db) -> None:
 def test_outcome_invalid_stock_code_fails_closed(isolated_db) -> None:
     _, sample_id = _add_sample(
         isolated_db,
-        code="600519.SZ",
+        code="AAPL.US",
         context_snapshot=_effective_snapshot("2024-01-05"),
     )
 
@@ -424,17 +384,17 @@ def test_outcome_never_combines_start_and_forward_bars_across_code_shapes(
 ) -> None:
     _, sample_id = _add_sample(
         isolated_db,
-        code="600519.SH",
+        code="HPG.VN",
         context_snapshot=_effective_snapshot("2024-01-02"),
     )
     _seed_bars(
         isolated_db,
-        code="600519.SH",
+        code="HPG.VN",
         bars=[(date(2024, 1, 2), 100.0)],
     )
     _seed_bars(
         isolated_db,
-        code="600519",
+        code="HPG",
         bars=[(date(2024, 1, 3), 105.0)],
     )
 
@@ -485,7 +445,7 @@ def test_each_skill_uses_its_own_signal_not_history_decision(isolated_db) -> Non
     with isolated_db.session_scope() as session:
         sell_sample = SkillOpinionSampleRecord(
             analysis_history_id=history_id,
-            stock_code="600519",
+            stock_code="HPG",
             skill_id="seller",
             signal="sell",
             confidence=0.8,
@@ -496,7 +456,7 @@ def test_each_skill_uses_its_own_signal_not_history_decision(isolated_db) -> Non
         sell_sample_id = int(sell_sample.id)
     _seed_bars(
         isolated_db,
-        code="600519",
+        code="HPG",
         bars=[
             (date(2024, 1, 2), 100.0),
             (date(2024, 1, 3), 105.0),
@@ -519,20 +479,20 @@ def test_pending_is_retried_but_terminal_outcome_is_immutable(isolated_db) -> No
         isolated_db,
         context_snapshot=_effective_snapshot("2024-01-02"),
     )
-    _seed_bars(isolated_db, code="600519", bars=[(date(2024, 1, 2), 100.0)])
+    _seed_bars(isolated_db, code="HPG", bars=[(date(2024, 1, 2), 100.0)])
     service = SkillOpinionOutcomeService(db_manager=isolated_db)
 
     pending = service.run_outcomes(sample_id=sample_id, horizons=["1d"])["items"][0]
     assert pending["eval_status"] == "pending"
 
-    _seed_bars(isolated_db, code="600519", bars=[(date(2024, 1, 3), 105.0)])
+    _seed_bars(isolated_db, code="HPG", bars=[(date(2024, 1, 3), 105.0)])
     evaluated = service.run_outcomes(sample_id=sample_id, horizons=["1d"])["items"][0]
     assert evaluated["eval_status"] == "evaluated"
     assert evaluated["stock_return_pct"] == pytest.approx(5.0)
 
     with isolated_db.session_scope() as session:
         bar = session.query(StockDaily).filter_by(
-            code="600519",
+            code="HPG",
             date=date(2024, 1, 3),
         ).one()
         bar.close = 90.0

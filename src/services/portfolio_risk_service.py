@@ -33,8 +33,6 @@ class PortfolioRiskService:
         self.portfolio_service = portfolio_service or PortfolioService(repo=self.repo)
         self.decision_signal_service = decision_signal_service or DecisionSignalService(portfolio_repo=self.repo)
         self.config = config or get_config()
-        self._data_manager = None
-        self._data_manager_init_error = ""
 
     def get_risk_report(
         self,
@@ -189,7 +187,7 @@ class PortfolioRiskService:
             for pos in account.get("positions", []) or []:
                 symbol = str(pos.get("symbol") or "").strip().upper()
                 market = str(pos.get("market") or "").strip().lower()
-                if not symbol or market not in {"cn", "hk", "us"}:
+                if not symbol or market != "vn":
                     continue
                 signal_stock_code = DecisionSignalService.normalize_stock_code_for_signal(symbol, market=market)
                 positions.append({
@@ -288,11 +286,11 @@ class PortfolioRiskService:
                 if not symbol:
                     continue
                 market_value = float(pos.get("market_value_base") or 0.0)
-                valuation_currency = str(pos.get("valuation_currency") or account.get("base_currency") or "CNY")
+                valuation_currency = str(pos.get("valuation_currency") or account.get("base_currency") or "VND")
                 converted, _, _ = self.portfolio_service.convert_amount(
                     amount=market_value,
                     from_currency=valuation_currency,
-                    to_currency="CNY",
+                    to_currency="VND",
                     as_of_date=as_of_date,
                 )
                 exposure_by_symbol[symbol] = exposure_by_symbol.get(symbol, 0.0) + converted
@@ -344,11 +342,11 @@ class PortfolioRiskService:
                     continue
 
                 market_value = float(pos.get("market_value_base") or 0.0)
-                valuation_currency = str(pos.get("valuation_currency") or account.get("base_currency") or "CNY")
+                valuation_currency = str(pos.get("valuation_currency") or account.get("base_currency") or "VND")
                 converted, _, _ = self.portfolio_service.convert_amount(
                     amount=market_value,
                     from_currency=valuation_currency,
-                    to_currency="CNY",
+                    to_currency="VND",
                     as_of_date=as_of_date,
                 )
 
@@ -399,69 +397,12 @@ class PortfolioRiskService:
         if cache_key in board_cache:
             return board_cache[cache_key]
 
-        if market != "cn":
-            coverage["unclassified_count"] += 1
-            board_cache[cache_key] = "UNCLASSIFIED"
-            return board_cache[cache_key]
-
-        try:
-            boards = self._fetch_belong_boards(symbol)
-            sector_name = self._pick_primary_board_name(boards)
-            if sector_name:
-                coverage["classified_count"] += 1
-                board_cache[cache_key] = sector_name
-                return board_cache[cache_key]
-        except Exception as exc:
-            coverage["failed_count"] += 1
-            errors.append(f"{symbol}: {exc}")
-
+        # Chưa có nguồn phân ngành cho cổ phiếu Việt Nam nên mọi vị thế đều chưa phân loại.
+        # No Vietnam sector-classification source yet; every position is unclassified.
         coverage["unclassified_count"] += 1
         board_cache[cache_key] = "UNCLASSIFIED"
         return board_cache[cache_key]
 
-    def _fetch_belong_boards(self, symbol: str) -> List[Dict[str, Any]]:
-        manager = self._get_data_manager()
-        if manager is None:
-            return []
-        result = manager.get_belong_boards(symbol)
-        if isinstance(result, list):
-            return result
-        return []
-
-    @staticmethod
-    def _pick_primary_board_name(boards: List[Dict[str, Any]]) -> Optional[str]:
-        if not boards:
-            return None
-
-        preferred: Optional[str] = None
-        fallback: Optional[str] = None
-        for item in boards:
-            if not isinstance(item, dict):
-                continue
-            name = str(item.get("name") or "").strip()
-            if not name:
-                continue
-            if fallback is None:
-                fallback = name
-            type_text = str(item.get("type") or "").strip().lower()
-            if "行业" in type_text or "industry" in type_text:
-                preferred = name
-                break
-        return preferred or fallback
-
-    def _get_data_manager(self):
-        if self._data_manager is not None:
-            return self._data_manager
-        if self._data_manager_init_error:
-            return None
-        try:
-            from data_provider import DataFetcherManager
-
-            self._data_manager = DataFetcherManager()
-            return self._data_manager
-        except Exception as exc:  # pragma: no cover - fail-open initialization
-            self._data_manager_init_error = str(exc)
-            return None
 
     def _build_drawdown(
         self,
@@ -493,8 +434,8 @@ class PortfolioRiskService:
             key = row.snapshot_date.isoformat()
             converted, stale, _ = self.portfolio_service.convert_amount(
                 amount=float(row.total_equity or 0.0),
-                from_currency=str(row.base_currency or "CNY"),
-                to_currency="CNY",
+                from_currency=str(row.base_currency or "VND"),
+                to_currency="VND",
                 as_of_date=row.snapshot_date,
             )
             grouped[key] = grouped.get(key, 0.0) + converted

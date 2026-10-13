@@ -67,13 +67,11 @@ import logging
 import sys
 import time
 import uuid
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timezone
 
 from src.webui_frontend import prepare_webui_frontend_assets
 from src.config import get_config, Config
 from src.logging_config import setup_logging
-from src.brokers.futu.portfolio import FutuPortfolioError
-from data_provider.base import canonical_stock_code
 from src.services.stock_list_parser import (
     AnalysisTarget,
     ParseStatus,
@@ -131,7 +129,7 @@ def _read_active_env_values() -> Optional[Dict[str, str]]:
     try:
         values = dotenv_values(env_path)
     except Exception as exc:  # pragma: no cover - defensive branch
-        logger.warning("读取配置文件 %s 失败，继续沿用当前环境变量: %s", env_path, exc)
+        logger.warning("Đọc file cấu hình %s thất bại, tiếp tục dùng biến môi trường hiện tại: %s", env_path, exc)
         return None
 
     return {
@@ -204,9 +202,9 @@ def _setup_runtime_logging(log_dir: str, debug: bool = False) -> bool:
         return True
     except OSError as exc:
         logger.warning(
-            "文件日志初始化失败，已降级为控制台日志输出；日志目录 %r 当前不可写或不可创建: %s。"
-            "官方 Docker 镜像启动入口会自动修复默认挂载目录权限；若仍失败，"
-            "请检查是否使用了 --user、只读挂载、rootless Docker 或 NFS 等限制写入的环境。",
+            "Khởi tạo log ra file thất bại, đã hạ cấp sang log ra console; thư mục log %r hiện không ghi được hoặc không tạo được: %s. "
+            "Entrypoint của Docker image chính thức sẽ tự sửa quyền thư mục mount mặc định; nếu vẫn lỗi, "
+            "hãy kiểm tra có dùng --user, mount chỉ đọc, rootless Docker hoặc NFS... làm hạn chế ghi hay không.",
             log_dir,
             exc,
         )
@@ -277,173 +275,165 @@ def _reload_env_file_values_preserving_overrides() -> None:
 def parse_arguments() -> argparse.Namespace:
     """Parse command-line arguments"""
     parser = argparse.ArgumentParser(
-        description='A股自选股智能分析系统',
+        description='Hệ thống phân tích thông minh cổ phiếu Việt Nam',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
-示例:
-  python main.py                    # 正常运行
-  python main.py --debug            # 调试模式
-  python main.py --dry-run          # 仅获取数据，不进行 AI 分析
-  python main.py --stocks 600519,000001  # 指定分析特定股票
-  python main.py --stocks sh000016,000300.CSI,930955.CSI  # 指定分析已登记指数（sh/sz 前缀或 .CSI alias）
-  python main.py --portfolio futu   # 使用 Futu 真实正股持仓（覆盖 --stocks）
-  python main.py --no-notify        # 不发送推送通知
-  python main.py --check-notify     # 检查通知配置，不发送通知
-  python main.py --single-notify    # 启用单股推送模式（每分析完一只立即推送）
-  python main.py --schedule         # 启用定时任务模式
-  python main.py --market-review    # 仅运行大盘复盘
+Ví dụ:
+  python main.py                    # Chạy bình thường
+  python main.py --debug            # Chế độ debug
+  python main.py --dry-run          # Chỉ lấy dữ liệu, không chạy phân tích AI
+  python main.py --stocks HPG,FPT,VCB  # Phân tích các mã chỉ định
+  python main.py --stocks VNINDEX   # Phân tích chỉ số đã đăng ký
+  python main.py --no-notify        # Không gửi thông báo
+  python main.py --check-notify     # Kiểm tra cấu hình thông báo, không gửi
+  python main.py --single-notify    # Bật chế độ gửi từng mã (phân tích xong mã nào gửi ngay mã đó)
+  python main.py --schedule         # Bật chế độ chạy định kỳ
+  python main.py --market-review    # Chỉ chạy tổng kết thị trường
         '''
     )
 
     parser.add_argument(
         '--debug',
         action='store_true',
-        help='启用调试模式，输出详细日志'
+        help='Bật chế độ debug, ghi log chi tiết'
     )
 
     parser.add_argument(
         '--dry-run',
         action='store_true',
-        help='仅获取数据，不进行 AI 分析'
+        help='Chỉ lấy dữ liệu, không chạy phân tích AI'
     )
 
     parser.add_argument(
         '--stocks',
         type=str,
-        help='指定要分析的股票代码，逗号分隔（覆盖配置文件）；支持已登记指数：sh/sz 前缀（如 sh000016）或 .CSI alias（如 000300.CSI、930955.CSI）'
-    )
-
-    parser.add_argument(
-        '--portfolio',
-        type=str.lower,
-        choices=('futu',),
-        help='使用券商真实持仓作为股票列表；当前支持 futu，并覆盖 --stocks/STOCK_LIST'
+        help='Mã cổ phiếu cần phân tích, phân tách bằng dấu phẩy (ghi đè file cấu hình), ví dụ HPG,FPT,VCB; hỗ trợ chỉ số đã đăng ký như VNINDEX'
     )
 
     parser.add_argument(
         '--no-notify',
         action='store_true',
-        help='不发送推送通知'
+        help='Không gửi thông báo'
     )
 
     parser.add_argument(
         '--check-notify',
         action='store_true',
-        help='只读检查通知渠道配置，不发送通知'
+        help='Chỉ kiểm tra (chỉ đọc) cấu hình kênh thông báo, không gửi thông báo'
     )
 
     parser.add_argument(
         '--single-notify',
         action='store_true',
-        help='启用单股推送模式：每分析完一只股票立即推送，而不是汇总推送'
+        help='Bật chế độ gửi từng mã: phân tích xong mã nào gửi ngay mã đó thay vì gửi tổng hợp'
     )
 
     parser.add_argument(
         '--workers',
         type=int,
         default=None,
-        help='并发线程数（默认使用配置值）'
+        help='Số luồng chạy song song (mặc định dùng giá trị cấu hình)'
     )
 
     parser.add_argument(
         '--schedule',
         action='store_true',
-        help='启用定时任务模式，每日定时执行'
+        help='Bật chế độ chạy định kỳ, chạy hằng ngày theo giờ đã đặt'
     )
 
     parser.add_argument(
         '--no-run-immediately',
         action='store_true',
-        help='定时任务启动时不立即执行一次'
+        help='Không chạy ngay một lần khi khởi động chế độ định kỳ'
     )
 
     parser.add_argument(
         '--market-review',
         action='store_true',
-        help='仅运行大盘复盘分析'
+        help='Chỉ chạy tổng kết thị trường'
     )
 
     parser.add_argument(
         '--no-market-review',
         action='store_true',
-        help='跳过大盘复盘分析'
+        help='Bỏ qua tổng kết thị trường'
     )
 
     parser.add_argument(
         '--force-run',
         action='store_true',
-        help='跳过交易日检查，强制执行全量分析（Issue #373）'
+        help='Bỏ qua kiểm tra ngày giao dịch, buộc chạy phân tích toàn bộ (Issue #373)'
     )
 
     parser.add_argument(
         '--webui',
         action='store_true',
-        help='启动 Web 管理界面'
+        help='Khởi động giao diện quản trị Web'
     )
 
     parser.add_argument(
         '--webui-only',
         action='store_true',
-        help='仅启动 Web 服务，不执行自动分析'
+        help='Chỉ khởi động dịch vụ Web, không tự chạy phân tích'
     )
 
     parser.add_argument(
         '--serve',
         action='store_true',
-        help='启动 FastAPI 后端服务（同时执行分析任务）'
+        help='Khởi động dịch vụ backend FastAPI (đồng thời chạy tác vụ phân tích)'
     )
 
     parser.add_argument(
         '--serve-only',
         action='store_true',
-        help='仅启动 FastAPI 后端服务，不自动执行分析'
+        help='Chỉ khởi động dịch vụ backend FastAPI, không tự chạy phân tích'
     )
 
     parser.add_argument(
         '--port',
         type=int,
         default=None,
-        help='FastAPI 服务端口（默认使用 WEBUI_PORT，未配置时为 8000）'
+        help='Cổng dịch vụ FastAPI (mặc định dùng WEBUI_PORT, nếu chưa cấu hình là 8000)'
     )
 
     parser.add_argument(
         '--host',
         type=str,
         default=None,
-        help='FastAPI 服务监听地址（默认使用 WEBUI_HOST，未配置时为 127.0.0.1）'
+        help='Địa chỉ lắng nghe của dịch vụ FastAPI (mặc định dùng WEBUI_HOST, nếu chưa cấu hình là 127.0.0.1)'
     )
 
     parser.add_argument(
         '--no-context-snapshot',
         action='store_true',
-        help='不保存分析上下文快照'
+        help='Không lưu snapshot ngữ cảnh phân tích'
     )
 
     # === Backtest ===
     parser.add_argument(
         '--backtest',
         action='store_true',
-        help='运行回测（对历史分析结果进行评估）'
+        help='Chạy backtest (đánh giá các kết quả phân tích lịch sử)'
     )
 
     parser.add_argument(
         '--backtest-code',
         type=str,
         default=None,
-        help='仅回测指定股票代码'
+        help='Chỉ backtest mã cổ phiếu chỉ định'
     )
 
     parser.add_argument(
         '--backtest-days',
         type=int,
         default=None,
-        help='回测评估窗口（交易日数，默认使用配置）'
+        help='Cửa sổ đánh giá backtest (số ngày giao dịch, mặc định dùng cấu hình)'
     )
 
     parser.add_argument(
         '--backtest-force',
         action='store_true',
-        help='强制回测（即使已有回测结果也重新计算）'
+        help='Buộc backtest (tính lại kể cả khi đã có kết quả backtest)'
     )
 
     return parser.parse_args()
@@ -477,21 +467,12 @@ def _compute_trading_day_filter(
     filtered_codes = []
     for code in stock_codes:
         mkt = get_market_for_stock(code)
-        if mkt is None:
-            # get_market_for_stock returns None for index codes (e.g. sh000016/csi930955/930955.CSI);
-            # keeping them via plain fail-open would leave indices unfiltered on A-share holidays, breaking
-            # the per-stock trading-day contract. For codes with unknown market, classify them with
-            # parse_analysis_target: registered indices join CN trading-day filtering as market=cn; still-unknown
-            # non-index codes remain fail-open (kept).
-            target = parse_analysis_target(code)
-            if target.asset_type == ParseStatus.INDEX:
-                mkt = "cn"
         if mkt in open_markets or mkt is None:
             filtered_codes.append(code)
 
     if config.market_review_enabled and not getattr(args, 'no_market_review', False):
         effective_region = compute_effective_region(
-            getattr(config, 'market_review_region', 'cn') or 'cn', open_markets
+            getattr(config, 'market_review_region', 'vn') or 'vn', open_markets
         )
     else:
         effective_region = None
@@ -525,18 +506,13 @@ def _classify_stock_list_tokens(
     if unsupported:
         token, reason = unsupported[0]
         logger.error(
-            "%s 包含不支持的目标 %r：%s；本轮不执行任何分析。",
+            "%s chứa mục tiêu không được hỗ trợ %r: %s; lượt này sẽ không chạy phân tích nào.",
             entry_label,
             token,
             reason,
         )
         return None
-    stock_codes = [
-        t.canonical_id
-        if t.asset_type == ParseStatus.INDEX
-        else resolve_index_stock_code_for_analysis(raw)
-        for t, raw in zip(targets, tokens)
-    ]
+    stock_codes = [resolve_index_stock_code_for_analysis(raw) for raw in tokens]
     return stock_codes, targets
 
 
@@ -552,7 +528,7 @@ def _run_market_review_with_shared_lock(
 
     lock_token = try_acquire_market_review_lock(config)
     if lock_token is None:
-        logger.warning("大盘复盘正在执行中，跳过本次大盘复盘")
+        logger.warning("Tổng kết thị trường đang chạy, bỏ qua lần tổng kết thị trường này")
         return None
 
     try:
@@ -571,42 +547,6 @@ def _is_multi_market_region(region: str) -> bool:
         return True
     parts = {item.strip() for item in normalized.split(",") if item.strip()}
     return len(parts) > 1
-
-
-def _refresh_stock_index_cache_for_analysis(config: Config) -> None:
-    """Best-effort stock-index refresh for CLI/scheduled analysis paths."""
-    try:
-        from src.services.stock_index_remote_service import (
-            refresh_remote_stock_index_cache,
-            settings_from_config,
-        )
-
-        result = refresh_remote_stock_index_cache(settings_from_config(config))
-        if result.refreshed:
-            logger.info("[stock-index] 分析前已刷新股票索引缓存: %s", result.cache_path)
-        elif result.error:
-            logger.debug("[stock-index] 分析前刷新未完成，继续使用本地索引: %s", result.error)
-    except Exception as exc:  # noqa: BLE001 - stock index freshness must not block analysis.
-        logger.warning("[stock-index] 分析前刷新股票索引失败，继续执行分析: %s", exc)
-
-
-def _resolve_portfolio_stock_codes(args: argparse.Namespace) -> Optional[List[str]]:
-    """Resolve an optional broker portfolio into the analysis stock list."""
-    portfolio = str(getattr(args, "portfolio", "") or "").strip().lower()
-    if not portfolio:
-        return None
-    if portfolio != "futu":  # argparse prevents this for CLI callers; keep API callers safe.
-        raise ValueError(f"不支持的 portfolio: {portfolio}")
-
-    from src.brokers.futu.portfolio import load_futu_stock_codes
-
-    stock_codes = [
-        canonical_stock_code(code)
-        for code in load_futu_stock_codes()
-        if (code or "").strip()
-    ]
-    logger.info("portfolio=futu 已覆盖 stocks/STOCK_LIST，使用 %d 只真实正股", len(stock_codes))
-    return stock_codes
 
 
 def _prime_daily_market_context(
@@ -679,28 +619,21 @@ def _can_reuse_market_context_for_review(summary: str, region: str) -> bool:
     return len(parts) <= 1
 
 
-def _resolve_daily_market_context_market(market: str, normalized_region: str) -> str:
-    if "," not in normalized_region:
-        return market
-    parts = [item.strip() for item in normalized_region.split(",") if item.strip()]
-    if parts and all(item in {"jp", "kr"} for item in parts):
-        return parts[0]
-    return market
-
-
 def _resolve_daily_market_context_target_date(
     region: str,
     current_time: datetime,
 ) -> date:
-    normalized_region = str(region or "cn").strip().lower()
-    market = normalized_region if normalized_region in {"cn", "hk", "us", "jp", "kr", "vn"} else "cn"
+    """Ngày nến hiệu lực cho bối cảnh thị trường trong ngày (chỉ thị trường Việt Nam).
 
+    Mọi giá trị ``region`` (kể cả vùng cũ cn/jp/kr) đều theo lịch giao dịch ``vn``;
+    trước đây vùng rỗng/không rõ rơi về ``cn`` — thị trường đã bị loại khỏi registry
+    nên không còn múi giờ và ngày hiệu lực bị tính theo giờ hệ thống.
+
+    Effective daily-bar date for the daily market context (Vietnam only).
+    """
     from src.core.trading_calendar import get_effective_trading_date
 
-    return get_effective_trading_date(
-        _resolve_daily_market_context_market(market, normalized_region),
-        current_time=current_time,
-    )
+    return get_effective_trading_date("vn", current_time=current_time)
 
 
 def _market_review_report_text(review_result: Any) -> str:
@@ -723,12 +656,10 @@ def _save_reused_market_review_report(
     body = str(market_report or "").strip()
     if not body:
         return
-    title = (
-        "# 🎯 Market Review"
-        if str(getattr(config, "report_language", "zh")).strip().lower() in ("en", "vi")
-        else "# 🎯 大盘复盘"
-    )
-    if not any(body.startswith(item) for item in ("# 🎯 大盘复盘", "# 🎯 Market Review")):
+    # Cả vi và en đều dùng tiêu đề tiếng Anh cố định khi lưu file.
+    # Both vi and en use a fixed English title for the saved file.
+    title = "# 🎯 Market Review"
+    if not any(body.startswith(item) for item in ("# 🎯 Điểm lại thị trường", "# 🎯 Market Review")):
         body = f"{title}\n\n{body}"
     try:
         date_str = datetime.now().strftime('%Y%m%d')
@@ -742,7 +673,7 @@ def _save_reused_market_review_report(
             filepath,
         )
     except Exception as exc:
-        logger.warning("复用大盘上下文保存大盘复盘报告失败: %s", exc)
+        logger.warning("Lưu báo cáo tổng kết thị trường từ ngữ cảnh thị trường dùng lại thất bại: %s", exc)
 
 
 def _run_auto_backtest(config: Config) -> None:
@@ -754,7 +685,7 @@ def _run_auto_backtest(config: Config) -> None:
 
         from src.services.backtest_service import BacktestService
 
-        logger.info("开始自动回测...")
+        logger.info("Bắt đầu backtest tự động...")
         service = BacktestService()
         stats = service.run_backtest(
             force=False,
@@ -763,12 +694,12 @@ def _run_auto_backtest(config: Config) -> None:
             limit=200,
         )
         logger.info(
-            f"自动回测完成: processed={stats.get('processed')} "
+            f"Backtest tự động hoàn tất: processed={stats.get('processed')} "
             f"saved={stats.get('saved')} completed={stats.get('completed')} "
             f"insufficient={stats.get('insufficient')} errors={stats.get('errors')}"
         )
     except Exception as exc:
-        logger.warning(f"自动回测失败（已忽略）: {exc}")
+        logger.warning(f"Backtest tự động thất bại (đã bỏ qua): {exc}")
 
 
 def run_full_analysis(
@@ -782,27 +713,14 @@ def run_full_analysis(
     """
     Run the full analysis flow (individual stocks + market review)
 
-    This is the main function invoked by scheduled tasks. Futu holdings parse failures always propagate to the caller;
-    ``raise_errors`` only controls exception semantics of the analysis flow after holdings parse succeeds.
+    This is the main function invoked by scheduled tasks.
     ``analysis_targets`` is aligned with ``stock_codes`` and carries structured analysis targets
     (index targets are used to derive market=cn and the capability matrix).
     """
-    # Portfolio resolution is its own CLI contract boundary. A broker import
-    # failure must reach the one-shot caller, while all later work keeps the
-    # existing run_full_analysis return-value semantics.
-    portfolio_stock_codes = _resolve_portfolio_stock_codes(args)
-    portfolio_is_empty = portfolio_stock_codes == []
     market_review_requested = (
         getattr(config, 'market_review_enabled', False)
         and not getattr(args, 'no_market_review', False)
     )
-    if portfolio_is_empty and not market_review_requested:
-        logger.info(
-            "真实账户中无符合条件的 Futu 持仓，"
-            "本轮跳过个股分析和大盘复盘。"
-        )
-        _run_auto_backtest(config)
-        return True
 
     # Import pipeline modules outside the broad try/except so that import-time
     # failures propagate to the caller instead of being silently swallowed.
@@ -817,16 +735,12 @@ def run_full_analysis(
         return result
 
     try:
-        _refresh_stock_index_cache_for_analysis(config)
-        if portfolio_stock_codes is not None:
-            stock_codes = portfolio_stock_codes
-            analysis_targets = None
 
         # Issue #529: Hot-reload STOCK_LIST from .env on each scheduled run
-        if stock_codes is None and portfolio_stock_codes is None:
+        if stock_codes is None:
             config.refresh_stock_list()
 
-        using_config_stock_list = stock_codes is None and portfolio_stock_codes is None
+        using_config_stock_list = stock_codes is None
         effective_codes = stock_codes if stock_codes is not None else config.stock_list
         # Fail fast on an empty persisted watchlist before trading-day filtering.
         # Otherwise should_skip=True would mask the configuration error as success.
@@ -838,7 +752,7 @@ def run_full_analysis(
         ):
             _LAST_ANALYSIS_FAILURE_REASON = "empty_stock_list"
             logger.error(
-                "本轮分析未生成报告：STOCK_LIST 为空，且未启用大盘复盘。"
+                "Lượt phân tích này không tạo báo cáo: STOCK_LIST rỗng và chưa bật tổng kết thị trường."
             )
             return _return_with_auto_backtest(False)
 
@@ -847,20 +761,14 @@ def run_full_analysis(
             config, args, effective_codes
         )
         if should_skip:
-            if portfolio_is_empty:
-                logger.info(
-                    "真实账户中无符合条件的 Futu 持仓，"
-                    "本轮无需执行个股分析或大盘复盘，跳过执行。"
-                )
-            else:
-                logger.info(
-                    "今日所有相关市场均为非交易日，跳过执行。"
-                    "可使用 --force-run 强制执行。"
-                )
+            logger.info(
+                "Hôm nay mọi thị trường liên quan đều không phải ngày giao dịch, bỏ qua. "
+                "Có thể dùng --force-run để buộc chạy."
+            )
             return True
         if set(filtered_codes) != set(effective_codes):
             skipped = set(effective_codes) - set(filtered_codes)
-            logger.info("今日休市股票已跳过: %s", skipped)
+            logger.info("Đã bỏ qua các mã có thị trường nghỉ hôm nay: %s", skipped)
         if analysis_targets is not None:
             if len(analysis_targets) != len(effective_codes):
                 raise ValueError("analysis_targets must align with stock_codes")
@@ -874,9 +782,6 @@ def run_full_analysis(
                         break
             analysis_targets = filtered_targets
         stock_codes = filtered_codes
-        skip_futu_stock_analysis = (
-            portfolio_stock_codes is not None and not stock_codes
-        )
 
         # The --single-notify CLI argument overrides config (#55)
         if getattr(args, 'single_notify', False):
@@ -913,7 +818,7 @@ def run_full_analysis(
         ):
             _LAST_ANALYSIS_FAILURE_REASON = "empty_stock_list"
             logger.error(
-                "本轮分析未生成报告：STOCK_LIST 为空，且未启用大盘复盘。"
+                "Lượt phân tích này không tạo báo cáo: STOCK_LIST rỗng và chưa bật tổng kết thị trường."
             )
             return _return_with_auto_backtest(False)
         should_use_daily_market_context = (
@@ -967,21 +872,14 @@ def run_full_analysis(
             )
 
         # 1. Run individual stock analysis
-        if skip_futu_stock_analysis:
-            if portfolio_is_empty:
-                logger.info("真实账户中无符合条件的 Futu 持仓，跳过个股分析。")
-            else:
-                logger.info("Futu 持仓经交易日过滤后无可分析股票，跳过个股分析。")
-            results = []
-        else:
-            results = pipeline.run(
-                stock_codes=stock_codes,
-                dry_run=args.dry_run,
-                send_notification=not args.no_notify,
-                merge_notification=merge_notification,
-                current_time=analysis_reference_time,
-                analysis_targets=analysis_targets,
-            )
+        results = pipeline.run(
+            stock_codes=stock_codes,
+            dry_run=args.dry_run,
+            send_notification=not args.no_notify,
+            merge_notification=merge_notification,
+            current_time=analysis_reference_time,
+            analysis_targets=analysis_targets,
+        )
 
         if should_use_daily_market_context and not market_context_summary:
             (
@@ -1026,7 +924,7 @@ def run_full_analysis(
             if can_skip_market_review:
                 market_report = market_context_full_report or market_context_summary
                 logger.info(
-                    "复盘上下文可复用，跳过重复大盘复盘并复用上下文内容。"
+                    "Ngữ cảnh tổng kết có thể dùng lại, bỏ qua tổng kết thị trường trùng lặp và dùng lại nội dung ngữ cảnh."
                 )
                 _save_reused_market_review_report(
                     pipeline.notifier,
@@ -1042,18 +940,18 @@ def run_full_analysis(
                     and pipeline.notifier.is_available()
                 ):
                     if pipeline.notifier.send(
-                        f"# 📈 大盘复盘\n\n{market_report}",
+                        f"# 📈 Điểm lại thị trường\n\n{market_report}",
                         email_send_to_all=True,
                         route_type="report",
                     ):
-                        logger.info("复用本轮大盘上下文推送大盘复盘成功")
+                        logger.info("Gửi tổng kết thị trường từ ngữ cảnh thị trường của lượt này thành công")
                     else:
-                        logger.warning("复用本轮大盘上下文推送大盘复盘失败")
+                        logger.warning("Gửi tổng kết thị trường từ ngữ cảnh thị trường của lượt này thất bại")
 
             review_result = None
             if not can_skip_market_review:
                 if analysis_delay > 0:
-                    logger.info(f"等待 {analysis_delay} 秒后执行大盘复盘（避免API限流）...")
+                    logger.info(f"Chờ {analysis_delay} giây rồi chạy tổng kết thị trường (tránh giới hạn tần suất API)...")
                     time.sleep(analysis_delay)
 
                 review_result = _run_market_review_with_shared_lock(
@@ -1099,7 +997,6 @@ def run_full_analysis(
         expected_stock_report = (
             not getattr(args, "dry_run", False)
             and bool(stock_codes)
-            and not skip_futu_stock_analysis
         )
         deferred_failure_result = None
         if expected_stock_report and results and not getattr(
@@ -1108,7 +1005,7 @@ def run_full_analysis(
             _LAST_ANALYSIS_FAILURE_REASON = "report_save_failed"
             save_error = getattr(pipeline, "_last_local_report_error", None) or "unknown error"
             logger.error(
-                "本轮分析已生成个股结果，但汇总报告保存失败，未生成本地报告文件: %s",
+                "Lượt phân tích đã có kết quả từng mã, nhưng lưu báo cáo tổng hợp thất bại, không tạo file báo cáo cục bộ: %s",
                 save_error,
             )
             deferred_failure_result = False
@@ -1119,7 +1016,7 @@ def run_full_analysis(
         if (expected_stock_report or expected_market_report) and not results and not market_report:
             _LAST_ANALYSIS_FAILURE_REASON = "no_report"
             logger.error(
-                "本轮分析未生成任何报告：预期的个股分析或大盘复盘均未产出结果。"
+                "Lượt phân tích không tạo báo cáo nào: cả phân tích từng mã lẫn tổng kết thị trường dự kiến đều không ra kết quả."
             )
             return _return_with_auto_backtest(False)
 
@@ -1127,74 +1024,32 @@ def run_full_analysis(
         if merge_notification and (results or market_report) and not args.no_notify:
             parts = []
             if market_report:
-                parts.append(f"# 📈 大盘复盘\n\n{market_report}")
+                parts.append(f"# 📈 Điểm lại thị trường\n\n{market_report}")
             if results:
                 dashboard_content = pipeline.notifier.generate_aggregate_report(
                     results,
                     getattr(config, 'report_type', 'simple'),
                 )
-                parts.append(f"# 🚀 个股决策仪表盘\n\n{dashboard_content}")
+                parts.append(f"# 🚀 Bảng quyết định cổ phiếu\n\n{dashboard_content}")
             if parts:
                 combined_content = "\n\n---\n\n".join(parts)
                 if pipeline.notifier.is_available():
                     if pipeline.notifier.send(combined_content, email_send_to_all=True, route_type="report"):
-                        logger.info("已合并推送（个股+大盘复盘）")
+                        logger.info("Đã gửi gộp (từng mã + tổng kết thị trường)")
                     else:
-                        logger.warning("合并推送失败")
+                        logger.warning("Gửi gộp thất bại")
 
         # Print summary
         if results:
-            logger.info("\n===== 分析结果摘要 =====")
+            logger.info("\n===== Tóm tắt kết quả phân tích =====")
             for r in sorted(results, key=lambda x: x.sentiment_score, reverse=True):
                 emoji = r.get_emoji()
                 logger.info(
                     f"{emoji} {r.name}({r.code}): {r.operation_advice} | "
-                    f"评分 {r.sentiment_score} | {r.trend_prediction}"
+                    f"Điểm {r.sentiment_score} | {r.trend_prediction}"
                 )
 
-        logger.info("\n任务执行完成")
-
-        # === New: generate Feishu cloud doc ===
-        try:
-            from src.feishu_doc import FeishuDocManager
-
-            feishu_doc = FeishuDocManager()
-            if feishu_doc.is_configured() and (results or market_report):
-                logger.info("正在创建飞书云文档...")
-
-                # 1. Prepare title "01-01 13:01大盘复盘"
-                tz_cn = timezone(timedelta(hours=8))
-                now = datetime.now(tz_cn)
-                doc_title = f"{now.strftime('%Y-%m-%d %H:%M')} 大盘复盘"
-
-                # 2. Prepare content (concatenate stock analysis and market review)
-                full_content = ""
-
-                # Add market review content (if any)
-                if market_report:
-                    full_content += f"# 📈 大盘复盘\n\n{market_report}\n\n---\n\n"
-
-                # Add stock decision dashboard (generated by NotificationService, branched on report_type)
-                if results:
-                    dashboard_content = pipeline.notifier.generate_aggregate_report(
-                        results,
-                        getattr(config, 'report_type', 'simple'),
-                    )
-                    full_content += f"# 🚀 个股决策仪表盘\n\n{dashboard_content}"
-
-                # 3. Create the doc
-                doc_url = feishu_doc.create_daily_doc(doc_title, full_content)
-                if doc_url:
-                    logger.info(f"飞书云文档创建成功: {doc_url}")
-                    # Optional: also push the doc link to the group
-                    if not args.no_notify:
-                        pipeline.notifier.send(
-                            f"[{now.strftime('%Y-%m-%d %H:%M')}] 复盘文档创建成功: {doc_url}",
-                            route_type="report",
-                        )
-
-        except Exception as e:
-            logger.error(f"飞书文档生成失败: {e}")
+        logger.info("\nTác vụ hoàn tất")
 
         return _return_with_auto_backtest(
             deferred_failure_result
@@ -1205,7 +1060,7 @@ def run_full_analysis(
     except Exception as e:
         if _LAST_ANALYSIS_FAILURE_REASON is None:
             _LAST_ANALYSIS_FAILURE_REASON = "runtime_error"
-        logger.exception(f"分析流程执行失败: {e}")
+        logger.exception(f"Luồng phân tích chạy thất bại: {e}")
         if raise_errors:
             raise
         return False
@@ -1338,7 +1193,7 @@ def start_api_server(host: str, port: int, config: Config) -> None:
                 f"FastAPI server failed to start: {host}:{port}; {startup_error[0]}"
             )
         if uvicorn_server.started:
-            logger.info(f"FastAPI 服务已启动: http://{host}:{port}")
+            logger.info(f"Dịch vụ FastAPI đã khởi động: http://{host}:{port}")
             return
         if not thread.is_alive():
             break
@@ -1347,12 +1202,12 @@ def start_api_server(host: str, port: int, config: Config) -> None:
     if startup_error:
         raise RuntimeError(f"FastAPI server failed to start: {host}:{port}; {startup_error[0]}")
     if uvicorn_server.started:
-        logger.info(f"FastAPI 服务已启动: http://{host}:{port}")
+        logger.info(f"Dịch vụ FastAPI đã khởi động: http://{host}:{port}")
         return
     if not thread.is_alive():
-        raise RuntimeError(f"FastAPI 服务器启动后立即退出: {host}:{port}")
+        raise RuntimeError(f"Máy chủ FastAPI thoát ngay sau khi khởi động: {host}:{port}")
 
-    raise RuntimeError(f"FastAPI 服务在 {timeout_seconds:.1f}s 内未完成启动: {host}:{port}")
+    raise RuntimeError(f"Dịch vụ FastAPI không khởi động xong trong {timeout_seconds:.1f}s: {host}:{port}")
 
 
 def _is_truthy_env(var_name: str, default: str = "true") -> bool:
@@ -1361,44 +1216,11 @@ def _is_truthy_env(var_name: str, default: str = "true") -> bool:
     return value not in {"0", "false", "no", "off"}
 
 
-def start_bot_stream_clients(config: Config) -> None:
-    """Start bot stream clients when enabled in config."""
-    # Start the DingTalk Stream client
-    if config.dingtalk_stream_enabled:
-        try:
-            from bot.platforms import start_dingtalk_stream_background, DINGTALK_STREAM_AVAILABLE
-            if DINGTALK_STREAM_AVAILABLE:
-                if start_dingtalk_stream_background():
-                    logger.info("[Main] Dingtalk Stream client started in background.")
-                else:
-                    logger.warning("[Main] Dingtalk Stream client failed to start.")
-            else:
-                logger.warning("[Main] Dingtalk Stream enabled but SDK is missing.")
-                logger.warning("[Main] Run: pip install dingtalk-stream")
-        except Exception as exc:
-            logger.error(f"[Main] Failed to start Dingtalk Stream client: {exc}")
-
-    # Start the Feishu Stream client
-    if getattr(config, 'feishu_stream_enabled', False):
-        try:
-            from bot.platforms import start_feishu_stream_background, FEISHU_SDK_AVAILABLE
-            if FEISHU_SDK_AVAILABLE:
-                if start_feishu_stream_background():
-                    logger.info("[Main] Feishu Stream client started in background.")
-                else:
-                    logger.warning("[Main] Feishu Stream client failed to start.")
-            else:
-                logger.warning("[Main] Feishu Stream enabled but SDK is missing.")
-                logger.warning("[Main] Run: pip install lark-oapi")
-        except Exception as exc:
-            logger.error(f"[Main] Failed to start Feishu Stream client: {exc}")
-
-
 def _resolve_scheduled_stock_codes(stock_codes: Optional[List[str]]) -> Optional[List[str]]:
     """Scheduled runs should always read the latest persisted watchlist."""
     if stock_codes is not None:
         logger.warning(
-            "定时模式下检测到 --stocks 参数；计划执行将忽略启动时股票快照，并在每次运行前重新读取最新的 STOCK_LIST。"
+            "Phát hiện tham số --stocks ở chế độ định kỳ; các lần chạy theo lịch sẽ bỏ qua danh sách mã lúc khởi động và đọc lại STOCK_LIST mới nhất trước mỗi lần chạy."
         )
     return None
 
@@ -1410,8 +1232,8 @@ def _skips_stock_entry(args: argparse.Namespace, config: Config) -> bool:
     ``--stocks``/``STOCK_LIST`` tokens nor refresh the stock-index registry
     before the mode dispatch, otherwise an unsupported index token would
     wrongly block a run that never consumes it. Covered modes:
-    ``--backtest``, ``--market-review``, ``--serve-only``/``--webui-only``,
-    ``--portfolio`` (any value) and ``--schedule``/``config.schedule_enabled``.
+    ``--backtest``, ``--market-review``, ``--serve-only``/``--webui-only``
+    and ``--schedule``/``config.schedule_enabled``.
     ``--serve`` (not serve-only) and plain one-shot runs still consume the
     stock list and stay outside the guard. The webui-only flag is read
     directly here because the webui -> serve mapping happens only later in
@@ -1422,7 +1244,6 @@ def _skips_stock_entry(args: argparse.Namespace, config: Config) -> bool:
         or getattr(args, "market_review", False)
         or getattr(args, "serve_only", False)
         or getattr(args, "webui_only", False)
-        or bool(getattr(args, "portfolio", None))
         or getattr(args, "schedule", False)
         or getattr(config, "schedule_enabled", False)
     )
@@ -1525,25 +1346,25 @@ def main() -> int:
             format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
             stream=sys.stderr,
         )
-        logger.warning("Bootstrap 日志初始化失败，已回退到 stderr: %s", exc)
+        logger.warning("Khởi tạo log bootstrap thất bại, đã quay về stderr: %s", exc)
 
     # Load config (after bootstrap logging, so exceptions get logged)
     try:
         config = get_config()
     except Exception as exc:
-        logger.exception("加载配置失败: %s", exc)
+        logger.exception("Tải cấu hình thất bại: %s", exc)
         return 1
 
     # Configure logging (console and file)
     try:
         _setup_runtime_logging(config.log_dir, debug=args.debug)
     except Exception as exc:
-        logger.exception("切换到配置日志目录失败: %s", exc)
+        logger.exception("Chuyển sang thư mục log theo cấu hình thất bại: %s", exc)
         return 1
 
     logger.info("=" * 60)
-    logger.info("A股自选股智能分析系统 启动")
-    logger.info(f"运行时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("Hệ thống phân tích thông minh cổ phiếu Việt Nam khởi động")
+    logger.info(f"Thời gian chạy: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("=" * 60)
 
     # Validate config
@@ -1565,24 +1386,18 @@ def main() -> int:
     # Story 1.5: the one-off --stocks entry uses parse_analysis_target to build a structured
     # AnalysisTarget list; index targets (sh/sz/csi prefixes and .CSI aliases) keep their identity
     # semantics at the entry; unsupported targets (e.g. unregistered .CSI) are rejected up front and never reach a provider.
-    # Modes that do not consume the stock list (backtest/market review/serve-only/portfolio/schedule) skip
+    # Modes that do not consume the stock list (backtest/market review/serve-only/schedule) skip
     # classification and index refresh entirely (_skips_stock_entry), so unrelated bad tokens cannot block the mode.
     _skip_stock_entry = _skips_stock_entry(args, config)
-    if args.stocks and getattr(args, "portfolio", None):
-        logger.info("同时指定了 --portfolio；实际分析时 portfolio 将覆盖 --stocks")
     stock_codes = None
     analysis_targets = None
     if args.stocks and not _skip_stock_entry:
-        # Best-effort refresh of the stock index registry before parsing --stocks, so the first run picks up
-        # refreshed aliases/identities; failure/timeout/disabled does not block analysis. Only the --stocks entry needs this;
-        # other modes are covered by the existing refresh inside run_full_analysis.
-        _refresh_stock_index_cache_for_analysis(config)
         tokens = [c for c in split_stock_list(args.stocks) if (c or "").strip()]
         resolved = _classify_stock_list_tokens(tokens, entry_label="--stocks")
         if resolved is None:
             return 1
         stock_codes, analysis_targets = resolved
-        logger.info(f"使用命令行指定的股票列表: {stock_codes}")
+        logger.info(f"Dùng danh sách mã chỉ định từ dòng lệnh: {stock_codes}")
     elif (
         os.getenv("GITHUB_ACTIONS") == "true"
         and not _skip_stock_entry
@@ -1600,14 +1415,13 @@ def main() -> int:
         )
         raw_tokens = [c for c in raw_tokens if (c or "").strip()]
         if raw_tokens:
-            _refresh_stock_index_cache_for_analysis(config)
             resolved = _classify_stock_list_tokens(
                 raw_tokens, entry_label="GitHub Actions STOCK_LIST"
             )
             if resolved is None:
                 return 1
             stock_codes, analysis_targets = resolved
-            logger.info(f"GitHub Actions 默认 STOCK_LIST: {stock_codes}")
+            logger.info(f"STOCK_LIST mặc định của GitHub Actions: {stock_codes}")
 
     # === Handle --webui / --webui-only, mapped to --serve / --serve-only ===
     if args.webui:
@@ -1626,7 +1440,6 @@ def main() -> int:
         args.host, args.port = _resolve_web_service_bind(args, config)
         _warn_if_public_webui_without_auth(args.host)
 
-    bot_clients_started = False
     if start_serve:
         from src.services.runtime_scheduler import (
             CLI_SCHEDULER_OWNER_ENV,
@@ -1668,41 +1481,35 @@ def main() -> int:
             "no_context_snapshot": bool(getattr(args, "no_context_snapshot", False)),
             "workers": getattr(args, "workers", None),
         }
-        if getattr(args, "portfolio", None):
-            runtime_scheduler_args["portfolio"] = args.portfolio
         os.environ[RUNTIME_SCHEDULER_ARGS_ENV] = json.dumps(runtime_scheduler_args)
         if not prepare_webui_frontend_assets():
-            logger.warning("前端静态资源未就绪，继续启动 FastAPI 服务（Web 页面可能不可用）")
+            logger.warning("Tài nguyên tĩnh frontend chưa sẵn sàng, vẫn tiếp tục khởi động dịch vụ FastAPI (trang Web có thể không dùng được)")
         try:
             start_api_server(host=args.host, port=args.port, config=config)
-            bot_clients_started = True
         except Exception as e:
-            logger.error(f"启动 FastAPI 服务失败: {e}")
+            logger.error(f"Khởi động dịch vụ FastAPI thất bại: {e}")
             if args.serve_only:
                 return 1
             start_serve = False
 
-    if bot_clients_started:
-        start_bot_stream_clients(config)
-
     # === Web-service-only mode: do not run analysis automatically ===
     if args.serve_only:
-        logger.info("模式: 仅 Web 服务")
-        logger.info(f"Web 服务运行中: http://{args.host}:{args.port}")
-        logger.info("通过 /api/v1/analysis/analyze 接口触发分析")
-        logger.info(f"API 文档: http://{args.host}:{args.port}/docs")
-        logger.info("按 Ctrl+C 退出...")
+        logger.info("Chế độ: chỉ dịch vụ Web")
+        logger.info(f"Dịch vụ Web đang chạy: http://{args.host}:{args.port}")
+        logger.info("Kích hoạt phân tích qua endpoint /api/v1/analysis/analyze")
+        logger.info(f"Tài liệu API: http://{args.host}:{args.port}/docs")
+        logger.info("Nhấn Ctrl+C để thoát...")
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            logger.info("\n用户中断，程序退出")
+            logger.info("\nNgười dùng ngắt, chương trình thoát")
         return 0
 
     try:
         # Mode 0: backtest
         if getattr(args, 'backtest', False):
-            logger.info("模式: 回测")
+            logger.info("Chế độ: backtest")
             from src.services.backtest_service import BacktestService
 
             service = BacktestService()
@@ -1712,7 +1519,7 @@ def main() -> int:
                 eval_window_days=getattr(args, 'backtest_days', None),
             )
             logger.info(
-                f"回测完成: processed={stats.get('processed')} saved={stats.get('saved')} "
+                f"Backtest hoàn tất: processed={stats.get('processed')} saved={stats.get('saved')} "
                 f"completed={stats.get('completed')} insufficient={stats.get('insufficient')} errors={stats.get('errors')}"
             )
             return 0
@@ -1731,13 +1538,13 @@ def main() -> int:
                 from src.core.trading_calendar import get_open_markets_today, compute_effective_region as _compute_region
                 open_markets = get_open_markets_today()
                 effective_region = _compute_region(
-                    getattr(config, 'market_review_region', 'cn') or 'cn', open_markets
+                    getattr(config, 'market_review_region', 'vn') or 'vn', open_markets
                 )
                 if effective_region == '':
-                    logger.info("今日大盘复盘相关市场均为非交易日，跳过执行。可使用 --force-run 强制执行。")
+                    logger.info("Hôm nay các thị trường của tổng kết thị trường đều không phải ngày giao dịch, bỏ qua. Có thể dùng --force-run để buộc chạy.")
                     return 0
 
-            logger.info("模式: 仅大盘复盘")
+            logger.info("Chế độ: chỉ tổng kết thị trường")
             notifier, analyzer, search_service = build_market_review_runtime(config)
 
             market_review_result = _run_market_review_with_shared_lock(
@@ -1758,19 +1565,19 @@ def main() -> int:
                 # Mode 2 + Web service: this path comes from combining --schedule/--webui/--serve with
                 # config.schedule_enabled (all already guarded); the API runtime
                 # scheduler takes over; --serve-only already returned in the serve_only branch above.
-                logger.info("模式: Web/API runtime scheduler")
-                logger.info(f"Web 服务运行中: http://{args.host}:{args.port}")
-                logger.info("Web/API runtime scheduler 已接管定时任务，保存设置会作用于当前进程")
-                logger.info("按 Ctrl+C 退出...")
+                logger.info("Chế độ: Web/API runtime scheduler")
+                logger.info(f"Dịch vụ Web đang chạy: http://{args.host}:{args.port}")
+                logger.info("Web/API runtime scheduler đã tiếp quản tác vụ định kỳ, lưu cài đặt sẽ áp dụng cho tiến trình hiện tại")
+                logger.info("Nhấn Ctrl+C để thoát...")
                 try:
                     while True:
                         time.sleep(1)
                 except KeyboardInterrupt:
-                    logger.info("\n用户中断，程序退出")
+                    logger.info("\nNgười dùng ngắt, chương trình thoát")
                 return 0
 
-            logger.info("模式: 定时任务")
-            logger.info(f"每日执行时间: {config.schedule_time}")
+            logger.info("Chế độ: chạy định kỳ")
+            logger.info(f"Giờ chạy hằng ngày: {config.schedule_time}")
 
             # Determine whether to run immediately:
             # Command line arg --no-run-immediately overrides config if present.
@@ -1779,7 +1586,7 @@ def main() -> int:
             if getattr(args, 'no_run_immediately', False):
                 should_run_immediately = False
 
-            logger.info(f"启动时立即执行: {should_run_immediately}")
+            logger.info(f"Chạy ngay khi khởi động: {should_run_immediately}")
 
             from src.scheduler import run_with_schedule
             scheduled_stock_codes = _resolve_scheduled_stock_codes(args.stocks or None)
@@ -1806,7 +1613,7 @@ def main() -> int:
                     stats = alert_worker.run_once()
                     triggered_count = stats.get("triggered", 0)
                     if triggered_count:
-                        logger.info("[EventMonitor] 本轮触发 %d 条提醒", triggered_count)
+                        logger.info("[EventMonitor] Lượt này kích hoạt %d cảnh báo", triggered_count)
 
                 background_tasks.append({
                     "task": event_monitor_task,
@@ -1835,36 +1642,27 @@ def main() -> int:
 
         # Mode 3: normal single run
         if config.run_immediately:
-            try:
-                analysis_ok = _run_analysis_with_runtime_scheduler_lock(
-                    config, args, stock_codes, analysis_targets
-                )
-            except FutuPortfolioError as exc:
-                if not start_serve:
-                    raise
-                logger.exception(
-                    "Futu 持仓导入失败，Web/API 服务继续运行: %s",
-                    exc,
-                )
-            else:
-                if analysis_ok is False:
-                    if start_serve:
-                        logger.error("启动时分析执行失败，Web/API 服务继续运行。")
-                    elif _LAST_ANALYSIS_FAILURE_REASON in {
-                        "no_report",
-                        "empty_stock_list",
-                        "report_save_failed",
-                    }:
-                        return 1
+            analysis_ok = _run_analysis_with_runtime_scheduler_lock(
+                config, args, stock_codes, analysis_targets
+            )
+            if analysis_ok is False:
+                if start_serve:
+                    logger.error("Chạy phân tích lúc khởi động thất bại, dịch vụ Web/API vẫn tiếp tục chạy.")
+                elif _LAST_ANALYSIS_FAILURE_REASON in {
+                    "no_report",
+                    "empty_stock_list",
+                    "report_save_failed",
+                }:
+                    return 1
         else:
-            logger.info("配置为不立即运行分析 (RUN_IMMEDIATELY=false)")
+            logger.info("Đã cấu hình không chạy phân tích ngay (RUN_IMMEDIATELY=false)")
 
-        logger.info("\n程序执行完成")
+        logger.info("\nChương trình chạy xong")
 
         # If the service is enabled and not in scheduled mode, keep the process running
         keep_running = start_serve and not (args.schedule or config.schedule_enabled)
         if keep_running:
-            logger.info("API 服务运行中 (按 Ctrl+C 退出)...")
+            logger.info("Dịch vụ API đang chạy (nhấn Ctrl+C để thoát)...")
             try:
                 while True:
                     time.sleep(1)
@@ -1874,11 +1672,11 @@ def main() -> int:
         return 0
 
     except KeyboardInterrupt:
-        logger.info("\n用户中断，程序退出")
+        logger.info("\nNgười dùng ngắt, chương trình thoát")
         return 130
 
     except Exception as e:
-        logger.exception(f"程序执行失败: {e}")
+        logger.exception(f"Chương trình chạy thất bại: {e}")
         return 1
 
 

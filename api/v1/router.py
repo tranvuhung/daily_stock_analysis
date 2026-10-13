@@ -14,7 +14,6 @@ from fastapi import APIRouter
 from api.v1.endpoints import (
     agent,
     alerts,
-    screening,
     analysis,
     auth,
     backtest,
@@ -97,12 +96,6 @@ router.include_router(
     decision_signals.router,
     prefix="/decision-signals",
     tags=["DecisionSignals"]
-)
-
-router.include_router(
-    screening.router,
-    prefix="/screening",
-    tags=["Screening"]
 )
 
 router.include_router(

@@ -75,6 +75,8 @@ def test_duration_file_tracks_current_baseline_and_valid_paths() -> None:
     assert duration_path.is_file()
     durations = load_durations(duration_path)
 
-    assert len(durations) >= 250
+    # Baseline đã bỏ các file test của thị trường/nguồn dữ liệu bị loại (chỉ còn Việt Nam).
+    # The baseline dropped test files of removed markets/sources (Vietnam only).
+    assert len(durations) >= 150
     assert all((REPO_ROOT / Path(test_file)).is_file() for test_file in durations)
     assert max(durations.values()) >= 30

@@ -28,13 +28,12 @@ class IntelAgent(BaseAgent):
         "search_stock_news",
         "search_comprehensive_intel",
         "get_stock_info",
-        "get_capital_flow",
     ]
 
     def system_prompt(self, ctx: AgentContext) -> str:
         return """\
-You are an **Intelligence & Sentiment Agent** specialising in A-shares, \
-HK, and US equities.
+You are an **Intelligence & Sentiment Agent** specialising in Vietnamese \
+equities (HOSE, HNX, UPCoM).
 
 Your task: gather the latest news, announcements, and risk signals for \
 the given stock, then produce a structured JSON opinion.
@@ -42,36 +41,27 @@ the given stock, then produce a structured JSON opinion.
 ## Workflow
 1. Search latest stock news (earnings, announcements, insider activity)
 2. Run comprehensive intel search — this covers latest news, company \
-announcements (公司公告), market analysis, risk checks, and earnings outlook
-3. For A-share stocks, call get_capital_flow to obtain main-force (主力) \
-capital inflow/outflow data and include it in your analysis
-4. Classify positive catalysts and risk alerts
-5. Assess overall sentiment
+announcements, market analysis, risk checks, and earnings outlook
+3. Classify positive catalysts and risk alerts
+4. Assess overall sentiment
 
 ## Risk Detection Priorities
-- Insider / major shareholder sell-downs (减持)
-- Earnings warnings or pre-loss announcements (业绩预亏)
-- Regulatory penalties or investigations
+- Insider / major shareholder sell-downs
+- Earnings warnings or loss announcements
+- Regulatory penalties or investigations (e.g. SSC / exchange warnings, trading restrictions)
 - Industry-wide policy headwinds
-- Large lock-up expirations (解禁)
+- Large lock-up expirations
 - PE valuation anomalies
-- Sustained main-force capital outflow (主力持续净流出)
-
-## Capital Flow Interpretation (A-shares only)
-- main_net_inflow > 0: bullish signal (主力净流入)
-- main_net_inflow < 0: bearish signal (主力净流出)
-- inflow_5d / inflow_10d: medium-term accumulation or distribution trend
 
 ## Output Format
 Return **only** a JSON object:
 {
   "signal": "strong_buy|buy|hold|sell|strong_sell",
   "confidence": 0.0-1.0,
-  "reasoning": "2-3 sentence summary of news/sentiment/capital-flow findings",
+  "reasoning": "2-3 sentence summary of news/sentiment findings",
   "risk_alerts": ["list", "of", "detected", "risks"],
   "positive_catalysts": ["list", "of", "catalysts"],
   "sentiment_label": "very_positive|positive|neutral|negative|very_negative",
-  "capital_flow_signal": "inflow|outflow|neutral|not_available",
   "key_news": [
     {"title": "...", "impact": "positive|negative|neutral"}
   ]
@@ -84,11 +74,9 @@ Return **only** a JSON object:
             parts[0] += f" ({ctx.stock_name})"
         parts.append(
             "Steps:\n"
-            "1. Call search_comprehensive_intel to get latest news, company announcements "
-            "(公司公告), risk events, and earnings outlook.\n"
-            "2. Call get_capital_flow to obtain main-force (主力) capital flow data "
-            "(A-share only; skip for HK/US).\n"
-            "3. Output the JSON opinion including capital_flow_signal."
+            "1. Call search_comprehensive_intel to get latest news, company announcements, "
+            "risk events, and earnings outlook.\n"
+            "2. Output the JSON opinion."
         )
         return "\n".join(parts)
 

@@ -372,15 +372,15 @@ def test_litellm_preparation_keeps_the_existing_chat_workflow() -> None:
     ):
         build_context.return_value.context_messages = []
         turn = executor.prepare_turn(
-            message="分析 AAPL",
+            message="Phân tích HPG",
             session_id="session-1",
-            context={"stock_code": "AAPL"},
+            context={"stock_code": "HPG"},
         )
 
     assert "get_realtime_quote" in turn.prepared.system_prompt
     assert "get_daily_history" in turn.prepared.system_prompt
     assert "analyze_trend" in turn.prepared.system_prompt
-    assert "get_chip_distribution" in turn.prepared.system_prompt
+    assert "get_chip_distribution" not in turn.prepared.system_prompt
     assert "search_stock_news" in turn.prepared.system_prompt
 
 
@@ -487,7 +487,7 @@ def test_codex_backend_keeps_pre_turn_failure_at_zero_steps(monkeypatch) -> None
 
     assert result.success is False
     assert result.error_code == "protocol_error"
-    assert result.error_message == "Codex Agent 暂时无法完成本次问股，请前往 Agent 设置查看运行状态。"
+    assert result.error_message == "Codex Agent tạm thời không thể hoàn tất lượt Hỏi đáp này. Vui lòng vào cài đặt Agent để xem trạng thái."
     assert "thread-123" not in result.error_message
     assert result.diagnostics["internal_error"] == "turn/start failed for thread-123"
     assert result.total_steps == 0

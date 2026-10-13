@@ -18,9 +18,8 @@ ensure_litellm_stub()
 
 _ENV_BEFORE_MAIN_IMPORT = dict(os.environ)
 import main
-from src.brokers.futu.portfolio import FutuPortfolioError
 from src.config import Config
-from src.services.stock_list_parser import ParseStatus, parse_analysis_target
+from src.services.stock_list_parser import parse_analysis_target
 
 _MAIN_IMPORT_ENV_ADDITIONS = frozenset(set(os.environ) - set(_ENV_BEFORE_MAIN_IMPORT))
 _MAIN_IMPORT_ENV_OVERRIDES = {
@@ -143,97 +142,67 @@ class MainScheduleModeTestCase(unittest.TestCase):
         defaults.update(overrides)
         return _DummyConfig(**defaults)
 
-    def test_daily_market_context_target_date_routes_jp_kr_calendars(self) -> None:
+    def test_daily_market_context_target_date_always_uses_vn_calendar(self) -> None:
+        # Mọi vùng (kể cả giá trị cũ jp/kr/cn/rỗng) đều dùng lịch vn.
+        # Every region value (including legacy ones) uses the vn calendar.
         current_time = datetime(2026, 5, 7, 0, 30, tzinfo=timezone.utc)
-        calls = []
-
-        def resolve_effective_date(market, *, current_time=None):
-            calls.append((market, current_time))
-            return date(2026, 5, 7)
 
         with patch(
             "src.core.trading_calendar.get_effective_trading_date",
-            side_effect=resolve_effective_date,
-        ):
-            self.assertEqual(
-                main._resolve_daily_market_context_target_date("jp", current_time),
-                date(2026, 5, 7),
-            )
-            self.assertEqual(
-                main._resolve_daily_market_context_target_date("kr", current_time),
-                date(2026, 5, 7),
-            )
-            self.assertEqual(
-                main._resolve_daily_market_context_target_date("jp,kr", current_time),
-                date(2026, 5, 7),
-            )
+            return_value=date(2026, 5, 7),
+        ) as get_date:
+            for region in ("vn", "", "cn", "jp,kr"):
+                self.assertEqual(
+                    main._resolve_daily_market_context_target_date(region, current_time),
+                    date(2026, 5, 7),
+                )
 
         self.assertEqual(
-            calls,
-            [
-                ("jp", current_time),
-                ("kr", current_time),
-                ("jp", current_time),
-            ],
+            get_date.call_args_list,
+            [unittest.mock.call("vn", current_time=current_time)] * 4,
         )
 
-    def test_compute_trading_day_filter_supports_comma_list_regions(self) -> None:
+    def test_compute_trading_day_filter_keeps_vn_codes_when_vn_open(self) -> None:
         args = self._make_args()
         config = self._make_config(
             trading_day_check_enabled=True,
             market_review_enabled=True,
-            market_review_region="jp,kr",
+            market_review_region="vn",
             database_path=str(Path(self.temp_dir.name) / "stock_analysis.db"),
         )
 
-        stock_codes = ["cn-stock", "jp-stock", "kr-stock", "us-stock", "none-stock"]
-
-        with patch(
-            "src.core.trading_calendar.get_market_for_stock",
-            side_effect=lambda code: {"cn-stock": "cn", "jp-stock": "jp", "kr-stock": "kr", "us-stock": "us"}.get(code),
-        ), patch("src.core.trading_calendar.get_open_markets_today", return_value={"jp", "kr"}):
+        with patch("src.core.trading_calendar.get_open_markets_today", return_value={"vn"}):
             filtered_codes, effective_region, should_skip_all = main._compute_trading_day_filter(
                 config,
                 args,
-                stock_codes,
+                ["HPG", "VCB", "XYZ123"],
             )
 
-        self.assertEqual(filtered_codes, ["jp-stock", "kr-stock", "none-stock"])
-        self.assertEqual(effective_region, "jp,kr")
+        self.assertEqual(filtered_codes, ["HPG", "VCB", "XYZ123"])
+        self.assertEqual(effective_region, "vn")
         self.assertFalse(should_skip_all)
 
-    def test_compute_trading_day_filter_filters_registered_indices_on_cn_holiday(self) -> None:
-        """Index codes whose ``get_market_for_stock`` returns None must still
-        participate in CN trading-day filtering via ``parse_analysis_target``
-        (INDEX -> market=cn). On a CN holiday the indices are dropped, a US
-        stock whose market is open stays, and a market-unknown non-index code
-        stays (fail-open unchanged)."""
+    def test_compute_trading_day_filter_drops_vn_codes_when_vn_closed(self) -> None:
+        """Ngày nghỉ VN: mã VN bị loại, mã không rõ thị trường vẫn fail-open giữ lại.
+
+        On a VN non-trading day VN codes are dropped; unknown-market codes stay."""
         args = self._make_args()
         config = self._make_config(
             trading_day_check_enabled=True,
-            market_review_enabled=False,
+            market_review_enabled=True,
+            market_review_region="vn",
             database_path=str(Path(self.temp_dir.name) / "stock_analysis.db"),
         )
 
-        stock_codes = ["sh000016", "csi930955", "930955.CSI", "AAPL", "XYZ123"]
-
-        def fake_market(code: str):
-            return "us" if code == "AAPL" else None
-
-        with patch(
-            "src.core.trading_calendar.get_market_for_stock",
-            side_effect=fake_market,
-        ), patch("src.core.trading_calendar.get_open_markets_today", return_value={"us"}):
+        with patch("src.core.trading_calendar.get_open_markets_today", return_value=set()):
             filtered_codes, effective_region, should_skip_all = main._compute_trading_day_filter(
                 config,
                 args,
-                stock_codes,
+                ["HPG", "VNINDEX", "XYZ123"],
             )
 
-        # 已登记指数按 market=cn 参与过滤，CN 休市时被剔除；AAPL 因 US 开市保留；
-        # 市场未知的非指数 code（XYZ123）继续 fail-open 保留。
-        self.assertEqual(filtered_codes, ["AAPL", "XYZ123"])
-        self.assertIsNone(effective_region)
+        self.assertEqual(filtered_codes, ["XYZ123"])
+        self.assertEqual(effective_region, "")
         self.assertFalse(should_skip_all)
 
     def test_public_webui_bind_warns_when_auth_is_disabled(self) -> None:
@@ -283,7 +252,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.get_config", return_value=config), \
              patch("main.prepare_webui_frontend_assets", return_value=True), \
              patch("main.start_api_server", side_effect=fake_start_api_server), \
-             patch("main.start_bot_stream_clients"), \
              patch("main.time.sleep", side_effect=KeyboardInterrupt):
             exit_code = main.main()
 
@@ -303,7 +271,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.get_config", return_value=config), \
              patch("main.prepare_webui_frontend_assets", return_value=True), \
              patch("main.start_api_server", side_effect=fake_start_api_server), \
-             patch("main.start_bot_stream_clients"), \
              patch("main.time.sleep", side_effect=KeyboardInterrupt):
             exit_code = main.main()
 
@@ -438,7 +405,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.setup_logging"), \
              patch("main.run_full_analysis") as run_full_analysis, \
              patch("main.logger.warning") as warning_log, \
-             patch("main._refresh_stock_index_cache_for_analysis"), \
              patch("src.scheduler.run_with_schedule", side_effect=fake_run_with_schedule):
             exit_code = main.main()
 
@@ -454,17 +420,16 @@ class MainScheduleModeTestCase(unittest.TestCase):
         )
         run_full_analysis.assert_called_once_with(config, args, None)
         warning_log.assert_any_call(
-            "定时模式下检测到 --stocks 参数；计划执行将忽略启动时股票快照，并在每次运行前重新读取最新的 STOCK_LIST。"
+            "Phát hiện tham số --stocks ở chế độ định kỳ; các lần chạy theo lịch sẽ bỏ qua danh sách mã lúc khởi động và đọc lại STOCK_LIST mới nhất trước mỗi lần chạy."
         )
 
     def test_standalone_run_resolves_stocks_before_run_full_analysis(self) -> None:
-        args = self._make_args(stocks="005930")
+        args = self._make_args(stocks="hpg.vn")
         config = self._make_config(run_immediately=True)
 
         with patch("main.parse_arguments", return_value=args), \
              patch("main.get_config", return_value=config), \
              patch("main.setup_logging"), \
-             patch("main._refresh_stock_index_cache_for_analysis"), \
              patch("main.run_full_analysis") as run_full_analysis:
             exit_code = main.main()
 
@@ -472,82 +437,47 @@ class MainScheduleModeTestCase(unittest.TestCase):
         run_full_analysis.assert_called_once()
         _, _, stock_codes = run_full_analysis.call_args.args
         analysis_targets = run_full_analysis.call_args.kwargs.get("analysis_targets")
-        self.assertEqual(stock_codes, ["005930.KS"])
+        # Mã giữ dạng viết hoa người dùng nhập; canonical_id quy về HPG.
+        # The code keeps the uppercased user form; canonical_id resolves to HPG.
+        self.assertEqual(stock_codes, ["HPG.VN"])
         self.assertEqual(len(analysis_targets), 1)
         self.assertEqual(analysis_targets[0].asset_type, "stock")
+        self.assertEqual(analysis_targets[0].canonical_id, "HPG")
 
     def test_standalone_run_builds_structured_index_targets(self) -> None:
-        args = self._make_args(
-            stocks="sh000016,000300.CSI,930955.CSI,000016"
-        )
+        args = self._make_args(stocks="VNINDEX,vn30,FUEVN100,HPG")
         config = self._make_config(run_immediately=True)
 
         with patch("main.parse_arguments", return_value=args), \
              patch("main.get_config", return_value=config), \
              patch("main.setup_logging"), \
-             patch("main._refresh_stock_index_cache_for_analysis"), \
              patch("main.run_full_analysis") as run_full_analysis:
             exit_code = main.main()
 
         self.assertEqual(exit_code, 0)
         _, _, stock_codes = run_full_analysis.call_args.args
         analysis_targets = run_full_analysis.call_args.kwargs["analysis_targets"]
-        self.assertEqual(
-            stock_codes,
-            ["sh000016", "sh000300", "csi930955", "000016"],
-        )
+        # Chỉ số VN đi chuỗi nến ngày thông thường (asset_type stock).
+        # VN indices use the regular daily chain (asset_type stock).
+        self.assertEqual(stock_codes, ["VNINDEX", "VN30", "FUEVN100", "HPG"])
         self.assertEqual(
             [target.asset_type for target in analysis_targets],
-            ["index", "index", "index", "stock"],
+            ["stock", "stock", "stock", "stock"],
         )
         self.assertEqual(
             [target.canonical_id for target in analysis_targets],
-            ["sh000016", "sh000300", "csi930955", "sz000016"],
+            ["VNINDEX", "VN30", "FUEVN100", "HPG"],
         )
 
-    def test_standalone_run_refreshes_index_cache_before_parsing_stocks(self) -> None:
-        """``main.main()`` must refresh the stock-index registry (best-effort)
-        BEFORE parsing ``--stocks`` so a first run with a stale local registry
-        resolves a newly-registered alias to an index target in the same run."""
-        args = self._make_args(stocks="930955.CSI")
-        config = self._make_config(run_immediately=True)
-        calls = []
-
-        def fake_refresh(cfg):
-            calls.append(("refresh", cfg))
-
-        def fake_run_full_analysis(cfg, a, stock_codes, **kwargs):
-            calls.append(("parse", stock_codes, kwargs.get("analysis_targets")))
-            return 0
-
-        with patch("main.parse_arguments", return_value=args), \
-             patch("main.get_config", return_value=config), \
-             patch("main.setup_logging"), \
-             patch(
-                 "main._refresh_stock_index_cache_for_analysis",
-                 side_effect=fake_refresh,
-             ), \
-             patch("main.run_full_analysis", side_effect=fake_run_full_analysis):
-            exit_code = main.main()
-
-        self.assertEqual(exit_code, 0)
-        # 刷新必须先于 --stocks 解析执行。
-        self.assertEqual(calls[0][0], "refresh")
-        self.assertEqual(calls[1][0], "parse")
-        self.assertEqual(calls[1][1], ["csi930955"])
-        self.assertEqual(calls[1][2][0].asset_type, ParseStatus.INDEX)
-        self.assertEqual(calls[1][2][0].canonical_id, "csi930955")
-
     def test_standalone_run_rejects_unsupported_stocks_token(self) -> None:
-        """`--stocks` 携带未登记 `.CSI` 目标时在入口明确报错并返回非零，
-        不再静默走股票路径或发起 provider 调用。"""
-        args = self._make_args(stocks="600519,930956.CSI")
+        """`--stocks` chứa mã ngoài VN thì báo lỗi ngay ở entry và trả mã khác 0,
+        không gọi provider nào. / Non-VN tokens are rejected up-front."""
+        args = self._make_args(stocks="HPG,600519")
         config = self._make_config(run_immediately=True)
 
         with patch("main.parse_arguments", return_value=args), \
              patch("main.get_config", return_value=config), \
              patch("main.setup_logging"), \
-             patch("main._refresh_stock_index_cache_for_analysis"), \
              patch("main.run_full_analysis") as run_full_analysis:
             exit_code = main.main()
 
@@ -555,18 +485,16 @@ class MainScheduleModeTestCase(unittest.TestCase):
         run_full_analysis.assert_not_called()
 
     def test_standalone_run_actions_stock_list_builds_index_targets(self) -> None:
-        """`GITHUB_ACTIONS=true` 且无 `--stocks` 时，`main.main()` 把默认
-        `STOCK_LIST` 的显式指数 token 分类为 INDEX target、个股 token 保持
-        legacy 语义（与一次性 `--stocks` 构造等价）。"""
+        """`GITHUB_ACTIONS=true` và không có `--stocks`: `main.main()` dựng target
+        có cấu trúc từ `STOCK_LIST` mặc định (tương đương `--stocks`)."""
         args = self._make_args()
         config = self._make_config(run_immediately=True)
-        config.stock_list = ["sh000016", "600519", "930955.CSI"]
+        config.stock_list = ["VNINDEX", "HPG", "FUEVN100"]
 
         with patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}), \
              patch("main.parse_arguments", return_value=args), \
              patch("main.get_config", return_value=config), \
              patch("main.setup_logging"), \
-             patch("main._refresh_stock_index_cache_for_analysis"), \
              patch("main.run_full_analysis") as run_full_analysis:
             exit_code = main.main()
 
@@ -574,14 +502,10 @@ class MainScheduleModeTestCase(unittest.TestCase):
         run_full_analysis.assert_called_once()
         stock_codes = run_full_analysis.call_args.args[2]
         analysis_targets = run_full_analysis.call_args.kwargs["analysis_targets"]
-        self.assertEqual(stock_codes, ["sh000016", "600519", "csi930955"])
-        self.assertEqual(
-            [t.asset_type for t in analysis_targets],
-            ["index", "stock", "index"],
-        )
+        self.assertEqual(stock_codes, ["VNINDEX", "HPG", "FUEVN100"])
         self.assertEqual(
             [t.canonical_id for t in analysis_targets],
-            ["sh000016", "sh600519", "csi930955"],
+            ["VNINDEX", "HPG", "FUEVN100"],
         )
 
     def test_standalone_run_local_default_does_not_build_targets(self) -> None:
@@ -595,7 +519,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.parse_arguments", return_value=args), \
              patch("main.get_config", return_value=config), \
              patch("main.setup_logging"), \
-             patch("main._refresh_stock_index_cache_for_analysis"), \
              patch("main.run_full_analysis") as run_full_analysis:
             exit_code = main.main()
 
@@ -622,7 +545,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.parse_arguments", return_value=args), \
              patch("main.get_config", return_value=config), \
              patch("main.setup_logging"), \
-             patch("main._refresh_stock_index_cache_for_analysis") as refresh, \
              patch("main._classify_stock_list_tokens") as classify, \
              patch(
                  "src.services.backtest_service.BacktestService",
@@ -633,7 +555,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
             exit_code = main.main()
 
         self.assertEqual(exit_code, 0)
-        refresh.assert_not_called()
         classify.assert_not_called()
         error_log.assert_not_called()
         backtest_class.assert_called_once_with()
@@ -654,7 +575,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.parse_arguments", return_value=args), \
              patch("main.get_config", return_value=config), \
              patch("main.setup_logging"), \
-             patch("main._refresh_stock_index_cache_for_analysis"), \
              patch("main.run_full_analysis") as run_full_analysis, \
              patch("main.logger.error") as error_log:
             exit_code = main.main()
@@ -662,122 +582,12 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         run_full_analysis.assert_not_called()
         error_log.assert_any_call(
-            "%s 包含不支持的目标 %r：%s；本轮不执行任何分析。",
+            "%s chứa mục tiêu không được hỗ trợ %r: %s; lượt này sẽ không chạy phân tích nào.",
             "GitHub Actions STOCK_LIST",
             "930956.CSI",
             unittest.mock.ANY,
         )
 
-    def test_portfolio_futu_with_bad_stocks_token_reaches_run_full_analysis(self) -> None:
-        """Review 反例：`--portfolio futu --stocks 930956.CSI` 同框时分类整体跳过，
-        坏 token 不拦截；run_full_analysis 内 portfolio 覆盖 `--stocks`。"""
-        args = self._make_args(portfolio="futu", stocks="930956.CSI")
-        config = self._make_config(run_immediately=True)
-
-        with patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}, clear=False), \
-             patch("main.parse_arguments", return_value=args), \
-             patch("main.get_config", return_value=config), \
-             patch("main.setup_logging"), \
-             patch("main._refresh_stock_index_cache_for_analysis") as refresh, \
-             patch("main._classify_stock_list_tokens") as classify, \
-             patch(
-                 "src.brokers.futu.portfolio.load_futu_stock_codes",
-                 return_value=["AAPL"],
-             ), \
-             patch(
-                 "main._compute_trading_day_filter",
-                 return_value=(["AAPL"], "us", False),
-             ), \
-             patch("main._run_analysis_with_runtime_scheduler_lock") as run_with_lock:
-            exit_code = main.main()
-
-        self.assertEqual(exit_code, 0)
-        refresh.assert_not_called()
-        classify.assert_not_called()
-        run_with_lock.assert_called_once_with(config, args, None, None)
-
-    def test_portfolio_futu_with_bad_stocks_token_runs_portfolio_codes(self) -> None:
-        """对照组：`--portfolio futu --stocks 600519` 时 run_full_analysis 内
-        portfolio 覆盖 `--stocks`，覆盖语义不回归。走真实运行时锁路径
-        （threading.Lock，无进程/磁盘副作用），验证 loader 被调用且进入
-        run_full_analysis 的代码为 portfolio 持仓。"""
-        args = self._make_args(portfolio="futu", stocks="600519")
-        config = self._make_config(run_immediately=True)
-
-        with patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}, clear=False), \
-             patch("main.parse_arguments", return_value=args), \
-             patch("main.get_config", return_value=config), \
-             patch("main.setup_logging"), \
-             patch("main._refresh_stock_index_cache_for_analysis"), \
-             patch(
-                 "src.brokers.futu.portfolio.load_futu_stock_codes",
-                 return_value=["AAPL", "HK00700"],
-             ) as loader, \
-             patch(
-                 "main._compute_trading_day_filter",
-                 return_value=(["AAPL", "HK00700"], "us,hk", False),
-             ), \
-             patch("src.core.pipeline.StockAnalysisPipeline"):
-            exit_code = main.main()
-
-        self.assertEqual(exit_code, 0)
-        loader.assert_called_once_with()
-
-    def test_actions_portfolio_futu_with_bad_stock_list_reaches_run_full_analysis(self) -> None:
-        """Review 反例补格：`GITHUB_ACTIONS=true` + `--portfolio futu` 时 Actions
-        分支的 STOCK_LIST 分类同样整体跳过，坏 watchlist 不拦截 portfolio 覆盖。"""
-        args = self._make_args(portfolio="futu")
-        config = self._make_config(run_immediately=True)
-        config.stock_list = ["930956.CSI"]
-
-        with patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}), \
-             patch("main.parse_arguments", return_value=args), \
-             patch("main.get_config", return_value=config), \
-             patch("main.setup_logging"), \
-             patch("main._refresh_stock_index_cache_for_analysis") as refresh, \
-             patch("main._classify_stock_list_tokens") as classify, \
-             patch(
-                 "src.brokers.futu.portfolio.load_futu_stock_codes",
-                 return_value=["AAPL"],
-             ), \
-             patch(
-                 "main._compute_trading_day_filter",
-                 return_value=(["AAPL"], "us", False),
-             ), \
-             patch("main._run_analysis_with_runtime_scheduler_lock") as run_with_lock:
-            exit_code = main.main()
-
-        self.assertEqual(exit_code, 0)
-        refresh.assert_not_called()
-        classify.assert_not_called()
-        run_with_lock.assert_called_once_with(config, args, None, None)
-
-    def test_portfolio_futu_with_bad_stocks_token_runs_pipeline_with_portfolio_codes(self) -> None:
-        """断言到达真实风险层：portfolio 覆盖后 pipeline.run 收到的 stock_codes
-        来自 Futu loader，与 `--stocks` 无关。"""
-        args = self._make_args(portfolio="futu", stocks="930956.CSI")
-        config = self._make_config(run_immediately=True)
-
-        with patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}, clear=False), \
-             patch("main.parse_arguments", return_value=args), \
-             patch("main.get_config", return_value=config), \
-             patch("main.setup_logging"), \
-             patch("main._refresh_stock_index_cache_for_analysis"), \
-             patch(
-                 "src.brokers.futu.portfolio.load_futu_stock_codes",
-                 return_value=["AAPL", "HK00700"],
-             ), \
-             patch(
-                 "main._compute_trading_day_filter",
-                 return_value=(["AAPL", "HK00700"], "us,hk", False),
-             ), \
-             patch("src.core.pipeline.StockAnalysisPipeline") as pipeline_class:
-            exit_code = main.main()
-
-        self.assertEqual(exit_code, 0)
-        pipeline_run_kwargs = pipeline_class.return_value.run.call_args.kwargs
-        self.assertEqual(pipeline_run_kwargs["stock_codes"], ["AAPL", "HK00700"])
-        self.assertIsNone(pipeline_run_kwargs["analysis_targets"])
 
     def test_schedule_mode_with_bad_stocks_token_reaches_scheduler(self) -> None:
         """Review 反例：`--schedule --stocks 930956.CSI` 不因坏 token 分类退出，
@@ -809,13 +619,11 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.setup_logging"), \
              patch("main.run_full_analysis") as run_full_analysis, \
              patch("main.logger.warning") as warning_log, \
-             patch("main._refresh_stock_index_cache_for_analysis") as refresh, \
              patch("main._classify_stock_list_tokens") as classify, \
              patch("src.scheduler.run_with_schedule", side_effect=fake_run_with_schedule):
             exit_code = main.main()
 
         self.assertEqual(exit_code, 0)
-        refresh.assert_not_called()
         classify.assert_not_called()
         self.assertEqual(
             scheduled_call,
@@ -828,7 +636,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
         )
         run_full_analysis.assert_called_once_with(config, args, None)
         warning_log.assert_any_call(
-            "定时模式下检测到 --stocks 参数；计划执行将忽略启动时股票快照，并在每次运行前重新读取最新的 STOCK_LIST。"
+            "Phát hiện tham số --stocks ở chế độ định kỳ; các lần chạy theo lịch sẽ bỏ qua danh sách mã lúc khởi động và đọc lại STOCK_LIST mới nhất trước mỗi lần chạy."
         )
 
     def test_serve_only_with_bad_stocks_token_enters_service_loop(self) -> None:
@@ -842,14 +650,11 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.get_config", return_value=config), \
              patch("main.prepare_webui_frontend_assets", return_value=True), \
              patch("main.start_api_server"), \
-             patch("main.start_bot_stream_clients"), \
-             patch("main._refresh_stock_index_cache_for_analysis") as refresh, \
              patch("main._classify_stock_list_tokens") as classify, \
              patch("main.time.sleep", side_effect=KeyboardInterrupt):
             exit_code = main.main()
 
         self.assertEqual(exit_code, 0)
-        refresh.assert_not_called()
         classify.assert_not_called()
 
     def test_standalone_run_actions_stock_list_rejects_unsupported(self) -> None:
@@ -863,7 +668,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.parse_arguments", return_value=args), \
              patch("main.get_config", return_value=config), \
              patch("main.setup_logging"), \
-             patch("main._refresh_stock_index_cache_for_analysis"), \
              patch("main.run_full_analysis") as run_full_analysis:
             exit_code = main.main()
 
@@ -882,7 +686,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.parse_arguments", return_value=args), \
              patch("main.get_config", return_value=config), \
              patch("main.setup_logging"), \
-             patch("main._refresh_stock_index_cache_for_analysis") as refresh, \
              patch("main.run_full_analysis") as run_full_analysis, \
              patch("main._run_market_review_with_shared_lock") as run_review, \
              patch("src.core.trading_calendar.get_open_markets_today", return_value={"cn"}), \
@@ -891,7 +694,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
             exit_code = main.main()
 
         self.assertEqual(exit_code, 0)
-        refresh.assert_not_called()
         run_full_analysis.assert_not_called()
         run_review.assert_called_once()
 
@@ -909,71 +711,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         run_with_lock.assert_called_once_with(config, args, None, None)
 
-    def test_standalone_futu_portfolio_failure_returns_nonzero(self) -> None:
-        args = self._make_args(portfolio="futu")
-        config = self._make_config(run_immediately=True)
-        error = FutuPortfolioError("OpenD unavailable")
-
-        with (
-            patch("main.parse_arguments", return_value=args),
-            patch("main.get_config", return_value=config),
-            patch("main.setup_logging"),
-            patch("main._refresh_stock_index_cache_for_analysis"),
-            patch(
-                "src.brokers.futu.portfolio.load_futu_stock_codes",
-                side_effect=error,
-            ) as loader,
-        ):
-            exit_code = main.main()
-
-        self.assertEqual(exit_code, 1)
-        loader.assert_called_once_with()
-
-    def test_standalone_futu_portfolio_success_returns_zero(self) -> None:
-        args = self._make_args(portfolio="futu")
-        config = self._make_config(run_immediately=True)
-
-        with (
-            patch("main.parse_arguments", return_value=args),
-            patch("main.get_config", return_value=config),
-            patch("main.setup_logging"),
-            patch("main._refresh_stock_index_cache_for_analysis"),
-            patch(
-                "src.brokers.futu.portfolio.load_futu_stock_codes",
-                return_value=["AAPL"],
-            ) as loader,
-            patch(
-                "main._compute_trading_day_filter",
-                return_value=([], "", True),
-            ),
-        ):
-            exit_code = main.main()
-
-        self.assertEqual(exit_code, 0)
-        loader.assert_called_once_with()
-
-    def test_standalone_futu_downstream_failure_keeps_existing_exit_semantics(self) -> None:
-        args = self._make_args(portfolio="futu")
-        config = self._make_config(run_immediately=True)
-
-        with (
-            patch("main.parse_arguments", return_value=args),
-            patch("main.get_config", return_value=config),
-            patch("main.setup_logging"),
-            patch("main._refresh_stock_index_cache_for_analysis"),
-            patch(
-                "src.brokers.futu.portfolio.load_futu_stock_codes",
-                return_value=["AAPL"],
-            ) as loader,
-            patch(
-                "main._compute_trading_day_filter",
-                side_effect=RuntimeError("calendar unavailable"),
-            ),
-        ):
-            exit_code = main.main()
-
-        self.assertEqual(exit_code, 0)
-        loader.assert_called_once_with()
 
     def test_schedule_mode_reload_uses_latest_runtime_config(self) -> None:
         args = self._make_args(schedule=True)
@@ -1091,7 +828,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
             background_task["task"]()
 
         worker.run_once.assert_called_once_with()
-        info_log.assert_any_call("[EventMonitor] 本轮触发 %d 条提醒", 2)
+        info_log.assert_any_call("[EventMonitor] Lượt này kích hoạt %d cảnh báo", 2)
 
     def test_schedule_mode_registers_event_monitor_worker_without_legacy_rules(self) -> None:
         args = self._make_args(schedule=True)
@@ -1165,12 +902,10 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.get_config", return_value=config), \
              patch("main.prepare_webui_frontend_assets", return_value=True), \
              patch("main.start_api_server", side_effect=RuntimeError("port busy")), \
-             patch("main.start_bot_stream_clients") as start_bots, \
              patch("main.logger.error") as error_log:
             exit_code = main.main()
 
         self.assertEqual(exit_code, 1)
-        start_bots.assert_not_called()
         error_log.assert_called_once()
 
     def test_webui_only_maps_to_serve_only_and_exits_when_api_server_start_fails(self) -> None:
@@ -1182,13 +917,11 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.get_config", return_value=config), \
              patch("main.prepare_webui_frontend_assets", return_value=True), \
              patch("main.start_api_server", side_effect=RuntimeError("port busy")), \
-             patch("main.start_bot_stream_clients") as start_bots, \
              patch("main.run_full_analysis") as run_full_analysis, \
              patch("main.logger.error") as error_log:
             exit_code = main.main()
 
         self.assertEqual(exit_code, 1)
-        start_bots.assert_not_called()
         run_full_analysis.assert_not_called()
         error_log.assert_called_once()
 
@@ -1201,14 +934,12 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.get_config", return_value=config), \
              patch("main.prepare_webui_frontend_assets", return_value=True), \
              patch("main.start_api_server", side_effect=RuntimeError("port busy")), \
-             patch("main.start_bot_stream_clients") as start_bots, \
              patch("main.run_full_analysis") as run_full_analysis, \
              patch("main._run_analysis_with_runtime_scheduler_lock") as run_with_lock, \
              patch("main.logger.error") as error_log:
             exit_code = main.main()
 
         self.assertEqual(exit_code, 0)
-        start_bots.assert_not_called()
         run_with_lock.assert_called_once_with(config, args, None, None)
         run_full_analysis.assert_not_called()
         error_log.assert_called_once()
@@ -1237,14 +968,12 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main._build_schedule_time_provider", return_value=lambda: "18:00"), \
              patch("main.prepare_webui_frontend_assets", return_value=True), \
              patch("main.start_api_server", side_effect=RuntimeError("port busy")), \
-             patch("main.start_bot_stream_clients") as start_bots, \
              patch("main.run_full_analysis") as run_full_analysis, \
              patch("src.scheduler.run_with_schedule", side_effect=fake_run_with_schedule), \
              patch("main.logger.error") as error_log:
             exit_code = main.main()
 
         self.assertEqual(exit_code, 0)
-        start_bots.assert_not_called()
         run_full_analysis.assert_called_once_with(config, args, None)
         self.assertEqual(scheduled_call["schedule_time"], "18:00")
         self.assertEqual(scheduled_call["run_immediately"], True)
@@ -1290,7 +1019,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.get_config", return_value=config), \
              patch("main.prepare_webui_frontend_assets", return_value=True), \
              patch("main.start_api_server", side_effect=fake_start_api_server), \
-             patch("main.start_bot_stream_clients") as start_bots, \
              patch("main.time.sleep", side_effect=KeyboardInterrupt), \
              patch("src.scheduler.run_with_schedule") as run_with_schedule:
             exit_code = main.main()
@@ -1307,7 +1035,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
             "no_context_snapshot": True,
             "workers": 4,
         }])
-        start_bots.assert_called_once_with(config)
         run_with_schedule.assert_not_called()
 
     def test_serve_mode_uses_shared_analysis_lock_for_immediate_run_full_analysis(self) -> None:
@@ -1326,7 +1053,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
             patch("main.get_config", return_value=config),
             patch("main.prepare_webui_frontend_assets", return_value=True),
             patch("main.start_api_server"),
-            patch("main.start_bot_stream_clients") as start_bots,
             patch("main.time.sleep", side_effect=KeyboardInterrupt),
             patch("main.run_full_analysis") as run_full_analysis,
             patch("main._run_analysis_with_runtime_scheduler_lock") as run_with_lock,
@@ -1337,42 +1063,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(run_with_lock.call_count, 1)
         run_with_lock.assert_called_once_with(config, args, None, None)
         run_full_analysis.assert_not_called()
-        start_bots.assert_called_once_with(config)
 
-    def test_serve_mode_keeps_running_after_futu_portfolio_load_failure(self) -> None:
-        args = self._make_args(
-            serve=True,
-            schedule=False,
-            portfolio="futu",
-            host="127.0.0.1",
-            port=8000,
-        )
-        config = self._make_config(webui_enabled=False, run_immediately=True)
-        error = FutuPortfolioError("OpenD unavailable")
-
-        with (
-            patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}, clear=False),
-            patch("main.parse_arguments", return_value=args),
-            patch("main.get_config", return_value=config),
-            patch("main.prepare_webui_frontend_assets", return_value=True),
-            patch("main.start_api_server"),
-            patch("main.start_bot_stream_clients") as start_bots,
-            patch("main.time.sleep", side_effect=KeyboardInterrupt),
-            patch(
-                "main._run_analysis_with_runtime_scheduler_lock",
-                side_effect=error,
-            ) as run_with_lock,
-            patch("main.logger.exception") as exception_log,
-        ):
-            exit_code = main.main()
-
-        self.assertEqual(exit_code, 0)
-        run_with_lock.assert_called_once_with(config, args, None, None)
-        start_bots.assert_called_once_with(config)
-        exception_log.assert_any_call(
-            "Futu 持仓导入失败，Web/API 服务继续运行: %s",
-            error,
-        )
 
     def test_serve_schedule_flag_enables_api_runtime_scheduler(self) -> None:
         from src.services.runtime_scheduler import (
@@ -1412,7 +1103,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.get_config", return_value=config), \
              patch("main.prepare_webui_frontend_assets", return_value=True), \
              patch("main.start_api_server", side_effect=fake_start_api_server), \
-             patch("main.start_bot_stream_clients"), \
              patch("main.time.sleep", side_effect=KeyboardInterrupt), \
              patch("src.scheduler.run_with_schedule") as run_with_schedule:
             exit_code = main.main()
@@ -1454,7 +1144,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.get_config", return_value=config), \
              patch("main.prepare_webui_frontend_assets", return_value=True), \
              patch("main.start_api_server", side_effect=fake_start_api_server), \
-             patch("main.start_bot_stream_clients"), \
              patch("main.time.sleep", side_effect=KeyboardInterrupt), \
              patch("src.scheduler.run_with_schedule") as run_with_schedule:
             exit_code = main.main()
@@ -1490,7 +1179,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
              patch("main.get_config", return_value=config), \
              patch("main.prepare_webui_frontend_assets", return_value=True), \
              patch("main.start_api_server", side_effect=fake_start_api_server), \
-             patch("main.start_bot_stream_clients") as start_bots, \
              patch("main.time.sleep", side_effect=KeyboardInterrupt), \
              patch("src.scheduler.run_with_schedule") as run_with_schedule:
             exit_code = main.main()
@@ -1499,7 +1187,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(marker_seen_by_server, [None])
         self.assertEqual(suppress_seen_by_server, [None])
         self.assertEqual(run_immediately_seen_by_server, ["false"])
-        start_bots.assert_called_once_with(config)
         run_with_schedule.assert_not_called()
 
     def test_reload_runtime_config_preserves_process_env_overrides(self) -> None:
@@ -1661,13 +1348,12 @@ class MainScheduleModeTestCase(unittest.TestCase):
             self.assertEqual(provider(), "18:00")
 
     def test_single_run_keeps_cli_stock_override(self) -> None:
-        args = self._make_args(stocks="600519,000001")
+        args = self._make_args(stocks="HPG,VCB")
         config = self._make_config(run_immediately=True)
 
         with patch("main.parse_arguments", return_value=args), \
              patch("main.get_config", return_value=config), \
              patch("main.setup_logging"), \
-             patch("main._refresh_stock_index_cache_for_analysis"), \
              patch("main.run_full_analysis") as run_full_analysis:
             exit_code = main.main()
 
@@ -1675,7 +1361,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
         run_full_analysis.assert_called_once()
         _, _, stock_codes = run_full_analysis.call_args.args
         analysis_targets = run_full_analysis.call_args.kwargs.get("analysis_targets")
-        self.assertEqual(stock_codes, ["600519", "000001"])
+        self.assertEqual(stock_codes, ["HPG", "VCB"])
         self.assertEqual(len(analysis_targets), 2)
         self.assertEqual(analysis_targets[0].asset_type, "stock")
         self.assertEqual(analysis_targets[1].asset_type, "stock")
@@ -1702,9 +1388,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
         events = []
         pipeline_kwargs = {}
 
-        def refresh_index(config_arg):
-            events.append("refresh")
-
         def build_pipeline(*args, **kwargs):
             events.append("pipeline")
             pipeline_kwargs.update(kwargs)
@@ -1713,15 +1396,13 @@ class MainScheduleModeTestCase(unittest.TestCase):
         lock_token = try_acquire_market_review_lock(config)
         self.assertIsNotNone(lock_token)
         try:
-            with patch.object(main, "_refresh_stock_index_cache_for_analysis", side_effect=refresh_index) as refresh, \
-                 patch("src.core.pipeline.StockAnalysisPipeline", side_effect=build_pipeline), \
+            with patch("src.core.pipeline.StockAnalysisPipeline", side_effect=build_pipeline), \
                  patch("src.core.market_review.run_market_review") as run_market_review:
                 main.run_full_analysis(config, args, [])
         finally:
             release_market_review_lock(lock_token)
 
-            refresh.assert_called_once_with(config)
-        self.assertEqual(events[:2], ["refresh", "pipeline"])
+        self.assertEqual(events[:1], ["pipeline"])
         self.assertTrue(pipeline_kwargs["daily_market_context_allow_generate"])
         pipeline.run.assert_called_once()
         run_market_review.assert_not_called()
@@ -1745,8 +1426,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
             pipeline_kwargs.update(kwargs)
             return pipeline
 
-        with patch.object(main, "_refresh_stock_index_cache_for_analysis") as refresh, \
-             patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
+        with patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
              patch("src.core.pipeline.StockAnalysisPipeline", side_effect=build_pipeline), \
              patch("main._prime_daily_market_context") as prime_context, \
              patch("src.core.market_review.run_market_review") as run_market_review:
@@ -1756,7 +1436,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(pipeline_kwargs["daily_market_context_enabled"], False)
         prime_context.assert_not_called()
         run_market_review.assert_not_called()
-        refresh.assert_called_once_with(config)
 
     def test_run_full_analysis_defaults_daily_context_on_without_disabling_market_review(self) -> None:
         args = self._make_args()
@@ -1776,8 +1455,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
             pipeline_kwargs.update(kwargs)
             return pipeline
 
-        with patch.object(main, "_refresh_stock_index_cache_for_analysis") as refresh, \
-             patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
+        with patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
              patch("src.core.pipeline.StockAnalysisPipeline", side_effect=build_pipeline), \
              patch("main._prime_daily_market_context", side_effect=[("", ""), ("缓存摘要", "完整复盘")]) as prime_context, \
              patch("main._run_market_review_with_shared_lock", return_value=SimpleNamespace(report="大盘复盘")) as run_with_lock:
@@ -1787,7 +1465,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertTrue(pipeline_kwargs["daily_market_context_allow_generate"])
         self.assertEqual(prime_context.call_count, 2)
         run_with_lock.assert_called_once()
-        refresh.assert_called_once_with(config)
 
     def test_run_full_analysis_primes_daily_market_context_before_stock_analysis(self) -> None:
         args = self._make_args()
@@ -1815,8 +1492,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
             reference_times.append(current_time)
             return target_date
 
-        with patch.object(main, "_refresh_stock_index_cache_for_analysis") as refresh, \
-             patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
+        with patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
              patch("main._resolve_daily_market_context_target_date", side_effect=resolve_target_date), \
              patch("src.core.pipeline.StockAnalysisPipeline", side_effect=build_pipeline), \
              patch("main._prime_daily_market_context", return_value=("大盘退潮，高风险，建议观望，仓位上限30%。", "完整复盘正文")) as prime_context, \
@@ -1855,30 +1531,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertFalse(run_with_lock.call_args.kwargs["merge_notification"])
         self.assertTrue(run_with_lock.call_args.kwargs["send_notification"])
         run_market_review.assert_not_called()
-        refresh.assert_called_once_with(config)
         pipeline.run.assert_called_once()
-
-    def test_resolve_daily_market_context_target_date_passes_jp_kr_to_trading_calendar(self) -> None:
-        current_time = datetime(2026, 3, 26, 12, 0, tzinfo=timezone.utc)
-        target_date = date(2026, 3, 25)
-
-        with patch("src.core.trading_calendar.get_effective_trading_date", return_value=target_date) as get_date:
-            self.assertEqual(
-                main._resolve_daily_market_context_target_date("jp", current_time),
-                target_date,
-            )
-            self.assertEqual(
-                main._resolve_daily_market_context_target_date("kr", current_time),
-                target_date,
-            )
-
-        self.assertEqual(
-            get_date.call_args_list,
-            [
-                unittest.mock.call("jp", current_time=current_time),
-                unittest.mock.call("kr", current_time=current_time),
-            ],
-        )
 
     def test_run_full_analysis_does_not_reuse_single_context_for_multi_market_review(self) -> None:
         args = self._make_args()
@@ -1901,8 +1554,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
             pipeline_kwargs.update(kwargs)
             return pipeline
 
-        with patch.object(main, "_refresh_stock_index_cache_for_analysis") as refresh, \
-             patch("main._compute_trading_day_filter", return_value=([], "cn,us", False)), \
+        with patch("main._compute_trading_day_filter", return_value=([], "cn,us", False)), \
              patch("main._resolve_daily_market_context_target_date", return_value=target_date), \
              patch("src.core.pipeline.StockAnalysisPipeline", side_effect=build_pipeline), \
              patch("main._prime_daily_market_context", return_value=("A股缓存摘要", "")) as prime_context, \
@@ -1937,7 +1589,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
         run_with_lock.assert_called_once()
         self.assertEqual(run_with_lock.call_args.kwargs["override_region"], "cn,us")
         run_market_review.assert_not_called()
-        refresh.assert_called_once_with(config)
         pipeline.run.assert_called_once()
 
     def test_prime_daily_market_context_readonly_mode_still_reuses_cached_context(self) -> None:
@@ -2053,8 +1704,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
             events.append("market-review")
             return SimpleNamespace(report="完整复盘")
 
-        with patch.object(main, "_refresh_stock_index_cache_for_analysis") as refresh, \
-             patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
+        with patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
              patch("main._resolve_daily_market_context_target_date", return_value=target_date), \
              patch("src.core.pipeline.StockAnalysisPipeline", side_effect=build_pipeline), \
              patch("main._prime_daily_market_context", return_value=("", "")) as prime_context, \
@@ -2092,7 +1742,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
         )
         run_with_lock_mock.assert_called_once()
         run_market_review.assert_not_called()
-        refresh.assert_called_once_with(config)
         pipeline.run.assert_called_once()
 
     def test_run_full_analysis_reuses_runtime_market_context_after_stock_analysis(self) -> None:
@@ -2120,8 +1769,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
             return pipeline
 
         runtime_context = ("本轮运行时复盘摘要", "## 本轮运行时完整复盘")
-        with patch.object(main, "_refresh_stock_index_cache_for_analysis") as refresh, \
-             patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
+        with patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
              patch("main._resolve_daily_market_context_target_date", return_value=target_date), \
              patch("src.core.pipeline.StockAnalysisPipeline", side_effect=build_pipeline), \
              patch(
@@ -2164,7 +1812,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
                 query_scoped_read,
             ],
         )
-        refresh.assert_called_once_with(config)
         pipeline.run.assert_called_once()
 
     def test_run_full_analysis_saves_reused_runtime_market_context_without_notify(self) -> None:
@@ -2189,7 +1836,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
 
         runtime_context = ("本轮运行时复盘摘要", "## 本轮运行时完整复盘")
         with (
-            patch.object(main, "_refresh_stock_index_cache_for_analysis") as refresh,
             patch("main._compute_trading_day_filter", return_value=([], "cn", False)),
             patch("main._resolve_daily_market_context_target_date", return_value=target_date),
             patch("src.core.pipeline.StockAnalysisPipeline", side_effect=build_pipeline),
@@ -2207,12 +1853,11 @@ class MainScheduleModeTestCase(unittest.TestCase):
         pipeline.notifier.send.assert_not_called()
         pipeline.notifier.save_report_to_file.assert_called_once()
         saved_content, saved_filename = pipeline.notifier.save_report_to_file.call_args.args
-        self.assertTrue(saved_content.startswith("# 🎯 大盘复盘\n\n"))
+        self.assertTrue(saved_content.startswith("# 🎯 Market Review\n\n"))
         self.assertIn("## 本轮运行时完整复盘", saved_content)
         self.assertTrue(saved_filename.startswith("market_review_"))
         self.assertTrue(saved_filename.endswith(".md"))
         self.assertEqual(prime_context.call_count, 3)
-        refresh.assert_called_once_with(config)
         pipeline.run.assert_called_once()
 
     def test_run_full_analysis_still_runs_market_review_for_merge_disabled_with_reused_context(self) -> None:
@@ -2235,8 +1880,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
             pipeline_kwargs.update(kwargs)
             return pipeline
 
-        with patch.object(main, "_refresh_stock_index_cache_for_analysis") as refresh, \
-             patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
+        with patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
              patch("main._resolve_daily_market_context_target_date", return_value=target_date), \
              patch("src.core.pipeline.StockAnalysisPipeline", side_effect=build_pipeline), \
              patch(
@@ -2274,7 +1918,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
         run_with_lock.assert_called_once()
         self.assertFalse(run_with_lock.call_args.kwargs["merge_notification"])
         run_market_review.assert_not_called()
-        refresh.assert_called_once_with(config)
         pipeline.run.assert_called_once()
 
     def test_run_full_analysis_waits_for_analysis_delay_before_market_review(self) -> None:
@@ -2303,8 +1946,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
             events.append("market-review")
             return SimpleNamespace(report="完整复盘")
 
-        with patch.object(main, "_refresh_stock_index_cache_for_analysis") as refresh, \
-             patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
+        with patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
              patch("main._resolve_daily_market_context_target_date", return_value=target_date), \
              patch("src.core.pipeline.StockAnalysisPipeline", side_effect=build_pipeline), \
              patch("main._prime_daily_market_context", return_value=("", "")) as prime_context, \
@@ -2323,7 +1965,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
         )
         run_market_review.assert_not_called()
         run_with_lock_mock.assert_called_once()
-        refresh.assert_called_once_with(config)
         prime_context.assert_has_calls(
             [
                 unittest.mock.call(
@@ -2384,8 +2025,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
             pipeline_kwargs.update(kwargs)
             return pipeline
 
-        with patch.object(main, "_refresh_stock_index_cache_for_analysis") as refresh, \
-             patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
+        with patch("main._compute_trading_day_filter", return_value=([], "cn", False)), \
              patch("main._resolve_daily_market_context_target_date", return_value=target_date), \
              patch("src.core.pipeline.StockAnalysisPipeline", side_effect=build_pipeline), \
              patch(
@@ -2425,7 +2065,6 @@ class MainScheduleModeTestCase(unittest.TestCase):
         )
         run_with_lock.assert_not_called()
         run_market_review.assert_not_called()
-        refresh.assert_called_once_with(config)
         pipeline.run.assert_called_once_with(
             stock_codes=[],
             dry_run=False,
@@ -2527,8 +2166,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
         pipeline = MagicMock()
         pipeline.run.return_value = []
 
-        with patch.object(main, "_refresh_stock_index_cache_for_analysis"), \
-             patch.object(main, "_compute_trading_day_filter", return_value=(["600519"], "cn", False)), \
+        with patch.object(main, "_compute_trading_day_filter", return_value=(["600519"], "cn", False)), \
              patch("main._resolve_daily_market_context_target_date", return_value=target_date), \
              patch("src.core.pipeline.StockAnalysisPipeline", return_value=pipeline), \
              patch("main._prime_daily_market_context", return_value=("", "")), \
@@ -2560,8 +2198,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
             parse_analysis_target("AAPL"),
         ]
 
-        with patch.object(main, "_refresh_stock_index_cache_for_analysis"), \
-             patch.object(
+        with patch.object(
                  main,
                  "_compute_trading_day_filter",
                  return_value=(["AAPL"], "us", False),
@@ -2647,11 +2284,11 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         run_with_lock.assert_called_once()
 
-    def test_market_review_mode_respects_comma_list_market_review_region(self) -> None:
+    def test_market_review_mode_respects_market_review_region(self) -> None:
         args = self._make_args(market_review=True)
         config = self._make_config(
             trading_day_check_enabled=True,
-            market_review_region="jp,kr",
+            market_review_region="vn",
             market_review_enabled=False,
             database_path=str(Path(self.temp_dir.name) / "stock_analysis.db"),
         )
@@ -2668,14 +2305,14 @@ class MainScheduleModeTestCase(unittest.TestCase):
                  return_value=(runtime_notifier, runtime_analyzer, runtime_search_service),
              ) as runtime_builder, \
              patch("src.core.market_review.run_market_review"), \
-             patch("src.core.trading_calendar.get_open_markets_today", return_value={"jp", "kr"}):
+             patch("src.core.trading_calendar.get_open_markets_today", return_value={"vn"}):
             exit_code = main.main()
 
         self.assertEqual(exit_code, 0)
         runtime_builder.assert_called_once_with(config)
         call_args = run_with_lock.call_args
         self.assertIs(call_args.args[0], config)
-        self.assertEqual(call_args.kwargs["override_region"], "jp,kr")
+        self.assertEqual(call_args.kwargs["override_region"], "vn")
         self.assertEqual(call_args.kwargs["trigger_source"], "cli")
 
     def test_bootstrap_logging_persists_when_config_load_fails(self) -> None:
@@ -2707,7 +2344,7 @@ class MainScheduleModeTestCase(unittest.TestCase):
 
         self.assertEqual(exit_code, 1)
         output = capture_stream.getvalue()
-        self.assertIn("加载配置失败", output)
+        self.assertIn("Tải cấu hình thất bại", output)
         self.assertIn("config boom", output)
 
     def test_bootstrap_logging_failure_does_not_block_startup(self) -> None:
@@ -2755,9 +2392,9 @@ class MainScheduleModeTestCase(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         run_mock.assert_called_once()
         output = capture_stream.getvalue()
-        self.assertIn("文件日志初始化失败，已降级为控制台日志输出", output)
+        self.assertIn("Khởi tạo log ra file thất bại, đã hạ cấp sang log ra console", output)
         self.assertIn("/app/logs", output)
-        self.assertIn("官方 Docker 镜像启动入口会自动修复默认挂载目录权限", output)
+        self.assertIn("Entrypoint của Docker image chính thức sẽ tự sửa quyền thư mục mount mặc định", output)
 
     def test_run_full_analysis_import_failure_propagates(self) -> None:
         """P1: import failures in run_full_analysis must propagate, not be swallowed."""

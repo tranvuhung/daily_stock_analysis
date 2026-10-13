@@ -173,7 +173,7 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
         def worker():
             try:
                 barrier.wait(timeout=1)
-                responses.append(service.search_stock_news("600519", "贵州茅台", max_results=3))
+                responses.append(service.search_stock_news("HPG", "Hòa Phát", max_results=3))
             except Exception as exc:  # pragma: no cover - thread collection
                 errors.append(exc)
 
@@ -198,12 +198,12 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
         )
         search_days = service._effective_news_window_days()
         cache_key = service._cache_key(
-            "贵州茅台 600519 股票 最新消息|target=600519:贵州茅台|news_pref=zh",
+            "Hòa Phát HPG cổ phiếu tin tức mới nhất|target=HPG:Hòa Phát",
             3,
             search_days,
         )
         cached_response = SearchResponse(
-            query="贵州茅台 600519 股票 最新消息",
+            query="Hòa Phát HPG cổ phiếu tin tức mới nhất",
             results=[
                 SearchResult(
                     title="cached-after-wait",
@@ -230,24 +230,24 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
             return None
 
         with patch.object(service, "_wait_for_cached", side_effect=wait_for_cached):
-            response = service.search_stock_news("600519", "贵州茅台", max_results=3)
+            response = service.search_stock_news("HPG", "Hòa Phát", max_results=3)
 
         self.assertIs(response, cached_response)
         provider.search.assert_not_called()
 
     def test_bounded_topic_search_caches_in_parent_before_starting_another_process(self):
         service = SearchService(
-            bocha_keys=["dummy_key"],
+            tavily_keys=["dummy_key"],
             searxng_public_instances_enabled=False,
             news_max_age_days=3,
             news_strategy_profile="short",
         )
         response = SearchResponse(
-            query='"影视传媒" A股 最新消息 催化',
+            query='"thép" chứng khoán Việt Nam tin mới nhất',
             results=[
                 SearchResult(
-                    title="影视传媒订单",
-                    snippet="板块近期出现新订单。",
+                    title="Đơn hàng ngành thép",
+                    snippet="Ngành thép gần đây có đơn hàng mới.",
                     url="https://example.com/topic-news",
                     source="example.com",
                     published_date=datetime.now().date().isoformat(),
@@ -258,8 +258,8 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
         )
 
         with patch("src.search_service._call_topic_news_in_subprocess", return_value=response) as subprocess_call:
-            first = service.search_topic_news_bounded("影视传媒", max_results=2, timeout_seconds=0.5)
-            second = service.search_topic_news_bounded("影视传媒", max_results=2, timeout_seconds=0.5)
+            first = service.search_topic_news_bounded("thép", max_results=2, timeout_seconds=0.5)
+            second = service.search_topic_news_bounded("thép", max_results=2, timeout_seconds=0.5)
 
         self.assertIs(first, response)
         self.assertIs(second, response)
@@ -268,7 +268,7 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
 
     def test_bounded_topic_search_waits_when_retry_reservation_has_another_owner(self):
         service = SearchService(
-            bocha_keys=["dummy_key"],
+            tavily_keys=["dummy_key"],
             searxng_public_instances_enabled=False,
             news_max_age_days=3,
             news_strategy_profile="short",
@@ -276,11 +276,11 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
         first_owner = threading.Event()
         retry_owner = threading.Event()
         response = SearchResponse(
-            query='"影视传媒" A股 最新消息 催化',
+            query='"thép" chứng khoán Việt Nam tin mới nhất',
             results=[
                 SearchResult(
-                    title="并发 owner 返回结果",
-                    snippet="只允许 owner 执行供应商链。",
+                    title="Kết quả do owner song song trả về",
+                    snippet="Chỉ owner được chạy chuỗi provider.",
                     url="https://example.com/coalesced-topic-news",
                     source="example.com",
                     published_date=datetime.now().date().isoformat(),
@@ -302,7 +302,7 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
             patch.object(service, "_wait_for_cached", side_effect=[None, response]) as wait_for_cached,
             patch("src.search_service._call_topic_news_in_subprocess") as subprocess_call,
         ):
-            actual = service.search_topic_news_bounded("影视传媒", max_results=2, timeout_seconds=0.5)
+            actual = service.search_topic_news_bounded("thép", max_results=2, timeout_seconds=0.5)
 
         self.assertIs(actual, response)
         self.assertIs(wait_for_cached.call_args_list[0].args[1], first_owner)
@@ -311,7 +311,7 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
 
     def test_bounded_topic_search_cache_wait_uses_the_caller_deadline(self):
         service = SearchService(
-            bocha_keys=["dummy_key"],
+            tavily_keys=["dummy_key"],
             searxng_public_instances_enabled=False,
             news_max_age_days=3,
             news_strategy_profile="short",
@@ -328,7 +328,7 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
         ):
             started = time.monotonic()
             with self.assertRaisesRegex(TimeoutError, "call deadline"):
-                service.search_topic_news_bounded("影视传媒", max_results=2, timeout_seconds=0.05)
+                service.search_topic_news_bounded("thép", max_results=2, timeout_seconds=0.05)
             elapsed = time.monotonic() - started
 
         self.assertLess(elapsed, 0.5)
@@ -336,7 +336,7 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
 
     def test_bounded_topic_search_provider_receives_only_remaining_deadline(self):
         service = SearchService(
-            bocha_keys=["dummy_key"],
+            tavily_keys=["dummy_key"],
             searxng_public_instances_enabled=False,
             news_max_age_days=3,
             news_strategy_profile="short",
@@ -344,7 +344,7 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
         first_owner = threading.Event()
         retry_owner = threading.Event()
         response = SearchResponse(
-            query='"影视传媒" A股 最新消息 催化',
+            query='"thép" chứng khoán Việt Nam tin mới nhất',
             results=[],
             provider="Filtered",
             success=True,
@@ -368,7 +368,7 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
             patch.object(service, "_wait_for_cached", side_effect=wait_for_owner),
             patch("src.search_service._call_topic_news_in_subprocess", return_value=response) as subprocess_call,
         ):
-            actual = service.search_topic_news_bounded("影视传媒", max_results=2, timeout_seconds=0.2)
+            actual = service.search_topic_news_bounded("thép", max_results=2, timeout_seconds=0.2)
 
         self.assertIs(actual, response)
         remaining = subprocess_call.call_args.kwargs["timeout_seconds"]
@@ -384,7 +384,7 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
                         "news_max_age_days": 3,
                         "news_strategy_profile": "short",
                     },
-                    topic="影视传媒",
+                    topic="thép",
                     max_results=2,
                     focus_keywords=None,
                     timeout_seconds=0.05,
@@ -404,7 +404,7 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
                 "news_max_age_days": 3,
                 "news_strategy_profile": "short",
             },
-            topic="影视传媒",
+            topic="thép",
             max_results=2,
             focus_keywords=None,
             timeout_seconds=5.0,
@@ -423,7 +423,7 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "concurrency is full"):
                 _call_topic_news_in_subprocess(
                     constructor_kwargs={},
-                    topic="影视传媒",
+                    topic="thép",
                     max_results=2,
                     focus_keywords=None,
                     timeout_seconds=0.5,
@@ -451,7 +451,7 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
             with self.assertRaisesRegex(OSError, "spawn failed"):
                 _call_topic_news_in_subprocess(
                     constructor_kwargs={},
-                    topic="影视传媒",
+                    topic="thép",
                     max_results=2,
                     focus_keywords=None,
                     timeout_seconds=0.5,
@@ -482,7 +482,7 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
             with self.assertRaisesRegex(OSError, "pipe close failed"):
                 _call_topic_news_in_subprocess(
                     constructor_kwargs={},
-                    topic="影视传媒",
+                    topic="thép",
                     max_results=2,
                     focus_keywords=None,
                     timeout_seconds=0.5,
@@ -497,11 +497,9 @@ class SearchServiceConcurrencyTestCase(unittest.TestCase):
     def test_get_search_service_initializes_singleton_once(self):
         reset_search_service()
         config = SimpleNamespace(
-            bocha_api_keys=[],
             tavily_api_keys=[],
             brave_api_keys=[],
             serpapi_keys=[],
-            minimax_api_keys=[],
             searxng_base_urls=[],
             searxng_public_instances_enabled=False,
             news_max_age_days=3,

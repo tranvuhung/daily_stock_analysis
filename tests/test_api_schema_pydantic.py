@@ -104,7 +104,7 @@ def test_schema_examples_remain_in_openapi_schema() -> None:
 
     assert root_schema["properties"]["message"]["example"] == "Daily Stock Analysis API is running"
     assert root_schema["example"]["version"] == "1.0.0"
-    assert analyze_schema["properties"]["stock_code"]["example"] == "600519"
+    assert analyze_schema["properties"]["stock_code"]["example"] == "HPG"
     assert analyze_schema["properties"]["skills"]["example"] == ["bull_trend", "growth_quality"]
     assert analyze_schema["properties"]["analysis_phase"]["default"] == "auto"
     assert analyze_schema["properties"]["analysis_phase"]["enum"] == [
@@ -113,8 +113,8 @@ def test_schema_examples_remain_in_openapi_schema() -> None:
         "intraday",
         "postmarket",
     ]
-    assert history_schema["example"]["stock_code"] == "600519"
-    assert quote_schema["example"]["stock_name"] == "贵州茅台"
+    assert history_schema["example"]["stock_code"] == "HPG"
+    assert quote_schema["example"]["stock_name"] == "Hoa Phat Group"
 
 
 def test_analyze_request_supports_legacy_strategies_dict_input() -> None:
@@ -160,12 +160,15 @@ def test_request_models_reject_legacy_report_languages() -> None:
 @pytest.mark.parametrize(
     ("raw_region", "expected"),
     [
-        ("cn", "cn"),
-        ("US", "us"),
-        (" jp , kr ", "jp,kr"),
-        ("kr,jp", "jp,kr"),
-        ("cn,cn,us", "cn,us"),
-        ("both", "cn,hk,us,jp,kr,vn"),
+        ("vn", "vn"),
+        (" VN ", "vn"),
+        # Vùng cũ vẫn được chấp nhận và quy về vn. / Legacy regions normalize to vn.
+        ("cn", "vn"),
+        ("US", "vn"),
+        (" jp , kr ", "vn"),
+        ("cn,cn,us", "vn"),
+        ("both", "vn"),
+        ("both,us", "vn"),
     ],
 )
 def test_market_review_request_normalizes_strict_region_input(
@@ -179,7 +182,7 @@ def test_market_review_request_normalizes_strict_region_input(
 
 @pytest.mark.parametrize(
     "raw_region",
-    ["", "   ", "abc", "cn,abc", "cn,,us", "both,us"],
+    ["", "   ", "abc", "cn,abc", "cn,,us"],
 )
 def test_market_review_request_rejects_invalid_region_input(raw_region: str) -> None:
     with pytest.raises(ValidationError, match="region"):
@@ -195,15 +198,15 @@ def test_market_review_request_openapi_exposes_only_region_override_name() -> No
     schema = MarketReviewRequest.model_json_schema()
 
     region_schema = schema["properties"]["region"]
-    assert region_schema["example"] == "cn,us"
+    assert region_schema["example"] == "vn"
     string_schema = next(
         option for option in region_schema["anyOf"] if option.get("type") == "string"
     )
     assert string_schema["maxLength"] == 64
     assert string_schema["minLength"] == 1
-    assert region_schema["examples"] == ["cn", "jp,kr", "both"]
+    assert region_schema["examples"] == ["vn"]
     description = region_schema["description"]
-    for contract_text in ("cn", "both must be used alone", "empty token", "returns 4xx", "64"):
+    for contract_text in ("vn", "normalized to vn", "empty token", "returns 4xx", "64"):
         assert contract_text in description
     assert "market_review_region" not in schema["properties"]
 

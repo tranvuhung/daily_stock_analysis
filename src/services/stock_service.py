@@ -47,7 +47,7 @@ class StockService:
             quote = manager.get_realtime_quote(stock_code)
             
             if quote is None:
-                logger.warning(f"获取 {stock_code} 实时行情失败")
+                logger.warning(f"Lấy báo giá realtime của {stock_code} thất bại")
                 return None
             
             # UnifiedRealtimeQuote is a dataclass; use getattr for safe field access
@@ -79,10 +79,10 @@ class StockService:
             }
             
         except ImportError:
-            logger.warning("DataFetcherManager 未找到，使用占位数据")
+            logger.warning("Không tìm thấy DataFetcherManager, dùng dữ liệu giữ chỗ")
             return self._get_placeholder_quote(stock_code)
         except Exception as e:
-            logger.error(f"获取实时行情失败: {e}", exc_info=True)
+            logger.error(f"Lấy báo giá realtime thất bại: {e}", exc_info=True)
             return None
     
     def get_history_data(
@@ -108,8 +108,8 @@ class StockService:
         # Validate period; only daily is supported
         if period != "daily":
             raise ValueError(
-                f"暂不支持 '{period}' 周期，目前仅支持 'daily'。"
-                "weekly/monthly 聚合功能将在后续版本实现。"
+                f"Chưa hỗ trợ chu kỳ '{period}', hiện chỉ hỗ trợ 'daily'. "
+                "Tổng hợp weekly/monthly sẽ có ở phiên bản sau."
             )
         
         try:
@@ -120,7 +120,7 @@ class StockService:
             df, source = manager.get_daily_data(stock_code, days=days)
             
             if df is None or df.empty:
-                logger.warning(f"获取 {stock_code} 历史数据失败")
+                logger.warning(f"Lấy dữ liệu lịch sử của {stock_code} thất bại")
                 return {"stock_code": stock_code, "period": period, "data": []}
             
             # Get the stock name
@@ -154,10 +154,10 @@ class StockService:
             }
             
         except ImportError:
-            logger.warning("DataFetcherManager 未找到，返回空数据")
+            logger.warning("Không tìm thấy DataFetcherManager, trả về dữ liệu rỗng")
             return {"stock_code": stock_code, "period": period, "data": []}
         except Exception as e:
-            logger.error(f"获取历史数据失败: {e}", exc_info=True)
+            logger.error(f"Lấy dữ liệu lịch sử thất bại: {e}", exc_info=True)
             return {"stock_code": stock_code, "period": period, "data": []}
     
     def _get_placeholder_quote(self, stock_code: str) -> Dict[str, Any]:
@@ -172,7 +172,7 @@ class StockService:
         """
         return {
             "stock_code": stock_code,
-            "stock_name": f"股票{stock_code}",
+            "stock_name": f"Cổ phiếu {stock_code}",
             "current_price": 0.0,
             "change": None,
             "change_percent": None,

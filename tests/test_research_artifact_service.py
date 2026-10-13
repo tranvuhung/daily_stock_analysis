@@ -17,16 +17,16 @@ def test_build_research_artifact_from_report_with_evidence_and_invalidation() ->
         "meta": {
             "id": 12,
             "query_id": "q-12",
-            "stock_code": "600519",
-            "stock_name": "贵州茅台",
+            "stock_code": "HPG",
+            "stock_name": "Hòa Phát",
             "created_at": "2026-03-19T08:00:00",
         },
         "summary": {
-            "analysis_summary": "趋势维持偏强",
-            "operation_advice": "持有",
+            "analysis_summary": "Xu hướng duy trì nghiêng tăng",
+            "operation_advice": "Nắm giữ",
             "action": "hold",
-            "action_label": "持有",
-            "trend_prediction": "震荡上行",
+            "action_label": "Nắm giữ",
+            "trend_prediction": "Dao động đi lên",
             "sentiment_score": 72,
         },
         "strategy": {
@@ -35,11 +35,11 @@ def test_build_research_artifact_from_report_with_evidence_and_invalidation() ->
         },
         "details": {
             "analysis_context_pack_overview": {
-                "subject": {"market": "cn"},
+                "subject": {"market": "vn"},
                 "blocks": [
                     {
                         "key": "daily_price",
-                        "label": "日线行情",
+                        "label": "Dữ liệu ngày",
                         "status": "available",
                         "source": "tencent",
                         "warnings": [],
@@ -47,7 +47,7 @@ def test_build_research_artifact_from_report_with_evidence_and_invalidation() ->
                     },
                     {
                         "key": "news",
-                        "label": "新闻",
+                        "label": "Tin tức",
                         "status": "partial",
                         "source": "anspire",
                         "warnings": ["partial"],
@@ -57,10 +57,10 @@ def test_build_research_artifact_from_report_with_evidence_and_invalidation() ->
                 "data_quality": {
                     "overall_score": 83,
                     "level": "good",
-                    "limitations": ["新闻覆盖有限"],
+                    "limitations": ["Độ phủ tin tức hạn chế"],
                 },
             },
-            "news_content": "公司新闻摘要",
+            "news_content": "Tóm tắt tin doanh nghiệp",
         },
     }
 
@@ -68,8 +68,8 @@ def test_build_research_artifact_from_report_with_evidence_and_invalidation() ->
 
     assert artifact.schema_version == "research-artifact-v1"
     assert artifact.artifact_id == "report:12"
-    assert artifact.subject.stock_code == "600519"
-    assert artifact.subject.market == "cn"
+    assert artifact.subject.stock_code == "HPG"
+    assert artifact.subject.market == "vn"
     assert artifact.thesis.direction == "neutral"
     assert artifact.thesis.action == "hold"
     assert artifact.data_quality.level == "good"
@@ -90,7 +90,7 @@ def test_build_research_artifact_from_report_with_evidence_and_invalidation() ->
 def test_build_research_artifact_always_includes_invalidation_conditions() -> None:
     artifact = ResearchArtifact.model_validate(build_research_artifact({
         "meta": {"query_id": "q-empty", "stock_code": "AAPL"},
-        "summary": {"analysis_summary": "等待更多证据", "sentiment_score": 50},
+        "summary": {"analysis_summary": "Chờ thêm bằng chứng", "sentiment_score": 50},
     }))
 
     assert artifact.artifact_id == "report:AAPL:q-empty"
@@ -110,7 +110,7 @@ def test_research_artifact_requires_invalidation_conditions() -> None:
 
 def test_fallback_artifact_id_is_unique_for_stocks_in_the_same_batch() -> None:
     first = build_research_artifact({
-        "meta": {"query_id": "batch-1", "stock_code": "600519"},
+        "meta": {"query_id": "batch-1", "stock_code": "HPG"},
         "summary": {"analysis_summary": "first"},
     })
     second = build_research_artifact({
@@ -118,7 +118,7 @@ def test_fallback_artifact_id_is_unique_for_stocks_in_the_same_batch() -> None:
         "summary": {"analysis_summary": "second"},
     })
 
-    assert first["artifact_id"] == "report:600519:batch-1"
+    assert first["artifact_id"] == "report:HPG:batch-1"
     assert second["artifact_id"] == "report:000001:batch-1"
     assert first["artifact_id"] != second["artifact_id"]
 
@@ -166,16 +166,3 @@ def test_unavailable_context_blocks_do_not_inflate_source_count() -> None:
         "news:summary",
     }
 
-
-def test_market_structure_ok_is_healthy_evidence() -> None:
-    artifact = ResearchArtifact.model_validate(build_research_artifact({
-        "meta": {"query_id": "market-ok", "stock_code": "600519"},
-        "summary": {"analysis_summary": "market structure available"},
-        "details": {"market_structure": {"status": "ok"}},
-    }))
-
-    market_evidence = next(item for item in artifact.evidence if item.id == "market:structure")
-    assert market_evidence.freshness == "fresh"
-    assert market_evidence.quality_level == "good"
-    assert artifact.data_quality.source_count == 1
-    assert artifact.data_quality.level == "good"

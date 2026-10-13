@@ -42,21 +42,12 @@ def _get_search_service():
 
 def _canonical_search_code(stock_code: str) -> str:
     from data_provider.base import canonical_stock_code, normalize_stock_code
-    from src.services.stock_list_parser import ParseStatus, parse_analysis_target
 
     raw = str(stock_code or "").strip()
-    target = parse_analysis_target(raw)
-    if target.asset_type == ParseStatus.INDEX and target.canonical_id:
-        return target.canonical_id
     return canonical_stock_code(normalize_stock_code(raw))
 
 
 def _resolve_search_subject(stock_code: str, stock_name: str) -> tuple[str, str]:
-    from src.services.stock_list_parser import ParseStatus, parse_analysis_target
-
-    target = parse_analysis_target(stock_code)
-    if target.asset_type == ParseStatus.INDEX and target.matched_index is not None:
-        return "", target.matched_index.display_name
     return stock_code, stock_name
 
 
@@ -152,12 +143,12 @@ search_stock_news_tool = ToolDefinition(
         ToolParameter(
             name="stock_code",
             type="string",
-            description="Stock code, e.g., '600519'",
+            description="Stock code, e.g., 'HPG'",
         ),
         ToolParameter(
             name="stock_name",
             type="string",
-            description="Stock name in Chinese, e.g., '贵州茅台'",
+            description="Company name, e.g., 'Hoa Phat Group' or 'FPT Corporation'",
         ),
     ],
     handler=_handle_search_stock_news,
@@ -236,12 +227,12 @@ search_comprehensive_intel_tool = ToolDefinition(
         ToolParameter(
             name="stock_code",
             type="string",
-            description="Stock code, e.g., '600519'",
+            description="Stock code, e.g., 'HPG'",
         ),
         ToolParameter(
             name="stock_name",
             type="string",
-            description="Stock name in Chinese, e.g., '贵州茅台'",
+            description="Company name, e.g., 'Hoa Phat Group' or 'FPT Corporation'",
         ),
     ],
     handler=_handle_search_comprehensive_intel,

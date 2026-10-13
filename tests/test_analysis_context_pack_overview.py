@@ -28,7 +28,7 @@ from src.schemas.analysis_context_pack import (
 
 def _pack() -> AnalysisContextPack:
     return AnalysisContextPack(
-        subject=AnalysisSubject(code="600519", stock_name="贵州茅台", market="cn"),
+        subject=AnalysisSubject(code="HPG", stock_name="Hòa Phát", market="vn"),
         created_at=datetime(2026, 4, 10, 8, 30, tzinfo=timezone.utc),
         blocks={
             "news": AnalysisContextBlock(
@@ -103,7 +103,6 @@ def _pack() -> AnalysisContextPack:
                 "technical": 75,
                 "news": 35,
                 "fundamentals": 100,
-                "chip": 100,
             },
             limitations=["quote: fallback", "technical: partial"],
             warnings=["intraday_realtime_overlay", "intraday_realtime_overlay"]
@@ -131,7 +130,7 @@ def _walk_keys(value: Any) -> list[str]:
 
 
 def test_renderer_outputs_only_public_schema_fields() -> None:
-    overview = render_analysis_context_pack_overview(_pack(), report_language="zh")
+    overview = render_analysis_context_pack_overview(_pack(), report_language="vi")
 
     assert overview is not None
     assert set(overview) == {
@@ -169,14 +168,13 @@ def test_renderer_outputs_only_public_schema_fields() -> None:
             "technical": 75,
             "news": 35,
             "fundamentals": 100,
-            "chip": 100,
         },
         "limitations": ["quote: fallback", "technical: partial"],
     }
 
 
 def test_renderer_does_not_dump_items_values_payloads_or_sensitive_markers() -> None:
-    overview = render_analysis_context_pack_overview(_pack(), report_language="zh")
+    overview = render_analysis_context_pack_overview(_pack(), report_language="vi")
 
     assert overview is not None
     keys = set(_walk_keys(overview))
@@ -195,7 +193,7 @@ def test_renderer_does_not_dump_items_values_payloads_or_sensitive_markers() -> 
 
 
 def test_counts_are_by_block_status_and_missing_reasons_are_deduped() -> None:
-    overview = render_analysis_context_pack_overview(_pack(), report_language="zh")
+    overview = render_analysis_context_pack_overview(_pack(), report_language="vi")
 
     assert overview is not None
     assert overview["counts"] == {
@@ -226,10 +224,12 @@ def test_labels_follow_report_language_and_prompt_block_order() -> None:
     assert [block["key"] for block in overview_zh["blocks"]] == iter_analysis_context_pack_block_keys(
         pack.model_dump(mode="json")["blocks"]
     )
+    # Ngôn ngữ cũ zh được chuẩn hoá: nhãn khối luôn là tiếng Anh.
+    # Legacy zh is normalized: block labels are always English.
     assert [block["label"] for block in overview_zh["blocks"][:3]] == [
-        "行情",
-        "技术",
-        "基本面",
+        "quote",
+        "technical",
+        "fundamentals",
     ]
     assert [block["label"] for block in overview_en["blocks"][:3]] == [
         "quote",
@@ -237,15 +237,15 @@ def test_labels_follow_report_language_and_prompt_block_order() -> None:
         "fundamentals",
     ]
     prompt = format_analysis_context_pack_prompt_section(pack, report_language="zh")
-    assert prompt.index("行情:") < prompt.index("技术:") < prompt.index("基本面:")
+    assert prompt.index("quote:") < prompt.index("technical:") < prompt.index("fundamentals:")
 
 
 def test_extract_and_sanitize_handle_json_snapshot_strings() -> None:
-    overview = render_analysis_context_pack_overview(_pack(), report_language="zh")
+    overview = render_analysis_context_pack_overview(_pack(), report_language="vi")
     snapshot = json.dumps(
         {
             "enhanced_context": {
-                "code": "600519",
+                "code": "HPG",
                 "daily_market_context_summary": "仅供Prompt，历史复盘摘要",
                 "portfolio_context": {
                     "quantity": 100,
@@ -256,7 +256,7 @@ def test_extract_and_sanitize_handle_json_snapshot_strings() -> None:
             "portfolio_context": {"total_cost": 180000},
             "daily_market_context_summary": "根快照大盘摘要（应清理）",
             "analysis_context_pack_overview": overview,
-            "market_phase_summary": {"phase": "intraday", "market": "cn"},
+            "market_phase_summary": {"phase": "intraday", "market": "vn"},
         },
         ensure_ascii=False,
     )
@@ -265,10 +265,10 @@ def test_extract_and_sanitize_handle_json_snapshot_strings() -> None:
     sanitized = sanitize_context_snapshot_for_api(snapshot)
 
     assert extracted is not None
-    assert extracted["subject"]["code"] == "600519"
+    assert extracted["subject"]["code"] == "HPG"
     assert sanitized == {
         "enhanced_context": {
-            "code": "600519",
+            "code": "HPG",
             "daily_market_context": {"summary": "大盘偏弱，谨慎"},
         }
     }
@@ -280,9 +280,9 @@ def test_extract_reprojects_persisted_overview_to_public_schema() -> None:
             "pack_version": "1.0",
             "created_at": "2026-04-10T08:30:00+00:00",
             "subject": {
-                "code": "600519",
-                "stock_name": "贵州茅台",
-                "market": "cn",
+                "code": "HPG",
+                "stock_name": "Hòa Phát",
+                "market": "vn",
                 "api_key": "secret-key",
             },
             "blocks": [
@@ -389,7 +389,7 @@ def test_extract_accepts_legacy_overview_without_data_quality() -> None:
         {
             "analysis_context_pack_overview": {
                 "pack_version": "1.0",
-                "subject": {"code": "600519"},
+                "subject": {"code": "HPG"},
                 "blocks": [
                     {
                         "key": "quote",
@@ -414,7 +414,7 @@ def test_extract_returns_none_for_malformed_persisted_overview() -> None:
     assert extract_analysis_context_pack_overview(
         {
             "analysis_context_pack_overview": {
-                "subject": {"code": "600519"},
+                "subject": {"code": "HPG"},
                 "blocks": [{"key": "quote", "label": "行情", "status": "bad_status"}],
             }
         }
@@ -422,7 +422,7 @@ def test_extract_returns_none_for_malformed_persisted_overview() -> None:
     assert extract_analysis_context_pack_overview(
         {
             "analysis_context_pack_overview": {
-                "subject": {"code": "600519"},
+                "subject": {"code": "HPG"},
                 "blocks": "not-a-list",
             }
         }

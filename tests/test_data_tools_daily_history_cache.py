@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Tests for Agent get_daily_history DB cache reuse."""
+"""Kiểm thử tái dùng cache DB của tool get_daily_history (mã Việt Nam).
+
+Tests for Agent get_daily_history DB cache reuse."""
 
 from datetime import date, timedelta
 from types import SimpleNamespace
@@ -86,12 +88,12 @@ class DailyHistoryCacheToolTest(unittest.TestCase):
 
     def test_uses_fresh_partial_db_cache_without_fetching(self) -> None:
         target = date(2026, 4, 24)
-        db = _FakeDb({"600519": _rows("600519", target, 30)})
+        db = _FakeDb({"HPG": _rows("HPG", target, 30)})
         manager = SimpleNamespace(get_daily_data=MagicMock())
 
         with patch("src.storage.get_db", return_value=db), \
              patch("src.services.history_loader._get_fetcher_manager", return_value=manager):
-            result = self._run_with_frozen_date(target, "600519", days=60)
+            result = self._run_with_frozen_date(target, "HPG", days=60)
 
         self.assertEqual(result["source"], "db_cache")
         self.assertTrue(result["cache_hit"])
@@ -106,17 +108,17 @@ class DailyHistoryCacheToolTest(unittest.TestCase):
         target = date(2026, 4, 24)
         db = _FakeDb(
             {
-                "1810.HK": _rows("1810.HK", target, 40),
-                "HK01810": _rows("HK01810", target, 30),
+                "HPG.VN": _rows("HPG.VN", target, 40),
+                "HPG": _rows("HPG", target, 30),
             }
         )
         manager = SimpleNamespace(get_daily_data=MagicMock())
 
         with patch("src.storage.get_db", return_value=db), \
              patch("src.services.history_loader._get_fetcher_manager", return_value=manager):
-            result = self._run_with_frozen_date(target, "1810.HK", days=60)
+            result = self._run_with_frozen_date(target, "HPG.VN", days=60)
 
-        self.assertEqual(result["code"], "1810.HK")
+        self.assertEqual(result["code"], "HPG.VN")
         self.assertEqual(result["actual_records"], 40)
         manager.get_daily_data.assert_not_called()
 
@@ -124,23 +126,23 @@ class DailyHistoryCacheToolTest(unittest.TestCase):
         target = date(2026, 4, 24)
         db = _FakeDb(
             {
-                "1810.HK": _rows("1810.HK", target, 30),
-                "HK01810": _rows("HK01810", target, 30),
+                "HPG.VN": _rows("HPG.VN", target, 30),
+                "HPG": _rows("HPG", target, 30),
             }
         )
         manager = SimpleNamespace(get_daily_data=MagicMock())
 
         with patch("src.storage.get_db", return_value=db), \
              patch("src.services.history_loader._get_fetcher_manager", return_value=manager):
-            result = self._run_with_frozen_date(target, "1810.HK", days=60)
+            result = self._run_with_frozen_date(target, "HPG.VN", days=60)
 
-        self.assertEqual(result["code"], "HK01810")
+        self.assertEqual(result["code"], "HPG")
         self.assertEqual(result["actual_records"], 30)
         manager.get_daily_data.assert_not_called()
 
     def test_fetches_and_persists_when_cache_is_stale(self) -> None:
         target = date(2026, 4, 24)
-        db = _FakeDb({"600519": _rows("600519", target - timedelta(days=1), 30)})
+        db = _FakeDb({"HPG": _rows("HPG", target - timedelta(days=1), 30)})
         df = pd.DataFrame(
             [
                 {"date": target, "open": 1, "high": 2, "low": 0.5, "close": 1.5},
@@ -151,10 +153,10 @@ class DailyHistoryCacheToolTest(unittest.TestCase):
         with patch("src.storage.get_db", return_value=db), \
              patch("src.agent.tools.data_tools._get_db", return_value=db), \
              patch("src.services.history_loader._get_fetcher_manager", return_value=manager):
-            result = self._run_with_frozen_date(target, "600519", days=60)
+            result = self._run_with_frozen_date(target, "HPG", days=60)
 
-        manager.get_daily_data.assert_called_once_with("600519", days=60)
-        db.save_daily_data.assert_called_once_with(df, "600519", "Fetcher")
+        manager.get_daily_data.assert_called_once_with("HPG", days=60)
+        db.save_daily_data.assert_called_once_with(df, "HPG", "Fetcher")
         self.assertFalse(result["cache_hit"])
         self.assertEqual(result["source"], "Fetcher")
 
@@ -171,7 +173,7 @@ class DailyHistoryCacheToolTest(unittest.TestCase):
         with patch("src.storage.get_db", return_value=db), \
              patch("src.agent.tools.data_tools._get_db", return_value=db), \
              patch("src.services.history_loader._get_fetcher_manager", return_value=manager):
-            result = self._run_with_frozen_date(target, "600519", days=60)
+            result = self._run_with_frozen_date(target, "HPG", days=60)
 
         self.assertEqual(result["total_records"], 1)
         self.assertEqual(result["data"][0]["date"], str(target))
@@ -189,20 +191,20 @@ class DailyHistoryCacheToolTest(unittest.TestCase):
         with patch("src.storage.get_db", return_value=broken_db), \
              patch("src.agent.tools.data_tools._get_db", return_value=broken_db), \
              patch("src.services.history_loader._get_fetcher_manager", return_value=manager):
-            result = self._run_with_frozen_date(target, "600519", days=60)
+            result = self._run_with_frozen_date(target, "HPG", days=60)
 
-        manager.get_daily_data.assert_called_once_with("600519", days=60)
+        manager.get_daily_data.assert_called_once_with("HPG", days=60)
         self.assertFalse(result["cache_hit"])
         self.assertEqual(result["source"], "Fetcher")
 
     def test_days_one_cache_hit_with_single_fresh_record(self) -> None:
         target = date(2026, 4, 24)
-        db = _FakeDb({"600519": _rows("600519", target, 1)})
+        db = _FakeDb({"HPG": _rows("HPG", target, 1)})
         manager = SimpleNamespace(get_daily_data=MagicMock())
 
         with patch("src.storage.get_db", return_value=db), \
              patch("src.services.history_loader._get_fetcher_manager", return_value=manager):
-            result = self._run_with_frozen_date(target, "600519", days=1)
+            result = self._run_with_frozen_date(target, "HPG", days=1)
 
         self.assertTrue(result["cache_hit"])
         self.assertEqual(result["actual_records"], 1)
@@ -218,9 +220,9 @@ class DailyHistoryCacheToolTest(unittest.TestCase):
         with patch("src.storage.get_db", return_value=db), \
              patch("src.agent.tools.data_tools._get_db", return_value=db), \
              patch("src.services.history_loader._get_fetcher_manager", return_value=manager):
-            result = self._run_with_frozen_date(target, "600519", days=999)
+            result = self._run_with_frozen_date(target, "HPG", days=999)
 
-        manager.get_daily_data.assert_called_once_with("600519", days=365)
+        manager.get_daily_data.assert_called_once_with("HPG", days=365)
         self.assertEqual(result["requested_days"], 999)
         self.assertEqual(result["effective_days"], 365)
         self.assertIn("warning", result)

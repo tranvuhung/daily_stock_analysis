@@ -93,14 +93,20 @@ def resolve_stock_daily_start(
                 None,
                 "future_effective_daily_bar_date",
             )
-        if (
-            resolve_historical_daily_bar_date(
-                identity.market,
-                effective_date,
-                "postmarket",
-            )
-            != effective_date
-        ):
+        calendar_date = resolve_historical_daily_bar_date(
+            identity.market,
+            effective_date,
+            "postmarket",
+        )
+        # Không có lịch giao dịch (luôn đúng với Việt Nam) thì ngày nến đã lưu là nguồn
+        # chuẩn; chỉ loại ngày cuối tuần vì chắc chắn không có phiên.
+        # Without an exchange calendar (always the case for Vietnam) the persisted
+        # date is authoritative; only weekend dates are rejected outright.
+        if calendar_date is None:
+            effective_date_valid = effective_date.weekday() < 5
+        else:
+            effective_date_valid = calendar_date == effective_date
+        if not effective_date_valid:
             return DailyStockStartResolution(
                 identity,
                 None,

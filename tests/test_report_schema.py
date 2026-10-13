@@ -147,19 +147,19 @@ class TestAnalyzerSchemaFallback(unittest.TestCase):
         """Valid JSON produces correct AnalysisResult."""
         analyzer = GeminiAnalyzer()
         response = json.dumps({
-            "stock_name": "贵州茅台",
+            "stock_name": "Hòa Phát",
             "sentiment_score": 72,
-            "trend_prediction": "看多",
-            "operation_advice": "持有",
+            "trend_prediction": "Tăng",
+            "operation_advice": "Nắm giữ",
             "decision_type": "hold",
-            "confidence_level": "高",
-            "analysis_summary": "技术面向好",
+            "confidence_level": "Cao",
+            "analysis_summary": "Kỹ thuật tích cực",
         })
-        result = analyzer._parse_response(response, "600519", "股票600519")
+        result = analyzer._parse_response(response, "HPG", "Cổ phiếu HPG")
         self.assertIsInstance(result, AnalysisResult)
-        self.assertEqual(result.name, "贵州茅台")
+        self.assertEqual(result.name, "Hòa Phát")
         self.assertEqual(result.sentiment_score, 72)
-        self.assertEqual(result.analysis_summary, "技术面向好")
+        self.assertEqual(result.analysis_summary, "Kỹ thuật tích cực")
         self.assertEqual(result.action, "hold")
         self.assertEqual(result.action_label, "Nắm giữ")
 

@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Tests for the data capability overview service."""
+"""Kiểm thử dịch vụ tổng quan năng lực dữ liệu (ma trận nguồn Việt Nam).
+
+Tests for the data capability overview service (Vietnam provider matrix).
+"""
 
 from __future__ import annotations
 
@@ -9,9 +12,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
+import pytest
 
-from api.app import create_app
 from src.services.data_capability_service import DataCapabilityService
 
 
@@ -56,25 +58,23 @@ class _RuntimeScheduler:
 
 def _config(**overrides):
     values = {
-        "tushare_token": None,
-        "tickflow_api_key": None,
-        "tickflow_priority": 2,
-        "futu_opend_host": None,
-        "longbridge_app_key": None,
-        "longbridge_app_secret": None,
-        "longbridge_access_token": None,
-        "longbridge_oauth_client_id": None,
-        "finnhub_api_key": None,
-        "alphavantage_api_key": None,
         "enable_realtime_quote": True,
         "enable_fundamental_pipeline": True,
-        "realtime_source_priority": "tencent,akshare_sina,efinance,akshare_em",
-        "futu_hk_realtime_source_priority": "futu,longbridge,akshare,yfinance",
-        "screening_enabled": False,
+        "realtime_source_priority": "ssi,vci",
         "agent_event_monitor_enabled": False,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
+
+
+def _default_manager(**availability):
+    """VCI(P0) -> SSI(P1) -> YFinance(P4), mặc định đều khả dụng / all available by default."""
+
+    return _FetcherManager([
+        _Fetcher("VciFetcher", 0, available=availability.get("vci", True)),
+        _Fetcher("SsiFetcher", 1, available=availability.get("ssi", True)),
+        _Fetcher("YfinanceFetcher", 4, available=availability.get("yfinance", True)),
+    ])
 
 
 def _dataset(overview, name: str):
@@ -85,848 +85,320 @@ def _provider(overview, name: str):
     return next(item for item in overview["providers"] if item["name"] == name)
 
 
-def test_overview_marks_tickflow_priority_gap_without_leaking_secret() -> None:
-    manager = _FetcherManager([
-        _Fetcher("AkshareFetcher", 1, available=True),
-        _Fetcher("EfinanceFetcher", 3, available=True),
-        _Fetcher("TickFlowFetcher", 2),
-        _Fetcher("YfinanceFetcher", 4, available=True),
-    ])
-    secret = "tickflow-secret-value"
-    service = DataCapabilityService(
-        config=_config(tickflow_api_key=secret, realtime_source_priority="tencent,efinance"),
-        fetcher_manager=manager,
-    )
-
-    overview = service.get_overview()
-
-    assert _provider(overview, "tickflow")["configured"] is True
-    assert _provider(overview, "tickflow")["status"] == "unknown"
-    assert _provider(overview, "tickflow")["warnings"] == ["runtime_probe_not_performed"]
-    assert "tickflow_configured_but_not_in_realtime_priority" in overview["warnings"]
-    assert secret not in json.dumps(overview, ensure_ascii=False)
+def _priorities(overview):
+    return {item["scenario"]: item for item in overview["priorities"]}
 
 
-def test_realtime_dataset_degrades_when_first_priority_source_is_unconfigured() -> None:
-    manager = _FetcherManager([
-        _Fetcher("EfinanceFetcher", 0, available=True),
-        _Fetcher("AkshareFetcher", 1, available=True),
-        _Fetcher("YfinanceFetcher", 4, available=True),
-    ])
-    service = DataCapabilityService(
-        config=_config(realtime_source_priority="tushare,efinance"),
-        fetcher_manager=manager,
-    )
+@pytest.fixture(autouse=True)
+def _reset_daily_health(monkeypatch):
+    # Trạng thái ngắt mạch nến ngày là cấp class, reset để test độc lập
+    # Daily circuit state is class-level; reset it so tests stay independent
+    from data_provider.base import DataFetcherManager
 
-    overview = service.get_overview()
-    quote_quality = _dataset(overview, "quote.realtime")
+    monkeypatch.delenv("VNSTOCK_ENABLED", raising=False)
+    DataFetcherManager.reset_daily_source_health()
+    yield
+    DataFetcherManager.reset_daily_source_health()
 
-    assert quote_quality["status"] == "degraded"
-    assert quote_quality["source"] is None
-    assert quote_quality["fallback_from"] == ["cn:tushare", "hk:longbridge"]
-    assert quote_quality["coverage"]["markets"]["cn"]["status"] == "degraded"
-    assert quote_quality["coverage"]["markets"]["cn"]["source"] == "efinance"
-    assert "cn:source_status:tushare:unconfigured" in quote_quality["warnings"]
+
+def test_provider_matrix_is_vietnam_only() -> None:
+    overview = DataCapabilityService(
+        config=_config(),
+        fetcher_manager=_default_manager(),
+    ).get_overview()
+
+    assert [item["name"] for item in overview["providers"]] == ["vci", "ssi", "vnstock", "yfinance"]
+    for provider in overview["providers"]:
+        assert provider["markets"] == ["vn"]
+        for markets in provider["dataset_markets"].values():
+            assert markets == ["vn"]
+
+    assert set(_provider(overview, "vci")["datasets"]) == {
+        "quote.realtime",
+        "kline.daily",
+        "index.daily",
+        "market.overview",
+    }
+    assert set(_provider(overview, "ssi")["datasets"]) == {
+        "quote.realtime",
+        "kline.daily",
+        "market.overview",
+    }
+    assert _provider(overview, "vnstock")["datasets"] == ["kline.daily"]
+    # Yahoo chỉ là dự phòng nến ngày / Yahoo is a daily-only fallback
+    assert _provider(overview, "yfinance")["datasets"] == ["kline.daily"]
+
+    assert [item["dataset"] for item in overview["datasets"]] == [
+        "quote.realtime",
+        "kline.daily",
+        "index.daily",
+        "market.overview",
+        "financial.snapshot",
+        "news.events",
+        "alert.monitor",
+        "portfolio.account",
+    ]
+    assert [item["scenario"] for item in overview["priorities"]] == [
+        "vn.realtime",
+        "daily.generic",
+        "vn.index.daily",
+        "market.overview",
+        "news.events",
+    ]
+
+
+def test_builtin_providers_report_runtime_status_and_priority() -> None:
+    overview = DataCapabilityService(
+        config=_config(),
+        fetcher_manager=_default_manager(ssi=False),
+    ).get_overview()
+
+    vci = _provider(overview, "vci")
+    ssi = _provider(overview, "ssi")
+    assert vci["enabled"] is True and vci["configured"] is True
+    assert vci["status"] == "ok"
+    assert vci["priority"] == 0
+    assert ssi["status"] == "unavailable"
+    assert ssi["warnings"] == ["provider_marked_unavailable"]
 
 
 def test_provider_runtime_probe_preserves_unknown_until_checked() -> None:
-    manager = _FetcherManager([
-        _Fetcher("TickFlowFetcher", 1),
-        _Fetcher("TushareFetcher", 2, is_available=False),
-    ])
-    service = DataCapabilityService(
-        config=_config(tickflow_api_key="secret", tushare_token="token"),
-        fetcher_manager=manager,
-    )
-
-    overview = service.get_overview()
-
-    assert _provider(overview, "tickflow")["status"] == "unknown"
-    assert _provider(overview, "tushare")["status"] == "unavailable"
-
-
-def test_provider_runtime_probe_honors_request_time_unavailable_over_cached_available_flag() -> None:
-    manager = _FetcherManager([
-        _Fetcher("LongbridgeFetcher", 1, available=True, is_available_for_request=False),
-    ])
-    service = DataCapabilityService(
-        config=_config(longbridge_app_key="key"),
-        fetcher_manager=manager,
-    )
-
-    overview = service.get_overview()
-
-    assert _provider(overview, "longbridge")["status"] == "unavailable"
-    assert _provider(overview, "longbridge")["warnings"] == ["provider_marked_unavailable"]
-
-
-def test_us_realtime_priority_skips_longbridge_during_request_cooldown() -> None:
-    manager = _FetcherManager([
-        _Fetcher("LongbridgeFetcher", 1, available=True, is_available_for_request=False),
-        _Fetcher("YfinanceFetcher", 4, available=True),
-    ])
-    service = DataCapabilityService(
-        config=_config(longbridge_app_key="key"),
-        fetcher_manager=manager,
-    )
-
-    overview = service.get_overview()
-    priorities = {item["scenario"]: item for item in overview["priorities"]}
-    us_quality = _dataset(overview, "quote.realtime")["coverage"]["markets"]["us"]
-
-    assert priorities["us.realtime"]["providers"] == ["yfinance", "longbridge"]
-    assert us_quality["status"] == "ok"
-    assert us_quality["source"] == "yfinance"
-    assert us_quality["fallback_from"] == []
-
-
-def test_provider_dataset_market_matrix_matches_fundamental_runtime_routes() -> None:
-    service = DataCapabilityService(
-        config=_config(
-            tushare_token="token",
-            longbridge_app_key="key",
-            futu_opend_host="127.0.0.1",
-        ),
-        fetcher_manager=_FetcherManager([]),
-    )
-
-    overview = service.get_overview()
-
-    assert _provider(overview, "akshare")["dataset_markets"]["financial.snapshot"] == ["cn"]
-    assert _provider(overview, "futu")["dataset_markets"]["financial.snapshot"] == ["hk"]
-    assert _provider(overview, "yfinance")["dataset_markets"]["financial.snapshot"] == [
-        "hk",
-        "us",
-        "jp",
-        "kr",
-        "tw",
-    ]
-    assert "financial.snapshot" not in _provider(overview, "tushare")["datasets"]
-    assert "financial.snapshot" not in _provider(overview, "longbridge")["datasets"]
-    assert _provider(overview, "tushare")["dataset_markets"]["quote.realtime"] == ["cn"]
-    assert "index.daily" not in _provider(overview, "tushare")["datasets"]
-    assert _provider(overview, "yfinance")["dataset_markets"]["quote.realtime"] == [
-        "hk",
-        "us",
-        "jp",
-        "kr",
-        "tw",
-    ]
-    assert _provider(overview, "yfinance")["dataset_markets"]["index.daily"] == [
-        "cn",
-        "us",
-    ]
-    assert "quote.realtime" not in _provider(overview, "pytdx")["datasets"]
-    assert "quote.realtime" not in _provider(overview, "finnhub")["datasets"]
-    assert "quote.realtime" not in _provider(overview, "alphavantage")["datasets"]
-    assert "index.daily" not in _provider(overview, "finnhub")["datasets"]
-
-
-def test_hk_realtime_priority_skips_futu_when_opend_is_unconfigured() -> None:
-    service = DataCapabilityService(
-        config=_config(futu_opend_host=None),
-        fetcher_manager=_FetcherManager([_Fetcher("YfinanceFetcher", 4, available=True)]),
-    )
-
-    overview = service.get_overview()
-    priorities = {item["scenario"]: item for item in overview["priorities"]}
-    hk_quality = _dataset(overview, "quote.realtime")["coverage"]["markets"]["hk"]
-
-    assert priorities["hk.realtime"]["providers"] == ["longbridge", "akshare", "yfinance"]
-    assert "futu" not in hk_quality["fallback_from"]
-
-
-def test_realtime_dataset_quality_is_market_aware() -> None:
-    manager = _FetcherManager([
-        _Fetcher("EfinanceFetcher", 0, available=True),
-        _Fetcher("YfinanceFetcher", 4, available=True),
-    ])
-    service = DataCapabilityService(
-        config=_config(
-            realtime_source_priority="efinance",
-            futu_hk_realtime_source_priority="futu,longbridge",
-        ),
-        fetcher_manager=manager,
-    )
-
-    overview = service.get_overview()
-    quote_quality = _dataset(overview, "quote.realtime")
-    priorities = {item["scenario"]: item for item in overview["priorities"]}
-
-    assert priorities["us.realtime"]["providers"] == ["yfinance", "longbridge"]
-    assert quote_quality["status"] == "partial"
-    assert quote_quality["coverage"]["markets"]["cn"]["status"] == "ok"
-    assert quote_quality["coverage"]["markets"]["cn"]["source"] == "efinance"
-    assert quote_quality["coverage"]["markets"]["hk"]["status"] == "unavailable"
-    assert quote_quality["coverage"]["markets"]["us"]["status"] == "ok"
-    for market in ("jp", "kr", "tw"):
-        assert quote_quality["coverage"]["markets"][market] == {
-            "status": "ok",
-            "source": "yfinance",
-            "fallback_from": [],
-            "warnings": [],
-        }
-
-
-def test_cn_realtime_quality_honors_akshare_subsource_circuit_breaker() -> None:
-    from data_provider.realtime_types import get_realtime_circuit_breaker
-
-    breaker = get_realtime_circuit_breaker()
-    breaker.reset("akshare_tencent")
-    try:
-        for _ in range(3):
-            breaker.record_failure("akshare_tencent", "test failure")
-        service = DataCapabilityService(
-            config=_config(realtime_source_priority="tencent,efinance"),
-            fetcher_manager=_FetcherManager([
-                _Fetcher("AkshareFetcher", 0),
-                _Fetcher("EfinanceFetcher", 1, available=True),
-                _Fetcher("YfinanceFetcher", 4, available=True),
-            ]),
-        )
-
-        quote_quality = _dataset(service.get_overview(), "quote.realtime")
-        cn_quality = quote_quality["coverage"]["markets"]["cn"]
-
-        assert cn_quality["status"] == "degraded"
-        assert cn_quality["source"] == "efinance"
-        assert cn_quality["fallback_from"] == ["tencent"]
-        assert cn_quality["warnings"] == ["source_status:tencent:cooldown"]
-    finally:
-        breaker.reset("akshare_tencent")
-
-
-def test_daily_circuit_open_precedes_unknown_provider_probe() -> None:
-    service = DataCapabilityService(
+    overview = DataCapabilityService(
         config=_config(),
         fetcher_manager=_FetcherManager([
-            _Fetcher("EfinanceFetcher", 0),
-            _Fetcher("PytdxFetcher", 1, available=True),
+            _Fetcher("VciFetcher", 0),
+            _Fetcher("SsiFetcher", 1, is_available=False),
         ]),
-    )
+    ).get_overview()
 
-    with patch(
-        "data_provider.base.DataFetcherManager._is_daily_source_available",
-        side_effect=lambda fetcher, _market: fetcher.name != "EfinanceFetcher",
-    ):
-        cn_quality = _dataset(service.get_overview(), "kline.daily")["coverage"]["markets"]["cn"]
-
-    assert cn_quality["status"] == "degraded"
-    assert cn_quality["source"] == "pytdx"
-    assert cn_quality["fallback_from"] == ["efinance"]
-    assert cn_quality["warnings"] == ["source_status:efinance:cooldown"]
+    assert _provider(overview, "vci")["status"] == "unknown"
+    assert _provider(overview, "vci")["warnings"] == ["runtime_probe_not_performed"]
+    assert _provider(overview, "ssi")["status"] == "unavailable"
 
 
-def test_cn_realtime_reports_fixed_index_route_separately_from_stock_priority() -> None:
-    service = DataCapabilityService(
-        config=_config(
-            tushare_token="token",
-            realtime_source_priority="tushare",
-        ),
+def test_provider_runtime_probe_honors_request_time_unavailable_over_cached_flag() -> None:
+    overview = DataCapabilityService(
+        config=_config(),
         fetcher_manager=_FetcherManager([
-            _Fetcher("TushareFetcher", 0, available=True),
-            _Fetcher("EfinanceFetcher", 1, available=False),
+            _Fetcher("SsiFetcher", 1, available=True, is_available_for_request=False),
         ]),
-    )
+    ).get_overview()
 
-    quote_quality = _dataset(service.get_overview(), "quote.realtime")
-    markets = quote_quality["coverage"]["markets"]
-
-    assert markets["cn"]["status"] == "ok"
-    assert markets["cn"]["source"] == "tushare"
-    assert markets["cn.index.exchange"]["status"] == "unavailable"
-    assert markets["cn.index.csi"]["status"] == "unavailable"
-    assert quote_quality["status"] == "partial"
+    assert _provider(overview, "ssi")["status"] == "unavailable"
+    assert _provider(overview, "ssi")["warnings"] == ["provider_marked_unavailable"]
 
 
-def test_efinance_realtime_breakers_apply_to_stock_and_index_routes() -> None:
-    from data_provider.realtime_types import get_realtime_circuit_breaker
+def test_builtin_provider_missing_from_manager_is_reported_not_initialized() -> None:
+    overview = DataCapabilityService(
+        config=_config(),
+        fetcher_manager=_FetcherManager([]),
+    ).get_overview()
 
-    breaker = get_realtime_circuit_breaker()
-    try:
-        for key in ("efinance", "efinance_index"):
-            breaker.reset(key)
-            for _ in range(3):
-                breaker.record_failure(key, "test")
-        service = DataCapabilityService(
-            config=_config(realtime_source_priority="efinance,tencent"),
-            fetcher_manager=_FetcherManager([
-                _Fetcher("EfinanceFetcher", 0, available=True),
-                _Fetcher("AkshareFetcher", 1, available=True),
-            ]),
-        )
-
-        markets = _dataset(service.get_overview(), "quote.realtime")["coverage"]["markets"]
-
-        assert markets["cn"]["source"] == "tencent"
-        assert markets["cn"]["fallback_from"] == ["efinance"]
-        assert markets["cn.index.csi"]["status"] == "unavailable"
-        assert markets["cn.index.csi"]["warnings"] == ["source_status:efinance:cooldown"]
-    finally:
-        breaker.reset("efinance")
-        breaker.reset("efinance_index")
+    assert _provider(overview, "vci")["status"] == "unavailable"
+    assert _provider(overview, "vci")["warnings"] == ["provider_not_initialized"]
 
 
-def test_hk_realtime_falls_back_only_when_both_akshare_routes_are_open() -> None:
-    from data_provider.realtime_types import get_realtime_circuit_breaker
+def test_vnstock_is_unconfigured_unless_opted_in(monkeypatch) -> None:
+    overview = DataCapabilityService(
+        config=_config(),
+        fetcher_manager=_default_manager(),
+    ).get_overview()
+    vnstock = _provider(overview, "vnstock")
+    assert vnstock["configured"] is False
+    assert vnstock["enabled"] is False
+    assert vnstock["status"] == "unconfigured"
 
-    breaker = get_realtime_circuit_breaker()
-    try:
-        for key in ("akshare_hk_em", "akshare_hk_sina"):
-            breaker.reset(key)
-            for _ in range(3):
-                breaker.record_failure(key, "test")
-        service = DataCapabilityService(
-            config=_config(futu_hk_realtime_source_priority="akshare,yfinance"),
-            fetcher_manager=_FetcherManager([
-                _Fetcher("AkshareFetcher", 1, available=True),
-                _Fetcher("YfinanceFetcher", 4, available=True),
-            ]),
-        )
-
-        hk_quality = _dataset(service.get_overview(), "quote.realtime")["coverage"]["markets"]["hk"]
-
-        assert hk_quality["status"] == "degraded"
-        assert hk_quality["source"] == "yfinance"
-        assert hk_quality["fallback_from"] == ["akshare"]
-    finally:
-        breaker.reset("akshare_hk_em")
-        breaker.reset("akshare_hk_sina")
+    monkeypatch.setenv("VNSTOCK_ENABLED", "true")
+    overview = DataCapabilityService(
+        config=_config(),
+        fetcher_manager=_FetcherManager([_Fetcher("VnstockFetcher", 2, available=True)]),
+    ).get_overview()
+    vnstock = _provider(overview, "vnstock")
+    assert vnstock["configured"] is True
+    assert vnstock["enabled"] is True
+    assert vnstock["status"] == "ok"
+    assert vnstock["priority"] == 2
 
 
-def test_us_index_realtime_keeps_yfinance_ahead_of_healthy_longbridge() -> None:
-    service = DataCapabilityService(
-        config=_config(longbridge_app_key="key"),
+def test_market_disabled_marks_providers_unconfigured() -> None:
+    with patch("src.core.markets.is_market_enabled", return_value=False):
+        overview = DataCapabilityService(
+            config=_config(),
+            fetcher_manager=_default_manager(),
+        ).get_overview()
+
+    for provider in overview["providers"]:
+        assert provider["enabled"] is False
+        assert provider["status"] == "unconfigured"
+        assert provider["warnings"] == ["market_disabled"]
+
+
+def test_realtime_priority_follows_config_and_appends_missing_defaults() -> None:
+    overview = DataCapabilityService(
+        config=_config(realtime_source_priority="vci"),
+        fetcher_manager=_default_manager(),
+    ).get_overview()
+
+    realtime = _priorities(overview)["vn.realtime"]
+    assert realtime["providers"] == ["vci", "ssi"]
+    assert realtime["source"] == "Config.realtime_source_priority"
+    assert realtime["warnings"] == []
+
+    quality = _dataset(overview, "quote.realtime")
+    assert quality["status"] == "ok"
+    assert quality["source"] == "vci"
+    assert quality["coverage"]["markets"]["vn"]["source"] == "vci"
+
+
+def test_realtime_priority_flags_ignored_legacy_tokens() -> None:
+    overview = DataCapabilityService(
+        config=_config(realtime_source_priority="tencent,ssi,efinance"),
+        fetcher_manager=_default_manager(),
+    ).get_overview()
+
+    realtime = _priorities(overview)["vn.realtime"]
+    assert realtime["providers"] == ["ssi", "vci"]
+    assert realtime["warnings"] == ["ignored_source:tencent", "ignored_source:efinance"]
+    assert "vn.realtime:ignored_source:tencent" in overview["warnings"]
+
+
+def test_realtime_dataset_degrades_when_ssi_is_unavailable() -> None:
+    overview = DataCapabilityService(
+        config=_config(),
+        fetcher_manager=_default_manager(ssi=False),
+    ).get_overview()
+
+    quality = _dataset(overview, "quote.realtime")
+    assert quality["status"] == "degraded"
+    assert quality["source"] == "vci"
+    assert quality["fallback_from"] == ["vn:ssi"]
+    assert "vn:source_status:ssi:unavailable" in quality["warnings"]
+
+
+def test_daily_priority_follows_fetcher_order_and_excludes_request_unavailable() -> None:
+    overview = DataCapabilityService(
+        config=_config(),
         fetcher_manager=_FetcherManager([
-            _Fetcher("LongbridgeFetcher", 1, available=True, is_available_for_request=True),
             _Fetcher("YfinanceFetcher", 4, available=True),
+            _Fetcher("SsiFetcher", 1, available=True),
+            _Fetcher("VciFetcher", 0, available=True, is_available_for_request=False),
         ]),
-    )
+    ).get_overview()
 
-    markets = _dataset(service.get_overview(), "quote.realtime")["coverage"]["markets"]
-
-    assert markets["us"]["source"] == "longbridge"
-    assert markets["us.index"]["source"] == "yfinance"
-    assert markets["us.index"]["fallback_from"] == []
-
-
-def test_us_index_realtime_does_not_fallback_to_longbridge() -> None:
-    service = DataCapabilityService(
-        config=_config(longbridge_app_key="key"),
-        fetcher_manager=_FetcherManager([
-            _Fetcher("LongbridgeFetcher", 1, available=True, is_available_for_request=True),
-            _Fetcher("YfinanceFetcher", 4, available=False),
-        ]),
-    )
-
-    markets = _dataset(service.get_overview(), "quote.realtime")["coverage"]["markets"]
-
-    assert markets["us"]["source"] == "longbridge"
-    assert markets["us.index"]["status"] == "unavailable"
-    assert markets["us.index"]["source"] is None
-    assert markets["us.index"]["fallback_from"] == ["yfinance"]
+    priorities = _priorities(overview)
+    assert priorities["daily.generic"]["providers"] == ["ssi", "yfinance"]
+    daily = _dataset(overview, "kline.daily")
+    assert daily["status"] == "ok"
+    assert daily["source"] == "ssi"
+    assert daily["fallback_from"] == []
+    # VCI là nguồn duy nhất cho chỉ số / VCI is the only index source
+    assert priorities["vn.index.daily"]["providers"] == []
+    index_daily = _dataset(overview, "index.daily")
+    assert index_daily["status"] == "unavailable"
+    assert "vn:request_available_priority_empty" in index_daily["warnings"]
 
 
-def test_cn_realtime_rejects_tokens_without_runtime_handlers() -> None:
-    service = DataCapabilityService(
-        config=_config(realtime_source_priority="yfinance,efinance"),
-        fetcher_manager=_FetcherManager([
-            _Fetcher("YfinanceFetcher", 0, available=True),
-            _Fetcher("EfinanceFetcher", 1, available=True),
-        ]),
-    )
-
-    overview = service.get_overview()
-    cn_quality = _dataset(overview, "quote.realtime")["coverage"]["markets"]["cn"]
-    priorities = {item["scenario"]: item for item in overview["priorities"]}
-
-    assert priorities["cn.realtime"]["warnings"] == ["unknown_source:yfinance"]
-    assert cn_quality["status"] == "degraded"
-    assert cn_quality["source"] == "efinance"
-    assert cn_quality["fallback_from"] == ["yfinance"]
-    assert "source_status:yfinance:unsupported" in cn_quality["warnings"]
-
-
-def test_hk_realtime_rejects_configured_provider_without_runtime_handler() -> None:
-    service = DataCapabilityService(
-        config=_config(
-            tushare_token="token",
-            futu_hk_realtime_source_priority="tushare,yfinance",
-        ),
-        fetcher_manager=_FetcherManager([
-            _Fetcher("TushareFetcher", 0, available=True),
-            _Fetcher("YfinanceFetcher", 1, available=True),
-        ]),
-    )
-
-    overview = service.get_overview()
-    hk_quality = _dataset(overview, "quote.realtime")["coverage"]["markets"]["hk"]
-
-    assert hk_quality["status"] == "degraded"
-    assert hk_quality["source"] == "yfinance"
-    assert hk_quality["fallback_from"] == ["tushare"]
-    assert "source_status:tushare:unsupported" in hk_quality["warnings"]
-
-
-def test_runtime_ordered_daily_route_stops_at_unprobed_preferred_source() -> None:
+def test_daily_circuit_open_falls_back_to_next_source() -> None:
     service = DataCapabilityService(
         config=_config(),
-        fetcher_manager=_FetcherManager([
-            _Fetcher("EfinanceFetcher", 0),
-            _Fetcher("PytdxFetcher", 1, available=True),
-        ]),
-    )
-
-    cn_quality = _dataset(service.get_overview(), "kline.daily")["coverage"]["markets"]["cn"]
-
-    assert cn_quality["status"] == "unknown"
-    assert cn_quality["source"] is None
-    assert cn_quality["fallback_from"] == []
-    assert cn_quality["warnings"] == ["source_status:efinance:unknown"]
-
-
-def test_daily_dataset_quality_is_market_aware() -> None:
-    manager = _FetcherManager([
-        _Fetcher("EfinanceFetcher", 0, available=True),
-        _Fetcher("YfinanceFetcher", 4, available=False),
-    ])
-    service = DataCapabilityService(
-        config=_config(),
-        fetcher_manager=manager,
-    )
-
-    overview = service.get_overview()
-    daily_quality = _dataset(overview, "kline.daily")
-
-    assert daily_quality["status"] == "partial"
-    assert daily_quality["coverage"]["markets"]["cn"]["status"] == "ok"
-    assert daily_quality["coverage"]["markets"]["cn"]["source"] == "efinance"
-    assert daily_quality["coverage"]["markets"]["hk"]["status"] == "unavailable"
-    assert daily_quality["coverage"]["markets"]["us"]["status"] == "unavailable"
-    for market in ("jp", "kr", "tw"):
-        assert daily_quality["coverage"]["markets"][market]["status"] == "unavailable"
-    assert "hk:request_available_priority_empty" in daily_quality["warnings"]
-    assert "us:request_available_priority_empty" in daily_quality["warnings"]
-
-
-def test_daily_dataset_quality_prefers_longbridge_for_us_when_available() -> None:
-    manager = _FetcherManager([
-        _Fetcher("LongbridgeFetcher", 5, available=True, is_available_for_request=True),
-        _Fetcher("YfinanceFetcher", 4, available=True),
-    ])
-    service = DataCapabilityService(
-        config=_config(longbridge_app_key="key"),
-        fetcher_manager=manager,
-    )
-
-    overview = service.get_overview()
-    daily_quality = _dataset(overview, "kline.daily")
-
-    assert daily_quality["coverage"]["markets"]["us"]["status"] == "ok"
-    assert daily_quality["coverage"]["markets"]["us"]["source"] == "longbridge"
-    assert "us:finnhub" not in daily_quality["fallback_from"]
-
-
-def test_us_daily_priority_omits_unregistered_configured_sources() -> None:
-    manager = _FetcherManager([
-        _Fetcher("YfinanceFetcher", 4, available=True),
-    ])
-    service = DataCapabilityService(config=_config(), fetcher_manager=manager)
-
-    overview = service.get_overview()
-    priorities = {item["scenario"]: item for item in overview["priorities"]}
-    us_quality = _dataset(overview, "kline.daily")["coverage"]["markets"]["us"]
-
-    assert priorities["daily.generic"]["providers"] == ["yfinance"]
-    assert us_quality["status"] == "ok"
-    assert us_quality["source"] == "yfinance"
-    assert us_quality["fallback_from"] == []
-
-
-def test_daily_priority_excludes_request_unavailable_fetchers() -> None:
-    service = DataCapabilityService(
-        config=_config(),
-        fetcher_manager=_FetcherManager([
-            _Fetcher("EfinanceFetcher", 0, available=True, is_available_for_request=False),
-            _Fetcher("PytdxFetcher", 1, available=True, is_available_for_request=True),
-        ]),
-    )
-
-    overview = service.get_overview()
-    priorities = {item["scenario"]: item for item in overview["priorities"]}
-    cn_daily = _dataset(overview, "kline.daily")["coverage"]["markets"]["cn"]
-
-    assert priorities["daily.generic"]["providers"] == ["pytdx"]
-    assert cn_daily["source"] == "pytdx"
-    assert cn_daily["fallback_from"] == []
-
-
-def test_daily_dataset_quality_honors_market_specific_circuit_breakers() -> None:
-    manager = _FetcherManager([
-        _Fetcher("EfinanceFetcher", 0, available=True),
-        _Fetcher("YfinanceFetcher", 4, available=True),
-    ])
-    service = DataCapabilityService(
-        config=_config(),
-        fetcher_manager=manager,
+        fetcher_manager=_default_manager(),
     )
 
     with patch(
         "data_provider.base.DataFetcherManager._is_daily_source_available",
-        side_effect=lambda fetcher, market: not (
-            getattr(fetcher, "name", "") == "YfinanceFetcher" and market == "hk"
-        ),
+        side_effect=lambda fetcher, market: not (fetcher.name == "VciFetcher" and market == "vn"),
     ):
         overview = service.get_overview()
 
-    daily_quality = _dataset(overview, "kline.daily")
+    daily = _dataset(overview, "kline.daily")["coverage"]["markets"]["vn"]
+    assert daily["status"] == "degraded"
+    assert daily["source"] == "ssi"
+    assert daily["fallback_from"] == ["vci"]
+    assert daily["warnings"] == ["source_status:vci:cooldown"]
 
-    assert daily_quality["status"] == "partial"
-    assert daily_quality["coverage"]["markets"]["cn"]["status"] == "ok"
-    assert daily_quality["coverage"]["markets"]["hk"]["status"] == "unavailable"
-    assert daily_quality["coverage"]["markets"]["hk"]["source"] is None
-    assert daily_quality["coverage"]["markets"]["us"]["status"] == "ok"
-    assert daily_quality["coverage"]["markets"]["us"]["source"] == "yfinance"
-    assert "hk:source_status:yfinance:cooldown" in daily_quality["warnings"]
-
-
-def test_index_daily_quality_uses_only_the_executable_us_runtime_route() -> None:
-    service = DataCapabilityService(
-        config=_config(finnhub_api_key="key"),
-        fetcher_manager=_FetcherManager([
-            _Fetcher("TencentFetcher", 0, available=True),
-            _Fetcher("AkshareFetcher", 1, available=True),
-            _Fetcher("YfinanceFetcher", 2, available=False),
-            _Fetcher("FinnhubFetcher", 3, available=True),
-        ]),
-    )
-
-    overview = service.get_overview()
-    index_quality = _dataset(overview, "index.daily")
-    us_quality = index_quality["coverage"]["markets"]["us"]
-
-    assert index_quality["status"] == "partial"
-    assert us_quality["status"] == "unavailable"
-    assert us_quality["source"] is None
-    assert us_quality["fallback_from"] == ["yfinance"]
-    assert "us:source_status:yfinance:unavailable" in index_quality["warnings"]
-    assert not any("finnhub" in warning for warning in index_quality["warnings"])
-    assert "index.daily" not in _provider(overview, "finnhub")["datasets"]
+    index_daily = _dataset(overview, "index.daily")
+    assert index_daily["status"] == "unavailable"
+    assert "vn:source_status:vci:cooldown" in index_daily["warnings"]
 
 
-def test_market_overview_dataset_quality_is_market_aware() -> None:
-    manager = _FetcherManager([
-        _Fetcher("EfinanceFetcher", 0, available=True),
-        _Fetcher("YfinanceFetcher", 4, available=True),
-    ])
-    service = DataCapabilityService(
-        config=_config(),
-        fetcher_manager=manager,
-    )
-
-    overview = service.get_overview()
-    market_overview = _dataset(overview, "market.overview")
-
-    assert market_overview["status"] == "ok"
-    assert market_overview["source"] is None
-    assert market_overview["coverage"]["markets"]["cn"]["source"] == "efinance"
-    assert market_overview["coverage"]["markets"]["hk"]["source"] == "yfinance"
-    assert market_overview["coverage"]["markets"]["us"]["source"] == "yfinance"
-    assert market_overview["coverage"]["markets"]["jp"]["source"] == "yfinance"
-    assert market_overview["coverage"]["markets"]["kr"]["source"] == "yfinance"
-    assert market_overview["coverage"]["markets"]["tw"]["source"] == "yfinance"
-
-
-def test_index_daily_quality_honors_cn_index_circuit_breakers() -> None:
-    manager = _FetcherManager([
-        _Fetcher("TencentFetcher", 0, available=True),
-        _Fetcher("AkshareFetcher", 1, available=True),
-        _Fetcher("YfinanceFetcher", 2, available=True),
-    ])
-    service = DataCapabilityService(
-        config=_config(),
-        fetcher_manager=manager,
-    )
-
-    with patch(
-        "data_provider.base.DataFetcherManager._is_daily_source_available",
-        side_effect=lambda fetcher, market: not (
-            getattr(fetcher, "name", "") == "TencentFetcher" and market == "cn_index"
-        ),
-    ):
-        overview = service.get_overview()
-
-    index_quality = _dataset(overview, "index.daily")
-
-    assert index_quality["status"] == "degraded"
-    assert index_quality["source"] is None
-    assert index_quality["coverage"]["markets"]["cn.exchange"]["status"] == "degraded"
-    assert index_quality["coverage"]["markets"]["cn.exchange"]["fallback_from"] == ["tencent"]
-    assert index_quality["coverage"]["markets"]["cn.csi"]["status"] == "ok"
-    assert index_quality["coverage"]["markets"]["us"]["source"] == "yfinance"
-    assert index_quality["fallback_from"] == ["cn.exchange:tencent"]
-    assert index_quality["warnings"] == ["cn.exchange:source_status:tencent:cooldown"]
-
-
-def test_index_daily_requires_akshare_for_csi_family() -> None:
-    service = DataCapabilityService(
+def test_daily_route_stops_at_unprobed_preferred_source() -> None:
+    overview = DataCapabilityService(
         config=_config(),
         fetcher_manager=_FetcherManager([
-            _Fetcher("TencentFetcher", 0, available=True),
-            _Fetcher("AkshareFetcher", 1, available=False),
+            _Fetcher("VciFetcher", 0),
+            _Fetcher("SsiFetcher", 1, available=True),
         ]),
-    )
+    ).get_overview()
 
-    index_quality = _dataset(service.get_overview(), "index.daily")
-
-    assert index_quality["status"] == "partial"
-    assert index_quality["coverage"]["markets"]["cn.exchange"]["source"] == "tencent"
-    assert index_quality["coverage"]["markets"]["cn.csi"]["status"] == "unavailable"
-    assert index_quality["coverage"]["markets"]["cn.csi"]["source"] is None
-
-
-def test_fundamental_dataset_quality_is_market_aware() -> None:
-    manager = _FetcherManager([
-        _Fetcher("AkshareFetcher", 1, available=True),
-        _Fetcher("TushareFetcher", 2, available=True),
-        _Fetcher("YfinanceFetcher", 4, available=False),
-    ])
-    service = DataCapabilityService(
-        config=_config(tushare_token="token"),
-        fetcher_manager=manager,
-    )
-
-    overview = service.get_overview()
-    fundamental_quality = _dataset(overview, "financial.snapshot")
-
-    assert fundamental_quality["status"] == "partial"
-    assert fundamental_quality["coverage"]["markets"]["cn"]["status"] == "ok"
-    assert fundamental_quality["coverage"]["markets"]["cn"]["source"] == "akshare"
-    assert fundamental_quality["coverage"]["markets"]["hk"]["status"] == "unavailable"
-    assert fundamental_quality["coverage"]["markets"]["hk"]["source"] is None
-    assert fundamental_quality["coverage"]["markets"]["us"]["status"] == "unavailable"
-    assert fundamental_quality["coverage"]["markets"]["us"]["source"] is None
-    for market in ("jp", "kr", "tw"):
-        assert fundamental_quality["coverage"]["markets"][market]["status"] == "unavailable"
-        assert fundamental_quality["coverage"]["markets"][market]["source"] is None
-    assert "hk:source_status:yfinance:unavailable" in fundamental_quality["warnings"]
-    assert "us:source_status:yfinance:unavailable" in fundamental_quality["warnings"]
+    daily = _dataset(overview, "kline.daily")["coverage"]["markets"]["vn"]
+    assert daily["status"] == "unknown"
+    assert daily["source"] is None
+    assert daily["fallback_from"] == []
+    assert daily["warnings"] == ["source_status:vci:unknown"]
 
 
-def test_screening_snapshot_priority_preserves_explicit_env_override() -> None:
-    service = DataCapabilityService(
-        config=_config(screening_enabled=True),
-        fetcher_manager=_FetcherManager([]),
-    )
+def test_market_overview_uses_vci_then_ssi() -> None:
+    overview = DataCapabilityService(
+        config=_config(),
+        fetcher_manager=_default_manager(vci=False),
+    ).get_overview()
 
-    with patch.dict("os.environ", {"SNAPSHOT_SOURCE_PRIORITY": "tushare,em_datacenter"}, clear=False):
-        with patch(
-            "src.services.screening_service._resolve_screening_snapshot_source_priority",
-            side_effect=AssertionError("resolver should not run when override is set"),
-        ):
-            overview = service.get_overview()
-
-    priorities = {item["scenario"]: item for item in overview["priorities"]}
-    screening = priorities["screening.snapshot"]
-
-    assert screening["providers"] == ["tushare", "em_datacenter"]
+    assert _priorities(overview)["market.overview"]["providers"] == ["vci", "ssi"]
+    quality = _dataset(overview, "market.overview")
+    assert quality["status"] == "degraded"
+    assert quality["source"] == "ssi"
+    assert quality["fallback_from"] == ["vn:vci"]
 
 
-def test_screening_dataset_reports_engine_unavailable() -> None:
-    service = DataCapabilityService(
-        config=_config(screening_enabled=True),
-        fetcher_manager=_FetcherManager([]),
-    )
+def test_fundamental_dataset_is_valuation_only_from_realtime_chain() -> None:
+    overview = DataCapabilityService(
+        config=_config(),
+        fetcher_manager=_default_manager(),
+    ).get_overview()
 
-    with patch.dict("os.environ", {"SNAPSHOT_SOURCE_PRIORITY": "tushare,em_datacenter"}, clear=False):
-        with patch(
-            "src.services.screening_service._get_screening_status_snapshot",
-            return_value=({}, False, {"error": "screening_unavailable"}),
-        ):
-            with patch(
-                "src.services.screening_service._get_screening_source_health_snapshot",
-                return_value={},
-            ):
-                overview = service.get_overview()
-
-    screening_quality = _dataset(overview, "strategy.screening")
-
-    assert screening_quality["status"] == "unavailable"
-    assert screening_quality["source"] is None
-    assert screening_quality["warnings"] == ["screening_engine_unavailable"]
-
-
-def test_screening_dataset_reports_cooldown_sources_as_unavailable() -> None:
-    service = DataCapabilityService(
-        config=_config(screening_enabled=True),
-        fetcher_manager=_FetcherManager([]),
-    )
-
-    with patch.dict("os.environ", {"SNAPSHOT_SOURCE_PRIORITY": "tushare,em_datacenter"}, clear=False):
-        with patch(
-            "src.services.screening_service._get_screening_status_snapshot",
-            return_value=({"available": True}, True, None),
-        ):
-            with patch(
-                "src.services.screening_service._get_screening_source_health_snapshot",
-                return_value={
-                    "snapshot": {
-                        "tushare": {"disabled": True},
-                        "em_datacenter": {"disabled": True},
-                    }
-                },
-            ):
-                overview = service.get_overview()
-
-    screening_quality = _dataset(overview, "strategy.screening")
-
-    assert screening_quality["status"] == "unavailable"
-    assert screening_quality["source"] is None
-    assert screening_quality["fallback_from"] == ["tushare", "em_datacenter"]
-    assert screening_quality["warnings"] == [
-        "source_status:tushare:cooldown",
-        "source_status:em_datacenter:cooldown",
-    ]
-
-
-def test_screening_dataset_keeps_known_sources_unknown_before_runtime_probe() -> None:
-    service = DataCapabilityService(
-        config=_config(screening_enabled=True),
-        fetcher_manager=_FetcherManager([]),
-    )
-
-    with patch.dict("os.environ", {"SNAPSHOT_SOURCE_PRIORITY": "tushare,em_datacenter"}, clear=False):
-        with patch(
-            "src.services.screening_service._get_screening_status_snapshot",
-            return_value=({"available": True}, True, None),
-        ):
-            with patch(
-                "src.services.screening_service._get_screening_source_health_snapshot",
-                return_value={
-                    "snapshot": {
-                        "tushare": {"successes": 0, "failures": 0, "disabled": False},
-                        "em_datacenter": {"successes": 0, "failures": 0, "disabled": False},
-                    }
-                },
-            ):
-                overview = service.get_overview()
-
-    screening_quality = _dataset(overview, "strategy.screening")
-
-    assert screening_quality["status"] == "unknown"
-    assert screening_quality["source"] is None
-    assert screening_quality["fallback_from"] == []
-    assert screening_quality["warnings"] == [
-        "source_status:tushare:unknown",
-    ]
-
-
-def test_screening_dataset_does_not_skip_unprobed_preferred_source() -> None:
-    service = DataCapabilityService(
-        config=_config(screening_enabled=True),
-        fetcher_manager=_FetcherManager([]),
-    )
-
-    with patch.dict("os.environ", {"SNAPSHOT_SOURCE_PRIORITY": "tushare,em_datacenter"}, clear=False):
-        with patch(
-            "src.services.screening_service._get_screening_status_snapshot",
-            return_value=({"available": True}, True, None),
-        ):
-            with patch(
-                "src.services.screening_service._get_screening_source_health_snapshot",
-                return_value={
-                    "snapshot": {
-                        "tushare": {"successes": 0, "failures": 0, "disabled": False},
-                        "em_datacenter": {"successes": 1},
-                    }
-                },
-            ):
-                screening_quality = _dataset(service.get_overview(), "strategy.screening")
-
-    assert screening_quality["status"] == "unknown"
-    assert screening_quality["source"] is None
-    assert screening_quality["fallback_from"] == []
-    assert screening_quality["warnings"] == ["source_status:tushare:unknown"]
-
-
-def test_screening_dataset_does_not_select_unknown_snapshot_source() -> None:
-    service = DataCapabilityService(
-        config=_config(screening_enabled=True),
-        fetcher_manager=_FetcherManager([]),
-    )
-
-    with patch.dict("os.environ", {"SNAPSHOT_SOURCE_PRIORITY": "mystery_source,em_datacenter"}, clear=False):
-        with patch(
-            "src.services.screening_service._get_screening_status_snapshot",
-            return_value=({"available": True}, True, None),
-        ):
-            with patch(
-                "src.services.screening_service._get_screening_source_health_snapshot",
-                return_value={"snapshot": {"em_datacenter": {"successes": 1}}},
-            ):
-                overview = service.get_overview()
-
-    screening_quality = _dataset(overview, "strategy.screening")
-
-    assert screening_quality["status"] == "degraded"
-    assert screening_quality["source"] == "em_datacenter"
-    assert screening_quality["fallback_from"] == ["mystery_source"]
-    assert screening_quality["warnings"] == [
-        "unknown_source:mystery_source",
-        "source_status:mystery_source:unsupported",
-    ]
-
-
-def test_daily_capability_contract_includes_market_specific_daily_fetchers() -> None:
-    service = DataCapabilityService(
-        config=_config(
-            futu_opend_host="127.0.0.1",
-            finnhub_api_key="key",
-            alphavantage_api_key="key",
-        ),
-        fetcher_manager=_FetcherManager([]),
-    )
-
-    overview = service.get_overview()
-
-    assert "kline.daily" in _provider(overview, "futu")["datasets"]
-    assert "kline.daily" in _provider(overview, "finnhub")["datasets"]
-    assert "kline.daily" in _provider(overview, "alphavantage")["datasets"]
+    quality = _dataset(overview, "financial.snapshot")
+    assert quality["status"] == "ok"
+    assert quality["source"] == "ssi"
+    assert "vn:valuation_only" in quality["warnings"]
 
 
 def test_disabled_runtime_features_surface_dataset_quality_warnings() -> None:
-    manager = _FetcherManager([_Fetcher("AkshareFetcher", 1), _Fetcher("YfinanceFetcher", 4)])
-    service = DataCapabilityService(
-        config=_config(
-            enable_realtime_quote=False,
-            enable_fundamental_pipeline=False,
-            screening_enabled=False,
-        ),
-        fetcher_manager=manager,
-    )
-
-    overview = service.get_overview()
+    overview = DataCapabilityService(
+        config=_config(enable_realtime_quote=False, enable_fundamental_pipeline=False),
+        fetcher_manager=_default_manager(),
+    ).get_overview()
 
     assert _dataset(overview, "quote.realtime")["status"] == "unavailable"
     assert _dataset(overview, "quote.realtime")["warnings"] == ["realtime_quote_disabled"]
     assert _dataset(overview, "financial.snapshot")["status"] == "unavailable"
     assert _dataset(overview, "financial.snapshot")["warnings"] == ["fundamental_pipeline_disabled"]
-    assert _dataset(overview, "strategy.screening")["status"] == "unconfigured"
-    assert _dataset(overview, "strategy.screening")["warnings"] == ["screening_disabled"]
     assert _dataset(overview, "alert.monitor")["status"] == "unavailable"
     assert _dataset(overview, "alert.monitor")["source"] is None
     assert _dataset(overview, "alert.monitor")["warnings"] == ["agent_event_monitor_disabled"]
     assert _dataset(overview, "news.events")["source"] is None
+    assert _dataset(overview, "portfolio.account")["status"] == "ok"
+
+
+def test_fundamental_dataset_unavailable_when_only_realtime_is_disabled() -> None:
+    overview = DataCapabilityService(
+        config=_config(enable_realtime_quote=False),
+        fetcher_manager=_default_manager(),
+    ).get_overview()
+
+    quality = _dataset(overview, "financial.snapshot")
+    assert quality["status"] == "unavailable"
+    assert quality["warnings"] == ["realtime_quote_disabled"]
 
 
 def test_enabled_alert_monitor_requires_a_registered_live_scheduler_task() -> None:
-    service = DataCapabilityService(
-        config=_config(agent_event_monitor_enabled=True),
-        fetcher_manager=_FetcherManager([]),
-        runtime_scheduler=_RuntimeScheduler(active=False),
+    quality = _dataset(
+        DataCapabilityService(
+            config=_config(agent_event_monitor_enabled=True),
+            fetcher_manager=_FetcherManager([]),
+            runtime_scheduler=_RuntimeScheduler(active=False),
+        ).get_overview(),
+        "alert.monitor",
     )
-
-    quality = _dataset(service.get_overview(), "alert.monitor")
 
     assert quality["status"] == "unavailable"
     assert quality["source"] is None
@@ -934,33 +406,53 @@ def test_enabled_alert_monitor_requires_a_registered_live_scheduler_task() -> No
 
 
 def test_running_alert_monitor_surfaces_local_dataset_as_available() -> None:
-    service = DataCapabilityService(
-        config=_config(agent_event_monitor_enabled=True),
-        fetcher_manager=_FetcherManager([]),
-        runtime_scheduler=_RuntimeScheduler(active=True),
+    quality = _dataset(
+        DataCapabilityService(
+            config=_config(agent_event_monitor_enabled=True),
+            fetcher_manager=_FetcherManager([]),
+            runtime_scheduler=_RuntimeScheduler(active=True),
+        ).get_overview(),
+        "alert.monitor",
     )
-
-    quality = _dataset(service.get_overview(), "alert.monitor")
 
     assert quality["status"] == "ok"
     assert quality["source"] == "alerts"
     assert quality["warnings"] == []
 
 
+def test_overview_does_not_leak_last_error_whitespace_and_validates_schema() -> None:
+    from api.v1.schemas.data_capability import DataCapabilityOverviewResponse
+
+    overview = DataCapabilityService(
+        config=_config(),
+        fetcher_manager=_FetcherManager([
+            _Fetcher("VciFetcher", 0, available=False, last_error="timeout\n  upstream"),
+        ]),
+    ).get_overview()
+
+    assert _provider(overview, "vci")["last_error"] == "timeout upstream"
+    DataCapabilityOverviewResponse.model_validate(overview)
+    json.dumps(overview, ensure_ascii=False)
+
+
 def test_data_capability_api_paths_return_valid_contract() -> None:
+    from fastapi.testclient import TestClient
+
+    from api.app import create_app
+
     overview_payload = {
-        "as_of": "2026-08-26T15:05:00+08:00",
+        "as_of": "2026-08-26T15:05:00+07:00",
         "providers": [
             {
-                "name": "efinance",
-                "label": "Efinance",
+                "name": "ssi",
+                "label": "SSI iBoard",
                 "enabled": True,
                 "configured": True,
                 "status": "ok",
-                "priority": 0,
-                "markets": ["cn"],
+                "priority": 1,
+                "markets": ["vn"],
                 "datasets": ["quote.realtime"],
-                "dataset_markets": {"quote.realtime": ["cn"]},
+                "dataset_markets": {"quote.realtime": ["vn"]},
                 "warnings": [],
                 "last_error": None,
                 "cooldown": None,
@@ -970,7 +462,7 @@ def test_data_capability_api_paths_return_valid_contract() -> None:
             {
                 "dataset": "quote.realtime",
                 "status": "ok",
-                "source": "efinance",
+                "source": "ssi",
                 "stale": False,
                 "last_success": None,
                 "last_error": None,
@@ -981,8 +473,8 @@ def test_data_capability_api_paths_return_valid_contract() -> None:
         ],
         "priorities": [
             {
-                "scenario": "cn.realtime",
-                "providers": ["efinance"],
+                "scenario": "vn.realtime",
+                "providers": ["ssi", "vci"],
                 "source": "test",
                 "warnings": [],
             }

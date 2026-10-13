@@ -32,12 +32,12 @@ def _snapshot(
     limit_available: bool = True,
 ) -> dict:
     return {
-        "region": "cn",
+        "region": "vn",
         "trade_date": trade_date,
         "status": status,
         "score": score,
-        "label": "需观察",
-        "temperature_label": "震荡",
+        "label": "balanced",
+        "temperature_label": "mixed",
         "reasons": ["test"],
         "guidance": "test",
         "dimensions": {
@@ -53,7 +53,7 @@ class MarketLightAlertsTestCase(unittest.TestCase):
     def _rule(self, alert_type: str, parameters: dict) -> MarketLightAlert:
         return MarketLightAlert(
             target_scope="market",
-            target="cn",
+            target="vn",
             alert_type=alert_type,
             parameters=parameters,
             metadata={"persisted_rule_id": 7, "trading_day_check_enabled": False},
@@ -63,10 +63,10 @@ class MarketLightAlertsTestCase(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "red or yellow"):
             normalize_market_alert_parameters("market_light_status", {"statuses": ["green"]})
 
-    def test_market_light_alert_rejects_jp_kr_targets(self) -> None:
-        for region in ("jp", "kr"):
+    def test_market_light_alert_rejects_non_vn_targets(self) -> None:
+        for region in ("cn", "hk", "us", "jp", "kr"):
             with self.subTest(region=region):
-                with self.assertRaisesRegex(ValueError, "vn, cn, hk, us"):
+                with self.assertRaisesRegex(ValueError, "must be one of vn"):
                     MarketLightAlert(
                         target_scope="market",
                         target=region,
@@ -86,29 +86,34 @@ class MarketLightAlertsTestCase(unittest.TestCase):
     def test_enabled_regions_follow_supported_markets_vn_first(self) -> None:
         with patch.dict(os.environ, {"SUPPORTED_MARKETS": "vn"}):
             self.assertEqual(enabled_market_alert_regions(), ("vn",))
+        # Chỉ còn thị trường Việt Nam, mọi cấu hình đều quy về vn.
+        # Only Vietnam remains; every configuration resolves to vn.
         with patch.dict(os.environ, {"SUPPORTED_MARKETS": "us,vn,cn,jp"}):
-            # jp được bật nhưng không hỗ trợ cảnh báo thị trường.
-            self.assertEqual(enabled_market_alert_regions(), ("vn", "cn", "us"))
+            self.assertEqual(enabled_market_alert_regions(), ("vn",))
         with patch.dict(os.environ, {"SUPPORTED_MARKETS": "all"}):
-            self.assertEqual(enabled_market_alert_regions(), ("vn", "cn", "hk", "us"))
+            self.assertEqual(enabled_market_alert_regions(), ("vn",))
 
     def test_ensure_region_enabled_rejects_disabled_market(self) -> None:
         with patch.dict(os.environ, {"SUPPORTED_MARKETS": "vn"}):
             self.assertEqual(ensure_market_alert_region_enabled("vn"), "vn")
-            with self.assertRaisesRegex(ValueError, "not enabled; enabled markets: vn"):
+            with self.assertRaisesRegex(ValueError, "must be one of vn"):
                 ensure_market_alert_region_enabled("cn")
 
     def test_disabled_market_payload_is_skipped_with_explicit_reason(self) -> None:
         data = {
             "id": 9,
             "target_scope": "market",
-            "target": "cn",
+            "target": "vn",
             "alert_type": "market_light_status",
             "parameters": {"statuses": ["red"]},
-            "name": "cn risk-off",
+            "name": "vn risk-off",
         }
         config = SimpleNamespace(trading_day_check_enabled=True, report_language="vi")
-        with patch.dict(os.environ, {"SUPPORTED_MARKETS": "vn"}), patch(
+        # vn luôn được bật; giả lập trạng thái tắt để kiểm tra nhánh bỏ qua.
+        # vn is always enabled; simulate a disabled market to cover the skip path.
+        with patch(
+            "src.services.market_light_alerts.is_market_alert_region_enabled", return_value=False
+        ), patch(
             "src.services.market_light_alerts.get_open_markets_today"
         ) as open_markets, patch("src.services.market_light_alerts.build_current_snapshot") as build_snapshot:
             payload = make_market_light_payload(parent_key="rule:9", data=data, config=config)
@@ -118,7 +123,7 @@ class MarketLightAlertsTestCase(unittest.TestCase):
         build_snapshot.assert_not_called()
         self.assertEqual(result["record_status"], "skipped")
         self.assertIn("not enabled in SUPPORTED_MARKETS", result["message"])
-        self.assertEqual(payload.display_target, "Trung Quốc (A)")
+        self.assertEqual(payload.display_target, "Việt Nam")
 
     def test_vn_payload_uses_trading_calendar_and_vietnamese_label(self) -> None:
         data = {

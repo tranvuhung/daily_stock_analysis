@@ -22,9 +22,6 @@ class ChatType(str, Enum):
 
 class Platform(str, Enum):
     """Platform type"""
-    FEISHU = "feishu"        # Feishu
-    DINGTALK = "dingtalk"    # DingTalk
-    WECOM = "wecom"          # WeCom (WeChat Work)
     TELEGRAM = "telegram"    # Telegram
     UNKNOWN = "unknown"      # Unknown
 
@@ -71,25 +68,15 @@ class BotMessage:
             prefix: command prefix, defaults to "/"
             
         Returns:
-            A (command, args) tuple, e.g. ("analyze", ["600519"])
+            A (command, args) tuple, e.g. ("analyze", ["HPG"])
             Returns (None, []) if the message is not a command
         """
         text = self.content.strip()
         
         # Check whether it starts with the command prefix
         if not text.startswith(prefix):
-            # Try to match a Chinese command (no prefix)
-            chinese_commands = {
-                '分析': 'analyze',
-                '大盘': 'market',
-                '批量': 'batch',
-                '帮助': 'help',
-                '状态': 'status',
-            }
-            for cn_cmd, en_cmd in chinese_commands.items():
-                if text.startswith(cn_cmd):
-                    args = text[len(cn_cmd):].strip().split()
-                    return en_cmd, args
+            # Không có tiền tố -> không phải lệnh; câu tự nhiên đi qua NL routing của dispatcher.
+            # No prefix -> not a command; free text goes through dispatcher NL routing.
             return None, []
         
         # Strip the prefix
@@ -144,7 +131,7 @@ class BotResponse:
     @classmethod
     def error_response(cls, message: str) -> 'BotResponse':
         """Create an error response"""
-        return cls(text=f"❌ 错误：{message}", markdown=False, at_user=True)
+        return cls(text=f"❌ Lỗi: {message}", markdown=False, at_user=True)
 
 
 @dataclass

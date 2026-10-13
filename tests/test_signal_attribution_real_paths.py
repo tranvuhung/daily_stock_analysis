@@ -121,8 +121,8 @@ class TestHistoryServiceDisplay:
         from src.services.history_service import HistoryService
 
         result = AnalysisResult(
-            code="600519",
-            name="贵州茅台",
+            code="HPG",
+            name="Hòa Phát",
             sentiment_score=50,
             trend_prediction="震荡",
             operation_advice="持有",
@@ -143,7 +143,7 @@ class TestHistoryServiceDisplay:
             created_at = None
 
         markdown = HistoryService()._generate_single_stock_markdown(result, MockRecord())
-        assert "信号归因" in markdown or "Signal Attribution" in markdown
+        assert "Phân rã tín hiệu" in markdown or "Signal Attribution" in markdown
         assert "70%" in markdown or "70%" in markdown
 
     def test_no_signal_attribution_no_section(self):
@@ -151,8 +151,8 @@ class TestHistoryServiceDisplay:
         from src.services.history_service import HistoryService
 
         result = AnalysisResult(
-            code="600519",
-            name="贵州茅台",
+            code="HPG",
+            name="Hòa Phát",
             sentiment_score=50,
             trend_prediction="震荡",
             operation_advice="持有",
@@ -163,7 +163,7 @@ class TestHistoryServiceDisplay:
             created_at = None
 
         markdown = HistoryService()._generate_single_stock_markdown(result, MockRecord())
-        assert "信号归因" not in markdown
+        assert "Phân rã tín hiệu" not in markdown
 
 
 if __name__ == "__main__":

@@ -8,12 +8,13 @@ from typing import Any, Dict, Optional
 
 from src.schemas.decision_scale import signal_key_for_score
 
-# Languages the renderer *understands*. Historical records store zh/en/ko and must keep
-# rendering in their original language, otherwise old reports get a Vietnamese shell.
-SUPPORTED_REPORT_LANGUAGES = ("vi", "zh", "en", "ko")
+# Ngôn ngữ mà bộ render hiểu: tiếng Việt và tiếng Anh. Bản ghi cũ lưu zh/ko được quy về
+# tiếng Việt (nhãn hiển thị theo tiếng Việt, nội dung giữ nguyên).
+# Languages the renderer understands; legacy zh/ko records normalize to Vietnamese.
+SUPPORTED_REPORT_LANGUAGES = ("vi", "en")
 
 # Languages this deployment *allows selecting*. Reports are produced only in Vietnamese, so
-# REPORT_LANGUAGE config and API requests accept only vi; SUPPORTED_REPORT_LANGUAGES above is for rendering history only.
+# REPORT_LANGUAGE config and API requests accept only vi; SUPPORTED_REPORT_LANGUAGES above also covers English rendering.
 SELECTABLE_REPORT_LANGUAGES = ("vi",)
 
 DEFAULT_REPORT_LANGUAGE = "vi"
@@ -26,23 +27,26 @@ _REPORT_LANGUAGE_ALIASES = {
     "vietnamese": "vi",
     "tieng_viet": "vi",
     "tiếng_việt": "vi",
-    "zh-cn": "zh",
-    "zh_cn": "zh",
-    "zh-hans": "zh",
-    "zh_hans": "zh",
-    "zh-tw": "zh",
-    "zh_tw": "zh",
-    "cn": "zh",
-    "chinese": "zh",
+    "zh-cn": "vi",
+    "zh_cn": "vi",
+    "zh-hans": "vi",
+    "zh_hans": "vi",
+    "zh-tw": "vi",
+    "zh_tw": "vi",
+    "cn": "vi",
+    "chinese": "vi",
     "english": "en",
     "en-us": "en",
     "en_us": "en",
     "en-gb": "en",
     "en_gb": "en",
-    "korean": "ko",
-    "kr": "ko",
-    "ko-kr": "ko",
-    "ko_kr": "ko",
+    "korean": "vi",
+    "kr": "vi",
+    "ko-kr": "vi",
+    "ko_kr": "vi",
+    # Ngôn ngữ đã bị loại bỏ: quy về tiếng Việt. / Removed languages normalize to Vietnamese.
+    "zh": "vi",
+    "ko": "vi",
 }
 
 _OPERATION_ADVICE_CANONICAL_MAP = {
@@ -59,48 +63,30 @@ _OPERATION_ADVICE_CANONICAL_MAP = {
     "giảm tỷ trọng": "reduce",
     "bán": "sell",
     "bán mạnh": "strong_sell",
-    "强烈买入": "strong_buy",
     "strong buy": "strong_buy",
     "strong_buy": "strong_buy",
-    "买入": "buy",
     "buy": "buy",
-    "加仓": "buy",
     "accumulate": "buy",
     "add position": "buy",
-    "持有": "hold",
-    "洗盘观察": "hold",
-    "观察": "hold",
     "hold": "hold",
-    "观望": "watch",
     "watch": "watch",
     "wait": "watch",
     "wait and see": "watch",
-    "减仓": "reduce",
     "reduce": "reduce",
     "trim": "reduce",
-    "卖出": "sell",
     "sell": "sell",
-    "强烈卖出": "strong_sell",
     "strong sell": "strong_sell",
     "strong_sell": "strong_sell",
-    "적극 매수": "strong_buy",
-    "매수": "buy",
-    "보유": "hold",
-    "보유 관찰": "hold",
-    "관망": "watch",
-    "비중축소": "reduce",
-    "매도": "sell",
-    "적극 매도": "strong_sell",
 }
 
 _OPERATION_ADVICE_TRANSLATIONS = {
-    "strong_buy": {"zh": "强烈买入", "vi": "Mua mạnh", "en": "Strong Buy", "ko": "적극 매수"},
-    "buy": {"zh": "买入", "vi": "Mua", "en": "Buy", "ko": "매수"},
-    "hold": {"zh": "持有", "vi": "Nắm giữ", "en": "Hold", "ko": "보유"},
-    "watch": {"zh": "观望", "vi": "Quan sát", "en": "Watch", "ko": "관망"},
-    "reduce": {"zh": "减仓", "vi": "Giảm tỷ trọng", "en": "Reduce", "ko": "비중축소"},
-    "sell": {"zh": "卖出", "vi": "Bán", "en": "Sell", "ko": "매도"},
-    "strong_sell": {"zh": "强烈卖出", "vi": "Bán mạnh", "en": "Strong Sell", "ko": "적극 매도"},
+    "strong_buy": { "vi": "Mua mạnh", "en": "Strong Buy", },
+    "buy": { "vi": "Mua", "en": "Buy", },
+    "hold": { "vi": "Nắm giữ", "en": "Hold", },
+    "watch": { "vi": "Quan sát", "en": "Watch", },
+    "reduce": { "vi": "Giảm tỷ trọng", "en": "Reduce", },
+    "sell": { "vi": "Bán", "en": "Sell", },
+    "strong_sell": { "vi": "Bán mạnh", "en": "Strong Sell", },
 }
 
 _TREND_PREDICTION_CANONICAL_MAP = {
@@ -112,8 +98,6 @@ _TREND_PREDICTION_CANONICAL_MAP = {
     "đi ngang": "sideways",
     "giảm": "bearish",
     "giảm mạnh": "strong_bearish",
-    "强势空头": "strong_bearish",
-    "强烈看多": "strong_bullish",
     "strong bullish": "strong_bullish",
     "very bullish": "strong_bullish",
     # Nhãn TrendStatus tiếng Anh của src/stock_analyzer.py (chuẩn mới); khoá tiếng Trung
@@ -124,38 +108,23 @@ _TREND_PREDICTION_CANONICAL_MAP = {
     "consolidation": "sideways",
     "weak bearish": "bearish",
     "bearish alignment": "bearish",
-    "强势多头": "strong_bullish",
-    "多头排列": "bullish",
-    "空头排列": "bearish",
-    "弱势多头": "bullish",
-    "弱势空头": "bearish",
-    "看多": "bullish",
-    "盘整": "sideways",
     "bullish": "bullish",
     "uptrend": "bullish",
-    "震荡": "sideways",
     "neutral": "sideways",
     "sideways": "sideways",
     "range-bound": "sideways",
-    "看空": "bearish",
     "bearish": "bearish",
     "downtrend": "bearish",
-    "强烈看空": "strong_bearish",
     "strong bearish": "strong_bearish",
     "very bearish": "strong_bearish",
-    "강한 상승": "strong_bullish",
-    "상승": "bullish",
-    "횡보": "sideways",
-    "하락": "bearish",
-    "강한 하락": "strong_bearish",
 }
 
 _TREND_PREDICTION_TRANSLATIONS = {
-    "strong_bullish": {"zh": "强烈看多", "vi": "Tăng mạnh", "en": "Strong Bullish", "ko": "강한 상승"},
-    "bullish": {"zh": "看多", "vi": "Tăng", "en": "Bullish", "ko": "상승"},
-    "sideways": {"zh": "震荡", "vi": "Đi ngang", "en": "Sideways", "ko": "횡보"},
-    "bearish": {"zh": "看空", "vi": "Giảm", "en": "Bearish", "ko": "하락"},
-    "strong_bearish": {"zh": "强烈看空", "vi": "Giảm mạnh", "en": "Strong Bearish", "ko": "강한 하락"},
+    "strong_bullish": { "vi": "Tăng mạnh", "en": "Strong Bullish", },
+    "bullish": { "vi": "Tăng", "en": "Bullish", },
+    "sideways": { "vi": "Đi ngang", "en": "Sideways", },
+    "bearish": { "vi": "Giảm", "en": "Bearish", },
+    "strong_bearish": { "vi": "Giảm mạnh", "en": "Strong Bearish", },
 }
 
 _CONFIDENCE_LEVEL_CANONICAL_MAP = {
@@ -165,22 +134,16 @@ _CONFIDENCE_LEVEL_CANONICAL_MAP = {
     "cao": "high",
     "trung bình": "medium",
     "thấp": "low",
-    "高": "high",
     "high": "high",
-    "中": "medium",
     "medium": "medium",
     "med": "medium",
-    "低": "low",
     "low": "low",
-    "높음": "high",
-    "보통": "medium",
-    "낮음": "low",
 }
 
 _CONFIDENCE_LEVEL_TRANSLATIONS = {
-    "high": {"zh": "高", "vi": "Cao", "en": "High", "ko": "높음"},
-    "medium": {"zh": "中", "vi": "Trung bình", "en": "Medium", "ko": "보통"},
-    "low": {"zh": "低", "vi": "Thấp", "en": "Low", "ko": "낮음"},
+    "high": { "vi": "Cao", "en": "High", },
+    "medium": { "vi": "Trung bình", "en": "Medium", },
+    "low": { "vi": "Thấp", "en": "Low", },
 }
 
 _STRATEGY_SIGNAL_CANONICAL_MAP = {
@@ -194,24 +157,19 @@ _STRATEGY_SIGNAL_CANONICAL_MAP = {
     "bán mạnh": "strong_sell",
     "strong buy": "strong_buy",
     "strong_buy": "strong_buy",
-    "强烈买入": "strong_buy",
     "buy": "buy",
-    "买入": "buy",
     "hold": "hold",
-    "持有": "hold",
     "sell": "sell",
-    "卖出": "sell",
     "strong sell": "strong_sell",
     "strong_sell": "strong_sell",
-    "强烈卖出": "strong_sell",
 }
 
 _STRATEGY_SIGNAL_TRANSLATIONS = {
-    "strong_buy": {"zh": "强烈买入", "vi": "Mua mạnh", "en": "Strong Buy", "ko": "적극 매수"},
-    "buy": {"zh": "买入", "vi": "Mua", "en": "Buy", "ko": "매수"},
-    "hold": {"zh": "持有", "vi": "Nắm giữ", "en": "Hold", "ko": "보유"},
-    "sell": {"zh": "卖出", "vi": "Bán", "en": "Sell", "ko": "매도"},
-    "strong_sell": {"zh": "强烈卖出", "vi": "Bán mạnh", "en": "Strong Sell", "ko": "적극 매도"},
+    "strong_buy": { "vi": "Mua mạnh", "en": "Strong Buy", },
+    "buy": { "vi": "Mua", "en": "Buy", },
+    "hold": { "vi": "Nắm giữ", "en": "Hold", },
+    "sell": { "vi": "Bán", "en": "Sell", },
+    "strong_sell": { "vi": "Bán mạnh", "en": "Strong Sell", },
 }
 
 _CONSENSUS_LEVEL_CANONICAL_MAP = {
@@ -223,22 +181,17 @@ _CONSENSUS_LEVEL_CANONICAL_MAP = {
     "thấp": "low",
     "không đủ bằng chứng": "insufficient",
     "high": "high",
-    "高": "high",
     "medium": "medium",
-    "中": "medium",
     "low": "low",
-    "低": "low",
     "insufficient": "insufficient",
-    "证据不足": "insufficient",
     "Insufficient": "insufficient",
-    "증거 부족": "insufficient",
 }
 
 _CONSENSUS_LEVEL_TRANSLATIONS = {
-    "high": {"zh": "高", "vi": "Cao", "en": "High", "ko": "높음"},
-    "medium": {"zh": "中", "vi": "Trung bình", "en": "Medium", "ko": "보통"},
-    "low": {"zh": "低", "vi": "Thấp", "en": "Low", "ko": "낮음"},
-    "insufficient": {"zh": "证据不足", "vi": "Không đủ bằng chứng", "en": "Insufficient", "ko": "증거 부족"},
+    "high": { "vi": "Cao", "en": "High", },
+    "medium": { "vi": "Trung bình", "en": "Medium", },
+    "low": { "vi": "Thấp", "en": "Low", },
+    "insufficient": { "vi": "Không đủ bằng chứng", "en": "Insufficient", },
 }
 
 _CONFLICT_SEVERITY_CANONICAL_MAP = {
@@ -250,20 +203,16 @@ _CONFLICT_SEVERITY_CANONICAL_MAP = {
     "trung bình": "medium",
     "cao": "high",
     "none": "none",
-    "无": "none",
     "low": "low",
-    "低": "low",
     "medium": "medium",
-    "中": "medium",
     "high": "high",
-    "高": "high",
 }
 
 _CONFLICT_SEVERITY_TRANSLATIONS = {
-    "none": {"zh": "无", "vi": "Không có", "en": "None", "ko": "없음"},
-    "low": {"zh": "低", "vi": "Thấp", "en": "Low", "ko": "낮음"},
-    "medium": {"zh": "中", "vi": "Trung bình", "en": "Medium", "ko": "보통"},
-    "high": {"zh": "高", "vi": "Cao", "en": "High", "ko": "높음"},
+    "none": { "vi": "Không có", "en": "None", },
+    "low": { "vi": "Thấp", "en": "Low", },
+    "medium": { "vi": "Trung bình", "en": "Medium", },
+    "high": { "vi": "Cao", "en": "High", },
 }
 
 _STRATEGY_SKILL_CANONICAL_MAP = {
@@ -287,82 +236,58 @@ _STRATEGY_SKILL_CANONICAL_MAP = {
     "lý thuyết sóng": "wave_theory",
     "bull trend": "bull_trend",
     "bull_trend": "bull_trend",
-    "默认多头趋势": "bull_trend",
     "hot theme": "hot_theme",
     "hot_theme": "hot_theme",
-    "热点题材": "hot_theme",
     "volume breakout": "volume_breakout",
     "volume_breakout": "volume_breakout",
-    "放量突破": "volume_breakout",
     "ma golden cross": "ma_golden_cross",
     "ma_golden_cross": "ma_golden_cross",
-    "均线金叉": "ma_golden_cross",
     "growth quality": "growth_quality",
     "growth_quality": "growth_quality",
-    "成长质量": "growth_quality",
     "bottom volume": "bottom_volume",
     "bottom_volume": "bottom_volume",
-    "底部放量": "bottom_volume",
     "box oscillation": "box_oscillation",
     "box_oscillation": "box_oscillation",
-    "箱体震荡": "box_oscillation",
     "chan theory": "chan_theory",
     "chan_theory": "chan_theory",
-    "缠论结构": "chan_theory",
     "dragon head": "dragon_head",
     "dragon_head": "dragon_head",
-    "龙头战法": "dragon_head",
     "emotion cycle": "emotion_cycle",
     "emotion_cycle": "emotion_cycle",
-    "情绪周期": "emotion_cycle",
     "event driven": "event_driven",
     "event_driven": "event_driven",
-    "事件驱动": "event_driven",
     "expectation repricing": "expectation_repricing",
     "expectation_repricing": "expectation_repricing",
-    "预期重估": "expectation_repricing",
     "one yang three yin": "one_yang_three_yin",
     "one_yang_three_yin": "one_yang_three_yin",
-    "一阳三阴": "one_yang_three_yin",
     "shrink pullback": "shrink_pullback",
     "shrink_pullback": "shrink_pullback",
-    "缩量回踩": "shrink_pullback",
     "wave theory": "wave_theory",
     "wave_theory": "wave_theory",
-    "波浪理论": "wave_theory",
 }
 
 _STRATEGY_SKILL_TRANSLATIONS = {
-    "bull_trend": {"zh": "默认多头趋势", "vi": "Xu hướng tăng mặc định", "en": "Bull Trend", "ko": "기본 상승 추세"},
-    "hot_theme": {"zh": "热点题材", "vi": "Chủ đề nóng", "en": "Hot Theme", "ko": "핫 테마"},
-    "volume_breakout": {"zh": "放量突破", "vi": "Bứt phá kèm khối lượng", "en": "Volume Breakout", "ko": "거래량 돌파"},
-    "ma_golden_cross": {"zh": "均线金叉", "vi": "Giao cắt vàng đường MA", "en": "MA Golden Cross", "ko": "이평선 골든크로스"},
-    "growth_quality": {"zh": "成长质量", "vi": "Chất lượng tăng trưởng", "en": "Growth Quality", "ko": "성장 품질"},
-    "bottom_volume": {"zh": "底部放量", "vi": "Khối lượng tăng tại đáy", "en": "Bottom Volume", "ko": "저점 거래량"},
-    "box_oscillation": {"zh": "箱体震荡", "vi": "Dao động trong hộp", "en": "Box Oscillation", "ko": "박스권 등락"},
-    "chan_theory": {"zh": "缠论结构", "vi": "Cấu trúc lý thuyết Chan", "en": "Chan Theory", "ko": "찬 이론 구조"},
-    "dragon_head": {"zh": "龙头战法", "vi": "Chiến pháp cổ phiếu dẫn dắt", "en": "Dragon Head", "ko": "대장주 전략"},
-    "emotion_cycle": {"zh": "情绪周期", "vi": "Chu kỳ tâm lý", "en": "Emotion Cycle", "ko": "심리 사이클"},
-    "event_driven": {"zh": "事件驱动", "vi": "Dẫn dắt bởi sự kiện", "en": "Event Driven", "ko": "이벤트 드리븐"},
-    "expectation_repricing": {"zh": "预期重估", "vi": "Định giá lại kỳ vọng", "en": "Expectation Repricing", "ko": "기대 재평가"},
-    "one_yang_three_yin": {"zh": "一阳三阴", "vi": "Một tăng ba giảm", "en": "One Yang Three Yin", "ko": "일양삼음"},
-    "shrink_pullback": {"zh": "缩量回踩", "vi": "Điều chỉnh với khối lượng cạn", "en": "Shrink Pullback", "ko": "거래량 축소 눌림"},
-    "wave_theory": {"zh": "波浪理论", "vi": "Lý thuyết sóng", "en": "Wave Theory", "ko": "파동 이론"},
+    "bull_trend": { "vi": "Xu hướng tăng mặc định", "en": "Bull Trend", },
+    "hot_theme": { "vi": "Chủ đề nóng", "en": "Hot Theme", },
+    "volume_breakout": { "vi": "Bứt phá kèm khối lượng", "en": "Volume Breakout", },
+    "ma_golden_cross": { "vi": "Giao cắt vàng đường MA", "en": "MA Golden Cross", },
+    "growth_quality": { "vi": "Chất lượng tăng trưởng", "en": "Growth Quality", },
+    "bottom_volume": { "vi": "Khối lượng tăng tại đáy", "en": "Bottom Volume", },
+    "box_oscillation": { "vi": "Dao động trong hộp", "en": "Box Oscillation", },
+    "chan_theory": { "vi": "Cấu trúc lý thuyết Chan", "en": "Chan Theory", },
+    "dragon_head": { "vi": "Chiến pháp cổ phiếu dẫn dắt", "en": "Dragon Head", },
+    "emotion_cycle": { "vi": "Chu kỳ tâm lý", "en": "Emotion Cycle", },
+    "event_driven": { "vi": "Dẫn dắt bởi sự kiện", "en": "Event Driven", },
+    "expectation_repricing": { "vi": "Định giá lại kỳ vọng", "en": "Expectation Repricing", },
+    "one_yang_three_yin": { "vi": "Một tăng ba giảm", "en": "One Yang Three Yin", },
+    "shrink_pullback": { "vi": "Điều chỉnh với khối lượng cạn", "en": "Shrink Pullback", },
+    "wave_theory": { "vi": "Lý thuyết sóng", "en": "Wave Theory", },
 }
 
 _VOLUME_STATUS_CANONICAL_MAP = {
     # The LLM copies example values from the prompt schema (Chinese "expanding / shrinking / flat volume"),
     # even when the output-language instruction asks for Vietnamese. Normalize and translate them here at
     # the render boundary instead of relying on the model to follow instructions.
-    "放量": "expanding",
-    "温和放量": "expanding",
-    "明显放量": "expanding",
-    "巨量": "surging",
-    "缩量": "shrinking",
-    "明显萎缩": "shrinking",
-    "极度萎缩": "shrinking",
-    "平量": "normal",
-    "正常": "normal",
     "expanding": "expanding",
     "expanding volume": "expanding",
     "high volume": "expanding",
@@ -389,34 +314,10 @@ _VOLUME_STATUS_CANONICAL_MAP = {
 }
 
 _VOLUME_STATUS_TRANSLATIONS = {
-    "expanding": {"vi": "Khối lượng tăng", "zh": "放量", "en": "Expanding volume", "ko": "거래량 증가"},
-    "surging": {"vi": "Bùng nổ khối lượng", "zh": "巨量", "en": "Surging volume", "ko": "거래량 급증"},
-    "shrinking": {"vi": "Khối lượng cạn", "zh": "缩量", "en": "Shrinking volume", "ko": "거래량 감소"},
-    "normal": {"vi": "Khối lượng bình thường", "zh": "平量", "en": "Normal volume", "ko": "거래량 보통"},
-}
-
-_CHIP_HEALTH_CANONICAL_MAP = {
-    # Tiếng Việt — nhận lại thuật ngữ do LLM trả về khi báo cáo là tiếng Việt.
-    # Thiếu phần này, giá trị như "Mua" sẽ không quy được về canonical và
-    # decision_type sẽ rơi về mặc định.
-    "lành mạnh": "healthy",
-    "trung bình": "average",
-    "cần thận trọng": "caution",
-    "健康": "healthy",
-    "healthy": "healthy",
-    "一般": "average",
-    "average": "average",
-    "警惕": "caution",
-    "caution": "caution",
-    "양호": "healthy",
-    "보통": "average",
-    "주의": "caution",
-}
-
-_CHIP_HEALTH_TRANSLATIONS = {
-    "healthy": {"zh": "健康", "vi": "Lành mạnh", "en": "Healthy", "ko": "양호"},
-    "average": {"zh": "一般", "vi": "Trung bình", "en": "Average", "ko": "보통"},
-    "caution": {"zh": "警惕", "vi": "Cần thận trọng", "en": "Caution", "ko": "주의"},
+    "expanding": {"vi": "Khối lượng tăng",  "en": "Expanding volume", },
+    "surging": {"vi": "Bùng nổ khối lượng",  "en": "Surging volume", },
+    "shrinking": {"vi": "Khối lượng cạn",  "en": "Shrinking volume", },
+    "normal": {"vi": "Khối lượng bình thường",  "en": "Normal volume", },
 }
 
 _BIAS_STATUS_CANONICAL_MAP = {
@@ -426,44 +327,31 @@ _BIAS_STATUS_CANONICAL_MAP = {
     "an toàn": "safe",
     "cảnh báo": "caution",
     "nguy hiểm": "danger",
-    "安全": "safe",
     "safe": "safe",
-    "警戒": "caution",
-    "警惕": "caution",
     "caution": "caution",
-    "危险": "danger",
     "risk": "danger",
     "danger": "danger",
-    "안전": "safe",
-    "경계": "caution",
-    "위험": "danger",
 }
 
 _BIAS_STATUS_TRANSLATIONS = {
-    "safe": {"zh": "安全", "vi": "An toàn", "en": "Safe", "ko": "안전"},
-    "caution": {"zh": "警戒", "vi": "Cảnh báo", "en": "Caution", "ko": "경계"},
-    "danger": {"zh": "危险", "vi": "Nguy hiểm", "en": "Danger", "ko": "위험"},
+    "safe": { "vi": "An toàn", "en": "Safe", },
+    "caution": { "vi": "Cảnh báo", "en": "Caution", },
+    "danger": { "vi": "Nguy hiểm", "en": "Danger", },
 }
 
 _PLACEHOLDER_BY_LANGUAGE = {
-    "zh": "待补充",
     "vi": "Chưa có",
     "en": "TBD",
-    "ko": "미정",
 }
 
 _UNKNOWN_BY_LANGUAGE = {
-    "zh": "未知",
     "vi": "Không rõ",
     "en": "Unknown",
-    "ko": "알 수 없음",
 }
 
 _NO_DATA_BY_LANGUAGE = {
-    "zh": "数据缺失",
     "vi": "Thiếu dữ liệu",
     "en": "Data unavailable",
-    "ko": "데이터 없음",
 }
 
 # Thông báo tiến độ của pipeline. Chuỗi này KHÔNG chỉ nằm trong log: nó đi qua
@@ -475,108 +363,71 @@ _NO_DATA_BY_LANGUAGE = {
 # verbatim in the Run Flow panel and the SSE stream, so they must be localized at the source.
 _PIPELINE_PROGRESS_MESSAGES: Dict[str, Dict[str, str]] = {
     "prepare": {
-        "zh": "{name}：正在准备分析任务",
         "vi": "{name}: đang chuẩn bị tác vụ phân tích",
         "en": "{name}: preparing the analysis task",
-        "ko": "{name}: 분석 작업을 준비하는 중",
     },
     "market_ready": {
-        "zh": "{name}：行情数据准备完成",
         "vi": "{name}: đã chuẩn bị xong dữ liệu giá",
         "en": "{name}: market data ready",
-        "ko": "{name}: 시세 데이터 준비 완료",
     },
     "fetch_market": {
-        "zh": "{name}：正在获取行情与筹码数据",
-        "vi": "{name}: đang lấy dữ liệu giá và phân bố nắm giữ",
-        "en": "{name}: fetching quote and chip data",
-        "ko": "{name}: 시세 및 매물대 데이터를 가져오는 중",
+        "vi": "{name}: đang lấy dữ liệu giá",
+        "en": "{name}: fetching quote data",
     },
     "aggregate": {
-        "zh": "{name}：正在聚合基本面与趋势数据",
         "vi": "{name}: đang tổng hợp dữ liệu cơ bản và xu hướng",
         "en": "{name}: aggregating fundamental and trend data",
-        "ko": "{name}: 펀더멘털 및 추세 데이터를 집계하는 중",
     },
     "news": {
-        "zh": "{name}：正在检索新闻与舆情",
         "vi": "{name}: đang tìm tin tức và tâm lý thị trường",
         "en": "{name}: searching news and sentiment",
-        "ko": "{name}: 뉴스 및 여론을 검색하는 중",
     },
     "agent_switch": {
-        "zh": "{name}：正在切换 Agent 分析链路",
         "vi": "{name}: đang chuyển sang luồng phân tích Agent",
         "en": "{name}: switching to the Agent analysis path",
-        "ko": "{name}: 에이전트 분석 경로로 전환하는 중",
     },
     "context": {
-        "zh": "{name}：正在整理分析上下文",
         "vi": "{name}: đang sắp xếp ngữ cảnh phân tích",
         "en": "{name}: assembling the analysis context",
-        "ko": "{name}: 분석 컨텍스트를 정리하는 중",
     },
     "llm_request": {
-        "zh": "{name}：正在请求 LLM 生成报告",
         "vi": "{name}: đang yêu cầu LLM sinh báo cáo",
         "en": "{name}: requesting the report from the LLM",
-        "ko": "{name}: LLM에 보고서 생성을 요청하는 중",
     },
     "llm_streaming": {
-        "zh": "{name}：LLM 正在生成分析结果（已接收 {chars} 字符）",
         "vi": "{name}: LLM đang sinh kết quả phân tích (đã nhận {chars} ký tự)",
         "en": "{name}: the LLM is generating the analysis ({chars} characters received)",
-        "ko": "{name}: LLM이 분석 결과를 생성 중 ({chars}자 수신)",
     },
     # Bốn giai đoạn dưới đây do ``src/analyzer.py`` phát ra, đi chung
     # ``progress_callback`` với pipeline (``pipeline.py:932``) nên cùng lọt ra Run Flow.
     # Emitted by ``src/analyzer.py`` through the same progress callback.
     "llm_wait": {
-        "zh": "{name}：LLM 请求前等待 {seconds} 秒",
         "vi": "{name}: chờ {seconds} giây trước khi gọi LLM",
         "en": "{name}: waiting {seconds}s before the LLM request",
-        "ko": "{name}: LLM 요청 전 {seconds}초 대기",
     },
     "llm_accepted": {
-        "zh": "{name}：LLM 已接收请求，等待响应",
         "vi": "{name}: LLM đã nhận yêu cầu, đang chờ phản hồi",
         "en": "{name}: the LLM accepted the request, awaiting the response",
-        "ko": "{name}: LLM이 요청을 수락했으며 응답 대기 중",
     },
     "llm_parsing": {
-        "zh": "{name}：LLM 返回完成，正在解析 JSON",
         "vi": "{name}: LLM đã trả kết quả, đang phân tích JSON",
         "en": "{name}: the LLM responded, parsing JSON",
-        "ko": "{name}: LLM 응답 완료, JSON 파싱 중",
     },
     "llm_retry": {
-        "zh": "{name}：报告字段不完整，正在补全重试（{attempt}/{total}）",
         "vi": "{name}: báo cáo thiếu trường bắt buộc, đang thử bổ sung ({attempt}/{total})",
         "en": "{name}: the report is missing required fields, retrying completion ({attempt}/{total})",
-        "ko": "{name}: 보고서 필수 항목 누락, 보완 재시도 중 ({attempt}/{total})",
     },
     "validate": {
-        "zh": "{name}：正在校验并整理分析结果",
         "vi": "{name}: đang kiểm tra và sắp xếp kết quả phân tích",
         "en": "{name}: validating and tidying the analysis result",
-        "ko": "{name}: 분석 결과를 검증하고 정리하는 중",
     },
     "save_report": {
-        "zh": "{name}：正在保存分析报告",
         "vi": "{name}: đang lưu báo cáo phân tích",
         "en": "{name}: saving the analysis report",
-        "ko": "{name}: 분석 보고서를 저장하는 중",
     },
 }
 
-_CHIP_UNAVAILABLE_BY_LANGUAGE = {
-    "zh": "筹码分布未启用或数据源暂不可用，未纳入筹码判断。",
-    "vi": "Phân bố nắm giữ chưa được bật hoặc nguồn dữ liệu tạm thời không khả dụng, nên không đưa vào đánh giá.",
-    "en": "Chip distribution is disabled or temporarily unavailable; chip signals were not used.",
-    "ko": "매물대가 비활성화되었거나 데이터 소스를 일시적으로 사용할 수 없어 매물대 신호를 반영하지 않았습니다.",
-}
-
-_CHIP_PLACEHOLDER_EXACT = {
+_PLACEHOLDER_EXACT = {
     "",
     "n/a",
     "na",
@@ -584,15 +435,16 @@ _CHIP_PLACEHOLDER_EXACT = {
     "null",
     "unknown",
     "tbd",
-    "数据缺失",
-    "未知",
-    "暂无",
-    "待补充",
+    "không có dữ liệu",
+    "chưa có dữ liệu",
+    "chưa rõ",
+    "không rõ",
 }
 
-_CHIP_PLACEHOLDER_HINTS = (
-    "数据缺失",
-    "无法判断",
+_PLACEHOLDER_HINTS = (
+    "thiếu dữ liệu",
+    "không có dữ liệu",
+    "không thể đánh giá",
     "data unavailable",
     "unavailable",
     "not available",
@@ -600,156 +452,12 @@ _CHIP_PLACEHOLDER_HINTS = (
     "not supported",
 )
 
-_CHIP_METRIC_KEYS = ("profit_ratio", "avg_cost", "concentration")
-_CHIP_UNAVAILABLE_REASON_KEYS = (
-    "chip_unavailable_reason",
-    "unavailable_reason",
-    "chip_unavailable",
-)
-
 _GENERIC_STOCK_NAME_BY_LANGUAGE = {
-    "zh": "待确认股票",
     "vi": "Cổ phiếu chưa xác định",
     "en": "Unnamed Stock",
-    "ko": "미확인 종목",
 }
 
 _REPORT_LABELS: Dict[str, Dict[str, str]] = {
-    "zh": {
-        "dashboard_title": "决策仪表盘",
-        "brief_title": "决策简报",
-        "analyzed_prefix": "共分析",
-        "stock_unit": "只股票",
-        "stock_unit_compact": "只",
-        "buy_label": "买入",
-        "watch_label": "观望",
-        "sell_label": "卖出",
-        "summary_heading": "分析结果摘要",
-        "info_heading": "重要信息速览",
-        "sentiment_summary_label": "舆情情绪",
-        "earnings_outlook_label": "业绩预期",
-        "risk_alerts_label": "风险警报",
-        "positive_catalysts_label": "利好催化",
-        "latest_news_label": "最新动态",
-        "core_conclusion_heading": "核心结论",
-        "one_sentence_label": "一句话决策",
-        "time_sensitivity_label": "时效性",
-        "default_time_sensitivity": "本周内",
-        "position_status_label": "持仓情况",
-        "action_advice_label": "操作建议",
-        "no_position_label": "空仓者",
-        "has_position_label": "持仓者",
-        "continue_holding": "继续持有",
-        "market_snapshot_heading": "当日行情",
-        "close_label": "收盘",
-        "prev_close_label": "昨收",
-        "open_label": "开盘",
-        "high_label": "最高",
-        "low_label": "最低",
-        "change_pct_label": "涨跌幅",
-        "change_amount_label": "涨跌额",
-        "amplitude_label": "振幅",
-        "volume_label": "成交量",
-        "amount_label": "成交额",
-        "current_price_label": "当前价",
-        "volume_ratio_label": "量比",
-        "turnover_rate_label": "换手率",
-        "source_label": "行情来源",
-        "data_sources_label": "数据来源",
-        "data_perspective_heading": "数据透视",
-        "ma_alignment_label": "均线排列",
-        "bullish_alignment_label": "多头排列",
-        "yes_label": "是",
-        "no_label": "否",
-        "none_label": "无",
-        "trend_strength_label": "趋势强度",
-        "price_metrics_label": "价格指标",
-        "ma5_label": "MA5",
-        "ma10_label": "MA10",
-        "ma20_label": "MA20",
-        "bias_ma5_label": "乖离率(MA5)",
-        "support_level_label": "支撑位",
-        "resistance_level_label": "压力位",
-        "chip_label": "筹码",
-        "phase_decision_heading": "盘中决策护栏",
-        "action_window_label": "行动窗口",
-        "immediate_action_label": "当前动作",
-        "watch_conditions_label": "观察条件",
-        "next_check_time_label": "下次检查",
-        "confidence_reason_label": "置信度理由",
-        "data_limitations_label": "数据限制",
-        "battle_plan_heading": "作战计划",
-        "ideal_buy_label": "理想买入点",
-        "secondary_buy_label": "次优买入点",
-        "stop_loss_label": "止损位",
-        "take_profit_label": "目标位",
-        "suggested_position_label": "仓位建议",
-        "entry_plan_label": "建仓策略",
-        "risk_control_label": "风控策略",
-        "checklist_heading": "检查清单",
-        "failed_checks_heading": "检查未通过项",
-        "history_compare_heading": "历史信号对比",
-        "time_label": "时间",
-        "score_label": "评分",
-        "advice_label": "建议",
-        "trend_label": "趋势",
-        "generated_at_label": "报告生成时间",
-        "report_time_label": "生成时间",
-        "no_results": "无分析结果",
-        "report_title": "股票分析报告",
-        "avg_score_label": "均分",
-        "action_points_heading": "操作点位",
-        "position_advice_heading": "持仓建议",
-        "analysis_model_label": "分析模型",
-        "not_investment_advice": "AI生成，仅供参考，不构成投资建议",
-        "details_report_hint": "详细报告见",
-        "financial_summary_heading": "财务摘要",
-        "report_date_label": "报告期",
-        "revenue_label": "营业收入",
-        "net_profit_label": "归母净利润",
-        "operating_cash_flow_label": "经营现金流",
-        "roe_label": "ROE",
-        "revenue_yoy_label": "营收同比",
-        "net_profit_yoy_label": "净利同比",
-        "gross_margin_label": "毛利率",
-        "shareholder_return_heading": "股东回报",
-        "ttm_cash_dividend_label": "近12月每股现金分红(税前)",
-        "ttm_event_count_label": "近12月分红次数",
-        "ttm_dividend_yield_label": "TTM 股息率",
-        "latest_ex_dividend_label": "最近除息日",
-        "institutional_flow_heading": "三大法人动向",
-        "institutional_flow_note": "正数=净买超，负数=净卖超；单位为股。",
-        "inst_foreign_label": "外资",
-        "inst_trust_label": "投信",
-        "inst_dealer_label": "自营商",
-        "inst_total_label": "三大法人合计",
-        "related_boards_heading": "关联板块",
-        "industry_boards_heading": "行业板块",
-        "concept_boards_heading": "概念板块",
-        "board_name_label": "板块",
-        "board_type_label": "类型",
-        "board_status_label": "板块表现",
-        "board_change_pct_label": "板块涨跌幅",
-        "leading_board_label": "领涨",
-        "lagging_board_label": "领跌",
-        "signal_attribution_heading": "信号归因分析",
-        "attribution_weights_label": "归因权重",
-        "technical_indicators_label": "技术指标",
-        "news_sentiment_label": "新闻舆情",
-        "fundamentals_label": "基本面",
-        "market_conditions_label": "市场环境",
-        "strongest_bullish_signal_label": "最强看多信号",
-        "strongest_bearish_signal_label": "最强看空信号",
-        "strategy_synthesis_heading": "多策略综合",
-        "strategy_final_signal_label": "综合信号",
-        "strategy_consensus_level_label": "共识度",
-        "strategy_conflict_label": "冲突",
-        "strategy_confidence_label": "置信度",
-        "strategy_summary_label": "综合说明",
-        "strategy_supporting_skills_label": "支持策略",
-        "strategy_opposing_skills_label": "反方策略",
-        "strategy_invalid_opinions_label": "另有 {count} 个策略解析失败",
-    },
     "vi": {
         "dashboard_title": "Bảng điều khiển quyết định",
         "brief_title": "Bản tin quyết định",
@@ -805,7 +513,6 @@ _REPORT_LABELS: Dict[str, Dict[str, str]] = {
         "bias_ma5_label": "Độ lệch (MA5)",
         "support_level_label": "Hỗ trợ",
         "resistance_level_label": "Kháng cự",
-        "chip_label": "Cấu trúc nắm giữ",
         "phase_decision_heading": "Hàng rào quyết định theo phiên",
         "action_window_label": "Khung thời gian hành động",
         "immediate_action_label": "Hành động hiện tại",
@@ -940,7 +647,6 @@ _REPORT_LABELS: Dict[str, Dict[str, str]] = {
         "bias_ma5_label": "Bias (MA5)",
         "support_level_label": "Support",
         "resistance_level_label": "Resistance",
-        "chip_label": "Chip Structure",
         "phase_decision_heading": "Phase Decision Guardrail",
         "action_window_label": "Action Window",
         "immediate_action_label": "Current Action",
@@ -1020,141 +726,6 @@ _REPORT_LABELS: Dict[str, Dict[str, str]] = {
         "strategy_opposing_skills_label": "Opposing Strategies",
         "strategy_invalid_opinions_label": "{count} additional strategies failed to produce valid signals",
     },
-    "ko": {
-        "dashboard_title": "결정 대시보드",
-        "brief_title": "결정 브리핑",
-        "analyzed_prefix": "분석 종목",
-        "stock_unit": "개 종목",
-        "stock_unit_compact": "개",
-        "buy_label": "매수",
-        "watch_label": "관망",
-        "sell_label": "매도",
-        "summary_heading": "분석 결과 요약",
-        "info_heading": "핵심 업데이트",
-        "sentiment_summary_label": "투자심리",
-        "earnings_outlook_label": "실적 전망",
-        "risk_alerts_label": "리스크 경보",
-        "positive_catalysts_label": "긍정 촉매",
-        "latest_news_label": "최신 뉴스",
-        "core_conclusion_heading": "핵심 결론",
-        "one_sentence_label": "한 줄 결론",
-        "time_sensitivity_label": "시의성",
-        "default_time_sensitivity": "이번 주",
-        "position_status_label": "보유 상태",
-        "action_advice_label": "대응 전략",
-        "no_position_label": "미보유",
-        "has_position_label": "보유 중",
-        "continue_holding": "보유 유지",
-        "market_snapshot_heading": "시세 스냅샷",
-        "close_label": "종가",
-        "prev_close_label": "전일 종가",
-        "open_label": "시가",
-        "high_label": "고가",
-        "low_label": "저가",
-        "change_pct_label": "등락률",
-        "change_amount_label": "등락액",
-        "amplitude_label": "변동폭",
-        "volume_label": "거래량",
-        "amount_label": "거래대금",
-        "current_price_label": "현재가",
-        "volume_ratio_label": "거래량비",
-        "turnover_rate_label": "회전율",
-        "source_label": "시세 출처",
-        "data_sources_label": "데이터 출처",
-        "data_perspective_heading": "데이터 분석",
-        "ma_alignment_label": "이동평균 배열",
-        "bullish_alignment_label": "정배열",
-        "yes_label": "예",
-        "no_label": "아니오",
-        "none_label": "없음",
-        "trend_strength_label": "추세 강도",
-        "price_metrics_label": "가격 지표",
-        "ma5_label": "MA5",
-        "ma10_label": "MA10",
-        "ma20_label": "MA20",
-        "bias_ma5_label": "이격도(MA5)",
-        "support_level_label": "지지선",
-        "resistance_level_label": "저항선",
-        "chip_label": "매물대",
-        "phase_decision_heading": "장중 결정 가드레일",
-        "action_window_label": "대응 시점",
-        "immediate_action_label": "현재 행동",
-        "watch_conditions_label": "관찰 조건",
-        "next_check_time_label": "다음 점검",
-        "confidence_reason_label": "신뢰도 근거",
-        "data_limitations_label": "데이터 한계",
-        "battle_plan_heading": "실행 계획",
-        "ideal_buy_label": "이상적 매수가",
-        "secondary_buy_label": "추가 매수가",
-        "stop_loss_label": "손절가",
-        "take_profit_label": "목표가",
-        "suggested_position_label": "비중 제안",
-        "entry_plan_label": "진입 전략",
-        "risk_control_label": "리스크 관리",
-        "checklist_heading": "체크리스트",
-        "failed_checks_heading": "미충족 항목",
-        "history_compare_heading": "과거 신호 비교",
-        "time_label": "시간",
-        "score_label": "점수",
-        "advice_label": "제안",
-        "trend_label": "추세",
-        "generated_at_label": "생성 시각",
-        "report_time_label": "생성",
-        "no_results": "분석 결과 없음",
-        "report_title": "종목 분석 리포트",
-        "avg_score_label": "평균 점수",
-        "action_points_heading": "대응 가격대",
-        "position_advice_heading": "보유 전략",
-        "analysis_model_label": "분석 모델",
-        "not_investment_advice": "AI 생성 참고용이며 투자 권유가 아닙니다.",
-        "details_report_hint": "상세 리포트 보기:",
-        "financial_summary_heading": "재무 요약",
-        "report_date_label": "보고 기준",
-        "revenue_label": "매출액",
-        "net_profit_label": "지배주주 순이익",
-        "operating_cash_flow_label": "영업 현금흐름",
-        "roe_label": "ROE",
-        "revenue_yoy_label": "매출 전년比",
-        "net_profit_yoy_label": "순이익 전년比",
-        "gross_margin_label": "매출총이익률",
-        "shareholder_return_heading": "주주 환원",
-        "ttm_cash_dividend_label": "최근 12개월 주당 현금배당(세전)",
-        "ttm_event_count_label": "최근 12개월 배당 횟수",
-        "ttm_dividend_yield_label": "TTM 배당수익률",
-        "latest_ex_dividend_label": "최근 배당락일",
-        "institutional_flow_heading": "3대 기관 동향",
-        "institutional_flow_note": "양수=순매수, 음수=순매도; 단위: 주.",
-        "inst_foreign_label": "외국인",
-        "inst_trust_label": "투신",
-        "inst_dealer_label": "딜러",
-        "inst_total_label": "3대 기관 합계",
-        "related_boards_heading": "관련 섹터",
-        "industry_boards_heading": "업종 섹터",
-        "concept_boards_heading": "테마 섹터",
-        "board_name_label": "섹터",
-        "board_type_label": "유형",
-        "board_status_label": "섹터 상태",
-        "board_change_pct_label": "섹터 등락률",
-        "leading_board_label": "강세",
-        "lagging_board_label": "약세",
-        "signal_attribution_heading": "신호 귀인 분석",
-        "attribution_weights_label": "귀인 가중치",
-        "technical_indicators_label": "기술 지표",
-        "news_sentiment_label": "뉴스 심리",
-        "fundamentals_label": "펀더멘털",
-        "market_conditions_label": "시장 환경",
-        "strongest_bullish_signal_label": "최강 상승 신호",
-        "strongest_bearish_signal_label": "최강 하락 신호",
-        "strategy_synthesis_heading": "전략 종합",
-        "strategy_final_signal_label": "종합 신호",
-        "strategy_consensus_level_label": "공감도",
-        "strategy_conflict_label": "충돌",
-        "strategy_confidence_label": "신뢰도",
-        "strategy_summary_label": "종합 설명",
-        "strategy_supporting_skills_label": "지지 전략",
-        "strategy_opposing_skills_label": "반대 전략",
-        "strategy_invalid_opinions_label": "추가로 {count}개 전략이 유효한 신호를 생성하지 못했습니다",
-    },
 }
 
 _DECISION_INTENT_NEGATIONS = (
@@ -1166,19 +737,12 @@ _DECISION_INTENT_NEGATIONS = (
     "đừng ",
     "chớ ",
     "hạn chế ",
-    "不",
-    "并非",
-    "并未",
-    "未",
-    "没有",
-    "无",
-    "不是",
     "no ",
     "not ",
     " never",
 )
 
-_DECISION_INTENT_NEGATION_SCOPE_BREAK_CHARS = "，,。；;:!?！？"
+_DECISION_INTENT_NEGATION_SCOPE_BREAK_CHARS = ",;:!?."
 _DECISION_INTENT_NEGATION_CONNECTORS = (
     # Tiếng Việt: các từ nối thường đứng giữa từ phủ định và động từ quyết định
     # ("không nên mua", "chưa vội bán").
@@ -1188,19 +752,6 @@ _DECISION_INTENT_NEGATION_CONNECTORS = (
     "phải",
     "được",
     "tiếp tục",
-    "建议",
-    "应",
-    "应当",
-    "宜",
-    "先",
-    "再",
-    "暂",
-    "暂时",
-    "可",
-    "可以",
-    "需要",
-    "需",
-    "继续",
 )
 
 
@@ -1255,8 +806,6 @@ def is_selectable_report_language_value(value: Optional[str]) -> bool:
 _LABEL_SEPARATOR_BY_LANGUAGE = {
     "vi": ": ",
     "en": ": ",
-    "zh": "：",
-    "ko": "：",
 }
 
 
@@ -1291,22 +840,16 @@ def get_no_data_text(language: Optional[str]) -> str:
 # Analysis error strings reach the Run Flow ``task_failed`` event via ``task.error``.
 _ANALYSIS_ERROR_MESSAGES: Dict[str, Dict[str, str]] = {
     "empty_result": {
-        "zh": "分析股票 {code} 返回空结果",
         "vi": "Phân tích mã {code} trả về kết quả rỗng",
         "en": "Analysis of {code} returned an empty result",
-        "ko": "{code} 분석이 빈 결과를 반환했습니다",
     },
     "failed": {
-        "zh": "分析股票 {code} 失败",
         "vi": "Phân tích mã {code} thất bại",
         "en": "Analysis of {code} failed",
-        "ko": "{code} 분석에 실패했습니다",
     },
     "empty_result_generic": {
-        "zh": "分析返回空结果",
         "vi": "Phân tích trả về kết quả rỗng",
         "en": "Analysis returned an empty result",
-        "ko": "분석이 빈 결과를 반환했습니다",
     },
 }
 
@@ -1340,11 +883,6 @@ def get_pipeline_progress_text(stage: str, language: Optional[str], **params: An
         # Thiếu tham số thì vẫn phải trả chuỗi dùng được, không được ném lỗi ra luồng phân tích.
         # A missing parameter must not raise into the analysis flow.
         return text
-
-
-def get_chip_unavailable_text(language: Optional[str]) -> str:
-    """Return the localized one-line chip distribution fallback text."""
-    return _CHIP_UNAVAILABLE_BY_LANGUAGE[normalize_report_language(language)]
 
 
 def _normalize_lookup_key(value: Any) -> str:
@@ -1426,14 +964,16 @@ def _is_placeholder_stock_name(value: Any, code: Any = None) -> bool:
     lowered = text.lower()
     if lowered in {"n/a", "na", "none", "null", "unknown"}:
         return True
-    if text in {"-", "—", "未知", "待补充"}:
+    if text in {"-", "—"}:
         return True
 
     code_text = str(code or "").strip()
     if code_text and lowered == code_text.lower():
         return True
 
-    return text.startswith("股票")
+    from src.data.stock_mapping import PLACEHOLDER_NAME_PREFIXES
+
+    return text.startswith(PLACEHOLDER_NAME_PREFIXES)
 
 
 def _translate_from_map(
@@ -1470,9 +1010,6 @@ def localize_trend_prediction(value: Any, language: Optional[str]) -> str:
     raw_text = str(value or "").strip()
     if not raw_text:
         return raw_text
-    if normalized_language == "zh":
-        if re.search(r"[\u4e00-\u9fff]", raw_text):
-            return raw_text
     return _translate_from_map(
         value,
         normalized_language,
@@ -1561,44 +1098,20 @@ def localize_volume_status(value: Any, language: Optional[str]) -> str:
     return raw_text
 
 
-def localize_chip_health(value: Any, language: Optional[str]) -> str:
-    """Translate chip health labels between Chinese and English when recognized."""
-    return _translate_from_map(
-        value,
-        language,
-        canonical_map=_CHIP_HEALTH_CANONICAL_MAP,
-        translations=_CHIP_HEALTH_TRANSLATIONS,
-    )
+def is_placeholder_value(value: Any) -> bool:
+    """Trả True khi trường bị điền rỗng hoặc placeholder "không có dữ liệu".
 
-
-def is_chip_placeholder_value(value: Any) -> bool:
-    """Return True for chip fields filled with empty or no-data placeholders."""
+    Return True for fields filled with empty or no-data placeholders.
+    """
     if value is None:
         return True
     if isinstance(value, (int, float)) and value == 0:
         return True
     text = str(value).strip()
     lowered = text.lower()
-    if lowered in _CHIP_PLACEHOLDER_EXACT:
+    if lowered in _PLACEHOLDER_EXACT:
         return True
-    return any(hint in lowered for hint in _CHIP_PLACEHOLDER_HINTS)
-
-
-def is_chip_structure_unavailable(chip_data: Any) -> bool:
-    """Detect chip_structure blocks that contain only unavailable placeholders."""
-    if not isinstance(chip_data, dict) or not chip_data:
-        return False
-    for key in _CHIP_UNAVAILABLE_REASON_KEYS:
-        raw = chip_data.get(key)
-        if isinstance(raw, bool):
-            if raw:
-                return True
-            continue
-        if str(raw or "").strip():
-            return True
-    if any(key in chip_data for key in _CHIP_METRIC_KEYS):
-        return all(is_chip_placeholder_value(chip_data.get(key)) for key in _CHIP_METRIC_KEYS)
-    return all(is_chip_placeholder_value(value) for value in chip_data.values())
+    return any(hint in lowered for hint in _PLACEHOLDER_HINTS)
 
 
 def localize_strategy_conflict_description(conflict_type: Any, language: Optional[str]) -> str:
@@ -1608,31 +1121,23 @@ def localize_strategy_conflict_description(conflict_type: Any, language: Optiona
     translations = {
         "directional_opposition": {
             "vi": "Các chiến lược cho tín hiệu trái chiều: một số nghiêng về tăng, một số nghiêng về giảm, nên hạ mức độ chắc chắn của kết luận tổng hợp.",
-            "zh": "策略方向出现对立：部分策略看多，部分策略看空，综合结论需要降低确定性。",
             "en": "Strategy directions diverge: some strategies are bullish while others are bearish, so conviction should be reduced.",
-            "ko": "전략 방향이 엇갈립니다. 일부 전략은 상승을, 일부 전략은 하락을 보며 확신도를 낮춰야 합니다.",
         },
         "wide_score_dispersion": {
             "vi": "Điểm tín hiệu giữa các chiến lược phân tán rộng, cho thấy bất đồng đáng kể về cấu trúc thị trường.",
-            "zh": "策略信号分数分布较宽，说明多策略对行情结构存在明显分歧。",
             "en": "Strategy signal scores are widely dispersed, indicating meaningful disagreement on market structure.",
-            "ko": "전략 신호 점수 분포가 넓어 시장 구조에 대한 전략 간 이견이 큽니다.",
         },
         "high_confidence_dissent": {
             "vi": "Có chiến lược thiểu số với độ tin cậy cao lệch rõ khỏi tín hiệu tổng hợp; cần giữ lại quan điểm phản biện này.",
-            "zh": "存在高置信少数派策略与综合信号明显不一致，应保留反方观点。",
             "en": "A high-confidence minority strategy materially disagrees with the final signal and should be kept as a dissenting view.",
-            "ko": "높은 확신도의 소수 전략이 종합 신호와 크게 달라 반대 관점으로 보존해야 합니다.",
         },
         "adjustment_contradiction": {
             "vi": "Hướng cộng/trừ điểm giữa các chiến lược mâu thuẫn nhau, cho thấy khác biệt lớn khi chấm điểm biên cho cùng một mã.",
-            "zh": "策略加减分方向相互矛盾，说明不同策略对同一标的的边际评分分歧较大。",
             "en": "Strategy score adjustments contradict each other, showing large disagreement in marginal scoring.",
-            "ko": "전략별 점수 조정 방향이 서로 충돌해 동일 종목의 한계 평가 차이가 큽니다.",
         },
     }
     localized = translations.get(key, {})
-    return localized.get(lang) or localized.get("zh") or key
+    return localized.get(lang) or localized.get("vi") or key
 
 
 def normalize_strategy_synthesis_payload(value: Any) -> Dict[str, Any]:
@@ -1700,7 +1205,7 @@ def localize_strategy_synthesis_summary(strategy_synthesis: Any, language: Optio
     consensus_level = localize_consensus_level(strategy_synthesis.get("consensus_level"), lang)
     conflict_severity = localize_conflict_severity(strategy_synthesis.get("conflict_severity"), lang)
     conflict_count = strategy_synthesis.get("conflict_count", 0)
-    if lang == "vi":
+    if lang != "en":
         if conflict_count:
             base = (
                 f"Tổng hợp từ {opinion_count} chiến lược: tín hiệu tổng hợp là {final_signal}, "
@@ -1718,35 +1223,7 @@ def localize_strategy_synthesis_summary(strategy_synthesis: Any, language: Optio
         else:
             base = f"Strategy synthesis from {opinion_count} strategies: final signal is {final_signal}, consensus level is {consensus_level}, with no detected conflicts."
         return base
-    if lang == "ko":
-        if conflict_count:
-            base = f"{opinion_count}개 전략의 종합 판단: 종합 신호는 {final_signal}, 공감도는 {consensus_level}, 충돌 강도는 {conflict_severity}입니다."
-        else:
-            base = f"{opinion_count}개 전략의 종합 판단: 종합 신호는 {final_signal}, 공감도는 {consensus_level}, 감지된 전략 충돌은 없습니다."
-        return base
-    if conflict_count:
-        base = f"来自 {opinion_count} 个策略的综合判断：综合信号为{final_signal}，共识度为{consensus_level}，冲突强度为{conflict_severity}。"
-    else:
-        base = f"来自 {opinion_count} 个策略的综合判断：综合信号为{final_signal}，共识度为{consensus_level}，未检测到策略冲突。"
     return base
-
-
-def get_chip_unavailable_reason(value: Any, language: Optional[str]) -> str:
-    """Return the explicit or default chip unavailable reason for rendering."""
-    if not isinstance(value, dict) or not value:
-        return ""
-    for key in _CHIP_UNAVAILABLE_REASON_KEYS:
-        raw = value.get(key)
-        if isinstance(raw, bool):
-            if raw:
-                return get_chip_unavailable_text(language)
-            continue
-        text = str(raw or "").strip()
-        if text:
-            return text
-    if is_chip_structure_unavailable(value):
-        return get_chip_unavailable_text(language)
-    return ""
 
 
 def localize_bias_status(value: Any, language: Optional[str]) -> str:
@@ -1857,34 +1334,12 @@ def get_sentiment_label(score: int, language: Optional[str]) -> str:
             return "Bi quan"
         return "Rất bi quan"
 
-    if normalized == "en":
-        if score >= 80:
-            return "Very Bullish"
-        if score >= 60:
-            return "Bullish"
-        if score >= 40:
-            return "Neutral"
-        if score >= 20:
-            return "Bearish"
-        return "Very Bearish"
-
-    if normalized == "ko":
-        if score >= 80:
-            return "매우 낙관"
-        if score >= 60:
-            return "낙관"
-        if score >= 40:
-            return "중립"
-        if score >= 20:
-            return "비관"
-        return "매우 비관"
-
     if score >= 80:
-        return "极度乐观"
+        return "Very Bullish"
     if score >= 60:
-        return "乐观"
+        return "Bullish"
     if score >= 40:
-        return "中性"
+        return "Neutral"
     if score >= 20:
-        return "悲观"
-    return "极度悲观"
+        return "Bearish"
+    return "Very Bearish"

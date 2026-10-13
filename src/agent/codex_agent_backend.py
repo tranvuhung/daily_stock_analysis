@@ -40,20 +40,20 @@ _NO_STOCK_SCOPE_INSTRUCTION = (
 )
 
 _PUBLIC_ERROR_MESSAGES = {
-    "command_not_found": "运行 DSA 的设备找不到 Codex，请前往 Agent 设置检查安装和 PATH。",
-    "login_required": "Codex 尚未登录，请在运行 DSA 的设备上完成登录后重试。",
-    "capability_unsupported": "当前 Codex 安装不满足问股所需能力，请前往 Agent 设置查看运行状态。",
-    "unsupported_agent_arch": "Codex 本地 Agent 当前只支持单 Agent 问股。",
-    "approval_required": "Codex 请求了本次问股不允许的授权，运行已安全停止。",
-    "timeout": "Codex Agent 本次问股超时，请稍后重试或检查 Agent 整体超时设置。",
-    "cancelled": "本次 Codex Agent 问股已取消。",
-    "output_too_large": "Codex Agent 返回的数据超过安全限制，本次问股已停止。",
-    "resource_limit_exceeded": "Codex Agent 本次问股超过允许的工作量，后台任务已结束。",
-    "tool_roundtrip_failed": "Codex Agent 本次未能完成只读数据调用，请根据提示重试或切换到默认模型。",
-    "resource_cleanup_failed": "Codex Agent 未能安全结束本次后台任务，请重启 DSA 服务后再试。",
-    "invalid_timeout": "Codex Agent 必须设置明确的整体时限，请在 Agent 设置中填写大于 0 的秒数。",
+    "command_not_found": "Máy chạy DSA không tìm thấy Codex. Vui lòng vào cài đặt Agent để kiểm tra việc cài đặt và PATH.",
+    "login_required": "Codex chưa đăng nhập. Vui lòng đăng nhập trên máy chạy DSA rồi thử lại.",
+    "capability_unsupported": "Bản cài đặt Codex hiện tại không đáp ứng khả năng cần cho Hỏi đáp cổ phiếu. Vui lòng vào cài đặt Agent để xem trạng thái.",
+    "unsupported_agent_arch": "Codex Agent cục bộ hiện chỉ hỗ trợ Hỏi đáp cổ phiếu với một Agent.",
+    "approval_required": "Codex đã yêu cầu quyền không được phép trong lượt Hỏi đáp này; phiên chạy đã được dừng an toàn.",
+    "timeout": "Codex Agent đã quá thời gian trong lượt Hỏi đáp này. Vui lòng thử lại sau hoặc kiểm tra cài đặt thời gian chờ tổng của Agent.",
+    "cancelled": "Lượt Hỏi đáp với Codex Agent đã bị huỷ.",
+    "output_too_large": "Dữ liệu Codex Agent trả về vượt giới hạn an toàn; lượt Hỏi đáp đã dừng.",
+    "resource_limit_exceeded": "Codex Agent đã vượt khối lượng công việc cho phép trong lượt này; tác vụ nền đã kết thúc.",
+    "tool_roundtrip_failed": "Codex Agent không hoàn tất được lệnh gọi dữ liệu chỉ đọc. Vui lòng thử lại theo hướng dẫn hoặc chuyển sang model mặc định.",
+    "resource_cleanup_failed": "Codex Agent không thể kết thúc an toàn tác vụ nền. Vui lòng khởi động lại dịch vụ DSA rồi thử lại.",
+    "invalid_timeout": "Codex Agent phải có giới hạn thời gian tổng rõ ràng. Vui lòng nhập số giây lớn hơn 0 trong cài đặt Agent.",
 }
-_DEFAULT_PUBLIC_ERROR_MESSAGE = "Codex Agent 暂时无法完成本次问股，请前往 Agent 设置查看运行状态。"
+_DEFAULT_PUBLIC_ERROR_MESSAGE = "Codex Agent tạm thời không thể hoàn tất lượt Hỏi đáp này. Vui lòng vào cài đặt Agent để xem trạng thái."
 
 
 class CodexAgentBackend(AgentBackend):
@@ -95,7 +95,7 @@ class CodexAgentBackend(AgentBackend):
             return self._error_result(request, "cancelled", "Agent request was cancelled", total_steps=0)
 
         if request.progress_callback:
-            request.progress_callback(stream_event("thinking", step=1, message="正在连接 Codex…"))
+            request.progress_callback(stream_event("thinking", step=1, message="Đang kết nối Codex…"))
 
         tool_context = ToolAccessContext(
             stock_scope=request.stock_scope,
@@ -173,7 +173,7 @@ class CodexAgentBackend(AgentBackend):
                 client.request_timeout = remaining_timeout()
                 client.inject_history(thread_id, request.history_messages)
                 if request.progress_callback:
-                    request.progress_callback(stream_event("thinking", step=1, message="正在准备分析…"))
+                    request.progress_callback(stream_event("thinking", step=1, message="Đang chuẩn bị phân tích…"))
                 turn_timeout = remaining_timeout()
                 tool_context.timeout_seconds = turn_timeout
                 turn = client.run_turn(
@@ -222,7 +222,7 @@ class CodexAgentBackend(AgentBackend):
         if usage and should_persist_usage_telemetry(usage):
             persist_llm_usage(usage, model, call_type="agent")
         if request.progress_callback:
-            request.progress_callback(stream_event("generating", step=1, message="正在整理分析结果…"))
+            request.progress_callback(stream_event("generating", step=1, message="Đang tổng hợp kết quả phân tích…"))
         messages = [
             *request.history_messages,
             {"role": "user", "content": request.user_message},

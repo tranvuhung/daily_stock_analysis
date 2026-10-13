@@ -24,20 +24,20 @@ from src.services.run_diagnostics import activate_run_diagnostic_context, curren
 
 def _analysis_result() -> AnalysisResult:
     return AnalysisResult(
-        code="600519",
-        name="贵州茅台",
+        code="HPG",
+        name="Hòa Phát",
         sentiment_score=62,
-        trend_prediction="震荡",
-        operation_advice="持有",
+        trend_prediction="Đi ngang",
+        operation_advice="Nắm giữ",
         decision_type="hold",
     )
 
 
 def _phase_payload() -> dict:
     return {
-        "market": "cn",
+        "market": "vn",
         "phase": "intraday",
-        "market_local_time": "2026-03-27T10:00:00+08:00",
+        "market_local_time": "2026-03-27T10:00:00+07:00",
         "session_date": "2026-03-27",
         "effective_daily_bar_date": "2026-03-26",
         "is_trading_day": True,
@@ -55,12 +55,11 @@ def _make_pipeline(*, agent_mode: bool = False, save_context_snapshot: bool = Tr
     pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)
     pipeline.config = SimpleNamespace(
         enable_realtime_quote=False,
-        enable_chip_distribution=False,
         realtime_source_priority=[],
         agent_mode=agent_mode,
         agent_skills=[],
         save_context_snapshot=save_context_snapshot,
-        report_language="zh",
+        report_language="vi",
         report_integrity_enabled=False,
         fundamental_stage_timeout_seconds=1,
     )
@@ -71,28 +70,24 @@ def _make_pipeline(*, agent_mode: bool = False, save_context_snapshot: bool = Tr
     pipeline.progress_callback = None
     pipeline.analysis_skills = None
     pipeline.analysis_phase = "auto"
-    pipeline.social_sentiment_service = None
 
     pipeline.fetcher_manager = MagicMock()
-    pipeline.fetcher_manager.get_stock_name.return_value = "贵州茅台"
+    pipeline.fetcher_manager.get_stock_name.return_value = "Hòa Phát"
     pipeline.fetcher_manager.get_realtime_quote.return_value = None
-    pipeline.fetcher_manager.get_chip_distribution.return_value = None
     pipeline.fetcher_manager.get_fundamental_context.return_value = {
-        "market": "cn",
-        "coverage": {"boards": "not_supported"},
+        "market": "vn",
         "source_chain": [],
     }
     pipeline.fetcher_manager.build_failed_fundamental_context.return_value = {
-        "market": "cn",
-        "coverage": {"boards": "not_supported"},
+        "market": "vn",
         "source_chain": [],
     }
 
     pipeline.db = MagicMock()
     pipeline.db.get_data_range.return_value = []
     pipeline.db.get_analysis_context.return_value = {
-        "code": "600519",
-        "stock_name": "贵州茅台",
+        "code": "HPG",
+        "stock_name": "Hòa Phát",
         "date": "2026-03-26",
         "today": {},
         "yesterday": {},
@@ -109,15 +104,15 @@ def _make_pipeline(*, agent_mode: bool = False, save_context_snapshot: bool = Tr
 
 
 class PipelineMarketPhaseContextTestCase(unittest.TestCase):
-    def test_jp_kr_analysis_context_uses_daily_fetcher_when_db_context_missing(self):
+    def test_vn_analysis_context_uses_daily_fetcher_when_db_context_missing(self):
         pipeline = _make_pipeline()
         pipeline.db.get_analysis_context.side_effect = [None, None]
         pipeline.db.save_daily_data.return_value = 2
-        pipeline.db._analyze_ma_status.return_value = "短期向好"
+        pipeline.db._analyze_ma_status.return_value = "Ngắn hạn tích cực"
         daily_df = pd.DataFrame(
             [
                 {
-                    "code": "7203.T",
+                    "code": "HPG",
                     "date": "2026-06-17",
                     "open": 2862.5,
                     "high": 2863.5,
@@ -132,7 +127,7 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
                     "volume_ratio": 1.0,
                 },
                 {
-                    "code": "7203.T",
+                    "code": "HPG",
                     "date": "2026-06-18",
                     "open": 2800.0,
                     "high": 2807.0,
@@ -148,20 +143,20 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
                 },
             ]
         )
-        pipeline.fetcher_manager.get_daily_data.return_value = (daily_df, "YfinanceFetcher")
+        pipeline.fetcher_manager.get_daily_data.return_value = (daily_df, "VciFetcher")
 
-        context = pipeline._get_analysis_context_with_market_fallback("7203.T")
+        context = pipeline._get_analysis_context_with_market_fallback("HPG")
 
         self.assertIsNotNone(context)
         self.assertNotIn("data_missing", context)
-        self.assertEqual(context["code"], "7203.T")
+        self.assertEqual(context["code"], "HPG")
         self.assertEqual(context["date"], "2026-06-18")
         self.assertEqual(context["today"]["close"], 2793.5)
         self.assertEqual(context["yesterday"]["close"], 2810.0)
         self.assertEqual(context["price_change_ratio"], -0.59)
-        self.assertEqual(context["ma_status"], "短期向好")
-        pipeline.fetcher_manager.get_daily_data.assert_called_once_with("7203.T", days=60)
-        pipeline.db.save_daily_data.assert_called_once_with(daily_df, "7203.T", "YfinanceFetcher")
+        self.assertEqual(context["ma_status"], "Ngắn hạn tích cực")
+        pipeline.fetcher_manager.get_daily_data.assert_called_once_with("HPG", days=60)
+        pipeline.db.save_daily_data.assert_called_once_with(daily_df, "HPG", "VciFetcher")
 
     def test_process_single_stock_propagates_current_time_to_analyze_stock(self):
         pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)
@@ -172,21 +167,21 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         pipeline.analyze_stock = MagicMock(
             return_value=SimpleNamespace(
                 success=True,
-                operation_advice="持有",
+                operation_advice="Nắm giữ",
                 sentiment_score=60,
             )
         )
         frozen_time = datetime(2026, 3, 27, 10, 0)
 
         pipeline.process_single_stock(
-            "600519",
+            "HPG",
             report_type=ReportType.SIMPLE,
             analysis_query_id="q-frozen",
             current_time=frozen_time,
         )
 
         pipeline.analyze_stock.assert_called_once_with(
-            "600519",
+            "HPG",
             ReportType.SIMPLE,
             query_id="q-frozen",
             current_time=frozen_time,
@@ -196,39 +191,36 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         pipeline = _make_pipeline(agent_mode=False, save_context_snapshot=True)
         pipeline.query_source = "api"
         phase = _phase_payload()
-        context = {"code": "600519", "today": {"close": 1800.0}, "yesterday": {}}
-        enhanced_context = {"realtime": {"price": 1888.0}, "stock_name": "贵州茅台"}
+        context = {"code": "HPG", "today": {"close": 1800.0}, "yesterday": {}}
+        enhanced_context = {"realtime": {"price": 1888.0}, "stock_name": "Hòa Phát"}
         realtime_quote = {"price": 1888.0, "source": "test"}
         trend_result = {"ma_trend": "up"}
-        chip_data = {"concentration": "medium"}
-        fundamental_context = {"market": "cn", "pe": 28}
+        fundamental_context = {"market": "vn", "pe": 28}
         news_context = "news summary"
 
         artifacts = pipeline._build_legacy_analysis_artifacts(
-            code="600519",
-            stock_name="贵州茅台",
-            market="cn",
+            code="HPG",
+            stock_name="Hòa Phát",
+            market="vn",
             phase=phase,
             context=context,
             enhanced_context=enhanced_context,
             realtime_quote=realtime_quote,
             trend_result=trend_result,
-            chip_data=chip_data,
             fundamental_context=fundamental_context,
             news_context=news_context,
             news_result_count=3,
             query_id="q-legacy",
         )
 
-        self.assertEqual(artifacts.code, "600519")
-        self.assertEqual(artifacts.stock_name, "贵州茅台")
-        self.assertEqual(artifacts.market, "cn")
+        self.assertEqual(artifacts.code, "HPG")
+        self.assertEqual(artifacts.stock_name, "Hòa Phát")
+        self.assertEqual(artifacts.market, "vn")
         self.assertIs(artifacts.phase, phase)
         self.assertIs(artifacts.base_context, context)
         self.assertIs(artifacts.enhanced_context, enhanced_context)
         self.assertIs(artifacts.realtime_quote, realtime_quote)
         self.assertIs(artifacts.trend_result, trend_result)
-        self.assertIs(artifacts.chip_data, chip_data)
         self.assertIs(artifacts.fundamental_context, fundamental_context)
         self.assertEqual(artifacts.news_context, news_context)
         self.assertEqual(artifacts.news_result_count, 3)
@@ -237,59 +229,13 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             {"query_id": "q-legacy", "trigger_source": "api"},
         )
 
-    def test_artifacts_mark_chip_not_supported_outside_a_share_and_for_index(self):
-        # Chip chỉ có cho A-share: VN/US/chỉ số phải ra chip_not_supported, không phải
-        # chip_distribution_missing. Chip is A-share only.
-        from src.schemas.analysis_context_pack import ContextFieldStatus
-        from src.services.analysis_context_builder import AnalysisContextBuilder
-
-        pipeline = _make_pipeline(agent_mode=False, save_context_snapshot=True)
-        pipeline.query_source = "api"
-        common = dict(
-            phase=None,
-            context={"code": "X", "today": {}, "yesterday": {}},
-            enhanced_context={},
-            realtime_quote=None,
-            trend_result=None,
-            chip_data=None,
-            fundamental_context=None,
-            news_context=None,
-            news_result_count=None,
-            query_id="q-chip",
-        )
-        cases = [
-            ("HPG", "vn", False, "chip_not_supported", ContextFieldStatus.NOT_SUPPORTED),
-            ("AAPL", "us", False, "chip_not_supported", ContextFieldStatus.NOT_SUPPORTED),
-            ("sh000001", "cn", True, "chip_not_supported", ContextFieldStatus.NOT_SUPPORTED),
-            ("600519", "cn", False, "chip_distribution_missing", ContextFieldStatus.MISSING),
-        ]
-        for code, market, is_index, reason, status in cases:
-            with self.subTest(code=code):
-                artifacts = pipeline._build_legacy_analysis_artifacts(
-                    code=code, stock_name=code, market=market, is_index=is_index, **common
-                )
-                chip = AnalysisContextBuilder.build(artifacts).blocks["chip"]
-                self.assertEqual(chip.status, status)
-                self.assertEqual(chip.items["chip_distribution"].missing_reason, reason)
-
-        agent_artifacts = pipeline._build_agent_analysis_artifacts(
-            code="HPG",
-            stock_name="HPG",
-            market="vn",
-            phase=None,
-            initial_context={},
-            fundamental_context=None,
-            query_id="q-chip-agent",
-        )
-        self.assertTrue(agent_artifacts.metadata.get("chip_not_supported"))
-
     def test_context_snapshot_strips_runtime_portfolio_context(self):
         pipeline = _make_pipeline(agent_mode=False, save_context_snapshot=True)
 
         snapshot = pipeline._build_context_snapshot(
             enhanced_context={
-                "code": "600519",
-                "daily_market_context_summary": "仅供prompt注入，不应入库存档",
+                "code": "HPG",
+                "daily_market_context_summary": "Chỉ dùng để chèn vào prompt, không lưu vào lịch sử",
                 "market_phase_context": _phase_payload(),
                 "portfolio_context": {
                     "quantity": 100,
@@ -299,7 +245,6 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             },
             news_content=None,
             realtime_quote=None,
-            chip_data=None,
         )
 
         self.assertNotIn("market_phase_context", snapshot["enhanced_context"])
@@ -313,34 +258,32 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         phase = _phase_payload()
         realtime_quote = {"price": 1888.0, "source": "test"}
         trend_result = {"ma_trend": "up"}
-        chip_distribution = {"concentration": "medium"}
-        fundamental_context = {"market": "cn", "pe": 28}
+        fundamental_context = {"market": "vn", "pe": 28}
         initial_context = {
             "realtime_quote": realtime_quote,
             "trend_result": trend_result,
-            "chip_distribution": chip_distribution,
             "news_context": "prefetched news",
         }
 
         artifacts = pipeline._build_agent_analysis_artifacts(
-            code="600519",
-            stock_name="贵州茅台",
-            market="cn",
+            code="HPG",
+            stock_name="Hòa Phát",
+            market="vn",
             phase=phase,
             initial_context=initial_context,
             fundamental_context=fundamental_context,
             query_id="q-agent",
         )
 
-        self.assertEqual(artifacts.code, "600519")
-        self.assertEqual(artifacts.stock_name, "贵州茅台")
-        self.assertEqual(artifacts.market, "cn")
+        self.assertEqual(artifacts.code, "HPG")
+        self.assertEqual(artifacts.stock_name, "Hòa Phát")
+        self.assertEqual(artifacts.market, "vn")
         self.assertIs(artifacts.phase, phase)
         self.assertEqual(
             artifacts.base_context,
             {
-                "code": "600519",
-                "stock_name": "贵州茅台",
+                "code": "HPG",
+                "stock_name": "Hòa Phát",
                 "data_missing": True,
                 "today": {},
                 "yesterday": {},
@@ -350,7 +293,6 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         self.assertEqual(artifacts.enhanced_context, {})
         self.assertIs(artifacts.realtime_quote, realtime_quote)
         self.assertIs(artifacts.trend_result, trend_result)
-        self.assertIs(artifacts.chip_data, chip_distribution)
         self.assertIs(artifacts.fundamental_context, fundamental_context)
         self.assertEqual(artifacts.news_context, "prefetched news")
         self.assertIsNone(artifacts.news_result_count)
@@ -360,15 +302,15 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         )
 
         daily_context = {
-            "code": "600519",
+            "code": "HPG",
             "date": "2026-03-26",
             "today": {"date": "2026-03-26", "close": 1888.0},
             "yesterday": {"date": "2026-03-25", "close": 1860.0},
         }
         artifacts_with_daily = pipeline._build_agent_analysis_artifacts(
-            code="600519",
-            stock_name="贵州茅台",
-            market="cn",
+            code="HPG",
+            stock_name="Hòa Phát",
+            market="vn",
             phase=phase,
             initial_context=initial_context,
             fundamental_context=fundamental_context,
@@ -379,17 +321,6 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         self.assertEqual(artifacts_with_daily.base_context["yesterday"]["close"], 1860.0)
         self.assertNotIn("data_missing", artifacts_with_daily.base_context)
 
-        artifacts_without_chip = pipeline._build_agent_analysis_artifacts(
-            code="600519",
-            stock_name="贵州茅台",
-            market="cn",
-            phase=phase,
-            initial_context={},
-            fundamental_context=fundamental_context,
-            query_id="q-agent-no-chip",
-        )
-        self.assertIsNone(artifacts_without_chip.chip_data)
-
     def test_legacy_pipeline_passes_market_phase_context_to_analyzer_only(self):
         pipeline = _make_pipeline(agent_mode=False, save_context_snapshot=True)
         phase_payload = _phase_payload()
@@ -397,7 +328,7 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
 
         with patch("src.core.pipeline.build_market_phase_context", return_value=phase_context) as mock_build:
             result = pipeline.analyze_stock(
-                "600519",
+                "HPG",
                 ReportType.SIMPLE,
                 "q-runtime",
                 current_time=datetime(2026, 3, 27, 10, 0),
@@ -408,10 +339,10 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         enhanced_context = pipeline.analyzer.analyze.call_args.args[0]
         self.assertEqual(enhanced_context["market_phase_context"], phase_payload)
         analyze_kwargs = pipeline.analyzer.analyze.call_args.kwargs
-        self.assertIn("分析上下文包摘要", analyze_kwargs["analysis_context_pack_summary"])
-        self.assertIn("日线: missing", analyze_kwargs["analysis_context_pack_summary"])
-        self.assertIn("盘中判断受", analyze_kwargs["analysis_context_pack_summary"])
-        self.assertIn("数据质量限制", analyze_kwargs["analysis_context_pack_summary"])
+        self.assertIn("Analysis Context Pack Summary", analyze_kwargs["analysis_context_pack_summary"])
+        self.assertIn("daily bars: missing", analyze_kwargs["analysis_context_pack_summary"])
+        self.assertIn("intraday judgment is limited", analyze_kwargs["analysis_context_pack_summary"])
+        self.assertIn("Data Limitations", analyze_kwargs["analysis_context_pack_summary"])
 
         save_kwargs = pipeline.db.save_analysis_history.call_args.kwargs
         self.assertTrue(save_kwargs["save_snapshot"])
@@ -419,12 +350,12 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         self.assertNotIn("market_phase_context", snapshot["enhanced_context"])
         self.assertNotIn("analysis_context_pack_summary", snapshot["enhanced_context"])
         self.assertEqual(snapshot["market_phase_summary"]["phase"], "intraday")
-        self.assertEqual(snapshot["market_phase_summary"]["market"], "cn")
+        self.assertEqual(snapshot["market_phase_summary"]["market"], "vn")
         self.assertIn("analysis_context_pack_overview", snapshot)
-        self.assertEqual(snapshot["analysis_context_pack_overview"]["subject"]["code"], "600519")
+        self.assertEqual(snapshot["analysis_context_pack_overview"]["subject"]["code"], "HPG")
         self.assertTrue(snapshot["analysis_context_pack_overview"]["blocks"])
         self.assertNotIn("items", str(snapshot["analysis_context_pack_overview"]))
-        self.assertNotIn("分析上下文包摘要", str(snapshot))
+        self.assertNotIn("Analysis Context Pack Summary", str(snapshot))
         self.assertEqual(result.dashboard["phase_decision"]["phase_context"]["phase"], "intraday")
         self.assertIsInstance(result.dashboard["phase_decision"]["watch_conditions"], list)
         self.assertIn("daily_bars: missing", result.dashboard["phase_decision"]["data_limitations"])
@@ -444,7 +375,7 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
 
         with patch("src.core.pipeline.build_market_phase_context", return_value=phase_context) as mock_build:
             result = pipeline.analyze_stock(
-                "600519",
+                "HPG",
                 ReportType.SIMPLE,
                 "q-runtime-phase",
                 current_time=datetime(2026, 3, 27, 16, 0),
@@ -467,7 +398,7 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             self.assertLogs("src.core.pipeline", level="WARNING") as logs,
         ):
             result = pipeline.analyze_stock(
-                "600519",
+                "HPG",
                 ReportType.SIMPLE,
                 "q-runtime",
                 current_time=datetime(2026, 3, 27, 10, 0),
@@ -477,7 +408,7 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         analyze_kwargs = pipeline.analyzer.analyze.call_args.kwargs
         self.assertEqual(analyze_kwargs["analysis_context_pack_summary"], "")
         self.assertIn(
-            "AnalysisContextPack output generation failed for 600519 query_id=q-runtime",
+            "AnalysisContextPack output generation failed for HPG query_id=q-runtime",
             "\n".join(logs.output),
         )
         save_kwargs = pipeline.db.save_analysis_history.call_args.kwargs
@@ -495,10 +426,10 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             success=True,
             content="{}",
             dashboard={
-                "stock_name": "贵州茅台",
+                "stock_name": "Hòa Phát",
                 "sentiment_score": 66,
-                "trend_prediction": "震荡",
-                "operation_advice": "持有",
+                "trend_prediction": "Đi ngang",
+                "operation_advice": "Nắm giữ",
                 "decision_type": "hold",
             },
             provider="test",
@@ -508,13 +439,12 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
 
         with patch("src.agent.factory.build_agent_executor", return_value=executor):
             result = pipeline._analyze_with_agent(
-                code="600519",
+                code="HPG",
                 report_type=ReportType.SIMPLE,
                 query_id="q-agent",
-                stock_name="贵州茅台",
+                stock_name="Hòa Phát",
                 realtime_quote=None,
-                chip_data=None,
-                fundamental_context={"market": "cn"},
+                fundamental_context={"market": "vn"},
                 trend_result=None,
                 market_phase_context=phase_payload,
                 market_phase_summary=phase_payload,
@@ -524,10 +454,10 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         run_context = executor.run.call_args.kwargs["context"]
         self.assertEqual(run_context["market_phase_context"], phase_payload)
         self.assertIn("analysis_context_pack_summary", run_context)
-        self.assertIn("分析上下文包摘要", run_context["analysis_context_pack_summary"])
-        self.assertIn("新闻: missing", run_context["analysis_context_pack_summary"])
-        self.assertIn("盘中判断受", run_context["analysis_context_pack_summary"])
-        self.assertIn("数据质量限制", run_context["analysis_context_pack_summary"])
+        self.assertIn("Analysis Context Pack Summary", run_context["analysis_context_pack_summary"])
+        self.assertIn("news: missing", run_context["analysis_context_pack_summary"])
+        self.assertIn("intraday judgment is limited", run_context["analysis_context_pack_summary"])
+        self.assertIn("Data Limitations", run_context["analysis_context_pack_summary"])
 
         save_kwargs = pipeline.db.save_analysis_history.call_args.kwargs
         self.assertTrue(save_kwargs["save_snapshot"])
@@ -537,26 +467,26 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         self.assertIn("analysis_context_pack_overview", save_kwargs["context_snapshot"])
         self.assertEqual(
             save_kwargs["context_snapshot"]["analysis_context_pack_overview"]["subject"]["code"],
-            "600519",
+            "HPG",
         )
         self.assertTrue(save_kwargs["context_snapshot"]["analysis_context_pack_overview"]["blocks"])
         self.assertNotIn(
             "items",
             str(save_kwargs["context_snapshot"]["analysis_context_pack_overview"]),
         )
-        self.assertNotIn("分析上下文包摘要", str(save_kwargs["context_snapshot"]))
+        self.assertNotIn("Analysis Context Pack Summary", str(save_kwargs["context_snapshot"]))
         enhanced_context = save_kwargs["context_snapshot"]["enhanced_context"]
-        self.assertEqual(enhanced_context["stock_name"], "贵州茅台")
+        self.assertEqual(enhanced_context["stock_name"], "Hòa Phát")
         self.assertEqual(result.dashboard["phase_decision"]["phase_context"]["phase"], "intraday")
         self.assertIsInstance(result.dashboard["phase_decision"]["watch_conditions"], list)
 
     def test_agent_pack_summary_uses_prefetched_news_context_when_present(self):
         pipeline = _make_pipeline(agent_mode=True, save_context_snapshot=True)
         pipeline._ensure_agent_history = MagicMock()
-        pipeline.social_sentiment_service = MagicMock()
-        pipeline.social_sentiment_service.is_available = True
-        pipeline.social_sentiment_service.get_social_context.return_value = (
-            "Social sentiment raw payload should stay in legacy news_context only."
+        # Bằng chứng tin tức cục bộ được chèn sẵn vào news_context.
+        # Local intelligence evidence is prefetched into news_context.
+        pipeline._load_persisted_intelligence_context = MagicMock(
+            return_value="Local news raw payload should stay in legacy news_context only."
         )
 
         from src.agent.executor import AgentResult
@@ -566,10 +496,10 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             success=True,
             content="{}",
             dashboard={
-                "stock_name": "Apple",
+                "stock_name": "FPT Corp",
                 "sentiment_score": 66,
-                "trend_prediction": "震荡",
-                "operation_advice": "持有",
+                "trend_prediction": "Đi ngang",
+                "operation_advice": "Nắm giữ",
                 "decision_type": "hold",
             },
             provider="test",
@@ -577,24 +507,23 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
 
         with patch("src.agent.factory.build_agent_executor", return_value=executor):
             result = pipeline._analyze_with_agent(
-                code="AAPL",
+                code="FPT",
                 report_type=ReportType.SIMPLE,
                 query_id="q-agent-news",
-                stock_name="Apple",
+                stock_name="FPT Corp",
                 realtime_quote=None,
-                chip_data=None,
-                fundamental_context={"market": "us"},
+                fundamental_context={"market": "vn"},
                 trend_result=None,
                 market_phase_context=_phase_payload(),
             )
 
         self.assertIsNotNone(result)
         run_context = executor.run.call_args.kwargs["context"]
-        self.assertIn("Social sentiment raw payload", run_context["news_context"])
+        self.assertIn("Local news raw payload", run_context["news_context"])
         summary = run_context["analysis_context_pack_summary"]
-        self.assertIn("新闻: available", summary)
-        self.assertNotIn("新闻: missing", summary)
-        self.assertNotIn("Social sentiment raw payload", summary)
+        self.assertIn("news: available", summary)
+        self.assertNotIn("news: missing", summary)
+        self.assertNotIn("Local news raw payload", summary)
 
         save_kwargs = pipeline.db.save_analysis_history.call_args.kwargs
         self.assertNotIn("analysis_context_pack_summary", save_kwargs["context_snapshot"])
@@ -608,8 +537,8 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         pipeline = _make_pipeline(agent_mode=True, save_context_snapshot=True)
         pipeline._ensure_agent_history = MagicMock()
         pipeline.db.get_analysis_context.return_value = {
-            "code": "600519",
-            "stock_name": "贵州茅台",
+            "code": "HPG",
+            "stock_name": "Hòa Phát",
             "date": "2026-06-02",
             "today": {"date": "2026-06-02", "close": 6.67, "volume": 1000.0},
             "yesterday": {"date": "2026-06-01", "close": 6.78, "volume": 900.0},
@@ -622,10 +551,10 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             success=True,
             content="{}",
             dashboard={
-                "stock_name": "贵州茅台",
+                "stock_name": "Hòa Phát",
                 "sentiment_score": 66,
-                "trend_prediction": "震荡",
-                "operation_advice": "持有",
+                "trend_prediction": "Đi ngang",
+                "operation_advice": "Nắm giữ",
                 "decision_type": "hold",
             },
             provider="test",
@@ -633,24 +562,23 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
 
         with patch("src.agent.factory.build_agent_executor", return_value=executor):
             result = pipeline._analyze_with_agent(
-                code="600519",
+                code="HPG",
                 report_type=ReportType.SIMPLE,
                 query_id="q-agent-daily",
-                stock_name="贵州茅台",
+                stock_name="Hòa Phát",
                 realtime_quote=None,
-                chip_data=None,
-                fundamental_context={"market": "cn"},
+                fundamental_context={"market": "vn"},
                 trend_result=None,
                 market_phase_context=_phase_payload(),
                 market_phase_summary=_phase_payload(),
             )
 
         self.assertIsNotNone(result)
-        pipeline._ensure_agent_history.assert_called_once_with("600519")
-        pipeline.db.get_analysis_context.assert_called_with("600519")
+        pipeline._ensure_agent_history.assert_called_once_with("HPG")
+        pipeline.db.get_analysis_context.assert_called_with("HPG")
 
         run_context = executor.run.call_args.kwargs["context"]
-        self.assertIn("日线: available", run_context["analysis_context_pack_summary"])
+        self.assertIn("daily bars: available", run_context["analysis_context_pack_summary"])
         self.assertNotIn("daily_bars_missing", run_context["analysis_context_pack_summary"])
 
         save_kwargs = pipeline.db.save_analysis_history.call_args.kwargs
@@ -675,10 +603,10 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             success=True,
             content="{}",
             dashboard={
-                "stock_name": "贵州茅台",
+                "stock_name": "Hòa Phát",
                 "sentiment_score": 66,
-                "trend_prediction": "震荡",
-                "operation_advice": "持有",
+                "trend_prediction": "Đi ngang",
+                "operation_advice": "Nắm giữ",
                 "decision_type": "hold",
             },
             provider="test",
@@ -693,13 +621,12 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             self.assertLogs("src.core.pipeline", level="WARNING") as logs,
         ):
             result = pipeline._analyze_with_agent(
-                code="600519",
+                code="HPG",
                 report_type=ReportType.SIMPLE,
                 query_id="q-agent",
-                stock_name="贵州茅台",
+                stock_name="Hòa Phát",
                 realtime_quote=None,
-                chip_data=None,
-                fundamental_context={"market": "cn"},
+                fundamental_context={"market": "vn"},
                 trend_result=None,
                 market_phase_context=phase_payload,
                 market_phase_summary=phase_payload,
@@ -709,7 +636,7 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         run_context = executor.run.call_args.kwargs["context"]
         self.assertNotIn("analysis_context_pack_summary", run_context)
         self.assertIn(
-            "AnalysisContextPack output generation failed for 600519 query_id=q-agent",
+            "AnalysisContextPack output generation failed for HPG query_id=q-agent",
             "\n".join(logs.output),
         )
         save_kwargs = pipeline.db.save_analysis_history.call_args.kwargs
@@ -723,7 +650,7 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         token = activate_run_diagnostic_context(
             trace_id="trace-agent",
             query_id="q-agent",
-            stock_code="600519",
+            stock_code="HPG",
             trigger_source="api",
         )
         try:
@@ -733,10 +660,10 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
                 success=True,
                 content="{}",
                 dashboard={
-                    "stock_name": "贵州茅台",
+                    "stock_name": "Hòa Phát",
                     "sentiment_score": 70,
-                    "trend_prediction": "震荡",
-                    "operation_advice": "持有",
+                    "trend_prediction": "Đi ngang",
+                    "operation_advice": "Nắm giữ",
                     "decision_type": "hold",
                 },
                 provider="test",
@@ -746,13 +673,12 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
 
             with patch("src.agent.factory.build_agent_executor", return_value=executor):
                 result = pipeline._analyze_with_agent(
-                    code="600519",
+                    code="HPG",
                     report_type=ReportType.SIMPLE,
                     query_id="q-agent",
-                    stock_name="贵州茅台",
+                    stock_name="Hòa Phát",
                     realtime_quote=None,
-                    chip_data=None,
-                    fundamental_context={"market": "cn"},
+                    fundamental_context={"market": "vn"},
                     trend_result=None,
                     market_phase_context=phase_payload,
                 )
@@ -787,10 +713,10 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             success=True,
             content="{}",
             dashboard={
-                "stock_name": "贵州茅台",
+                "stock_name": "Hòa Phát",
                 "sentiment_score": 66,
-                "trend_prediction": "震荡",
-                "operation_advice": "持有",
+                "trend_prediction": "Đi ngang",
+                "operation_advice": "Nắm giữ",
                 "decision_type": "hold",
             },
             provider="test",
@@ -799,18 +725,17 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         token = activate_run_diagnostic_context(
             trace_id="trace-agent",
             query_id="q-agent",
-            stock_code="600519",
+            stock_code="HPG",
             trigger_source="system",
         )
         try:
             with patch("src.agent.factory.build_agent_executor", return_value=executor):
                 result = pipeline._analyze_with_agent(
-                    code="600519",
+                    code="HPG",
                     report_type=ReportType.SIMPLE,
                     query_id="q-agent",
-                    stock_name="贵州茅台",
+                    stock_name="Hòa Phát",
                     realtime_quote=None,
-                    chip_data=None,
                 )
 
             self.assertIsNotNone(result)
@@ -877,7 +802,7 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             patch("src.core.pipeline.extract_and_persist_from_analysis_result") as mock_extract,
         ):
             result = pipeline.analyze_stock(
-                "600519",
+                "HPG",
                 ReportType.SIMPLE,
                 "q-runtime-signal",
                 current_time=datetime(2026, 3, 27, 10, 0),
@@ -894,43 +819,11 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         # No index target -> no market override.
         self.assertIsNone(kwargs["market_override"])
 
-    def test_legacy_pipeline_passes_market_override_cn_for_index_target(self):
-        """V8 — index targets must reach extract_and_persist_from_analysis_result
-        with market_override="cn" via the real wiring (not a mocked helper)."""
-        from src.services.stock_list_parser import ParseStatus, parse_analysis_target
-
-        target = parse_analysis_target("sh000016")
-        self.assertEqual(target.asset_type, ParseStatus.INDEX)
-
-        pipeline = _make_pipeline(agent_mode=False, save_context_snapshot=True)
-        pipeline.trace_id = "trace-index"
-        pipeline.query_source = "api"
-        pipeline.db.save_analysis_history.return_value = 42
-        phase_context = SimpleNamespace(to_dict=MagicMock(return_value=_phase_payload()))
-
-        with (
-            patch("src.core.pipeline.build_market_phase_context", return_value=phase_context),
-            patch("src.core.pipeline.extract_and_persist_from_analysis_result") as mock_extract,
-        ):
-            result = pipeline.analyze_stock(
-                "sh000016",
-                ReportType.SIMPLE,
-                "q-index-signal",
-                current_time=datetime(2026, 3, 27, 10, 0),
-                analysis_target=target,
-            )
-
-        self.assertIsNotNone(result)
-        mock_extract.assert_called_once()
-        kwargs = mock_extract.call_args.kwargs
-        self.assertEqual(kwargs["source_report_id"], 42)
-        self.assertEqual(kwargs["market_override"], "cn")
-
     def test_legacy_pipeline_passes_market_override_none_for_stock_target(self):
         """Stock targets (and analysis_target=None) must keep market_override=None."""
         from src.services.stock_list_parser import parse_analysis_target
 
-        target = parse_analysis_target("600519")
+        target = parse_analysis_target("HPG")
         self.assertEqual(target.asset_type, "stock")
 
         pipeline = _make_pipeline(agent_mode=False, save_context_snapshot=True)
@@ -944,7 +837,7 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             patch("src.core.pipeline.extract_and_persist_from_analysis_result") as mock_extract,
         ):
             result = pipeline.analyze_stock(
-                "600519",
+                "HPG",
                 ReportType.SIMPLE,
                 "q-stock-signal",
                 current_time=datetime(2026, 3, 27, 10, 0),
@@ -965,7 +858,7 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             patch("src.core.pipeline.extract_and_persist_from_analysis_result") as mock_extract,
         ):
             result = pipeline.analyze_stock(
-                "600519",
+                "HPG",
                 ReportType.SIMPLE,
                 "q-runtime-no-signal",
                 current_time=datetime(2026, 3, 27, 10, 0),
@@ -988,7 +881,7 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             patch("src.core.pipeline.record_history_run") as mock_record,
         ):
             result = pipeline.analyze_stock(
-                "600519",
+                "HPG",
                 ReportType.SIMPLE,
                 "q-runtime-extract-fail",
                 current_time=datetime(2026, 3, 27, 10, 0),
@@ -1011,10 +904,10 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             success=True,
             content="{}",
             dashboard={
-                "stock_name": "贵州茅台",
+                "stock_name": "Hòa Phát",
                 "sentiment_score": 66,
-                "trend_prediction": "震荡",
-                "operation_advice": "持有",
+                "trend_prediction": "Đi ngang",
+                "operation_advice": "Nắm giữ",
                 "decision_type": "hold",
             },
             provider="test",
@@ -1027,13 +920,12 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             patch("src.core.pipeline.extract_and_persist_from_analysis_result") as mock_extract,
         ):
             result = pipeline._analyze_with_agent(
-                code="600519",
+                code="HPG",
                 report_type=ReportType.SIMPLE,
                 query_id="q-agent-signal",
-                stock_name="贵州茅台",
+                stock_name="Hòa Phát",
                 realtime_quote=None,
-                chip_data=None,
-                fundamental_context={"market": "cn"},
+                fundamental_context={"market": "vn"},
                 trend_result=None,
                 market_phase_context=phase_payload,
                 market_phase_summary=phase_payload,

@@ -173,7 +173,7 @@ class ToolRegistry:
 
         registry = ToolRegistry()
         registry.register(tool_def)
-        registry.execute("get_realtime_quote", stock_code="600519")
+        registry.execute("get_realtime_quote", stock_code="HPG")
     """
 
     def __init__(self, category_timeout_map: Optional[Dict[str, float]] = None):

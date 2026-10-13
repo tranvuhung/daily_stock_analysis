@@ -69,7 +69,7 @@ class _SuccessfulDailyFetcher(BaseFetcher):
 
 
 class _Quote:
-    name = "贵州茅台"
+    name = "Hòa Phát"
     price = 100
     change_pct = 1.2
     volume_ratio = 1.1
@@ -84,8 +84,8 @@ class _Quote:
         return True
 
 
-class _EfinanceRealtimeFetcher(BaseFetcher):
-    name = "EfinanceFetcher"
+class _SsiRealtimeFetcher(BaseFetcher):
+    name = "SsiFetcher"
     priority = 0
 
     def _fetch_raw_data(self, stock_code: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -125,7 +125,7 @@ class RunDiagnosticsP1TestCase(unittest.TestCase):
         AnalysisTaskQueue._instance = self._original_queue
 
     def test_task_info_exposes_trace_id_for_sse_and_status_payloads(self) -> None:
-        task = TaskInfo(task_id="task-1", stock_code="600519")
+        task = TaskInfo(task_id="task-1", stock_code="HPG")
 
         self.assertEqual(task.to_dict()["trace_id"], "task-1")
         self.assertEqual(task.copy().trace_id, "task-1")
@@ -152,11 +152,11 @@ class RunDiagnosticsP1TestCase(unittest.TestCase):
         token = activate_run_diagnostic_context(
             trace_id="trace-daily",
             query_id="query-daily",
-            stock_code="600519",
+            stock_code="HPG",
             trigger_source="api",
         )
         try:
-            df, source = manager.get_daily_data("600519")
+            df, source = manager.get_daily_data("HPG")
             snapshot = current_diagnostic_snapshot()
         finally:
             reset_run_diagnostic_context(token)
@@ -172,20 +172,20 @@ class RunDiagnosticsP1TestCase(unittest.TestCase):
         self.assertEqual(runs[1]["record_count"], 1)
 
     def test_realtime_quote_provider_run_records_success(self) -> None:
-        manager = DataFetcherManager(fetchers=[_EfinanceRealtimeFetcher()])
+        manager = DataFetcherManager(fetchers=[_SsiRealtimeFetcher()])
         config = SimpleNamespace(
             enable_realtime_quote=True,
-            realtime_source_priority="efinance",
+            realtime_source_priority="ssi",
         )
         token = activate_run_diagnostic_context(
             trace_id="trace-realtime",
             query_id="query-realtime",
-            stock_code="600519",
+            stock_code="HPG",
             trigger_source="api",
         )
         try:
             with patch("src.config.get_config", return_value=config):
-                quote = manager.get_realtime_quote("600519")
+                quote = manager.get_realtime_quote("HPG")
             snapshot = current_diagnostic_snapshot()
         finally:
             reset_run_diagnostic_context(token)
@@ -194,7 +194,7 @@ class RunDiagnosticsP1TestCase(unittest.TestCase):
         runs = snapshot["provider_runs"]
         self.assertEqual(len(runs), 1)
         self.assertEqual(runs[0]["data_type"], "realtime_quote")
-        self.assertEqual(runs[0]["provider"], "EfinanceFetcher")
+        self.assertEqual(runs[0]["provider"], "SsiFetcher")
         self.assertTrue(runs[0]["success"])
 
     def test_record_provider_run_sanitizes_sensitive_text(self) -> None:
@@ -222,7 +222,7 @@ class RunDiagnosticsP1TestCase(unittest.TestCase):
             trace_id="trace-flow",
             task_id="task-flow",
             query_id="task-flow",
-            stock_code="600519",
+            stock_code="HPG",
             event_sink=events.append,
         )
         try:
@@ -263,7 +263,7 @@ class RunDiagnosticsP1TestCase(unittest.TestCase):
             trace_id="trace-provider-attempts",
             task_id="task-provider-attempts",
             query_id="query-provider-attempts",
-            stock_code="600519",
+            stock_code="HPG",
             event_sink=events.append,
         )
         try:

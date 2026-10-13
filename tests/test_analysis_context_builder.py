@@ -26,14 +26,6 @@ class _FakeTrend:
         return dict(self.data)
 
 
-@dataclass
-class _FakeChip:
-    data: dict
-
-    def to_dict(self) -> dict:
-        return dict(self.data)
-
-
 class _BrokenTrend:
     def to_dict(self) -> dict:
         raise RuntimeError("broken trend artifact")
@@ -45,12 +37,12 @@ class _InvalidTrend:
 
 
 def _quote(
-    source: RealtimeSource = RealtimeSource.AKSHARE_EM,
+    source: RealtimeSource = RealtimeSource.TVSI_MQTT,
     **overrides,
 ) -> UnifiedRealtimeQuote:
     return UnifiedRealtimeQuote(
-        code="600519",
-        name="贵州茅台",
+        code="HPG",
+        name="Hòa Phát",
         source=source,
         price=1880.0,
         change_pct=1.2,
@@ -62,13 +54,13 @@ def _quote(
 
 def _artifacts(**overrides) -> PipelineAnalysisArtifacts:
     data = {
-        "code": "600519",
-        "stock_name": "贵州茅台",
-        "market": "cn",
-        "phase": {"market": "cn", "phase": "intraday"},
+        "code": "HPG",
+        "stock_name": "Hòa Phát",
+        "market": "vn",
+        "phase": {"market": "vn", "phase": "intraday"},
         "base_context": {
-            "code": "600519",
-            "stock_name": "贵州茅台",
+            "code": "HPG",
+            "stock_name": "Hòa Phát",
             "date": "2026-05-24",
             "today": {"date": "2026-05-24", "close": 1880.0},
             "yesterday": {"date": "2026-05-23", "close": 1860.0},
@@ -79,19 +71,10 @@ def _artifacts(**overrides) -> PipelineAnalysisArtifacts:
         "realtime_quote": _quote(),
         "trend_result": _FakeTrend(
             {
-                "trend_status": "多头排列",
+                "trend_status": "MA xếp tăng",
                 "ma5": 1800.0,
                 "ma10": 1780.0,
                 "rsi_6": 66.0,
-            }
-        ),
-        "chip_data": _FakeChip(
-            {
-                "code": "600519",
-                "date": "2026-05-24",
-                "source": "akshare",
-                "profit_ratio": 0.72,
-                "avg_cost": 1700.0,
             }
         ),
         "fundamental_context": {
@@ -99,7 +82,7 @@ def _artifacts(**overrides) -> PipelineAnalysisArtifacts:
             "coverage": {"valuation": "ok"},
             "source_chain": [{"provider": "fundamental_pipeline", "result": "ok"}],
         },
-        "news_context": "公司公告与行业新闻摘要",
+        "news_context": "Tóm tắt công bố doanh nghiệp và tin ngành",
         "news_result_count": 3,
         "metadata": {"query_id": "q-1", "trigger_source": "api"},
     }
@@ -110,7 +93,7 @@ def _artifacts(**overrides) -> PipelineAnalysisArtifacts:
 def test_quote_block_maps_available_missing_fallback_and_explicit_stale() -> None:
     available = AnalysisContextBuilder.build(_artifacts()).blocks["quote"]
     assert available.status == ContextFieldStatus.AVAILABLE
-    assert available.source == "akshare_em"
+    assert available.source == "tvsi_mqtt"
     assert available.items["price"].value == 1880.0
 
     missing = AnalysisContextBuilder.build(
@@ -155,21 +138,21 @@ def test_quote_block_maps_realtime_metadata_and_status_priority() -> None:
                 provider_timestamp="2026-05-31T10:00:00+00:00",
                 is_stale=False,
                 stale_seconds=5,
-                fallback_from="efinance",
+                fallback_from="ssi",
             )
         )
     ).blocks["quote"]
 
     assert fallback.status == ContextFieldStatus.FALLBACK
-    assert fallback.source == "akshare_em"
+    assert fallback.source == "tvsi_mqtt"
     assert fallback.timestamp == "2026-05-31T10:00:00+00:00"
     assert fallback.items["price"].timestamp == "2026-05-31T10:00:00+00:00"
-    assert fallback.items["price"].fallback_from == "efinance"
+    assert fallback.items["price"].fallback_from == "ssi"
     assert fallback.metadata["fetched_at"] == "2026-05-31T10:00:05+00:00"
     assert fallback.metadata["provider_timestamp"] == "2026-05-31T10:00:00+00:00"
     assert fallback.metadata["is_stale"] is False
     assert fallback.metadata["stale_seconds"] == 5
-    assert fallback.metadata["fallback_from"] == "efinance"
+    assert fallback.metadata["fallback_from"] == "ssi"
 
     stale = AnalysisContextBuilder.build(
         _artifacts(
@@ -178,14 +161,14 @@ def test_quote_block_maps_realtime_metadata_and_status_priority() -> None:
                 provider_timestamp="2026-05-31T10:00:00+00:00",
                 is_stale=True,
                 stale_seconds=900,
-                fallback_from="efinance",
+                fallback_from="ssi",
             )
         )
     ).blocks["quote"]
 
     assert stale.status == ContextFieldStatus.STALE
-    assert stale.source == "akshare_em"
-    assert stale.items["price"].fallback_from == "efinance"
+    assert stale.source == "tvsi_mqtt"
+    assert stale.items["price"].fallback_from == "ssi"
     assert "quote_stale" in stale.warnings
 
 
@@ -193,7 +176,7 @@ def test_quote_block_ignores_invalid_or_legacy_timestamp_metadata() -> None:
     block = AnalysisContextBuilder.build(
         _artifacts(
             realtime_quote={
-                "source": "akshare_em",
+                "source": "tvsi_mqtt",
                 "price": 1870.0,
                 "provider_timestamp": "not-a-date",
                 "fetched_at": "2026-05-31T10:00:05+00:00",
@@ -211,7 +194,7 @@ def test_quote_block_ignores_invalid_or_legacy_timestamp_metadata() -> None:
     legacy_timestamp_only = AnalysisContextBuilder.build(
         _artifacts(
             realtime_quote={
-                "source": "akshare_em",
+                "source": "tvsi_mqtt",
                 "price": 1870.0,
                 "timestamp": 0,
             }
@@ -223,7 +206,7 @@ def test_quote_block_ignores_invalid_or_legacy_timestamp_metadata() -> None:
     space_separated_timestamp = AnalysisContextBuilder.build(
         _artifacts(
             realtime_quote={
-                "source": "akshare_em",
+                "source": "tvsi_mqtt",
                 "price": 1870.0,
                 "provider_timestamp": "2026-05-31 10:00:00",
             }
@@ -237,8 +220,8 @@ def test_daily_bars_uses_base_context_and_keeps_dates_out_of_timestamp() -> None
     pack = AnalysisContextBuilder.build(
         _artifacts(
             base_context={
-                "code": "600519",
-                "stock_name": "贵州茅台",
+                "code": "HPG",
+                "stock_name": "Hòa Phát",
                 "date": "2026-05-24",
                 "data_missing": True,
                 "today": {},
@@ -332,24 +315,6 @@ def test_technical_missing_and_realtime_overlay_statuses_are_explicit() -> None:
     assert explicit_block.metadata["estimated_fields"] == ["close", "ma5"]
 
 
-def test_chip_missing_defaults_to_missing_and_explicit_not_supported() -> None:
-    missing = AnalysisContextBuilder.build(_artifacts(chip_data=None)).blocks["chip"]
-    assert missing.status == ContextFieldStatus.MISSING
-    assert (
-        missing.items["chip_distribution"].missing_reason
-        == "chip_distribution_missing"
-    )
-
-    not_supported = AnalysisContextBuilder.build(
-        _artifacts(chip_data=None, metadata={"chip_not_supported": True})
-    ).blocks["chip"]
-    assert not_supported.status == ContextFieldStatus.NOT_SUPPORTED
-    assert (
-        not_supported.items["chip_distribution"].missing_reason
-        == "chip_not_supported"
-    )
-
-
 @pytest.mark.parametrize(
     ("payload_status", "expected_status"),
     (
@@ -427,7 +392,6 @@ def test_data_quality_scores_fixed_blocks_and_limits_auxiliary_missing() -> None
         "technical": 100,
         "news": 100,
         "fundamentals": 100,
-        "chip": 100,
     }
     assert pack.data_quality.limitations == []
 
@@ -444,7 +408,8 @@ def test_data_quality_scores_fixed_blocks_and_limits_auxiliary_missing() -> None
     )
     assert failed_fundamentals.blocks["fundamentals"].status == ContextFieldStatus.FETCH_FAILED
     assert failed_fundamentals.data_quality.block_scores["fundamentals"] == 25
-    assert failed_fundamentals.data_quality.overall_score == 92
+    # Trọng số: quote25 + daily25 + technical25 + news10 + fundamentals15(x0.25) = 88.75.
+    assert failed_fundamentals.data_quality.overall_score == 89
     assert failed_fundamentals.data_quality.level == "good"
     assert failed_fundamentals.data_quality.limitations == ["fundamentals: fetch_failed"]
 
@@ -463,9 +428,9 @@ def test_portfolio_block_is_auxiliary_and_does_not_change_quality_score() -> Non
             portfolio_context={
                 "account_id": 7,
                 "account_name": "Main",
-                "symbol": "600519",
-                "market": "cn",
-                "currency": "CNY",
+                "symbol": "HPG",
+                "market": "vn",
+                "currency": "VND",
                 "quantity": 100,
                 "avg_cost": 100.0,
                 "total_cost": 10000.0,
@@ -493,12 +458,12 @@ def test_portfolio_block_is_auxiliary_and_does_not_change_quality_score() -> Non
 def test_build_batch_returns_one_pack_per_artifact() -> None:
     packs = AnalysisContextBuilder.build_batch(
         [
-            _artifacts(code="600519", stock_name="贵州茅台"),
-            _artifacts(code="000001", stock_name="平安银行"),
+            _artifacts(code="HPG", stock_name="Hòa Phát"),
+            _artifacts(code="FPT", stock_name="FPT Corp"),
         ]
     )
 
-    assert [pack.subject.code for pack in packs] == ["600519", "000001"]
+    assert [pack.subject.code for pack in packs] == ["HPG", "FPT"]
 
 
 def test_builder_output_safe_dict_redacts_sensitive_mapping_keys() -> None:

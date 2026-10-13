@@ -41,33 +41,33 @@ def isolated_db(tmp_path):
 
 def _result(**overrides) -> AnalysisResult:
     result = AnalysisResult(
-        code="600519",
-        name="贵州茅台",
+        code="HPG",
+        name="Hòa Phát",
         sentiment_score=82,
-        trend_prediction="看多",
-        operation_advice="买入",
+        trend_prediction="Tăng",
+        operation_advice="Mua",
         decision_type="buy",
-        confidence_level="高",
-        analysis_summary="趋势确认，量价配合。",
-        risk_warning="跌破支撑需止损",
-        report_language="zh",
+        confidence_level="Cao",
+        analysis_summary="Xu hướng được xác nhận, giá và khối lượng đồng thuận.",
+        risk_warning="Thủng hỗ trợ cần cắt lỗ",
+        report_language="vi",
     )
     result.dashboard = {
         "battle_plan": {
             "sniper_points": {
-                "ideal_buy": "理想买入点：1700元",
-                "secondary_buy": "1680-1690（回踩MA5附近）",
-                "stop_loss": "止损位：1600元",
-                "take_profit": "目标位：1850元",
+                "ideal_buy": "Điểm mua lý tưởng: 27500 đồng",
+                "secondary_buy": "27300-27400 (gần MA5)",
+                "stop_loss": "Cắt lỗ: 26000 đồng",
+                "take_profit": "Mục tiêu: 30000 đồng",
             },
-            "action_checklist": ["放量突破前高", "回踩不破MA10"],
+            "action_checklist": ["Bứt phá đỉnh cũ với khối lượng lớn", "Điều chỉnh không thủng MA10"],
         },
         "phase_decision": {
-            "watch_conditions": ["盘中量能继续放大"],
+            "watch_conditions": ["Khối lượng trong phiên tiếp tục tăng"],
         },
         "intelligence": {
-            "risk_alerts": ["估值偏高"],
-            "positive_catalysts": ["业绩超预期"],
+            "risk_alerts": ["Định giá cao"],
+            "positive_catalysts": ["Kết quả kinh doanh vượt kỳ vọng"],
         },
     }
     for key, value in overrides.items():
@@ -84,33 +84,6 @@ def test_build_payload_rejects_invalid_profile_source() -> None:
             report_type="simple",
             profile_source="typo",
         )
-
-
-def test_build_payload_includes_tw_market() -> None:
-    """A Taiwan (`tw`) stock is now first-class on the DecisionSignal write path
-    (service VALID_MARKETS accepts tw, matching jp/kr).
-
-    Regression guard for the data-layer MVP follow-up: the analysis pipeline
-    auto-extracts a DecisionSignal after history save, so tw must PRODUCE a
-    payload (market == "tw") rather than be silently dropped by _normalize_market.
-    A plain action ("buy") is set so the path reaches the market mapping.
-    """
-    result = _result(code="2330.TW", name="台积电")
-
-    payload = build_decision_signal_payload_from_report(
-        result,
-        context_snapshot=None,
-        portfolio_context=None,
-        source_report_id=None,
-        trace_id="trace-tw",
-        query_source="api",
-        report_type="full",
-        profile_source=BUILD_PROFILE_SOURCE,
-    )
-
-    assert payload is not None
-    assert payload["market"] == "tw"
-    assert payload["action"] == "buy"
 
 
 def test_build_payload_maps_report_context_and_price_plan() -> None:
@@ -141,9 +114,9 @@ def test_build_payload_maps_report_context_and_price_plan() -> None:
     )
 
     assert payload is not None
-    assert payload["stock_code"] == "600519"
-    assert payload["stock_name"] == "贵州茅台"
-    assert payload["market"] == "cn"
+    assert payload["stock_code"] == "HPG"
+    assert payload["stock_name"] == "Hòa Phát"
+    assert payload["market"] == "vn"
     assert payload["source_type"] == "analysis"
     assert payload["source_report_id"] == 88
     assert payload["trace_id"] == "trace-88"
@@ -153,15 +126,15 @@ def test_build_payload_maps_report_context_and_price_plan() -> None:
     assert payload["confidence"] == 0.8
     assert payload["score"] == 82
     assert payload["market_phase"] == "intraday"
-    assert payload["entry_low"] == 1690.0
-    assert payload["entry_high"] == 1700.0
-    assert payload["stop_loss"] == 1600.0
-    assert payload["target_price"] == 1850.0
+    assert payload["entry_low"] == 27400.0
+    assert payload["entry_high"] == 27500.0
+    assert payload["stop_loss"] == 26000.0
+    assert payload["target_price"] == 30000.0
     assert payload["data_quality_summary"]["overall_score"] == 91
-    assert payload["watch_conditions"] == ["盘中量能继续放大"]
-    assert payload["risk_summary"] == ["跌破支撑需止损", "估值偏高"]
-    assert payload["catalyst_summary"] == ["业绩超预期"]
-    assert payload["metadata"]["report_confidence_level"] == "高"
+    assert payload["watch_conditions"] == ["Khối lượng trong phiên tiếp tục tăng"]
+    assert payload["risk_summary"] == ["Thủng hỗ trợ cần cắt lỗ", "Định giá cao"]
+    assert payload["catalyst_summary"] == ["Kết quả kinh doanh vượt kỳ vọng"]
+    assert payload["metadata"]["report_confidence_level"] == "Cao"
     assert payload["metadata"]["decision_profile"] == "balanced"
     assert payload["metadata"]["profile_source"] == BUILD_PROFILE_SOURCE
     assert payload["metadata"]["profile_policy_version"] == "decision-profile-v1"
@@ -177,58 +150,12 @@ def test_build_payload_maps_report_context_and_price_plan() -> None:
     assert payload["metadata"]["holding_state"] == "holding"
 
 
-def test_build_payload_adds_market_structure_metadata() -> None:
-    context_snapshot = {
-        "market_structure_context": {
-            "schema_version": "market-structure-v1",
-            "status": "partial",
-            "market": "cn",
-            "market_theme_context": {
-                "schema_version": "market-theme-v1",
-                "status": "partial",
-                "market": "cn",
-            },
-            "stock_market_position": {
-                "schema_version": "stock-market-position-v1",
-                "status": "partial",
-                "stock_code": "300024",
-                "market": "cn",
-                "primary_theme": {"name": "机器人概念"},
-                "theme_phase": "accelerating",
-                "stock_role": "follower",
-                "risk_tags": [{"code": "theme_data_partial", "message": "partial"}],
-            },
-        }
-    }
-
-    payload = build_decision_signal_payload_from_report(
-        _result(code="300024", name="机器人"),
-        context_snapshot=context_snapshot,
-        source_report_id=91,
-        trace_id="trace-market-structure",
-        query_source="api",
-        report_type="full",
-        profile_source=BUILD_PROFILE_SOURCE,
-    )
-
-    assert payload is not None
-    metadata = payload["metadata"]
-    assert metadata["market_structure_version"] == "market-structure-v1"
-    assert metadata["market_theme_version"] == "market-theme-v1"
-    assert metadata["stock_market_position_version"] == "stock-market-position-v1"
-    assert metadata["market_structure_status"] == "partial"
-    assert metadata["primary_theme"] == "机器人概念"
-    assert metadata["theme_phase"] == "accelerating"
-    assert metadata["stock_role"] == "follower"
-    assert metadata["market_structure_risk_tags"] == ["theme_data_partial"]
-
-
 def test_build_payload_uses_result_fallbacks_and_optional_catalysts() -> None:
-    result = _result(confidence_level="低")
+    result = _result(confidence_level="Thấp")
     result.dashboard = {
         "battle_plan": {
-            "sniper_points": {"ideal_buy": "1700"},
-            "action_checklist": ["等待回踩确认"],
+            "sniper_points": {"ideal_buy": "27500"},
+            "action_checklist": ["Chờ điều chỉnh xác nhận"],
         },
         "intelligence": {},
     }
@@ -248,9 +175,9 @@ def test_build_payload_uses_result_fallbacks_and_optional_catalysts() -> None:
     assert payload is not None
     assert payload["market_phase"] == "postmarket"
     assert payload["data_quality_summary"] == {"level": "limited"}
-    assert payload["entry_low"] == 1700.0
+    assert payload["entry_low"] == 27500.0
     assert "entry_high" not in payload
-    assert payload["watch_conditions"] == ["等待回踩确认"]
+    assert payload["watch_conditions"] == ["Chờ điều chỉnh xác nhận"]
     assert "catalyst_summary" not in payload
     assert payload["trigger_source"] == "system"
     assert payload["confidence"] == 0.4
@@ -260,7 +187,7 @@ def test_build_payload_uses_result_fallbacks_and_optional_catalysts() -> None:
 def test_build_payload_aligns_high_neutral_action_without_guardrail_to_buy() -> None:
     result = _result(
         sentiment_score=72,
-        operation_advice="持有",
+        operation_advice="Nắm giữ",
         decision_type="hold",
         action=None,
     )
@@ -275,7 +202,7 @@ def test_build_payload_aligns_high_neutral_action_without_guardrail_to_buy() -> 
 
     assert payload is not None
     assert payload["action"] == "buy"
-    assert payload["action_label"] == "买入"
+    assert payload["action_label"] == "Mua"
     assert payload["metadata"]["raw_action"] == "hold"
     assert payload["metadata"]["final_action"] == "buy"
     assert payload["metadata"]["action_adjustment_reason"] == "canonical_score_alignment"
@@ -285,7 +212,7 @@ def test_build_payload_aligns_high_neutral_action_without_guardrail_to_buy() -> 
 def test_build_payload_keeps_high_neutral_action_with_guardrail_reason() -> None:
     result = _result(
         sentiment_score=72,
-        operation_advice="持有/观望待回踩",
+        operation_advice="Quan sát, chờ điều chỉnh về hỗ trợ",
         decision_type="hold",
         action=None,
     )
@@ -300,16 +227,16 @@ def test_build_payload_keeps_high_neutral_action_with_guardrail_reason() -> None
 
     assert payload is not None
     assert payload["action"] == "watch"
-    assert payload["action_label"] == "观望"
+    assert payload["action_label"] == "Quan sát"
     assert payload["metadata"]["raw_action"] == "watch"
     assert payload["metadata"]["final_action"] == "watch"
-    assert payload["metadata"]["guardrail_reason"] == "持有/观望待回踩"
+    assert payload["metadata"]["guardrail_reason"] == "Quan sát, chờ điều chỉnh về hỗ trợ"
 
 
 def test_build_payload_uses_stability_calibration_raw_and_adjusted_scores() -> None:
     result = _result(
         sentiment_score=59,
-        operation_advice="观望",
+        operation_advice="Quan sát",
         decision_type="hold",
         action=None,
     )
@@ -318,7 +245,7 @@ def test_build_payload_uses_stability_calibration_raw_and_adjusted_scores() -> N
         "raw_score": 72,
         "adjusted_score": 59,
         "final_action": "watch",
-        "guardrail_reason": "资金流较弱，按风险规则降级",
+        "guardrail_reason": "Dòng tiền yếu, hạ cấp theo quy tắc rủi ro",
     }
     result.dashboard = dashboard
 
@@ -337,13 +264,13 @@ def test_build_payload_uses_stability_calibration_raw_and_adjusted_scores() -> N
     assert payload["metadata"]["score_scale"]["score_band"] == "40-59"
     assert payload["metadata"]["raw_action"] == "watch"
     assert payload["metadata"]["final_action"] == "watch"
-    assert payload["metadata"]["guardrail_reason"] == "资金流较弱，按风险规则降级"
+    assert payload["metadata"]["guardrail_reason"] == "Dòng tiền yếu, hạ cấp theo quy tắc rủi ro"
 
 
 def test_build_payload_aligns_low_neutral_action_to_reduce() -> None:
     result = _result(
         sentiment_score=28,
-        operation_advice="观望",
+        operation_advice="Quan sát",
         decision_type="hold",
         action=None,
     )
@@ -358,7 +285,7 @@ def test_build_payload_aligns_low_neutral_action_to_reduce() -> None:
 
     assert payload is not None
     assert payload["action"] == "reduce"
-    assert payload["action_label"] == "减仓"
+    assert payload["action_label"] == "Giảm tỷ trọng"
     assert payload["metadata"]["raw_action"] == "watch"
     assert payload["metadata"]["final_action"] == "reduce"
     assert payload["metadata"]["score_scale"]["score_band"] == "20-39"
@@ -389,7 +316,7 @@ def test_build_payload_maps_secondary_only_entry_to_entry_high() -> None:
     result = _result()
     result.dashboard = {
         "battle_plan": {
-            "sniper_points": {"secondary_buy": "次优买入点：1680元"},
+            "sniper_points": {"secondary_buy": "Điểm mua thứ cấp: 27300 đồng"},
         },
     }
 
@@ -403,7 +330,7 @@ def test_build_payload_maps_secondary_only_entry_to_entry_high() -> None:
 
     assert payload is not None
     assert "entry_low" not in payload
-    assert payload["entry_high"] == 1680.0
+    assert payload["entry_high"] == 27300.0
 
 
 def test_build_payload_reuses_shared_sniper_fallback_paths(isolated_db) -> None:
@@ -413,10 +340,10 @@ def test_build_payload_reuses_shared_sniper_fallback_paths(isolated_db) -> None:
         "dashboard": {
             "battle_plan": {
                 "sniper_points": {
-                    "ideal_buy": "1690",
-                    "secondary_buy": "1705",
-                    "stop_loss": "1620",
-                    "take_profit": "1880",
+                    "ideal_buy": "27400",
+                    "secondary_buy": "27600",
+                    "stop_loss": "26200",
+                    "take_profit": "30500",
                 }
             }
         }
@@ -433,19 +360,19 @@ def test_build_payload_reuses_shared_sniper_fallback_paths(isolated_db) -> None:
 
     assert payload is not None
     assert stored_points == {
-        "ideal_buy": 1690.0,
-        "secondary_buy": 1705.0,
-        "stop_loss": 1620.0,
-        "take_profit": 1880.0,
+        "ideal_buy": 27400.0,
+        "secondary_buy": 27600.0,
+        "stop_loss": 26200.0,
+        "take_profit": 30500.0,
     }
-    assert payload["entry_low"] == 1690.0
-    assert payload["entry_high"] == 1705.0
-    assert payload["stop_loss"] == 1620.0
-    assert payload["target_price"] == 1880.0
+    assert payload["entry_low"] == 27400.0
+    assert payload["entry_high"] == 27600.0
+    assert payload["stop_loss"] == 26200.0
+    assert payload["target_price"] == 30500.0
 
 
 def test_build_payload_skips_ambiguous_action_non_stock_and_unknown_market() -> None:
-    ambiguous = _result(operation_advice="买盘增强，继续观察", action=None)
+    ambiguous = _result(operation_advice="Mua vào hoặc bán ra tùy diễn biến", action=None)
     assert build_decision_signal_payload_from_report(
         ambiguous,
         trace_id="trace-1",
@@ -454,7 +381,7 @@ def test_build_payload_skips_ambiguous_action_non_stock_and_unknown_market() -> 
         profile_source=BUILD_PROFILE_SOURCE,
     ) is None
 
-    market_review = _result(operation_advice="买入", action="buy")
+    market_review = _result(operation_advice="Mua", action="buy")
     assert build_decision_signal_payload_from_report(
         market_review,
         trace_id="trace-2",
@@ -463,7 +390,7 @@ def test_build_payload_skips_ambiguous_action_non_stock_and_unknown_market() -> 
         profile_source=BUILD_PROFILE_SOURCE,
     ) is None
 
-    unknown_market = _result(code="UNKNOWN", operation_advice="买入", action="buy")
+    unknown_market = _result(code="UNKNOWN", operation_advice="Mua", action="buy")
     assert build_decision_signal_payload_from_report(
         unknown_market,
         trace_id="trace-3",
@@ -476,7 +403,7 @@ def test_build_payload_skips_ambiguous_action_non_stock_and_unknown_market() -> 
 def test_extract_and_persist_reuses_service_dedup_and_sanitization(isolated_db) -> None:
     service = DecisionSignalService(db_manager=isolated_db)
     result = _result(
-        analysis_summary="趋势确认 token=super-secret",
+        analysis_summary="Xu hướng xác nhận token=super-secret",
     )
 
     first = extract_and_persist_from_analysis_result(
@@ -506,7 +433,7 @@ def test_extract_and_persist_reuses_service_dedup_and_sanitization(isolated_db) 
     assert second is not None
     assert first["created"] is True
     assert second["created"] is False
-    assert first["item"]["reason"] == "趋势确认 token=[REDACTED]"
+    assert first["item"]["reason"] == "Xu hướng xác nhận token=[REDACTED]"
     assert first["item"]["plan_quality"] == "complete"
     assert first["item"]["horizon"] == "intraday"
     assert first["item"]["expires_at"] is not None
@@ -523,26 +450,26 @@ def test_extract_and_persist_reuses_service_dedup_and_sanitization(isolated_db) 
     assert persisted["metadata"]["decision_signal_metadata_version"] == "decision-signal-metadata-v1"
     assert "scoring_version" not in persisted["metadata"]
     assert "scoring_breakdown" not in persisted["metadata"]
-    assert persisted["reason"] == "趋势确认 token=[REDACTED]"
-    assert persisted["entry_low"] == 1690.0
-    assert persisted["entry_high"] == 1700.0
+    assert persisted["reason"] == "Xu hướng xác nhận token=[REDACTED]"
+    assert persisted["entry_low"] == 27400.0
+    assert persisted["entry_high"] == 27500.0
 
 
 def test_extract_and_persist_reuses_stability_score_metadata(isolated_db) -> None:
     service = DecisionSignalService(db_manager=isolated_db)
     result = _result(
         sentiment_score=59,
-        operation_advice="观望",
+        operation_advice="Quan sát",
         decision_type="hold",
         action=None,
-        confidence_level="中",
+        confidence_level="Trung bình",
     )
     dashboard = result.dashboard or {}
     dashboard["decision_score_calibration"] = {
         "raw_score": 72,
         "adjusted_score": 59,
         "final_action": "watch",
-        "guardrail_reason": "资金流较弱，按风险规则降级",
+        "guardrail_reason": "Dòng tiền yếu, hạ cấp theo quy tắc rủi ro",
     }
     result.dashboard = dashboard
 
@@ -564,39 +491,7 @@ def test_extract_and_persist_reuses_stability_score_metadata(isolated_db) -> Non
     assert persisted["metadata"]["adjusted_score"] == 59
     assert persisted["metadata"]["raw_action"] == "watch"
     assert persisted["metadata"]["final_action"] == "watch"
-    assert persisted["metadata"]["guardrail_reason"] == "资金流较弱，按风险规则降级"
-
-
-def test_extract_and_persist_writes_tw_signal(isolated_db) -> None:
-    """End-to-end write-leg guard: a tw analysis must PERSIST a DecisionSignal
-    through create_signal -> _normalize_market -> DB, not merely build the payload.
-
-    Closes the silent-failure leg where _normalize_market("tw") raised ValueError
-    inside extract_and_persist and was swallowed by its broad except -> return None,
-    so every tw analysis produced no signal while jp/kr did.
-    """
-    service = DecisionSignalService(db_manager=isolated_db)
-    result = _result(code="2330.TW", name="台积电")
-
-    created = extract_and_persist_from_analysis_result(
-        result,
-        context_snapshot={"market_phase_summary": {"phase": "intraday"}},
-        portfolio_context={"quantity": 10},
-        source_report_id=2330,
-        trace_id="trace-tw-persist",
-        query_source="api",
-        report_type="full",
-        profile_source="auto_default",
-        service=service,
-    )
-
-    assert created is not None
-    assert created["created"] is True
-    assert created["item"]["market"] == "tw"
-
-    listed = service.list_signals(source_report_id=2330)
-    assert listed["total"] == 1
-    assert listed["items"][0]["market"] == "tw"
+    assert persisted["metadata"]["guardrail_reason"] == "Dòng tiền yếu, hạ cấp theo quy tắc rủi ro"
 
 
 def test_extract_and_persist_missing_price_plan_does_not_fabricate_fields(isolated_db) -> None:
@@ -625,68 +520,3 @@ def test_extract_and_persist_missing_price_plan_does_not_fabricate_fields(isolat
     assert item["stop_loss"] is None
     assert item["target_price"] is None
 
-
-def test_build_payload_index_uses_market_override_cn() -> None:
-    """V9 — an index target whose canonical code would resolve to None market
-    (e.g. CSI) must persist with market=cn via the market_override."""
-    result = _result(code="csi930955", name="红利低波100")
-
-    payload = build_decision_signal_payload_from_report(
-        result,
-        context_snapshot=None,
-        portfolio_context=None,
-        source_report_id=955,
-        trace_id="trace-index-csi",
-        query_source="cli",
-        report_type="full",
-        profile_source=BUILD_PROFILE_SOURCE,
-        market_override="cn",
-    )
-
-    assert payload is not None
-    assert payload["stock_code"] == "csi930955"
-    assert payload["stock_name"] == "红利低波100"
-    assert payload["market"] == "cn"
-    assert payload["source_type"] == "analysis"
-    assert payload["source_report_id"] == 955
-
-
-def test_extract_and_persist_index_signal_with_market_override(isolated_db) -> None:
-    """V9 — end-to-end: an index signal persists with market=cn, source_type,
-    and source_report_id linkage (not skipped because CSI market was None)."""
-    service = DecisionSignalService(db_manager=isolated_db)
-    result = _result(code="csi930955", name="红利低波100")
-
-    created = extract_and_persist_from_analysis_result(
-        result,
-        context_snapshot={"market_phase_summary": {"phase": "intraday"}},
-        portfolio_context={"quantity": 0},
-        source_report_id=955,
-        trace_id="trace-index-csi",
-        query_source="cli",
-        report_type="full",
-        profile_source="auto_default",
-        service=service,
-        market_override="cn",
-    )
-
-    assert created is not None
-    assert created["created"] is True
-    item = created["item"]
-    assert item["stock_code"] == "csi930955"
-    assert item["market"] == "cn"
-    assert item["source_type"] == "analysis"
-    assert item["source_report_id"] == 955
-
-    listed = service.list_signals(source_report_id=955)
-    assert listed["total"] == 1
-    assert listed["items"][0]["stock_code"] == "csi930955"
-    assert listed["items"][0]["market"] == "cn"
-
-    by_alias = service.list_signals(stock_code="930955.CSI", market="cn")
-    assert by_alias["total"] == 1
-    assert by_alias["items"][0]["stock_code"] == "csi930955"
-
-    latest = service.get_latest_active(stock_code="csi930955", market="cn")
-    assert latest["total"] == 1
-    assert latest["items"][0]["source_report_id"] == 955

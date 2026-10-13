@@ -29,17 +29,13 @@ from src.config import FUNDAMENTAL_STAGE_TIMEOUT_SECONDS_DEFAULT, get_config, Co
 from src.storage import get_db
 from data_provider import DataFetcherManager
 from data_provider.base import (
-    is_bse_code,
-    is_vn_index_code,
     normalize_stock_code,
     should_persist_daily_data,
 )
-from data_provider.realtime_types import ChipDistribution
 from src.analyzer import (
     GeminiAnalyzer,
     AnalysisResult,
     fill_price_position_if_needed,
-    normalize_chip_structure_availability,
     populate_decision_action_fields,
     stabilize_decision_with_structure,
 )
@@ -79,14 +75,11 @@ from src.services.daily_market_context import (
     DailyMarketContextService,
     format_daily_market_context_prompt_section,
 )
-from src.services.social_sentiment_service import SocialSentimentService
 from src.services.intelligence_service import IntelligenceService
-from src.services.market_hotspot_service import MarketHotspotService
 from src.services.analysis_context_builder import (
     AnalysisContextBuilder,
     PipelineAnalysisArtifacts,
 )
-from src.services.market_structure_service import MarketStructureService
 from src.services.run_diagnostics import (
     activate_run_diagnostic_context,
     current_diagnostic_snapshot,
@@ -105,6 +98,7 @@ from src.services.decision_signal_extractor import (
 from src.services.stock_list_parser import AnalysisTarget, ParseStatus
 from src.services.decision_signal_summary import summarize_decision_signal
 from src.enums import ReportType
+from src.data.stock_mapping import PLACEHOLDER_NAME_PREFIXES
 from src.stock_analyzer import StockTrendAnalyzer, TrendAnalysisResult
 from src.core.trading_calendar import (
     build_market_phase_context,
@@ -113,49 +107,18 @@ from src.core.trading_calendar import (
     get_market_now,
     is_market_open,
 )
-from data_provider.us_index_mapping import is_us_stock_code
 from bot.models import BotMessage
 
 
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Index capability matrix — the single authority for which analysis modules
-# are skipped for index targets (Story 1.5). Skipping must happen before any
-# composite service, snapshot persistence, or the traditional/Agent branch
-# split, so the underlying provider calls are never reached.
-# ---------------------------------------------------------------------------
-INDEX_SKIP_MODULES = frozenset({
-    "chip_distribution",
-    "fundamental",
-    "belong_boards",
-    "capital_flow",
-    "lhb",
-    "corporate_events",
-})
+def _analysis_metadata(*, query_id: str, trigger_source: Any) -> Dict[str, Any]:
+    """Metadata của ContextPack (query_id và nguồn kích hoạt).
 
-# Chỉ A-share có nguồn phân bố chip (AkshareFetcher ``stock_cyq_em`` /
-# TushareFetcher ``cyq_chips``); các thị trường khác luôn trả None.
-# Only A-share has chip-distribution providers.
-_CHIP_SUPPORTED_MARKETS = frozenset({"cn"})
-
-
-def _analysis_metadata(
-    *, query_id: str, trigger_source: Any, market: str, is_index: bool
-) -> Dict[str, Any]:
-    """Metadata của ContextPack; đánh dấu ``chip_not_supported`` khi chip vốn không có.
-
-    Nếu không đánh dấu, builder sẽ báo ``chip_distribution_missing`` (thiếu, cần kiểm
-    tra nguồn) cho cả trường hợp thị trường/chỉ số không hề có dữ liệu chip.
+    ContextPack metadata (query id and trigger source).
     """
-    metadata: Dict[str, Any] = {"query_id": query_id, "trigger_source": trigger_source}
-    if (
-        (is_index and "chip_distribution" in INDEX_SKIP_MODULES)
-        or market not in _CHIP_SUPPORTED_MARKETS
-    ):
-        metadata["chip_not_supported"] = True
-    return metadata
+    return {"query_id": query_id, "trigger_source": trigger_source}
 
 
 def _share_image_payload(result: Any) -> Optional[Dict[str, Any]]:
@@ -167,7 +130,7 @@ def _share_image_payload(result: Any) -> Optional[Dict[str, Any]]:
     try:
         payload = to_dict()
     except Exception as exc:
-        logger.debug("构建分享图片结构化数据失败，回退 Markdown: %s", exc)
+        logger.debug("Dựng dữ liệu cấu trúc cho ảnh chia sẻ thất bại, quay về Markdown: %s", exc)
         return None
     return payload if isinstance(payload, dict) and payload else None
 
@@ -212,44 +175,9 @@ def _symbol_scope_lookup_values(code: str, market: str) -> List[str]:
     add_case_variants(normalized)
     add_case_variants(raw)
 
-    normalized_upper = normalized.upper()
-    if normalized_upper.startswith("HK") and normalized_upper[2:].isdigit():
-        digits = normalized_upper[2:]
-        trimmed_digits = digits.lstrip("0") or digits
-        add_case_variants(normalized_upper)
-        add_case_variants(digits)
-        add_case_variants(trimmed_digits)
-        add_case_variants(f"HK{trimmed_digits}")
-        add_case_variants(f"{trimmed_digits}.HK")
-        add_case_variants(f"{digits}.HK")
-        return values
-
-    if (market or "").strip().lower() != "cn":
-        return values
-    if not (normalized.isdigit() and len(normalized) == 6):
-        return values
-
-    raw_upper = raw.upper()
-    exchange = ""
-    if raw_upper.startswith(("SH", "SS")) or raw_upper.endswith((".SH", ".SS")):
-        exchange = "SH"
-    elif raw_upper.startswith("SZ") or raw_upper.endswith(".SZ"):
-        exchange = "SZ"
-    elif raw_upper.startswith("BJ") or raw_upper.endswith(".BJ"):
-        exchange = "BJ"
-    elif is_bse_code(normalized):
-        exchange = "BJ"
-    elif normalized.startswith(("5", "6", "9")):
-        exchange = "SH"
-    else:
-        exchange = "SZ"
-
-    add_case_variants(f"{exchange}{normalized}")
-    add_case_variants(f"{exchange}.{normalized}")
-    add_case_variants(f"{normalized}.{exchange}")
-    if exchange == "SH":
-        add_case_variants(f"SS.{normalized}")
-        add_case_variants(f"{normalized}.SS")
+    # Bản ghi cũ có thể dùng hậu tố ``.VN``. / Legacy rows may use the ``.VN`` suffix.
+    if normalized:
+        add_case_variants(f"{normalized.upper()}.VN")
     return values
 
 
@@ -314,18 +242,8 @@ class StockAnalysisPipeline:
         self.trend_analyzer = StockTrendAnalyzer()  # Bộ phân tích kỹ thuật
         self.analyzer = GeminiAnalyzer(config=self.config, skills=self.analysis_skills)
         self.notifier = NotificationService(source_message=source_message)
-        self.market_structure_service = MarketStructureService(fetcher_manager=self.fetcher_manager)
-        self.market_hotspot_service: Optional[MarketHotspotService] = None
-        try:
-            self.market_hotspot_service = MarketHotspotService(
-                fetcher_manager=self.fetcher_manager,
-            )
-        except Exception as exc:
-            logger.debug("market hotspot service init failed (fail-open): %s", exc)
         self._single_stock_notify_lock = threading.Lock()
         self._daily_market_context_service_lock = threading.Lock()
-        self._concept_rankings_cache_lock = threading.Lock()
-        self._concept_rankings_cache: Dict[str, Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]] = {}
         self._last_local_report_path: Optional[str] = None
         self._last_local_report_error: Optional[str] = None
         
@@ -333,12 +251,10 @@ class StockAnalysisPipeline:
         # phân tích chính)
         try:
             self.search_service = SearchService(
-                bocha_keys=self.config.bocha_api_keys,
                 tavily_keys=self.config.tavily_api_keys,
                 anspire_keys=self.config.anspire_api_keys,
                 brave_keys=self.config.brave_api_keys,
                 serpapi_keys=self.config.serpapi_keys,
-                minimax_keys=self.config.minimax_api_keys,
                 searxng_base_urls=self.config.searxng_base_urls,
                 searxng_public_instances_enabled=self.config.searxng_public_instances_enabled,
                 searxng_timeout_seconds=getattr(self.config, "searxng_timeout_seconds", None),
@@ -346,42 +262,22 @@ class StockAnalysisPipeline:
                 news_strategy_profile=getattr(self.config, "news_strategy_profile", "short"),
             )
         except Exception as exc:
-            logger.warning("搜索服务初始化失败，将以无搜索模式运行: %s", exc, exc_info=True)
+            logger.warning("Khởi tạo dịch vụ tìm kiếm thất bại, sẽ chạy ở chế độ không tìm kiếm: %s", exc, exc_info=True)
             self.search_service = None
         
-        logger.info(f"调度器初始化完成，最大并发数: {self.max_workers}")
-        logger.info("已启用技术分析引擎（均线/趋势/量价指标）")
-        # In trạng thái cấu hình giá realtime / phân bố chip
+        logger.info(f"Khởi tạo bộ điều phối hoàn tất, số luồng song song tối đa: {self.max_workers}")
+        logger.info("Đã bật bộ máy phân tích kỹ thuật (đường MA / xu hướng / chỉ báo giá-khối lượng)")
+        # In trạng thái cấu hình giá realtime
         if self.config.enable_realtime_quote:
-            logger.info(f"实时行情已启用 (优先级: {self.config.realtime_source_priority})")
+            logger.info(f"Đã bật báo giá realtime (thứ tự ưu tiên: {self.config.realtime_source_priority})")
         else:
-            logger.info("实时行情已禁用，将使用历史收盘价")
-        if self.config.enable_chip_distribution:
-            logger.info("筹码分布分析已启用")
-        else:
-            logger.info("筹码分布分析已禁用")
+            logger.info("Báo giá realtime đã tắt, sẽ dùng giá đóng cửa lịch sử")
         if self.search_service is None:
-            logger.warning("搜索服务未启用（初始化失败或依赖缺失）")
+            logger.warning("Dịch vụ tìm kiếm chưa bật (khởi tạo thất bại hoặc thiếu phụ thuộc)")
         elif self.search_service.is_available:
-            logger.info("搜索服务已启用")
+            logger.info("Đã bật dịch vụ tìm kiếm")
         else:
-            logger.warning("搜索服务未启用（未配置搜索能力）")
-
-        # Khởi tạo dịch vụ tâm lý mạng xã hội (chỉ thị trường Mỹ, tuỳ chọn)
-        try:
-            self.social_sentiment_service = SocialSentimentService(
-                api_key=self.config.social_sentiment_api_key,
-                api_url=self.config.social_sentiment_api_url,
-            )
-            if self.social_sentiment_service.is_available:
-                logger.info("Social sentiment service enabled (Reddit/X/Polymarket, US stocks only)")
-        except Exception as exc:
-            logger.warning(
-                "社交舆情服务初始化失败，将跳过舆情分析: %s",
-                exc,
-                exc_info=True,
-            )
-            self.social_sentiment_service = None
+            logger.warning("Dịch vụ tìm kiếm chưa bật (chưa cấu hình khả năng tìm kiếm)")
 
     def _progress_text(self, stage: str, *, code: Any = "", name: Any = None, **params: Any) -> str:
         """Build the progress message in the run's report language.
@@ -399,7 +295,7 @@ class StockAnalysisPipeline:
         # Building the message runs before ``_emit_progress``'s guard, so it must tolerate a
         # pipeline without ``config``. A progress line must never break the analysis run.
         config = getattr(self, "config", None)
-        language = normalize_report_language(getattr(config, "report_language", "zh"))
+        language = normalize_report_language(getattr(config, "report_language", "vi"))
         if name:
             # ``get_localized_stock_name`` coi tên trùng mã là giữ chỗ, nên chỉ gọi khi thực
             # sự có tên; nếu không sẽ biến "HPG" thành "Cổ phiếu chưa xác định" và mất mã.
@@ -470,7 +366,7 @@ class StockAnalysisPipeline:
 
         if dropped:
             logger.warning(
-                "跳过不属于已启用市场的标的: %s（当前 SUPPORTED_MARKETS=%s）",
+                "Bỏ qua mã không thuộc thị trường đã bật: %s (SUPPORTED_MARKETS hiện tại=%s)",
                 ", ".join(dropped),
                 ",".join(enabled_markets()),
             )
@@ -516,23 +412,23 @@ class StockAnalysisPipeline:
             # đã tồn tại thì bỏ qua
             if not force_refresh and self.db.has_today_data(code, target_date):
                 logger.info(
-                    f"{stock_name}({code}) {target_date} 数据已存在，跳过获取（断点续传）"
+                    f"{stock_name}({code}) {target_date} dữ liệu đã tồn tại, bỏ qua lấy dữ liệu (chạy tiếp từ điểm dừng)"
                 )
                 return True, None
 
             # Lấy dữ liệu từ nguồn
-            logger.info(f"{stock_name}({code}) 开始从数据源获取数据...")
+            logger.info(f"{stock_name}({code}) bắt đầu lấy dữ liệu từ nguồn dữ liệu...")
             df, source_name = self.fetcher_manager.get_daily_data(code, days=30)
 
             if df is None or df.empty:
-                return False, "获取数据为空"
+                return False, "Dữ liệu lấy về rỗng"
 
             # Lưu vào cơ sở dữ liệu. Nguồn lệch cơ sở điều chỉnh giá (ví dụ Yahoo
             # phục vụ cổ phiếu Việt Nam) chỉ dùng cho phiên chạy hiện tại, không
             # được ghi đè lẻ tẻ vào lịch sử theo khoá (code, date).
             if should_persist_daily_data(source_name, code):
                 saved_count = self.db.save_daily_data(df, code, source_name)
-                logger.info(f"{stock_name}({code}) 数据保存成功（来源: {source_name}，新增 {saved_count} 条）")
+                logger.info(f"{stock_name}({code}) lưu dữ liệu thành công (nguồn: {source_name}, thêm mới {saved_count} bản ghi)")
             else:
                 logger.info(
                     "%s(%s) Bỏ qua ghi DB: nguồn [%s] khác cơ sở điều chỉnh giá so với "
@@ -545,7 +441,7 @@ class StockAnalysisPipeline:
             return True, None
 
         except Exception as e:
-            error_msg = f"获取/保存数据失败: {str(e)}"
+            error_msg = f"Lấy/lưu dữ liệu thất bại: {str(e)}"
             logger.error(f"{stock_name}({code}) {error_msg}")
             return False, error_msg
     
@@ -559,16 +455,15 @@ class StockAnalysisPipeline:
     ) -> Optional[AnalysisResult]:
         """
         Phân tích một mã cổ phiếu (bản mở rộng: gồm tỷ lệ khối lượng, tỷ lệ quay vòng,
-        phân tích phân bố chip, thông tin đa chiều)
+        thông tin đa chiều)
 
         Quy trình:
         1. Lấy giá realtime (tỷ lệ khối lượng, tỷ lệ quay vòng) - qua DataFetcherManager,
            tự động chuyển nguồn khi sự cố
-        2. Lấy phân bố chip - qua DataFetcherManager, có circuit breaker bảo vệ
-        3. Phân tích xu hướng (dựa trên triết lý giao dịch)
-        4. Tìm kiếm thông tin đa chiều (tin mới nhất + rà soát rủi ro + kỳ vọng kết quả)
-        5. Lấy ngữ cảnh phân tích từ CSDL
-        6. Gọi AI để phân tích tổng hợp
+        2. Phân tích xu hướng (dựa trên triết lý giao dịch)
+        3. Tìm kiếm thông tin đa chiều (tin mới nhất + rà soát rủi ro + kỳ vọng kết quả)
+        4. Lấy ngữ cảnh phân tích từ CSDL
+        5. Gọi AI để phân tích tổng hợp
 
         Args:
             query_id: id liên kết chuỗi truy vấn
@@ -587,15 +482,7 @@ class StockAnalysisPipeline:
             portfolio_context = getattr(self, "portfolio_context", None)
             if not isinstance(portfolio_context, dict):
                 portfolio_context = None
-            is_index = (
-                analysis_target is not None
-                and analysis_target.asset_type == ParseStatus.INDEX
-            )
-            market = (
-                "cn"
-                if is_index
-                else get_market_for_stock(normalize_stock_code(code))
-            )
+            market = get_market_for_stock(normalize_stock_code(code))
             market_phase_context = build_market_phase_context(
                 market=market,
                 current_time=current_time,
@@ -604,7 +491,7 @@ class StockAnalysisPipeline:
             )
             market_phase_context_dict = market_phase_context.to_dict()
             market_phase_summary = render_market_phase_summary(market_phase_context_dict)
-            report_language = normalize_report_language(getattr(self.config, "report_language", "zh"))
+            report_language = normalize_report_language(getattr(self.config, "report_language", "vi"))
             daily_market_target_date = self._coerce_daily_market_context_date(
                 getattr(market_phase_context, "effective_daily_bar_date", None)
                 or market_phase_context_dict.get("effective_daily_bar_date")
@@ -621,18 +508,7 @@ class StockAnalysisPipeline:
 
             self._emit_progress(18, self._progress_text("fetch_market", code=code))
             # Lấy tên cổ phiếu (đi đường nhẹ trước; nếu realtime_quote có name thì ghi đè sau)
-            # Mục tiêu là chỉ số thì dùng tên hiển thị trong registry (matched_index.display_name),
-            # tránh đưa raw alias / canonical code / mã máy 6 chữ số vào truy vấn tìm kiếm
-            # (Story 1.5 V7).
-            if is_index and analysis_target is not None:
-                index_name = getattr(
-                    getattr(analysis_target, "matched_index", None),
-                    "display_name",
-                    None,
-                )
-                stock_name = index_name or analysis_target.display_code or code
-            else:
-                stock_name = self.fetcher_manager.get_stock_name(code, allow_realtime=False)
+            stock_name = self.fetcher_manager.get_stock_name(code, allow_realtime=False)
 
             # Bước 1: lấy giá realtime (tỷ lệ khối lượng, tỷ lệ quay vòng...) - dùng điểm vào
             # thống nhất, tự động chuyển nguồn khi sự cố
@@ -641,42 +517,24 @@ class StockAnalysisPipeline:
                 if self.config.enable_realtime_quote:
                     realtime_quote = self.fetcher_manager.get_realtime_quote(code, log_final_failure=False)
                     if realtime_quote:
-                        # Cổ phiếu dùng tên từ giá realtime; chỉ số giữ tên trong registry làm tên hiển
-                        # thị có thẩm quyền.
-                        if realtime_quote.name and not is_index:
+                        if realtime_quote.name:
                             stock_name = realtime_quote.name
                         # Tương thích trường dữ liệu giữa các nguồn (một số nguồn có thể không có volume_ratio)
                         volume_ratio = getattr(realtime_quote, 'volume_ratio', None)
                         turnover_rate = getattr(realtime_quote, 'turnover_rate', None)
-                        logger.info(f"{stock_name}({code}) 实时行情: 价格={realtime_quote.price}, "
-                                  f"量比={volume_ratio}, 换手率={turnover_rate}% "
-                                  f"(来源: {realtime_quote.source.value if hasattr(realtime_quote, 'source') else 'unknown'})")
+                        logger.info(f"{stock_name}({code}) báo giá realtime: giá={realtime_quote.price}, "
+                                  f"tỷ lệ KL={volume_ratio}, tỷ lệ quay vòng={turnover_rate}% "
+                                  f"(nguồn: {realtime_quote.source.value if hasattr(realtime_quote, 'source') else 'unknown'})")
                     else:
-                        logger.warning(f"{stock_name}({code}) 所有实时行情数据源均不可用，已降级为历史收盘价继续分析")
+                        logger.warning(f"{stock_name}({code}) mọi nguồn báo giá realtime đều không khả dụng, đã hạ cấp sang giá đóng cửa lịch sử để tiếp tục phân tích")
                 else:
-                    logger.info(f"{stock_name}({code}) 实时行情已禁用，使用历史收盘价继续分析")
+                    logger.info(f"{stock_name}({code}) báo giá realtime đã tắt, dùng giá đóng cửa lịch sử để tiếp tục phân tích")
             except Exception as e:
-                logger.warning(f"{stock_name}({code}) 实时行情链路异常，已降级为历史收盘价继续分析: {e}")
+                logger.warning(f"{stock_name}({code}) luồng báo giá realtime gặp lỗi, đã hạ cấp sang giá đóng cửa lịch sử để tiếp tục phân tích: {e}")
 
             # Nếu vẫn chưa có tên thì dùng luôn mã làm tên
             if not stock_name:
-                stock_name = f'股票{code}'
-
-            # Bước 2: lấy phân bố chip - dùng điểm vào thống nhất, có circuit breaker bảo vệ
-            # Mục tiêu là chỉ số thì bỏ qua phân bố chip (ma trận năng lực INDEX_SKIP_MODULES)
-            chip_data = None
-            if is_index and "chip_distribution" in INDEX_SKIP_MODULES:
-                logger.debug(f"{stock_name}({code}) 指数目标跳过筹码分布")
-            else:
-                try:
-                    chip_data = self.fetcher_manager.get_chip_distribution(code)
-                    if chip_data:
-                        logger.info(f"{stock_name}({code}) 筹码分布: 获利比例={chip_data.profit_ratio:.1%}, "
-                                  f"90%集中度={chip_data.concentration_90:.2%}")
-                    else:
-                        logger.debug(f"{stock_name}({code}) 筹码分布获取失败或已禁用")
-                except Exception as e:
-                    logger.warning(f"{stock_name}({code}) 获取筹码分布失败: {e}")
+                stock_name = f'Cổ phiếu {code}'
 
             # If agent mode is explicitly enabled, or specific agent skills are configured, use the Agent analysis pipeline.
             # NOTE: use config.agent_mode (explicit opt-in) instead of
@@ -700,67 +558,32 @@ class StockAnalysisPipeline:
             # Bước 2.5: tổng hợp năng lực dữ liệu cơ bản (điểm vào thống nhất, hạ cấp khi lỗi)
             # - Thất bại thì trả partial/failed, không ảnh hưởng luồng kỹ thuật/tin tức sẵn có
             # - Khi tắt công tắc vẫn trả về cấu trúc not_supported
-            # - Mục tiêu là chỉ số thì bỏ qua cơ bản/nhóm ngành/dòng tiền/Dragon-Tiger/sự kiện
-            #   doanh nghiệp (INDEX_SKIP_MODULES)
             fundamental_context = None
-            fundamental_modules = {
-                "fundamental",
-                "belong_boards",
-                "capital_flow",
-                "lhb",
-                "corporate_events",
-            }
-            if is_index and INDEX_SKIP_MODULES.intersection(fundamental_modules):
-                logger.debug(f"{stock_name}({code}) 指数目标跳过基本面聚合")
-                fundamental_context = self.fetcher_manager.build_not_supported_fundamental_context(
+            try:
+                fundamental_context = self.fetcher_manager.get_fundamental_context(
                     code,
-                    "index target: fundamental modules skipped",
+                    budget_seconds=getattr(
+                        self.config,
+                        'fundamental_stage_timeout_seconds',
+                        FUNDAMENTAL_STAGE_TIMEOUT_SECONDS_DEFAULT,
+                    ),
                 )
-            else:
-                try:
-                    fundamental_context = self.fetcher_manager.get_fundamental_context(
-                        code,
-                        budget_seconds=getattr(
-                            self.config,
-                            'fundamental_stage_timeout_seconds',
-                            FUNDAMENTAL_STAGE_TIMEOUT_SECONDS_DEFAULT,
-                        ),
-                    )
-                except Exception as e:
-                    logger.warning(f"{stock_name}({code}) 基本面聚合失败: {e}")
-                    fundamental_context = self.fetcher_manager.build_failed_fundamental_context(code, str(e))
+            except Exception as e:
+                logger.warning(f"{stock_name}({code}) tổng hợp dữ liệu cơ bản thất bại: {e}")
+                fundamental_context = self.fetcher_manager.build_failed_fundamental_context(code, str(e))
 
-            if is_index and "belong_boards" in INDEX_SKIP_MODULES:
-                logger.debug(f"{stock_name}({code}) 指数目标跳过板块归属")
-                if isinstance(fundamental_context, dict):
-                    fundamental_context = dict(fundamental_context)
-                    fundamental_context["belong_boards"] = []
-            else:
-                fundamental_context = self._attach_belong_boards_to_fundamental_context(
-                    code,
-                    fundamental_context,
-                )
-            market_structure_context = self._build_market_structure_context(
-                code=code,
-                stock_name=stock_name,
-                market=market,
-                fundamental_context=fundamental_context,
-                trade_date=daily_market_target_date,
-                market_phase_summary=market_phase_summary,
-            )
 
             # P0: write-only snapshot, fail-open, no read dependency on this table.
-            if not is_index:
-                try:
-                    self.db.save_fundamental_snapshot(
-                        query_id=query_id,
-                        code=code,
-                        payload=fundamental_context,
-                        source_chain=fundamental_context.get("source_chain", []),
-                        coverage=fundamental_context.get("coverage", {}),
-                    )
-                except Exception as e:
-                    logger.debug(f"{stock_name}({code}) 基本面快照写入失败: {e}")
+            try:
+                self.db.save_fundamental_snapshot(
+                    query_id=query_id,
+                    code=code,
+                    payload=fundamental_context,
+                    source_chain=fundamental_context.get("source_chain", []),
+                    coverage=fundamental_context.get("coverage", {}),
+                )
+            except Exception as e:
+                logger.debug(f"{stock_name}({code}) ghi snapshot cơ bản thất bại: {e}")
 
             # Bước 3: phân tích xu hướng (dựa trên triết lý giao dịch) - chạy trước nhánh Agent
             # để cả hai luồng dùng chung
@@ -780,13 +603,13 @@ class StockAnalysisPipeline:
                             df, realtime_quote, code, market=market
                         )
                     trend_result = self.trend_analyzer.analyze(df, code)
-                    logger.info(f"{stock_name}({code}) 趋势分析: {trend_result.trend_status.value}, "
-                              f"买入信号={trend_result.buy_signal.value}, 评分={trend_result.signal_score}")
+                    logger.info(f"{stock_name}({code}) phân tích xu hướng: {trend_result.trend_status.value}, "
+                              f"tín hiệu mua={trend_result.buy_signal.value}, điểm={trend_result.signal_score}")
             except Exception as e:
-                logger.warning(f"{stock_name}({code}) 趋势分析失败: {e}", exc_info=True)
+                logger.warning(f"{stock_name}({code}) phân tích xu hướng thất bại: {e}", exc_info=True)
 
             if use_agent:
-                logger.info(f"{stock_name}({code}) 启用 Agent 模式进行分析")
+                logger.info(f"{stock_name}({code}) phân tích ở chế độ Agent")
                 self._emit_progress(58, self._progress_text("agent_switch", code=code, name=stock_name))
                 return self._analyze_with_agent(
                     code,
@@ -794,14 +617,12 @@ class StockAnalysisPipeline:
                     query_id,
                     stock_name,
                     realtime_quote,
-                    chip_data,
                     fundamental_context,
                     trend_result,
                     market_phase_context=market_phase_context_dict,
                     market_phase_summary=market_phase_summary,
                     daily_market_context=daily_market_context,
                     portfolio_context=portfolio_context,
-                    market_structure_context=market_structure_context,
                     analysis_target=analysis_target,
                 )
 
@@ -810,12 +631,12 @@ class StockAnalysisPipeline:
             persisted_intelligence_context = self._load_persisted_intelligence_context(
                 code=code,
                 stock_name=stock_name,
-                market=market or "cn",
+                market=market or "vn",
             )
             news_result_count: Optional[int] = None
             self._emit_progress(46, self._progress_text("news", code=code, name=stock_name))
             if self.search_service is not None and self.search_service.is_available:
-                logger.info(f"{stock_name}({code}) 开始多维度情报搜索...")
+                logger.info(f"{stock_name}({code}) bắt đầu tìm kiếm tin tức đa chiều...")
 
                 # Đã phát lệnh tìm kiếm: từ đây dù không lấy được bản ghi nào thì vẫn là "đã chạy
                 # nhưng không trúng kết quả", chứ không phải "chưa chạy tìm kiếm". Nếu để nguyên None
@@ -824,16 +645,7 @@ class StockAnalysisPipeline:
                 news_result_count = 0
 
                 # Dùng tìm kiếm đa chiều (tối đa 5 lượt)
-                # Mục tiêu là chỉ số: subject của truy vấn chỉ dùng tên trong registry, không đưa
-                # canonical code / mã máy 6 chữ số vào truy vấn (Story 1.5 V7).
-                #
-                # Ngoại lệ chỉ số Việt Nam: mã của chúng (VNINDEX / VN30 / HNXIndex) chính là tên
-                # gọi thông dụng chứ không phải mã máy, nên vẫn truyền vào để tầng tìm kiếm nhận
-                # ra đây là mục tiêu Việt Nam. Bỏ mã đi thì truy vấn rơi về bộ chiều tiếng Trung
-                # và chỉ số Việt Nam bị tìm bằng truy vấn tiếng Trung "research report / target price / rating".
-                intel_stock_code = (
-                    "" if (is_index and not is_vn_index_code(code)) else code
-                )
+                intel_stock_code = code
                 intel_results = self.search_service.search_comprehensive_intel(
                     stock_code=intel_stock_code,
                     stock_name=stock_name,
@@ -847,8 +659,8 @@ class StockAnalysisPipeline:
                         len(r.results) for r in intel_results.values() if r.success
                     )
                     news_result_count = total_results
-                    logger.info(f"{stock_name}({code}) 情报搜索完成: 共 {total_results} 条结果")
-                    logger.debug(f"{stock_name}({code}) 情报搜索结果:\n{news_context}")
+                    logger.info(f"{stock_name}({code}) tìm kiếm tin tức hoàn tất: tổng {total_results} kết quả")
+                    logger.debug(f"{stock_name}({code}) kết quả tìm kiếm tin tức:\n{news_context}")
 
                     # Lưu thông tin tin tức vào cơ sở dữ liệu (phục vụ tổng kết và tra cứu sau này)
                     try:
@@ -864,24 +676,9 @@ class StockAnalysisPipeline:
                                     query_context=query_context
                                 )
                     except Exception as e:
-                        logger.warning(f"{stock_name}({code}) 保存新闻情报失败: {e}")
+                        logger.warning(f"{stock_name}({code}) lưu tin tức tình báo thất bại: {e}")
             else:
-                logger.info(f"{stock_name}({code}) 搜索服务不可用，跳过情报搜索")
-
-            # Step 4.5: Social sentiment intelligence (US stocks only)
-            social_evidence_context: Optional[str] = None
-            if self.social_sentiment_service is not None and self.social_sentiment_service.is_available and is_us_stock_code(code):
-                try:
-                    social_context = self.social_sentiment_service.get_social_context(code)
-                    if social_context:
-                        logger.info(f"{stock_name}({code}) Social sentiment data retrieved")
-                        social_evidence_context = social_context
-                        if news_context:
-                            news_context = news_context + "\n\n" + social_context
-                        else:
-                            news_context = social_context
-                except Exception as e:
-                    logger.warning(f"{stock_name}({code}) Social sentiment fetch failed: {e}")
+                logger.info(f"{stock_name}({code}) dịch vụ tìm kiếm không khả dụng, bỏ qua tìm kiếm tin tức")
 
             if persisted_intelligence_context:
                 news_context = (
@@ -897,7 +694,7 @@ class StockAnalysisPipeline:
             )
 
             if context is None:
-                logger.warning(f"{stock_name}({code}) 无法获取历史行情数据，将仅基于新闻和实时行情分析")
+                logger.warning(f"{stock_name}({code}) không lấy được dữ liệu giá lịch sử, sẽ chỉ phân tích dựa trên tin tức và báo giá realtime")
                 _mkt_date = get_market_now(
                     get_market_for_stock(normalize_stock_code(code))
                 ).date()
@@ -910,12 +707,11 @@ class StockAnalysisPipeline:
                     'yesterday': {}
                 }
             
-            # Bước 6: bổ sung dữ liệu ngữ cảnh (thêm giá realtime, phân bố chip, kết quả phân
-            # tích xu hướng, tên cổ phiếu)
+            # Bước 6: bổ sung dữ liệu ngữ cảnh (thêm giá realtime, kết quả phân tích xu
+            # hướng, tên cổ phiếu)
             enhanced_context = self._enhance_context(
                 context, 
                 realtime_quote, 
-                chip_data,
                 trend_result,
                 stock_name,  # Truyền vào tên cổ phiếu
                 fundamental_context,
@@ -930,8 +726,6 @@ class StockAnalysisPipeline:
             )
             if portfolio_context is not None:
                 enhanced_context["portfolio_context"] = dict(portfolio_context)
-            if isinstance(market_structure_context, dict):
-                enhanced_context["market_structure_context"] = market_structure_context
             
             # Bước 7: gọi AI phân tích (truyền vào ngữ cảnh đã bổ sung và tin tức)
             (
@@ -947,13 +741,11 @@ class StockAnalysisPipeline:
                     enhanced_context=enhanced_context,
                     realtime_quote=realtime_quote,
                     trend_result=trend_result,
-                    chip_data=chip_data,
                     fundamental_context=fundamental_context,
                     news_context=news_context,
                     news_result_count=news_result_count,
                     query_id=query_id,
                     portfolio_context=portfolio_context,
-                    is_index=is_index,
                 ),
                 report_language=report_language,
                 code=code,
@@ -993,13 +785,12 @@ class StockAnalysisPipeline:
                     # và "trúng kết quả bình thường". Trước đây giá trị này chỉ vào ảnh chụp chẩn đoán,
                     # tầng báo cáo không lấy được.
                     result.news_result_count = news_result_count
-                    # Đăng ký từng nguồn trong ba luồng, không nhìn vào cả đoạn news_context đã ghép:
+                    # Đăng ký từng nguồn trong hai luồng, không nhìn vào cả đoạn news_context đã ghép:
                     # format_intel_report() khi không trúng kết quả vẫn xuất văn bản placeholder nên cả
                     # đoạn không bao giờ rỗng; lấy nó để phán đoán sẽ biến "đã tìm nhưng không được bản
                     # ghi nào" thành "có bằng chứng".
                     result.news_evidence_present = news_evidence_present(
                         news_result_count,
-                        social_evidence_context,
                         persisted_intelligence_context,
                     )
                 record_llm_run(
@@ -1037,10 +828,6 @@ class StockAnalysisPipeline:
                 result.current_price = realtime_data.get('price')
                 result.change_pct = realtime_data.get('change_pct')
 
-            # Step 7.6: chip_structure fallback (Issue #589) and unavailable collapse
-            if result:
-                normalize_chip_structure_availability(result, chip_data)
-
             # Step 7.7: price_position fallback
             if result:
                 fill_price_position_if_needed(result, trend_result, realtime_quote)
@@ -1051,7 +838,7 @@ class StockAnalysisPipeline:
                     market_phase_summary=market_phase_summary,
                     analysis_context_pack_overview=analysis_context_pack_overview,
                     report_language=getattr(result, "report_language", None)
-                    or getattr(self.config, "report_language", "zh"),
+                    or getattr(self.config, "report_language", "vi"),
                 )
                 if adjustments:
                     logger.info("[phase_decision_guardrail] Applied adjustments for %s: %s", code, adjustments)
@@ -1059,7 +846,7 @@ class StockAnalysisPipeline:
                     result,
                     daily_market_context=enhanced_context.get("daily_market_context"),
                     report_language=getattr(result, "report_language", None)
-                    or getattr(self.config, "report_language", "zh"),
+                    or getattr(self.config, "report_language", "vi"),
                 )
                 if market_context_adjustments:
                     logger.info(
@@ -1069,8 +856,6 @@ class StockAnalysisPipeline:
                     )
                 if isinstance(fundamental_context, dict):
                     result.fundamental_context = fundamental_context
-                if isinstance(market_structure_context, dict):
-                    result.market_structure_context = market_structure_context
                 result.market_phase_summary = market_phase_summary
                 result.analysis_context_pack_overview = analysis_context_pack_overview
                 self._refresh_decision_action_for_final_result(
@@ -1078,9 +863,6 @@ class StockAnalysisPipeline:
                     report_type=report_type.value,
                     previous_operation_advice=action_source_advice,
                 )
-
-            if result:
-                self._append_daily_data_source(result, context, analysis_target)
 
             # Bước 8: lưu lịch sử phân tích
             if result and result.success:
@@ -1091,7 +873,6 @@ class StockAnalysisPipeline:
                         news_content=news_context,
                         news_result_count=news_result_count,
                         realtime_quote=realtime_quote,
-                        chip_data=chip_data,
                         analysis_context_pack_overview=analysis_context_pack_overview,
                         market_phase_summary=market_phase_summary,
                     )
@@ -1132,20 +913,19 @@ class StockAnalysisPipeline:
                         metadata_saved=False,
                         error_message=e,
                     )
-                    logger.warning(f"{stock_name}({code}) 保存分析历史失败: {e}")
+                    logger.warning(f"{stock_name}({code}) lưu lịch sử phân tích thất bại: {e}")
 
             return result
 
         except Exception as e:
-            logger.error(f"{stock_name}({code}) 分析失败: {e}")
-            logger.exception(f"{stock_name}({code}) 详细错误信息:")
+            logger.error(f"{stock_name}({code}) phân tích thất bại: {e}")
+            logger.exception(f"{stock_name}({code}) chi tiết lỗi:")
             return None
     
     def _enhance_context(
         self,
         context: Dict[str, Any],
         realtime_quote,
-        chip_data: Optional[ChipDistribution],
         trend_result: Optional[TrendAnalysisResult],
         stock_name: str = "",
         fundamental_context: Optional[Dict[str, Any]] = None,
@@ -1155,13 +935,11 @@ class StockAnalysisPipeline:
         """
         Bổ sung ngữ cảnh phân tích
 
-        Thêm giá realtime, phân bố chip, kết quả phân tích xu hướng và tên cổ phiếu vào
-        ngữ cảnh
+        Thêm giá realtime, kết quả phân tích xu hướng và tên cổ phiếu vào ngữ cảnh
 
         Args:
             context: ngữ cảnh gốc
             realtime_quote: dữ liệu giá realtime (UnifiedRealtimeQuote hoặc None)
-            chip_data: dữ liệu phân bố chip
             trend_result: kết quả phân tích xu hướng
             stock_name: tên cổ phiếu
             market_phase_context: ngữ cảnh phiên thị trường đã dựng sẵn, dùng để đánh dấu
@@ -1171,7 +949,7 @@ class StockAnalysisPipeline:
             Ngữ cảnh sau khi đã bổ sung
         """
         enhanced = context.copy()
-        enhanced["report_language"] = normalize_report_language(getattr(self.config, "report_language", "zh"))
+        enhanced["report_language"] = normalize_report_language(getattr(self.config, "report_language", "vi"))
         
         # Thêm tên cổ phiếu
         if stock_name:
@@ -1197,7 +975,7 @@ class StockAnalysisPipeline:
                 'price': getattr(realtime_quote, 'price', None),
                 'change_pct': getattr(realtime_quote, 'change_pct', None),
                 'volume_ratio': volume_ratio,
-                'volume_ratio_desc': self._describe_volume_ratio(volume_ratio) if volume_ratio else '无数据',
+                'volume_ratio_desc': self._describe_volume_ratio(volume_ratio) if volume_ratio else 'Không có dữ liệu',
                 'turnover_rate': getattr(realtime_quote, 'turnover_rate', None),
                 'pe_ratio': getattr(realtime_quote, 'pe_ratio', None),
                 'pb_ratio': getattr(realtime_quote, 'pb_ratio', None),
@@ -1213,17 +991,6 @@ class StockAnalysisPipeline:
             }
             # Loại bỏ giá trị None để giảm kích thước ngữ cảnh
             enhanced['realtime'] = {k: v for k, v in enhanced['realtime'].items() if v is not None}
-        
-        # Thêm phân bố chip
-        if chip_data:
-            current_price = getattr(realtime_quote, 'price', 0) if realtime_quote else 0
-            enhanced['chip'] = {
-                'profit_ratio': chip_data.profit_ratio,
-                'avg_cost': chip_data.avg_cost,
-                'concentration_90': chip_data.concentration_90,
-                'concentration_70': chip_data.concentration_70,
-                'chip_status': chip_data.get_chip_status(current_price or 0),
-            }
         
         # Thêm kết quả phân tích xu hướng
         if trend_result:
@@ -1359,185 +1126,6 @@ class StockAnalysisPipeline:
 
         return enhanced
 
-    def _attach_belong_boards_to_fundamental_context(
-        self,
-        code: str,
-        fundamental_context: Optional[Dict[str, Any]],
-    ) -> Dict[str, Any]:
-        """
-        Attach A-share board membership as a top-level supplemental field.
-
-        Keep this as a shallow copy so cached fundamental contexts are not
-        mutated in place after retrieval.
-        """
-        if isinstance(fundamental_context, dict):
-            enriched_context = dict(fundamental_context)
-        else:
-            enriched_context = self.fetcher_manager.build_failed_fundamental_context(
-                code,
-                "invalid fundamental context",
-            )
-
-        market = enriched_context.get("market")
-        if not isinstance(market, str) or not market.strip():
-            market = get_market_for_stock(normalize_stock_code(code))
-
-        existing_boards = enriched_context.get("belong_boards")
-        existing_board_list = list(existing_boards) if isinstance(existing_boards, list) else None
-        if existing_board_list:
-            enriched_context["belong_boards"] = existing_board_list
-            self._attach_concept_rankings_to_fundamental_context(code, enriched_context, market)
-            return enriched_context
-
-        boards_block = enriched_context.get("boards")
-        boards_status = boards_block.get("status") if isinstance(boards_block, dict) else None
-        coverage = enriched_context.get("coverage")
-        boards_coverage = coverage.get("boards") if isinstance(coverage, dict) else None
-
-        # For HK/US: the offshore adapter already populates belong_boards from
-        # yfinance sector/industry. Don't overwrite it (and we have no AkShare
-        # sector endpoint for those markets anyway). Default to [] when callers
-        # pass a minimal context without the key.
-        if market != "cn":
-            enriched_context["belong_boards"] = existing_board_list or []
-            return enriched_context
-
-        if boards_status == "not_supported" or boards_coverage == "not_supported":
-            enriched_context["belong_boards"] = existing_board_list or []
-            return enriched_context
-
-        boards: List[Dict[str, Any]] = []
-        try:
-            raw_boards = self.fetcher_manager.get_belong_boards(code)
-            if isinstance(raw_boards, list):
-                boards = raw_boards
-        except Exception as e:
-            logger.debug("%s attach belong_boards failed (fail-open): %s", code, e)
-
-        enriched_context["belong_boards"] = boards or existing_board_list or []
-        self._attach_concept_rankings_to_fundamental_context(code, enriched_context, market)
-        return enriched_context
-
-    def _attach_concept_rankings_to_fundamental_context(
-        self,
-        code: str,
-        enriched_context: Dict[str, Any],
-        market: str,
-    ) -> None:
-        """Attach concept/theme rankings for A-share related-board signals."""
-        if market != "cn" or isinstance(enriched_context.get("concept_boards"), dict):
-            return
-
-        top_concepts, bottom_concepts = self._get_concept_rankings_for_market(market)
-
-        concept_data: Dict[str, Any] = {
-            "top": top_concepts,
-            "bottom": bottom_concepts,
-        }
-        if not top_concepts and not bottom_concepts:
-            # Empty lists are removed while fundamental contexts are merged.
-            # Keep a non-empty internal marker so downstream consumers can
-            # distinguish an attempted empty result from a missing preload.
-            concept_data["fetch_attempted"] = True
-        enriched_context["concept_boards"] = {
-            "status": "ok" if top_concepts and bottom_concepts else "partial",
-            "data": concept_data,
-        }
-
-    def _get_concept_rankings_for_market(
-        self,
-        market: str,
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """Fetch market-wide concept rankings once per pipeline run."""
-        if market != "cn":
-            return [], []
-
-        service = getattr(self, "market_hotspot_service", None)
-        if service is None:
-            try:
-                service = MarketHotspotService(fetcher_manager=self.fetcher_manager)
-            except Exception as exc:
-                logger.debug(
-                    "market hotspot service init failed in concept ranking path (fail-open): %s",
-                    exc,
-                )
-                service = None
-            else:
-                self.market_hotspot_service = service
-
-        cache = getattr(self, "_concept_rankings_cache", None)
-        if not isinstance(cache, dict):
-            cache = {}
-            self._concept_rankings_cache = cache
-
-        lock = getattr(self, "_concept_rankings_cache_lock", None)
-        if lock is None:
-            lock = threading.Lock()
-            self._concept_rankings_cache_lock = lock
-
-        with lock:
-            if market in cache:
-                top_concepts, bottom_concepts = cache[market]
-                return list(top_concepts), list(bottom_concepts)
-
-            top_concepts: List[Dict[str, Any]] = []
-            bottom_concepts: List[Dict[str, Any]] = []
-            try:
-                if service is None:
-                    fetch_rankings = getattr(self.fetcher_manager, "get_concept_rankings", None)
-                    if callable(fetch_rankings):
-                        rankings = fetch_rankings(5)
-                        if isinstance(rankings, tuple) and len(rankings) == 2:
-                            raw_top, raw_bottom = rankings
-                            if isinstance(raw_top, list):
-                                top_concepts = list(raw_top)
-                            if isinstance(raw_bottom, list):
-                                bottom_concepts = list(raw_bottom)
-                else:
-                    top_concepts, bottom_concepts = service.get_concept_rankings(5)
-            except Exception as e:
-                logger.debug("attach concept_rankings failed (fail-open): %s", e)
-
-            cache[market] = (top_concepts, bottom_concepts)
-            return list(top_concepts), list(bottom_concepts)
-
-    def _build_market_structure_context(
-        self,
-        *,
-        code: str,
-        stock_name: str,
-        market: str,
-        fundamental_context: Optional[Dict[str, Any]],
-        trade_date: Any = None,
-        market_phase_summary: Optional[Dict[str, Any]] = None,
-    ) -> Optional[Dict[str, Any]]:
-        """Build market structure context without blocking the main analysis."""
-        service = getattr(self, "market_structure_service", None)
-        if service is None:
-            try:
-                service = MarketStructureService(fetcher_manager=self.fetcher_manager)
-                self.market_structure_service = service
-            except Exception as exc:
-                logger.debug("market structure service init failed (fail-open): %s", exc)
-                return None
-        try:
-            return service.build_context(
-                code=code,
-                stock_name=stock_name,
-                market=market,
-                fundamental_context=fundamental_context,
-                trade_date=trade_date,
-                market_phase_summary=market_phase_summary,
-            )
-        except Exception as exc:
-            logger.debug(
-                "%s market structure context build failed (fail-open): %s",
-                code,
-                exc,
-                exc_info=True,
-            )
-            return None
-
     def _ensure_agent_history(
         self,
         code: str,
@@ -1574,42 +1162,6 @@ class StockAnalysisPipeline:
         except Exception as e:
             logger.warning("[%s] Agent history prefetch failed: %s", code, e)
 
-    def _filter_agent_tools_for_index(self, executor: Any) -> Any:
-        """Return an executor whose tool registry excludes index-incompatible tools.
-
-        Maps ``INDEX_SKIP_MODULES`` to the agent tool names that would otherwise
-        invoke the skipped bottom-layer providers (chip distribution, fundamental
-        aggregation, capital flow). The filtered registry carries the source
-        category-timeout map so per-category ceilings survive the subset copy.
-        """
-        tool_modules = {
-            "get_chip_distribution": {"chip_distribution"},
-            "get_stock_info": {
-                "fundamental",
-                "belong_boards",
-                "lhb",
-                "corporate_events",
-            },
-            "get_capital_flow": {"capital_flow"},
-        }
-        index_skip_tool_names = {
-            name
-            for name, modules in tool_modules.items()
-            if INDEX_SKIP_MODULES.intersection(modules)
-        }
-        registry = getattr(executor, "tool_registry", None)
-        if registry is None:
-            return executor
-        from src.agent.tools.registry import ToolRegistry as _TR
-        filtered = _TR(category_timeout_map=registry.category_timeout_map)
-        for name in registry.list_names():
-            if name in index_skip_tool_names:
-                continue
-            tool_def = registry.get(name)
-            if tool_def is not None:
-                filtered.register(tool_def)
-        executor.tool_registry = filtered
-        return executor
 
     def _analyze_with_agent(
         self, 
@@ -1618,7 +1170,6 @@ class StockAnalysisPipeline:
         query_id: str,
         stock_name: str,
         realtime_quote: Any,
-        chip_data: Optional[ChipDistribution],
         fundamental_context: Optional[Dict[str, Any]] = None,
         trend_result: Optional[TrendAnalysisResult] = None,
         *,
@@ -1626,7 +1177,6 @@ class StockAnalysisPipeline:
         market_phase_summary: Optional[Dict[str, Any]] = None,
         daily_market_context: Optional[DailyMarketContext] = None,
         portfolio_context: Optional[Dict[str, Any]] = None,
-        market_structure_context: Optional[Dict[str, Any]] = None,
         analysis_target: Optional[AnalysisTarget] = None,
     ) -> Optional[AnalysisResult]:
         """
@@ -1634,12 +1184,7 @@ class StockAnalysisPipeline:
         """
         try:
             from src.agent.factory import build_agent_executor
-            report_language = normalize_report_language(getattr(self.config, "report_language", "zh"))
-
-            is_index = (
-                analysis_target is not None
-                and analysis_target.asset_type == ParseStatus.INDEX
-            )
+            report_language = normalize_report_language(getattr(self.config, "report_language", "vi"))
 
             requested_skills = (
                 self.analysis_skills
@@ -1648,12 +1193,6 @@ class StockAnalysisPipeline:
             )
             # Build executor from shared factory (ToolRegistry and SkillManager prototype are cached)
             executor = build_agent_executor(self.config, requested_skills)
-
-            # Mục tiêu là chỉ số: loại khỏi bộ công cụ của Agent những tool provider tầng dưới
-            # tương ứng với INDEX_SKIP_MODULES (phân bố chip / cơ bản / dòng tiền), để nhánh
-            # Agent cũng không gọi lần nào (Story 1.5 V6).
-            if is_index:
-                executor = self._filter_agent_tools_for_index(executor)
 
             # Build initial context to avoid redundant tool calls
             initial_context = {
@@ -1669,8 +1208,6 @@ class StockAnalysisPipeline:
                 initial_context["skills"] = self.analysis_skills
             if market_phase_context is not None:
                 initial_context["market_phase_context"] = market_phase_context
-            if isinstance(market_structure_context, dict):
-                initial_context["market_structure_context"] = market_structure_context
             self._attach_daily_market_context(
                 initial_context,
                 daily_market_context,
@@ -1679,33 +1216,13 @@ class StockAnalysisPipeline:
             
             if realtime_quote:
                 initial_context["realtime_quote"] = self._safe_to_dict(realtime_quote)
-            if chip_data:
-                initial_context["chip_distribution"] = self._safe_to_dict(chip_data)
             if trend_result:
                 initial_context["trend_result"] = self._safe_to_dict(trend_result)
-
-            # Agent path: inject social sentiment as news_context so both
-            # executor (_build_user_message) and orchestrator (ctx.set_data)
-            # can consume it through the existing news_context channel
-            social_evidence_context: Optional[str] = None
-            if self.social_sentiment_service is not None and self.social_sentiment_service.is_available and is_us_stock_code(code):
-                try:
-                    social_context = self.social_sentiment_service.get_social_context(code)
-                    if social_context:
-                        social_evidence_context = social_context
-                        existing = initial_context.get("news_context")
-                        if existing:
-                            initial_context["news_context"] = existing + "\n\n" + social_context
-                        else:
-                            initial_context["news_context"] = social_context
-                        logger.info(f"[{code}] Agent mode: social sentiment data injected into news_context")
-                except Exception as e:
-                    logger.warning(f"[{code}] Agent mode: social sentiment fetch failed: {e}")
 
             persisted_intelligence_context = self._load_persisted_intelligence_context(
                 code=code,
                 stock_name=stock_name,
-                market=("cn" if is_index else get_market_for_stock(normalize_stock_code(code)) or "cn"),
+                market=get_market_for_stock(normalize_stock_code(code)) or "vn",
             )
             if persisted_intelligence_context:
                 existing = initial_context.get("news_context")
@@ -1725,7 +1242,7 @@ class StockAnalysisPipeline:
             analysis_context = self._load_agent_analysis_context(
                 code, stock_name, analysis_target=analysis_target
             )
-            market = "cn" if is_index else get_market_for_stock(normalize_stock_code(code))
+            market = get_market_for_stock(normalize_stock_code(code))
             (
                 analysis_context_pack_summary,
                 analysis_context_pack_overview,
@@ -1740,7 +1257,6 @@ class StockAnalysisPipeline:
                     query_id=query_id,
                     base_context=analysis_context,
                     portfolio_context=portfolio_context,
-                    is_index=is_index,
                 ),
                 report_language=report_language,
                 code=code,
@@ -1750,10 +1266,7 @@ class StockAnalysisPipeline:
                 initial_context["analysis_context_pack_summary"] = analysis_context_pack_summary
 
             # Chạy Agent
-            if report_language in ("en", "ko", "vi"):
-                message = f"Analyze stock {code} ({stock_name}) and return the full decision dashboard JSON."
-            else:
-                message = f"请分析股票 {code} ({stock_name})，并生成决策仪表盘报告。"
+            message = f"Analyze stock {code} ({stock_name}) and return the full decision dashboard JSON."
             llm_started_at = time.monotonic()
             # Agent tự gọi tool tìm kiếm để lấy bằng chứng, nên số liệu công bố chỉ lấy từ kết
             # quả thật của những tool đó; lời gọi search_stock_news() bù thêm sau khi phân tích
@@ -1800,13 +1313,12 @@ class StockAnalysisPipeline:
                         and self.search_service.is_available
                     ),
                 )
-                # Giống nhánh thường, đăng ký theo từng nguồn: số bản ghi Agent tự tìm được khi chạy,
-                # tâm lý mạng xã hội được tiêm vào, và kho tin tức cục bộ được tiêm vào. Nhánh này
+                # Giống nhánh thường, đăng ký theo từng nguồn: số bản ghi Agent tự tìm được khi chạy
+                # và kho tin tức cục bộ được tiêm vào. Nhánh này
                 # không đi qua format_intel_report(), nhưng vẫn không truyền cả đoạn đã ghép, phòng
                 # trường hợp sau này có người thêm một nguồn sinh văn bản placeholder.
                 result.news_evidence_present = news_evidence_present(
                     result.news_result_count,
-                    social_evidence_context,
                     persisted_intelligence_context,
                 )
             record_llm_run(
@@ -1838,13 +1350,9 @@ class StockAnalysisPipeline:
                 if not pass_integrity:
                     apply_placeholder_fill(result, missing)
                     logger.info(
-                        "[LLM完整性] integrity_mode=agent_weak 必填字段缺失 %s，已占位补全",
+                        "[LLM integrity] integrity_mode=agent_weak thiếu trường bắt buộc %s, đã điền giá trị giữ chỗ",
                         missing,
                     )
-            # chip_structure fallback (Issue #589), before save_analysis_history
-            if result and chip_data is not None:
-                normalize_chip_structure_availability(result, chip_data)
-
             # price_position fallback (same as non-agent path Step 7.7)
             if result:
                 pipeline_adjustments: list[PipelineActionAdjustment] = []
@@ -1899,7 +1407,7 @@ class StockAnalysisPipeline:
                     market_phase_summary=market_phase_summary,
                     analysis_context_pack_overview=analysis_context_pack_overview,
                     report_language=getattr(result, "report_language", None)
-                    or getattr(self.config, "report_language", "zh"),
+                    or getattr(self.config, "report_language", "vi"),
                 )
                 if adjustments:
                     logger.info("[phase_decision_guardrail] Applied agent adjustments for %s: %s", code, adjustments)
@@ -1926,7 +1434,7 @@ class StockAnalysisPipeline:
                     result,
                     daily_market_context=initial_context.get("daily_market_context"),
                     report_language=getattr(result, "report_language", None)
-                    or getattr(self.config, "report_language", "zh"),
+                    or getattr(self.config, "report_language", "vi"),
                 )
                 if market_context_adjustments:
                     logger.info(
@@ -1953,8 +1461,6 @@ class StockAnalysisPipeline:
                     action_chain_valid = False
                 if isinstance(fundamental_context, dict):
                     result.fundamental_context = fundamental_context
-                if isinstance(market_structure_context, dict):
-                    result.market_structure_context = market_structure_context
                 result.market_phase_summary = market_phase_summary
                 result.analysis_context_pack_overview = analysis_context_pack_overview
                 final_action = normalize_decision_action(getattr(result, "action", None))
@@ -1983,12 +1489,6 @@ class StockAnalysisPipeline:
                         )
                     )
 
-            if result:
-                self._append_daily_data_source(
-                    result,
-                    analysis_context,
-                    analysis_target,
-                )
 
             resolved_stock_name = result.name if result and result.name else stock_name
 
@@ -1999,7 +1499,7 @@ class StockAnalysisPipeline:
             if self.search_service is not None and self.search_service.is_available:
                 try:
                     news_response = self.search_service.search_stock_news(
-                        stock_code=("" if is_index else code),
+                        stock_code=code,
                         stock_name=resolved_stock_name,
                         max_results=5
                     )
@@ -2018,9 +1518,9 @@ class StockAnalysisPipeline:
                             response=news_response,
                             query_context=query_context
                         )
-                        logger.info(f"[{code}] Agent 模式: 新闻情报已保存 {len(news_response.results)} 条")
+                        logger.info(f"[{code}] Chế độ Agent: đã lưu {len(news_response.results)} tin tức tình báo")
                 except Exception as e:
-                    logger.warning(f"[{code}] Agent 模式保存新闻情报失败: {e}")
+                    logger.warning(f"[{code}] Chế độ Agent lưu tin tức tình báo thất bại: {e}")
 
             # Lưu lịch sử phân tích
             if result and result.success:
@@ -2032,7 +1532,6 @@ class StockAnalysisPipeline:
                         },
                         news_content=initial_context.get("news_context"),
                         realtime_quote=realtime_quote,
-                        chip_data=chip_data,
                         analysis_context_pack_overview=analysis_context_pack_overview,
                         market_phase_summary=market_phase_summary,
                     )
@@ -2084,13 +1583,13 @@ class StockAnalysisPipeline:
                         metadata_saved=False,
                         error_message=e,
                     )
-                    logger.warning(f"[{code}] 保存 Agent 分析历史失败: {e}")
+                    logger.warning(f"[{code}] Lưu lịch sử phân tích Agent thất bại: {e}")
 
             return result
 
         except Exception as e:
-            logger.error(f"[{code}] Agent 分析失败: {e}")
-            logger.exception(f"[{code}] Agent 详细错误信息:")
+            logger.error(f"[{code}] Phân tích Agent thất bại: {e}")
+            logger.exception(f"[{code}] Chi tiết lỗi Agent:")
             return None
 
     def _load_agent_analysis_context(
@@ -2137,11 +1636,8 @@ class StockAnalysisPipeline:
         if isinstance(context, dict) and context:
             return context
 
-        if analysis_target is not None and analysis_target.asset_type == ParseStatus.INDEX:
-            market = "cn"
-        else:
-            market = get_market_for_stock(normalize_stock_code(code))
-        if market not in {"jp", "kr", "tw", "vn"}:
+        market = get_market_for_stock(normalize_stock_code(code))
+        if market != "vn":
             return context
 
         try:
@@ -2257,7 +1753,7 @@ class StockAnalysisPipeline:
                 get_context_kwargs["current_query_id"] = current_query_id
             return service.get_context(**get_context_kwargs)
         except Exception as exc:
-            logger.warning("加载大盘环境上下文失败，个股分析继续: %s", exc, exc_info=True)
+            logger.warning("Tải ngữ cảnh môi trường thị trường thất bại, phân tích từng mã vẫn tiếp tục: %s", exc, exc_info=True)
             return None
 
     def _get_daily_market_context_service_lock(self) -> threading.Lock:
@@ -2316,14 +1812,14 @@ class StockAnalysisPipeline:
         """
         Chuyển AgentResult thành AnalysisResult.
         """
-        report_language = normalize_report_language(getattr(self.config, "report_language", "zh"))
+        report_language = normalize_report_language(getattr(self.config, "report_language", "vi"))
         dash = None
         result = AnalysisResult(
             code=code,
             name=stock_name,
             sentiment_score=50,
             trend_prediction=get_unknown_text(report_language),
-            operation_advice=localize_operation_advice("观望", report_language),
+            operation_advice=localize_operation_advice("watch", report_language),
             confidence_level=localize_confidence_level("medium", report_language),
             report_language=report_language,
             success=agent_result.success,
@@ -2403,7 +1899,7 @@ class StockAnalysisPipeline:
                 allow_dict=True,
                 expect_text=True,
             ):
-                result.operation_advice = str(raw_advice) if raw_advice else (localize_operation_advice("观望", report_language))
+                result.operation_advice = str(raw_advice) if raw_advice else (localize_operation_advice("watch", report_language))
             else:
                 signal_label = self._trend_signal_fallback(trend_result, report_language)
                 if signal_label:
@@ -2479,11 +1975,7 @@ class StockAnalysisPipeline:
                 )
                 self._backfill_agent_dashboard_fields(result, trend_result, report_language)
             if not result.error_message:
-                result.error_message = (
-                    "Agent failed to generate a valid decision dashboard" if report_language in ("en", "vi")
-                    else "에이전트가 유효한 결정 대시보드를 생성하지 못했습니다" if report_language == "ko"
-                    else "Agent 未能生成有效的决策仪表盘"
-                )
+                result.error_message = "Agent failed to generate a valid decision dashboard"
 
         explicit_action = dash.get("action") if isinstance(dash, dict) else None
         if explicit_action is None and isinstance(getattr(result, "dashboard", None), dict):
@@ -2561,11 +2053,10 @@ class StockAnalysisPipeline:
     def _is_agent_placeholder_text(text: str) -> bool:
         if not text:
             return True
-        return text.lower() in {"n/a", "na", "none", "null", "unknown", "tbd"} or text in {
-            "未知",
-            "待补充",
-            "数据缺失",
-            "无",
+        return text.lower() in {
+            "n/a", "na", "none", "null", "unknown", "tbd",
+            # Giá trị giữ chỗ tiếng Việt / Vietnamese placeholders
+            "không rõ", "chưa rõ", "đang cập nhật", "thiếu dữ liệu", "không có",
         }
 
     @staticmethod
@@ -2609,7 +2100,7 @@ class StockAnalysisPipeline:
     @staticmethod
     def _trend_label_fallback(
         trend_result: Optional[TrendAnalysisResult],
-        report_language: str = "zh",
+        report_language: str = "vi",
     ) -> str:
         if trend_result is None:
             return ""
@@ -2622,7 +2113,7 @@ class StockAnalysisPipeline:
     @staticmethod
     def _trend_signal_fallback(
         trend_result: Optional[TrendAnalysisResult],
-        report_language: str = "zh",
+        report_language: str = "vi",
     ) -> str:
         if trend_result is None:
             return ""
@@ -2644,47 +2135,6 @@ class StockAnalysisPipeline:
             "strong_sell": "sell",
         }.get(signal_name)
 
-    @staticmethod
-    def _append_daily_data_source(
-        result: AnalysisResult,
-        context: Any,
-        analysis_target: Optional[AnalysisTarget],
-    ) -> None:
-        """Append an index's persisted daily provider without inferring sources."""
-        if (
-            analysis_target is None
-            or analysis_target.asset_type != ParseStatus.INDEX
-        ):
-            return
-        if not isinstance(context, dict):
-            return
-        today = context.get("today")
-        if not isinstance(today, dict):
-            return
-        source = today.get("data_source")
-        if not isinstance(source, str):
-            return
-        source = source.strip()
-        if (
-            not source
-            or source.casefold() == "unknown"
-            or source.casefold().startswith("realtime:")
-        ):
-            return
-
-        existing = result.data_sources
-        if existing is None:
-            existing_tokens = []
-        elif isinstance(existing, str):
-            existing_tokens = [
-                item.strip() for item in existing.split(",") if item.strip()
-            ]
-        else:
-            return
-        token = f"daily:{source}"
-        if token in existing_tokens:
-            return
-        result.data_sources = ",".join([*existing_tokens, token])
 
     @staticmethod
     def _mark_trend_fallback_source(result: AnalysisResult) -> None:
@@ -2701,13 +2151,9 @@ class StockAnalysisPipeline:
         trend = (result.trend_prediction or "").strip()
         advice = (result.operation_advice or "").strip()
         if trend and advice:
-            if report_language == "vi":
-                return f"Nhận định xu hướng: {trend}; khuyến nghị hành động: {advice}."
             if report_language == "en":
                 return f"Trend view: {trend}; action advice: {advice}."
-            if report_language == "ko":
-                return f"추세 결론: {trend}; 대응 전략: {advice}."
-            return f"趋势结论：{trend}；操作建议：{advice}。"
+            return f"Nhận định xu hướng: {trend}; khuyến nghị hành động: {advice}."
         return ""
 
     def _backfill_agent_dashboard_fields(
@@ -2743,11 +2189,7 @@ class StockAnalysisPipeline:
             core["one_sentence"] = result.analysis_summary or self._summary_fallback_from_result(
                 result,
                 report_language,
-            ) or (
-                "Analysis pending" if report_language in ("en", "vi")
-                else "분석 보완 예정" if report_language == "ko"
-                else "分析待补充"
-            )
+            ) or "Analysis pending"
 
         intelligence = dashboard.get("intelligence")
         if not isinstance(intelligence, dict):
@@ -2795,7 +2237,7 @@ class StockAnalysisPipeline:
     ) -> None:
         if trend_result is None:
             result.sentiment_score = 50
-            result.operation_advice = localize_operation_advice("观望", report_language)
+            result.operation_advice = localize_operation_advice("watch", report_language)
             return
 
         score = getattr(trend_result, "signal_score", None)
@@ -2817,7 +2259,7 @@ class StockAnalysisPipeline:
         if signal_label:
             result.operation_advice = signal_label
         else:
-            result.operation_advice = localize_operation_advice("观望", report_language)
+            result.operation_advice = localize_operation_advice("watch", report_language)
 
         from src.agent.protocols import normalize_decision_signal
 
@@ -2844,7 +2286,7 @@ class StockAnalysisPipeline:
             return True
         if normalized == code:
             return True
-        if normalized.startswith("股票"):
+        if normalized.startswith(PLACEHOLDER_NAME_PREFIXES):
             return True
         if "Unknown" in normalized:
             return True
@@ -2873,17 +2315,17 @@ class StockAnalysisPipeline:
         Tỷ lệ khối lượng = khối lượng hiện tại / khối lượng trung bình 5 phiên gần nhất
         """
         if volume_ratio < 0.5:
-            return "极度萎缩"
+            return "Cạn kiệt mạnh"
         elif volume_ratio < 0.8:
-            return "明显萎缩"
+            return "Thu hẹp rõ"
         elif volume_ratio < 1.2:
-            return "正常"
+            return "Bình thường"
         elif volume_ratio < 2.0:
-            return "温和放量"
+            return "Tăng nhẹ"
         elif volume_ratio < 3.0:
-            return "明显放量"
+            return "Tăng rõ"
         else:
-            return "巨量"
+            return "Đột biến"
 
     @staticmethod
     def _compute_ma_status(close: float, ma5: float, ma10: float, ma20: float) -> str:
@@ -2896,15 +2338,15 @@ class StockAnalysisPipeline:
         ma10 = ma10 or 0
         ma20 = ma20 or 0
         if close > ma5 > ma10 > ma20 > 0:
-            return "多头排列 📈"
+            return "MA xếp tăng 📈"
         elif close < ma5 < ma10 < ma20 and ma20 > 0:
-            return "空头排列 📉"
+            return "MA xếp giảm 📉"
         elif close > ma5 and ma5 > ma10:
-            return "短期向好 🔼"
+            return "Ngắn hạn tích cực 🔼"
         elif close < ma5 and ma5 < ma10:
-            return "短期走弱 🔽"
+            return "Ngắn hạn suy yếu 🔽"
         else:
-            return "震荡整理 ↔️"
+            return "Đi ngang tích lũy ↔️"
 
     def _augment_historical_with_realtime(
         self,
@@ -2993,7 +2435,6 @@ class StockAnalysisPipeline:
         enhanced_context: Dict[str, Any],
         news_content: Optional[str],
         realtime_quote: Any,
-        chip_data: Optional[ChipDistribution],
         news_result_count: Optional[int] = None,
         analysis_context_pack_overview: Optional[Dict[str, Any]] = None,
         market_phase_summary: Optional[Dict[str, Any]] = None,
@@ -3005,11 +2446,7 @@ class StockAnalysisPipeline:
             "enhanced_context": self._without_runtime_prompt_context(enhanced_context),
             "news_content": news_content,
             "realtime_quote_raw": self._safe_to_dict(realtime_quote),
-            "chip_distribution_raw": self._safe_to_dict(chip_data),
         }
-        market_structure_context = enhanced_context.get("market_structure_context")
-        if isinstance(market_structure_context, dict):
-            snapshot["market_structure_context"] = market_structure_context
         if news_content is not None:
             snapshot["news_retrieval_content"] = news_content
         if news_result_count is not None:
@@ -3087,14 +2524,7 @@ class StockAnalysisPipeline:
                 or getattr(self, "trace_id", None)
                 or query_id
             )
-            # Mục tiêu là chỉ số: tín hiệu được lưu bền với market=cn (canonical code / tên hiển
-            # thị do result mang theo)
-            market_override = (
-                "cn"
-                if analysis_target is not None
-                and analysis_target.asset_type == ParseStatus.INDEX
-                else None
-            )
+            market_override = None
             signal_result = extract_and_persist_from_analysis_result(
                 result,
                 context_snapshot=context_snapshot,
@@ -3174,7 +2604,7 @@ class StockAnalysisPipeline:
             try:
                 updater(query_id=query_id, code=code, diagnostics=diagnostic_snapshot)
             except Exception as exc:
-                logger.warning("回写运行诊断快照失败（fail-open）: %s", exc)
+                logger.warning("Ghi lại snapshot chẩn đoán lượt chạy thất bại (fail-open): %s", exc)
             return
 
         if notification_run is None:
@@ -3193,7 +2623,7 @@ class StockAnalysisPipeline:
                     notification_runs=[notification_run],
                 )
             except Exception as exc:
-                logger.warning("回写通知诊断快照失败（fail-open）: %s", exc)
+                logger.warning("Ghi lại snapshot chẩn đoán thông báo thất bại (fail-open): %s", exc)
 
     def _load_persisted_intelligence_context(
         self,
@@ -3230,17 +2660,17 @@ class StockAnalysisPipeline:
                     break
             if not collected:
                 return None
-            # Khối này đi thẳng vào prompt của LLM, nên nhãn phải theo ngôn ngữ báo cáo;
-            # để cứng tiếng Trung sẽ lẫn chữ Hán vào đầu vào của báo cáo tiếng Việt.
-            # Cùng lớp lỗi đã sửa ở SearchService.format_intel_report.
-            is_vi = (getattr(self.config, "report_language", "") or "").strip().lower() == "vi"
+            # Khối này đi thẳng vào prompt của LLM, nên nhãn phải theo ngôn ngữ báo cáo
+            # ('en' dùng tiếng Anh, còn lại tiếng Việt).
+            # This block goes straight into the LLM prompt, so labels follow the report language.
+            is_en = normalize_report_language(getattr(self.config, "report_language", None)) == "en"
             heading = (
-                f"## Kho bằng chứng tin tức cục bộ ({stock_name}/{code})" if is_vi
-                else f"## 本地资讯证据池（{stock_name}/{code}）"
+                f"## Local news evidence pool ({stock_name}/{code})" if is_en
+                else f"## Kho bằng chứng tin tức cục bộ ({stock_name}/{code})"
             )
-            untitled = "Tin không có tiêu đề" if is_vi else "未命名资讯"
-            summary_label = "Tóm tắt" if is_vi else "摘要"
-            source_label = "Nguồn" if is_vi else "来源"
+            untitled = "Untitled news" if is_en else "Tin không có tiêu đề"
+            summary_label = "Summary" if is_en else "Tóm tắt"
+            source_label = "Source" if is_en else "Nguồn"
             lines = [heading]
             for idx, item in enumerate(collected[:limit], 1):
                 title = str(item.get("title") or untitled).strip()
@@ -3250,7 +2680,7 @@ class StockAnalysisPipeline:
                 url = str(item.get("url") or "").strip()
                 meta = " / ".join(part for part in (source, published) if part)
                 if meta:
-                    lines.append(f"{idx}. {title}" + (f" ({meta})" if is_vi else f"（{meta}）"))
+                    lines.append(f"{idx}. {title} ({meta})")
                 else:
                     lines.append(f"{idx}. {title}")
                 if summary:
@@ -3259,7 +2689,7 @@ class StockAnalysisPipeline:
                     lines.append(f"   {source_label}: {url}")
             return "\n".join(lines)
         except Exception as exc:
-            logger.debug("读取本地资讯证据失败（fail-open）: %s", exc)
+            logger.debug("Đọc bằng chứng tin tức cục bộ thất bại (fail-open): %s", exc)
             return None
 
     def _build_legacy_analysis_artifacts(
@@ -3273,13 +2703,11 @@ class StockAnalysisPipeline:
         enhanced_context: Dict[str, Any],
         realtime_quote: Any,
         trend_result: Optional[TrendAnalysisResult],
-        chip_data: Optional[ChipDistribution],
         fundamental_context: Optional[Dict[str, Any]],
         news_context: Optional[str],
         news_result_count: Optional[int],
         query_id: str,
         portfolio_context: Optional[Dict[str, Any]] = None,
-        is_index: bool = False,
     ) -> PipelineAnalysisArtifacts:
         return PipelineAnalysisArtifacts(
             code=code,
@@ -3290,15 +2718,12 @@ class StockAnalysisPipeline:
             enhanced_context=enhanced_context,
             realtime_quote=realtime_quote,
             trend_result=trend_result,
-            chip_data=chip_data,
             fundamental_context=fundamental_context,
             news_context=news_context,
             news_result_count=news_result_count,
             metadata=_analysis_metadata(
                 query_id=query_id,
                 trigger_source=self.query_source,
-                market=market,
-                is_index=is_index,
             ),
             portfolio_context=dict(portfolio_context) if isinstance(portfolio_context, dict) else None,
         )
@@ -3315,7 +2740,6 @@ class StockAnalysisPipeline:
         query_id: str,
         base_context: Optional[Dict[str, Any]] = None,
         portfolio_context: Optional[Dict[str, Any]] = None,
-        is_index: bool = False,
     ) -> PipelineAnalysisArtifacts:
         context_candidate = base_context
         if not isinstance(context_candidate, dict):
@@ -3343,15 +2767,12 @@ class StockAnalysisPipeline:
             enhanced_context={},
             realtime_quote=initial_context.get("realtime_quote"),
             trend_result=initial_context.get("trend_result"),
-            chip_data=initial_context.get("chip_distribution"),
             fundamental_context=fundamental_context,
             news_context=initial_context.get("news_context"),
             news_result_count=None,
             metadata=_analysis_metadata(
                 query_id=query_id,
                 trigger_source=self.query_source,
-                market=market,
-                is_index=is_index,
             ),
             portfolio_context=dict(portfolio_context) if isinstance(portfolio_context, dict) else None,
         )
@@ -3414,15 +2835,8 @@ class StockAnalysisPipeline:
     ) -> date:
         """
         Resolve the trading date used by checkpoint/resume checks.
-
-        For index targets the market is derived from the structured target
-        (``market=cn``) rather than from ``get_market_for_stock`` on the
-        canonical code, which would return ``None`` for CSI indices.
         """
-        if analysis_target is not None and analysis_target.asset_type == ParseStatus.INDEX:
-            market = "cn"
-        else:
-            market = get_market_for_stock(normalize_stock_code(code))
+        market = get_market_for_stock(normalize_stock_code(code))
         return get_effective_trading_date(market, current_time=current_time)
 
     @staticmethod
@@ -3530,7 +2944,7 @@ class StockAnalysisPipeline:
         Returns:
             AnalysisResult hoặc None
         """
-        logger.info(f"========== 开始处理 {code} ==========")
+        logger.info(f"========== Bắt đầu xử lý {code} ==========")
 
         from src.services.history_loader import set_frozen_target_date, reset_frozen_target_date
         frozen_td = self._resolve_resume_target_date(
@@ -3555,7 +2969,7 @@ class StockAnalysisPipeline:
             )
             
             if not success:
-                logger.warning(f"[{code}] 数据获取失败: {error}")
+                logger.warning(f"[{code}] Lấy dữ liệu thất bại: {error}")
                 # Kể cả khi lấy dữ liệu thất bại vẫn thử phân tích bằng dữ liệu sẵn có
             else:
                 # Ghi nhận để chế độ dry-run thống kê đúng: có nguồn (như Yahoo cho
@@ -3568,7 +2982,7 @@ class StockAnalysisPipeline:
             
             # Bước 2: AI phân tích
             if skip_analysis:
-                logger.info(f"[{code}] 跳过 AI 分析（dry-run 模式）")
+                logger.info(f"[{code}] Bỏ qua phân tích AI (chế độ dry-run)")
                 return None
             
             analyze_kwargs = {"query_id": effective_query_id}
@@ -3580,8 +2994,8 @@ class StockAnalysisPipeline:
             
             if result and result.success:
                 logger.info(
-                    f"[{code}] 分析完成: {result.operation_advice}, "
-                    f"评分 {result.sentiment_score}"
+                    f"[{code}] Phân tích hoàn tất: {result.operation_advice}, "
+                    f"điểm {result.sentiment_score}"
                 )
                 
                 # Chế độ đẩy từng mã (#55): phân tích xong mã nào là đẩy ngay mã đó
@@ -3593,14 +3007,14 @@ class StockAnalysisPipeline:
                     )
             elif result:
                 logger.warning(
-                    f"[{code}] 分析未成功: {result.error_message or '未知错误'}"
+                    f"[{code}] Phân tích không thành công: {result.error_message or 'lỗi không xác định'}"
                 )
             
             return result
             
         except Exception as e:
             # Bắt mọi ngoại lệ để một mã lỗi không ảnh hưởng toàn bộ
-            logger.exception(f"[{code}] 处理过程发生未知异常: {e}")
+            logger.exception(f"[{code}] Xảy ra lỗi không xác định khi xử lý: {e}")
             return None
         finally:
             reset_run_diagnostic_context(diag_token)
@@ -3648,7 +3062,7 @@ class StockAnalysisPipeline:
             stock_codes = self.config.stock_list
         
         if not stock_codes:
-            logger.error("未配置自选股列表，请在 .env 文件中设置 STOCK_LIST")
+            logger.error("Chưa cấu hình danh sách theo dõi, hãy đặt STOCK_LIST trong file .env")
             return []
         
         # Lọc bỏ mã thuộc thị trường chưa bật. Khác với bước lọc unsupported bên dưới, bước
@@ -3660,7 +3074,7 @@ class StockAnalysisPipeline:
             stock_codes, analysis_targets
         )
         if not stock_codes:
-            logger.warning("自选股中没有属于已启用市场的标的，本轮无任务可执行")
+            logger.warning("Danh sách theo dõi không có mã nào thuộc thị trường đã bật, lượt này không có tác vụ")
             return []
 
         # Lọc target unsupported và khử trùng lặp theo canonical identity, cả hai đều diễn ra
@@ -3675,18 +3089,14 @@ class StockAnalysisPipeline:
             for code, target in zip(stock_codes, analysis_targets):
                 if target is not None and target.asset_type == ParseStatus.UNSUPPORTED:
                     logger.warning(
-                        "跳过 unsupported 目标 %r（%s），不触发网络请求",
+                        "Bỏ qua mục tiêu unsupported %r (%s), không gửi request mạng",
                         code,
                         target.unsupported_reason or "unsupported",
                     )
                     continue
-                identity = (
-                    target.canonical_id
-                    if target is not None and target.asset_type == ParseStatus.INDEX
-                    else code
-                )
+                identity = code
                 if identity in seen_identities:
-                    logger.info("跳过重复分析目标 %s（canonical_id=%s）", code, identity)
+                    logger.info("Bỏ qua mục tiêu phân tích trùng lặp %s (canonical_id=%s)", code, identity)
                     continue
                 seen_identities.add(identity)
                 supported_codes.append(code)
@@ -3694,12 +3104,12 @@ class StockAnalysisPipeline:
             stock_codes = supported_codes
             analysis_targets = supported_targets
             if not stock_codes:
-                logger.warning("批次中所有目标均 unsupported，无任务可执行")
+                logger.warning("Mọi mục tiêu trong lô đều unsupported, không có tác vụ")
                 return []
 
-        logger.info(f"===== 开始分析 {len(stock_codes)} 只股票 =====")
-        logger.info(f"股票列表: {', '.join(stock_codes)}")
-        logger.info(f"并发数: {self.max_workers}, 模式: {'仅获取数据' if dry_run else '完整分析'}")
+        logger.info(f"===== Bắt đầu phân tích {len(stock_codes)} mã cổ phiếu =====")
+        logger.info(f"Danh sách mã: {', '.join(stock_codes)}")
+        logger.info(f"Số luồng song song: {self.max_workers}, chế độ: {'chỉ lấy dữ liệu' if dry_run else 'phân tích đầy đủ'}")
 
         # Đóng băng một mốc thời gian tham chiếu chung cho lượt chạy này, tránh việc cùng một
         # lô cổ phiếu lại dùng các phiên mục tiêu khác nhau khi vắt qua ranh giới đóng cửa
@@ -3721,7 +3131,7 @@ class StockAnalysisPipeline:
 
             prefetch_count = self.fetcher_manager.prefetch_realtime_quotes(stock_codes)
             if prefetch_count > 0:
-                logger.info(f"已启用批量预取架构：一次拉取全市场数据，{len(stock_codes)} 只股票共享缓存")
+                logger.info(f"Đã bật kiến trúc prefetch hàng loạt: lấy dữ liệu toàn thị trường một lần, {len(stock_codes)} mã dùng chung cache")
 
         # Issue #455: prefetch tên cổ phiếu, tránh hiển thị "cổ phiếu xxxxx" khi phân tích
         # đồng thời
@@ -3744,7 +3154,7 @@ class StockAnalysisPipeline:
 
         if single_stock_notify:
             logger.info(
-                "已启用单股推送模式：分析仍并发执行，通知改为在结果收集侧串行发送（报告类型: %s）",
+                "Đã bật chế độ gửi từng mã: phân tích vẫn chạy song song, thông báo được gửi tuần tự ở phía thu kết quả (loại báo cáo: %s)",
                 report_type_str,
             )
         
@@ -3794,8 +3204,8 @@ class StockAnalysisPipeline:
                             )
                     elif result and not result.success:
                         logger.warning(
-                            f"[{code}] 分析结果标记为失败，不计入汇总: "
-                            f"{result.error_message or '未知原因'}"
+                            f"[{code}] Kết quả phân tích bị đánh dấu thất bại, không tính vào tổng hợp: "
+                            f"{result.error_message or 'nguyên nhân không xác định'}"
                         )
 
                     # Issue #128: khoảng nghỉ - chèn độ trễ giữa phân tích từng mã và phân tích toàn thị trường
@@ -3805,11 +3215,11 @@ class StockAnalysisPipeline:
                         # Do đó tác dụng giảm đỉnh request đồng thời là hạn chế; đỉnh thật sự chủ yếu do
                         # max_workers quyết định.
                         # Hành vi này được giữ nguyên (yêu cầu không đổi logic).
-                        logger.debug(f"等待 {analysis_delay} 秒后继续下一只股票...")
+                        logger.debug(f"Chờ {analysis_delay} giây rồi tiếp tục mã tiếp theo...")
                         time.sleep(analysis_delay)
 
                 except Exception as e:
-                    logger.error(f"[{code}] 任务执行失败: {e}")
+                    logger.error(f"[{code}] Tác vụ chạy thất bại: {e}")
         
         # Thống kê
         elapsed_time = time.time() - start_time
@@ -3838,8 +3248,8 @@ class StockAnalysisPipeline:
             success_count = len(results)
             fail_count = len(stock_codes) - success_count
         
-        logger.info("===== 分析完成 =====")
-        logger.info(f"成功: {success_count}, 失败: {fail_count}, 耗时: {elapsed_time:.2f} 秒")
+        logger.info("===== Phân tích hoàn tất =====")
+        logger.info(f"Thành công: {success_count}, thất bại: {fail_count}, thời gian: {elapsed_time:.2f} giây")
         
         # Lưu báo cáo ra file cục bộ (lưu bất kể có đẩy thông báo hay không)
         if results and not dry_run:
@@ -3849,12 +3259,12 @@ class StockAnalysisPipeline:
         if results and send_notification and not dry_run:
             if single_stock_notify:
                 # Chế độ đẩy từng mã: chỉ lưu báo cáo tổng hợp, không đẩy lại lần nữa
-                logger.info("单股推送模式：跳过汇总推送，仅保存报告到本地")
+                logger.info("Chế độ gửi từng mã: bỏ qua gửi tổng hợp, chỉ lưu báo cáo cục bộ")
                 self._send_notifications(results, report_type, skip_push=True)
             elif merge_notification:
                 # Chế độ gộp (Issue #190): chỉ lưu, không đẩy; tầng main sẽ gộp phần từng mã + toàn
                 # thị trường rồi gửi một lần
-                logger.info("合并推送模式：跳过本次推送，将在个股+大盘复盘后统一发送")
+                logger.info("Chế độ gửi gộp: bỏ qua lần gửi này, sẽ gửi chung sau khi xong từng mã + tổng kết thị trường")
                 self._send_notifications(results, report_type, skip_push=True)
             else:
                 self._send_notifications(results, report_type)
@@ -3882,13 +3292,13 @@ class StockAnalysisPipeline:
             try:
                 if report_type == ReportType.FULL:
                     report_content = self.notifier.generate_dashboard_report([result])
-                    logger.info(f"[{stock_code}] 使用完整报告格式")
+                    logger.info(f"[{stock_code}] Dùng định dạng báo cáo đầy đủ")
                 elif report_type == ReportType.BRIEF:
                     report_content = self.notifier.generate_brief_report([result])
-                    logger.info(f"[{stock_code}] 使用简洁报告格式")
+                    logger.info(f"[{stock_code}] Dùng định dạng báo cáo tóm tắt")
                 else:
                     report_content = self.notifier.generate_single_stock_report(result)
-                    logger.info(f"[{stock_code}] 使用精简报告格式")
+                    logger.info(f"[{stock_code}] Dùng định dạng báo cáo rút gọn")
 
                 save_report = getattr(self.notifier, "save_report_to_file", None)
                 if callable(save_report):
@@ -3896,9 +3306,9 @@ class StockAnalysisPipeline:
                         date_str = datetime.now().strftime('%Y%m%d')
                         filename = f"report_{date_str}_{stock_code}.md"
                         filepath = save_report(report_content, filename=filename)
-                        logger.info(f"[{stock_code}] 单股报告已保存到本地: {filepath}")
+                        logger.info(f"[{stock_code}] Đã lưu báo cáo từng mã cục bộ: {filepath}")
                     except Exception as exc:
-                        logger.warning(f"[{stock_code}] 单股报告保存失败: {exc}")
+                        logger.warning(f"[{stock_code}] Lưu báo cáo từng mã thất bại: {exc}")
 
                 if not self.notifier.is_available():
                     notification_run = self._build_notification_run_snapshot(
@@ -3946,9 +3356,9 @@ class StockAnalysisPipeline:
                     notification_run=notification_run,
                 )
                 if sent:
-                    logger.info(f"[{stock_code}] 单股推送成功")
+                    logger.info(f"[{stock_code}] Gửi thông báo từng mã thành công")
                 else:
-                    logger.warning(f"[{stock_code}] 单股推送失败")
+                    logger.warning(f"[{stock_code}] Gửi thông báo từng mã thất bại")
             except Exception as e:
                 notification_run = self._build_notification_run_snapshot(
                     channel="report",
@@ -3967,7 +3377,7 @@ class StockAnalysisPipeline:
                     fallback_code=fallback_code,
                     notification_run=notification_run,
                 )
-                logger.error(f"[{stock_code}] 单股推送异常: {e}")
+                logger.error(f"[{stock_code}] Gửi thông báo từng mã gặp lỗi: {e}")
 
     def _save_local_report(
         self,
@@ -3982,7 +3392,7 @@ class StockAnalysisPipeline:
             report = self._generate_aggregate_report(results, report_type)
         except Exception as e:
             self._last_local_report_error = str(e)
-            logger.error("生成本地报告内容失败: %s", e)
+            logger.error("Tạo nội dung báo cáo cục bộ thất bại: %s", e)
             return None
 
         try:
@@ -3990,20 +3400,20 @@ class StockAnalysisPipeline:
             if filepath:
                 filepath = str(filepath)
                 self._last_local_report_path = filepath
-                logger.info(f"决策仪表盘日报已保存: {filepath}")
+                logger.info(f"Đã lưu báo cáo ngày bảng quyết định: {filepath}")
                 return filepath
             self._last_local_report_error = "notifier returned empty report path"
-            logger.error("保存本地报告失败: 通知服务未返回报告路径")
+            logger.error("Lưu báo cáo cục bộ thất bại: dịch vụ thông báo không trả về đường dẫn báo cáo")
         except Exception as e:
             self._last_local_report_error = str(e)
-            logger.error(f"保存本地报告失败: {e}")
+            logger.error(f"Lưu báo cáo cục bộ thất bại: {e}")
 
-        logger.warning("尝试回退到本地文件系统路径保存聚合报告")
+        logger.warning("Thử quay về đường dẫn hệ thống file cục bộ để lưu báo cáo tổng hợp")
         fallback_path = self._fallback_save_report_to_file(report)
         if fallback_path:
             self._last_local_report_path = fallback_path
             self._last_local_report_error = None
-            logger.warning("回退保存本地报告成功: %s", fallback_path)
+            logger.warning("Lưu báo cáo cục bộ theo đường dự phòng thành công: %s", fallback_path)
             return fallback_path
         if self._last_local_report_error is None:
             self._last_local_report_error = "fallback local report save failed"
@@ -4034,10 +3444,10 @@ class StockAnalysisPipeline:
             filename = filename or cls._default_report_filename()
             filepath = reports_dir / filename
             filepath.write_text(content, encoding='utf-8')
-            logger.info("决策仪表盘日报已回退写入: %s", filepath)
+            logger.info("Đã ghi báo cáo ngày bảng quyết định theo đường dự phòng: %s", filepath)
             return str(filepath)
         except Exception as exc:  # pragma: no cover - defensive fallback
-            logger.error("回退写入报告失败: %s", exc)
+            logger.error("Ghi báo cáo theo đường dự phòng thất bại: %s", exc)
             return None
 
     def _send_notifications(
@@ -4059,7 +3469,7 @@ class StockAnalysisPipeline:
         noise_decision = None
         noise_finalized = False
         try:
-            logger.info("生成决策仪表盘日报...")
+            logger.info("Đang tạo báo cáo ngày bảng quyết định...")
             report = self._generate_aggregate_report(results, report_type)
             
             # Bỏ qua bước đẩy (chế độ đẩy từng mã / chế độ gộp: báo cáo đã được _save_local_report lưu)
@@ -4095,7 +3505,7 @@ class StockAnalysisPipeline:
                         return bool(send_func()), None
                     except Exception as e:
                         logger.exception(
-                            "通知渠道 %s 推送异常，继续尝试其他渠道: %s",
+                            "Kênh thông báo %s gửi lỗi, tiếp tục thử các kênh khác: %s",
                             channel_label,
                             e,
                         )
@@ -4140,10 +3550,10 @@ class StockAnalysisPipeline:
                     if not send_context:
                         _record_channel_result("__context__", False)
                     if send_context:
-                        logger.info("决策仪表盘推送成功")
+                        logger.info("Gửi bảng quyết định thành công")
                     else:
-                        logger.warning("决策仪表盘推送失败")
-                    logger.info("交互式消息上下文回复模式：已跳过静态通知渠道")
+                        logger.warning("Gửi bảng quyết định thất bại")
+                    logger.info("Chế độ trả lời theo ngữ cảnh tin nhắn tương tác: đã bỏ qua các kênh thông báo tĩnh")
                     return
 
                 if channels and hasattr(self.notifier, "evaluate_noise_control"):
@@ -4187,9 +3597,6 @@ class StockAnalysisPipeline:
                     if ch.value in self.notifier._markdown_to_image_channels
                     and ch not in {NotificationChannel.NTFY, NotificationChannel.GOTIFY}
                 }
-                non_wechat_channels_needing_image = {
-                    ch for ch in channels_needing_image if ch != NotificationChannel.WECHAT
-                }
                 single_share_payload = (
                     _share_image_payload(results[0]) if len(results) == 1 else None
                 )
@@ -4205,7 +3612,7 @@ class StockAnalysisPipeline:
                     )
 
                 image_bytes = None
-                if non_wechat_channels_needing_image:
+                if channels_needing_image:
                     image_kwargs: Dict[str, Any] = {
                         "max_chars": self.notifier._markdown_to_image_max_chars,
                     }
@@ -4214,87 +3621,20 @@ class StockAnalysisPipeline:
                     image_bytes = markdown_to_image(report, **image_kwargs)
                     if image_bytes:
                         logger.info(
-                            "Markdown 已转换为图片，将向 %s 发送图片",
-                            [ch.value for ch in non_wechat_channels_needing_image],
+                            "Markdown đã được chuyển thành ảnh, sẽ gửi ảnh tới %s",
+                            [ch.value for ch in channels_needing_image],
                         )
                     else:
                         logger.warning(
-                            "Markdown 转图片失败，将回退为文本发送。请检查 MARKDOWN_TO_IMAGE_CHANNELS 配置并安装 %s",
+                            "Chuyển Markdown thành ảnh thất bại, sẽ quay về gửi văn bản. Hãy kiểm tra cấu hình MARKDOWN_TO_IMAGE_CHANNELS và cài %s",
                             _get_md2img_hint(),
                         )
 
-                # WeCom (WeChat Work): chỉ gửi bản rút gọn (giới hạn của nền tảng)
-                wechat_success = False
-                if NotificationChannel.WECHAT in channels:
-                    def _send_wechat_report() -> bool:
-                        if report_type == ReportType.BRIEF:
-                            dashboard_content = self.notifier.generate_brief_report(results)
-                        else:
-                            dashboard_content = self.notifier.generate_wechat_dashboard(results)
-                        logger.info(f"企业微信仪表盘长度: {len(dashboard_content)} 字符")
-                        logger.debug(f"企业微信推送内容:\n{dashboard_content}")
-                        wechat_image_bytes = None
-                        if NotificationChannel.WECHAT in channels_needing_image:
-                            wechat_image_kwargs: Dict[str, Any] = {
-                                "max_chars": self.notifier._markdown_to_image_max_chars,
-                            }
-                            if single_share_payload is not None:
-                                wechat_image_kwargs["structured_payload"] = single_share_payload
-                            wechat_image_bytes = markdown_to_image(
-                                dashboard_content,
-                                **wechat_image_kwargs,
-                            )
-                            if wechat_image_bytes is None:
-                                logger.warning(
-                                    "企业微信 Markdown 转图片失败，将回退为文本发送。请检查 MARKDOWN_TO_IMAGE_CHANNELS 配置并安装 %s",
-                                    _get_md2img_hint(),
-                                )
-                        use_image = self.notifier._should_use_image_for_channel(
-                            NotificationChannel.WECHAT, wechat_image_bytes
-                        )
-                        if use_image:
-                            return self.notifier._send_wechat_image(wechat_image_bytes)
-                        return self.notifier.send_to_wechat(dashboard_content)
-
-                    wechat_success, wechat_error = _send_channel_safely(
-                        NotificationChannel.WECHAT.value,
-                        _send_wechat_report,
-                    )
-                    _record_channel_result(
-                        NotificationChannel.WECHAT.value,
-                        wechat_success,
-                        wechat_error,
-                    )
-
-                # Các kênh khác: gửi báo cáo đầy đủ (tránh để logic cắt ngắn của wechat làm ảnh
-                # hưởng Webhook tuỳ chỉnh)
-                non_wechat_success = False
+                # Gửi báo cáo đầy đủ tới từng kênh. / Send the full report to each channel.
+                channels_success = False
                 stock_email_groups = getattr(self.config, 'stock_email_groups', []) or []
                 for channel in channels:
-                    if channel == NotificationChannel.WECHAT:
-                        continue
-                    if channel == NotificationChannel.FEISHU:
-                        def _send_feishu_report() -> bool:
-                            if getattr(self.notifier, "_feishu_send_as_file", False):
-                                date_str = datetime.now().strftime('%Y%m%d')
-                                filepath = self.notifier.save_report_to_file(
-                                    strip_hidden_markdown_metadata(report).strip(),
-                                    filename=f"dashboard_{date_str}.md",
-                                )
-                                return self.notifier.send_feishu_file(filepath)
-                            return self.notifier.send_to_feishu(report)
-
-                        channel_success, channel_error = _send_channel_safely(
-                            channel.value,
-                            _send_feishu_report,
-                        )
-                        non_wechat_success = channel_success or non_wechat_success
-                        _record_channel_result(
-                            channel.value,
-                            channel_success,
-                            channel_error,
-                        )
-                    elif channel == NotificationChannel.TELEGRAM:
+                    if channel == NotificationChannel.TELEGRAM:
                         def _send_telegram_report() -> bool:
                             use_image = self.notifier._should_use_image_for_channel(
                                 channel, image_bytes
@@ -4307,7 +3647,7 @@ class StockAnalysisPipeline:
                             channel.value,
                             _send_telegram_report,
                         )
-                        non_wechat_success = channel_success or non_wechat_success
+                        channels_success = channel_success or channels_success
                         _record_channel_result(
                             channel.value,
                             channel_success,
@@ -4373,7 +3713,7 @@ class StockAnalysisPipeline:
                                     email_label,
                                     _send_email_group,
                                 )
-                                non_wechat_success = channel_success or non_wechat_success
+                                channels_success = channel_success or channels_success
                                 _record_channel_result(
                                     email_label,
                                     channel_success,
@@ -4395,7 +3735,7 @@ class StockAnalysisPipeline:
                                 channel.value,
                                 _send_email_report,
                             )
-                            non_wechat_success = channel_success or non_wechat_success
+                            channels_success = channel_success or channels_success
                             _record_channel_result(
                                 channel.value,
                                 channel_success,
@@ -4416,29 +3756,7 @@ class StockAnalysisPipeline:
                             channel.value,
                             _send_custom_report,
                         )
-                        non_wechat_success = channel_success or non_wechat_success
-                        _record_channel_result(
-                            channel.value,
-                            channel_success,
-                            channel_error,
-                        )
-                    elif channel == NotificationChannel.PUSHPLUS:
-                        channel_success, channel_error = _send_channel_safely(
-                            channel.value,
-                            lambda: self.notifier.send_to_pushplus(report),
-                        )
-                        non_wechat_success = channel_success or non_wechat_success
-                        _record_channel_result(
-                            channel.value,
-                            channel_success,
-                            channel_error,
-                        )
-                    elif channel == NotificationChannel.SERVERCHAN3:
-                        channel_success, channel_error = _send_channel_safely(
-                            channel.value,
-                            lambda: self.notifier.send_to_serverchan3(report),
-                        )
-                        non_wechat_success = channel_success or non_wechat_success
+                        channels_success = channel_success or channels_success
                         _record_channel_result(
                             channel.value,
                             channel_success,
@@ -4449,7 +3767,7 @@ class StockAnalysisPipeline:
                             channel.value,
                             lambda: self.notifier.send_to_discord(report),
                         )
-                        non_wechat_success = channel_success or non_wechat_success
+                        channels_success = channel_success or channels_success
                         _record_channel_result(
                             channel.value,
                             channel_success,
@@ -4460,7 +3778,7 @@ class StockAnalysisPipeline:
                             channel.value,
                             lambda: self.notifier.send_to_pushover(report),
                         )
-                        non_wechat_success = channel_success or non_wechat_success
+                        channels_success = channel_success or channels_success
                         _record_channel_result(
                             channel.value,
                             channel_success,
@@ -4471,7 +3789,7 @@ class StockAnalysisPipeline:
                             channel.value,
                             lambda: self.notifier.send_to_ntfy(report),
                         )
-                        non_wechat_success = channel_success or non_wechat_success
+                        channels_success = channel_success or channels_success
                         _record_channel_result(
                             channel.value,
                             channel_success,
@@ -4482,18 +3800,7 @@ class StockAnalysisPipeline:
                             channel.value,
                             lambda: self.notifier.send_to_gotify(report),
                         )
-                        non_wechat_success = channel_success or non_wechat_success
-                        _record_channel_result(
-                            channel.value,
-                            channel_success,
-                            channel_error,
-                        )
-                    elif channel == NotificationChannel.ASTRBOT:
-                        channel_success, channel_error = _send_channel_safely(
-                            channel.value,
-                            lambda: self.notifier.send_to_astrbot(report),
-                        )
-                        non_wechat_success = channel_success or non_wechat_success
+                        channels_success = channel_success or channels_success
                         _record_channel_result(
                             channel.value,
                             channel_success,
@@ -4514,19 +3821,19 @@ class StockAnalysisPipeline:
                             channel.value,
                             _send_slack_report,
                         )
-                        non_wechat_success = channel_success or non_wechat_success
+                        channels_success = channel_success or channels_success
                         _record_channel_result(
                             channel.value,
                             channel_success,
                             channel_error,
                         )
                     else:
-                        logger.warning(f"未知通知渠道: {channel}")
+                        logger.warning(f"Kênh thông báo không xác định: {channel}")
 
                 has_targeted_channels = bool(channels)
-                success = wechat_success or non_wechat_success or send_context
+                success = channels_success or send_context
                 if (
-                    (wechat_success or non_wechat_success)
+                    channels_success
                     and noise_decision is not None
                     and hasattr(self.notifier, "record_noise_control")
                 ):
@@ -4539,9 +3846,9 @@ class StockAnalysisPipeline:
                     self.notifier.release_noise_control(noise_decision)
                     noise_finalized = True
                 if success:
-                    logger.info("决策仪表盘推送成功")
+                    logger.info("Gửi bảng quyết định thành công")
                 else:
-                    logger.warning("决策仪表盘推送失败")
+                    logger.warning("Gửi bảng quyết định thất bại")
                 if not has_targeted_channels and not send_context:
                     channel_label = ",".join(channel.value for channel in channels) or "report"
                     notification_run = self._build_notification_run_snapshot(
@@ -4575,7 +3882,7 @@ class StockAnalysisPipeline:
                     results=results,
                     notification_run=notification_run,
                 )
-                logger.info("通知渠道未配置，跳过推送")
+                logger.info("Chưa cấu hình kênh thông báo, bỏ qua gửi")
                 
         except Exception as e:
             notification_run = self._build_notification_run_snapshot(
@@ -4601,7 +3908,7 @@ class StockAnalysisPipeline:
             ):
                 self.notifier.release_noise_control(noise_decision)
             import traceback
-            logger.error(f"发送通知失败: {e}\n{traceback.format_exc()}")
+            logger.error(f"Gửi thông báo thất bại: {e}\n{traceback.format_exc()}")
 
     def _generate_aggregate_report(
         self,

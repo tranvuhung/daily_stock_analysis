@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """
+Kiểm thử hồi quy prefetch tên cổ phiếu (thị trường Việt Nam).
+
 Regression tests for stock-name prefetch behavior.
 """
 
@@ -16,7 +18,6 @@ import pandas as pd
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from data_provider.base import DataFetcherManager
-from data_provider.pytdx_fetcher import PytdxFetcher
 from src.core.pipeline import StockAnalysisPipeline
 
 
@@ -25,14 +26,14 @@ class _DummyFetcher:
 
     @staticmethod
     def get_stock_name(_stock_code):
-        return "测试股票"
+        return "Cổ phần Thử nghiệm"
 
 
 class _FallbackNameFetcher:
     name = "FallbackNameFetcher"
     priority = 99
 
-    def __init__(self, name: str = "备用名称"):
+    def __init__(self, name: str = "Tên dự phòng"):
         self.return_name = name
         self.calls = []
 
@@ -57,8 +58,8 @@ class _ThreadUnsafeStockListFetcher:
             time.sleep(0.05)
             return pd.DataFrame(
                 [
-                    {"code": "600519", "name": "贵州茅台"},
-                    {"code": "000001", "name": "平安银行"},
+                    {"code": "HPG", "name": "Hòa Phát"},
+                    {"code": "VCB", "name": "Vietcombank"},
                 ]
             )
         finally:
@@ -71,102 +72,106 @@ class TestPrefetchStockNames(unittest.TestCase):
         manager.get_stock_name = MagicMock(return_value="")
 
         DataFetcherManager.prefetch_stock_names(
-            manager, ["SH600519", "000001", "sh000016"], use_bulk=False
+            manager, ["HPG.VN", "VCB", "VNINDEX", "AAPL"], use_bulk=False
         )
 
+        # Mã ngoài VN (AAPL) bị bỏ qua. / Non-VN codes are skipped.
         manager.get_stock_name.assert_has_calls(
             [
-                call("600519", allow_realtime=False),
-                call("000001", allow_realtime=False),
-                call("sh000016", allow_realtime=False),
+                call("HPG", allow_realtime=False),
+                call("VCB", allow_realtime=False),
+                call("VNINDEX", allow_realtime=False),
             ]
         )
+        self.assertEqual(manager.get_stock_name.call_count, 3)
 
     def test_get_stock_name_skips_realtime_when_allow_realtime_false(self):
         manager = DataFetcherManager.__new__(DataFetcherManager)
         manager._fetchers = [_DummyFetcher()]
-        manager.get_realtime_quote = MagicMock(return_value=MagicMock(name="实时名称"))
+        manager.get_realtime_quote = MagicMock(return_value=MagicMock(name="Tên realtime"))
 
-        name = DataFetcherManager.get_stock_name(manager, "123456", allow_realtime=False)
+        with patch("data_provider.base.get_index_stock_name", return_value=None):
+            name = DataFetcherManager.get_stock_name(manager, "FPT", allow_realtime=False)
 
-        self.assertEqual(name, "测试股票")
+        self.assertEqual(name, "Cổ phần Thử nghiệm")
         manager.get_realtime_quote.assert_not_called()
 
     def test_get_stock_name_prefers_static_mapping_before_remote_fetchers(self):
         manager = DataFetcherManager.__new__(DataFetcherManager)
         remote_fetcher = MagicMock()
         remote_fetcher.name = "RemoteFetcher"
-        remote_fetcher.get_stock_name.return_value = "远程名称"
+        remote_fetcher.get_stock_name.return_value = "Tên từ xa"
         manager._fetchers = [remote_fetcher]
         manager.get_realtime_quote = MagicMock()
 
-        with patch("data_provider.base.get_index_stock_name", return_value=None):
-            name = DataFetcherManager.get_stock_name(manager, "600519", allow_realtime=False)
+        with patch.dict("data_provider.base.STOCK_NAME_MAP", {"HPG": "Hòa Phát"}, clear=True), \
+                patch("data_provider.base.get_index_stock_name", return_value=None):
+            name = DataFetcherManager.get_stock_name(manager, "HPG", allow_realtime=False)
 
-        self.assertEqual(name, "贵州茅台")
+        self.assertEqual(name, "Hòa Phát")
         manager.get_realtime_quote.assert_not_called()
         remote_fetcher.get_stock_name.assert_not_called()
-        self.assertEqual(manager._stock_name_cache["600519"], "贵州茅台")
+        self.assertEqual(manager._stock_name_cache["HPG"], "Hòa Phát")
 
     def test_get_stock_name_prefers_index_mapping_before_remote_fetchers(self):
         manager = DataFetcherManager.__new__(DataFetcherManager)
         remote_fetcher = MagicMock()
         remote_fetcher.name = "RemoteFetcher"
-        remote_fetcher.get_stock_name.return_value = "远程名称"
+        remote_fetcher.get_stock_name.return_value = "Tên từ xa"
         manager._fetchers = [remote_fetcher]
         manager.get_realtime_quote = MagicMock()
 
-        with patch("data_provider.base.get_index_stock_name", return_value="索引名称"):
-            name = DataFetcherManager.get_stock_name(manager, "123456", allow_realtime=False)
+        with patch("data_provider.base.get_index_stock_name", return_value="Tên trong index"):
+            name = DataFetcherManager.get_stock_name(manager, "FPT", allow_realtime=False)
 
-        self.assertEqual(name, "索引名称")
+        self.assertEqual(name, "Tên trong index")
         manager.get_realtime_quote.assert_not_called()
         remote_fetcher.get_stock_name.assert_not_called()
-        self.assertEqual(manager._stock_name_cache["123456"], "索引名称")
+        self.assertEqual(manager._stock_name_cache["FPT"], "Tên trong index")
 
     def test_get_stock_name_prefers_static_mapping_before_index_hits(self):
         manager = DataFetcherManager.__new__(DataFetcherManager)
         manager._fetchers = []
         manager.get_realtime_quote = MagicMock()
 
-        with patch.dict("data_provider.base.STOCK_NAME_MAP", {"AAPL": "苹果"}, clear=True):
-            with patch("data_provider.base.get_index_stock_name", return_value="APPLE"):
-                name = DataFetcherManager.get_stock_name(manager, "AAPL")
+        with patch.dict("data_provider.base.STOCK_NAME_MAP", {"VNM": "Vinamilk"}, clear=True):
+            with patch("data_provider.base.get_index_stock_name", return_value="VINAMILK INDEX"):
+                name = DataFetcherManager.get_stock_name(manager, "VNM")
 
-        self.assertEqual(name, "苹果")
+        self.assertEqual(name, "Vinamilk")
         manager.get_realtime_quote.assert_not_called()
-        self.assertEqual(manager._stock_name_cache["AAPL"], "苹果")
+        self.assertEqual(manager._stock_name_cache["VNM"], "Vinamilk")
 
     def test_get_stock_name_prefers_index_mapping_before_realtime_quote(self):
         manager = DataFetcherManager.__new__(DataFetcherManager)
         manager._fetchers = []
-        manager.get_realtime_quote = MagicMock(return_value=SimpleNamespace(name="实时名称"))
+        manager.get_realtime_quote = MagicMock(return_value=SimpleNamespace(name="Tên realtime"))
 
         with patch.dict("data_provider.base.STOCK_NAME_MAP", {}, clear=True):
-            with patch("data_provider.base.get_index_stock_name", return_value="索引名称"):
-                name = DataFetcherManager.get_stock_name(manager, "123456", allow_realtime=True)
+            with patch("data_provider.base.get_index_stock_name", return_value="Tên trong index"):
+                name = DataFetcherManager.get_stock_name(manager, "FPT", allow_realtime=True)
 
-        self.assertEqual(name, "索引名称")
+        self.assertEqual(name, "Tên trong index")
         manager.get_realtime_quote.assert_not_called()
-        self.assertEqual(manager._stock_name_cache["123456"], "索引名称")
+        self.assertEqual(manager._stock_name_cache["FPT"], "Tên trong index")
 
     def test_get_stock_name_preserves_raw_exchange_hint_for_realtime_lookup(self):
         manager = DataFetcherManager.__new__(DataFetcherManager)
         manager._fetchers = []
-        manager.get_realtime_quote = MagicMock(return_value=SimpleNamespace(name="平安银行"))
+        manager.get_realtime_quote = MagicMock(return_value=SimpleNamespace(name="Vietcombank"))
 
         with patch.dict("data_provider.base.STOCK_NAME_MAP", {}, clear=True):
             with patch("data_provider.base.get_index_stock_name", return_value=None):
-                name = DataFetcherManager.get_stock_name(manager, "000001.SZ")
+                name = DataFetcherManager.get_stock_name(manager, "VCB.VN")
 
-        self.assertEqual(name, "平安银行")
-        manager.get_realtime_quote.assert_called_once_with("000001.SZ", log_final_failure=False)
+        self.assertEqual(name, "Vietcombank")
+        manager.get_realtime_quote.assert_called_once_with("VCB.VN", log_final_failure=False)
 
     def test_fetch_and_save_stock_data_uses_lightweight_name_lookup(self):
         pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)
         pipeline.fetcher_manager = MagicMock()
         pipeline.db = MagicMock()
-        pipeline.fetcher_manager.get_stock_name.return_value = "贵州茅台"
+        pipeline.fetcher_manager.get_stock_name.return_value = "Hòa Phát"
         pipeline.db.has_today_data.return_value = False
         pipeline.fetcher_manager.get_daily_data.return_value = (
             pd.DataFrame(
@@ -187,96 +192,12 @@ class TestPrefetchStockNames(unittest.TestCase):
         )
         pipeline.db.save_daily_data.return_value = 1
 
-        success, error = StockAnalysisPipeline.fetch_and_save_stock_data(pipeline, "600519")
+        success, error = StockAnalysisPipeline.fetch_and_save_stock_data(pipeline, "HPG")
 
         self.assertTrue(success)
         self.assertIsNone(error)
-        pipeline.fetcher_manager.get_stock_name.assert_called_once_with("600519", allow_realtime=False)
+        pipeline.fetcher_manager.get_stock_name.assert_called_once_with("HPG", allow_realtime=False)
 
-    def test_pytdx_get_stock_name_reads_all_security_list_pages(self):
-        fetcher = PytdxFetcher(hosts=[])
-
-        first_page = [
-            {"code": f"{index:06d}", "name": f"股票{index:06d}"}
-            for index in range(1000)
-        ]
-        second_page = [{"code": "300750", "name": "宁德时代"}]
-
-        api = MagicMock()
-
-        def fake_get_security_list(market, start):
-            if market == 0 and start == 0:
-                return first_page
-            if market == 0 and start == 1000:
-                return second_page
-            return []
-
-        api.get_security_list.side_effect = fake_get_security_list
-        api.get_finance_info.return_value = None
-
-        session = MagicMock()
-        session.__enter__.return_value = api
-        session.__exit__.return_value = False
-
-        with patch.object(fetcher, "_pytdx_session", return_value=session):
-            name = fetcher.get_stock_name("300750")
-
-        self.assertEqual(name, "宁德时代")
-        self.assertEqual(fetcher._stock_name_cache["300750"], "宁德时代")
-        self.assertEqual(fetcher._stock_list_cache["300750"], "宁德时代")
-        api.get_finance_info.assert_not_called()
-
-    def test_pytdx_get_stock_name_enters_connection_cooldown_after_all_hosts_fail(self):
-        fetcher = PytdxFetcher(hosts=[("127.0.0.1", 7709), ("127.0.0.2", 7709)])
-        instances = []
-
-        class _FakeApi:
-            def __init__(self):
-                self.connect_calls = 0
-                instances.append(self)
-
-            def connect(self, host, port, time_out=5):
-                self.connect_calls += 1
-                return False
-
-            def disconnect(self):
-                return None
-
-        with patch.object(fetcher, "_get_pytdx", return_value=_FakeApi):
-            self.assertIsNone(fetcher.get_stock_name("159559"))
-            self.assertFalse(fetcher.is_available_for_request("stock_name"))
-            self.assertIsNone(fetcher.get_stock_name("159559"))
-
-        self.assertEqual(len(instances), 1)
-        self.assertEqual(instances[0].connect_calls, 2)
-
-    def test_manager_skips_pytdx_name_lookup_during_connection_cooldown(self):
-        pytdx = PytdxFetcher(hosts=[("127.0.0.1", 7709)])
-        fallback = _FallbackNameFetcher("创业板人工智能ETF")
-        manager = DataFetcherManager(fetchers=[pytdx, fallback])
-        instances = []
-
-        class _FakeApi:
-            def __init__(self):
-                self.connect_calls = 0
-                instances.append(self)
-
-            def connect(self, host, port, time_out=5):
-                self.connect_calls += 1
-                return False
-
-            def disconnect(self):
-                return None
-
-        with patch.object(pytdx, "_get_pytdx", return_value=_FakeApi):
-            first = manager.get_stock_name("159559", allow_realtime=False)
-            second = manager.get_stock_name("159560", allow_realtime=False)
-
-        self.assertEqual(first, "创业板人工智能ETF")
-        self.assertEqual(second, "创业板人工智能ETF")
-        self.assertEqual(fallback.calls, ["159559", "159560"])
-        self.assertEqual(len(instances), 1)
-        self.assertEqual(instances[0].connect_calls, 1)
 
     def test_batch_get_stock_names_serializes_shared_fetcher_access(self):
         manager = DataFetcherManager.__new__(DataFetcherManager)
@@ -289,7 +210,7 @@ class TestPrefetchStockNames(unittest.TestCase):
         def worker():
             try:
                 barrier.wait(timeout=1)
-                result = DataFetcherManager.batch_get_stock_names(manager, ["600519", "000001"])
+                result = DataFetcherManager.batch_get_stock_names(manager, ["HPG", "VCB"])
                 results.append(result)
             except Exception as exc:  # pragma: no cover - thread collection
                 errors.append(exc)
@@ -303,11 +224,11 @@ class TestPrefetchStockNames(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(len(results), 2)
         for result in results:
-            self.assertEqual(result["600519"], "贵州茅台")
-            self.assertEqual(result["000001"], "平安银行")
+            self.assertEqual(result["HPG"], "Hòa Phát")
+            self.assertEqual(result["VCB"], "Vietcombank")
         self.assertGreaterEqual(manager._fetchers[0].call_count, 1)
-        self.assertEqual(manager._stock_name_cache["600519"], "贵州茅台")
-        self.assertEqual(manager._stock_name_cache["000001"], "平安银行")
+        self.assertEqual(manager._stock_name_cache["HPG"], "Hòa Phát")
+        self.assertEqual(manager._stock_name_cache["VCB"], "Vietcombank")
 
 
 if __name__ == "__main__":

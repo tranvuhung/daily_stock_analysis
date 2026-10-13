@@ -34,15 +34,7 @@ _PHASE_CONTEXT_KEYS = (
     "warnings",
 )
 
-_ZH_POSTMARKET_RECAP_PATTERNS = (
-    "今日收盘后",
-    "收盘后复盘",
-    "盘后复盘",
-    "明日重点关注",
-    "明天重点关注",
-    "完整交易日复盘",
-)
-
+# Mẫu nhận diện (vi/en; đã bỏ zh/ko). / Detection patterns (vi/en; zh/ko removed).
 _EN_POSTMARKET_RECAP_PATTERNS = (
     "after today's close",
     "after today’s close",
@@ -52,65 +44,29 @@ _EN_POSTMARKET_RECAP_PATTERNS = (
     "focus tomorrow",
     "tomorrow's focus",
     "tomorrow’s focus",
+    "sau khi đóng cửa hôm nay",
+    "điểm lại sau phiên",
+    "tâm điểm ngày mai",
 )
 
-_IMMEDIATE_ACTION_MARKERS_ZH = (
-    "立即买入",
-    "马上买入",
-    "立即加仓",
-    "马上加仓",
-    "立即卖出",
-    "马上卖出",
-    "立即减仓",
-    "马上减仓",
-)
 _IMMEDIATE_ACTION_MARKERS_EN = ("buy now", "sell now", "immediate buy", "immediate sell", "add now", "reduce now")
-_NEGATION_PREFIXES_ZH = ("暂不", "不建议", "禁止", "不要", "无需", "避免", "不能", "不可", "不宜", "勿", "不")
 _NEGATION_PREFIXES_EN = ("do not", "don't", "dont", "not", "no", "avoid", "hold off", "without")
 
-_KO_POSTMARKET_RECAP_PATTERNS = (
-    "오늘 장 마감 후",
-    "장 마감 후 리뷰",
-    "장 마감 후",
-    "마감 후 리뷰",
-    "내일 주목",
-    "내일 집중",
-    "완전한 거래일 리뷰",
-)
-_IMMEDIATE_ACTION_MARKERS_KO = ("즉시 매수", "지금 매수", "즉시 비중확대", "즉시 매도", "지금 매도", "즉시 비중축소")
-_NEGATION_PREFIXES_KO = ("하지", "권하지 않", "금지", "삼가", "불필요", "피하", "불가", "않", "안")
-
-
 def _recap_patterns_for(language: str) -> tuple[str, ...]:
-    if language in ("en", "vi"):
-        return _EN_POSTMARKET_RECAP_PATTERNS
-    if language == "ko":
-        return _KO_POSTMARKET_RECAP_PATTERNS
-    return _ZH_POSTMARKET_RECAP_PATTERNS
+    return _EN_POSTMARKET_RECAP_PATTERNS
 
 
 def _immediate_markers_for(language: str) -> tuple[str, ...]:
-    if language in ("en", "vi"):
-        return _IMMEDIATE_ACTION_MARKERS_EN
-    if language == "ko":
-        return _IMMEDIATE_ACTION_MARKERS_KO
-    return _IMMEDIATE_ACTION_MARKERS_ZH
+    return _IMMEDIATE_ACTION_MARKERS_EN
 
 
 def _negations_for(language: str) -> tuple[str, ...]:
-    if language in ("en", "vi"):
-        return _NEGATION_PREFIXES_EN
-    if language == "ko":
-        return _NEGATION_PREFIXES_KO
-    return _NEGATION_PREFIXES_ZH
+    return _NEGATION_PREFIXES_EN
 
 
-def _reason_text(language: str, *, en: str, zh: str, ko: str) -> str:
-    if language in ("en", "vi"):
-        return en
-    if language == "ko":
-        return ko
-    return zh
+def _reason_text(language: str, *, en: str) -> str:
+    # vi và en dùng chung câu chữ tiếng Anh như trước. / vi and en share the English wording as before.
+    return en
 
 
 def apply_phase_decision_guardrails(
@@ -118,14 +74,15 @@ def apply_phase_decision_guardrails(
     *,
     market_phase_summary: Optional[Dict[str, Any]],
     analysis_context_pack_overview: Optional[Dict[str, Any]],
-    report_language: str = "zh",
+    report_language: str = "vi",
 ) -> List[str]:
     """Apply phase/data-quality guardrails to an AnalysisResult in place."""
 
     if result is None:
         return []
 
-    language = normalize_report_language(report_language or getattr(result, "report_language", "zh"))
+    # Chỉ còn 'en' và 'vi'. / Only 'en' and 'vi' remain.
+    language = "en" if normalize_report_language(report_language or getattr(result, "report_language", "vi")) == "en" else "vi"
     phase_summary = _safe_phase_summary(market_phase_summary)
     overview = analysis_context_pack_overview if isinstance(analysis_context_pack_overview, Mapping) else None
     adjustments: List[str] = []
@@ -161,8 +118,6 @@ def apply_phase_decision_guardrails(
         reason = _reason_text(
             language,
             en="Core quote, daily-bar, or technical data is degraded; high confidence was capped.",
-            zh="核心行情、日线或技术数据受限，已限制高置信结论。",
-            ko="핵심 시세·일봉·기술 데이터가 제한되어 높은 신뢰도를 하향 조정했습니다.",
         )
         _append_reason(phase_decision, reason)
         adjustments.append("confidence_capped_core_data_degraded")
@@ -176,8 +131,6 @@ def apply_phase_decision_guardrails(
         reason = _reason_text(
             language,
             en="Current market phase does not support immediate intraday buy/sell action.",
-            zh="当前市场阶段不支持即时盘中买卖动作。",
-            ko="현재 시장 단계에서는 즉시 장중 매수/매도 동작을 지원하지 않습니다.",
         )
         _append_reason(phase_decision, reason)
         adjustments.append("non_intraday_action_adjusted")
@@ -189,8 +142,6 @@ def apply_phase_decision_guardrails(
         reason = _reason_text(
             language,
             en="Intraday output contained post-market recap wording; replaced with phase-safe action wording.",
-            zh="盘中输出包含盘后复盘口吻，已替换为阶段安全动作表述。",
-            ko="장중 출력에 장 마감 후 리뷰 표현이 있어 단계에 맞는 안전한 표현으로 교체했습니다.",
         )
         _replace_postmarket_recap_fields(result, phase_decision, language=language)
         _append_reason(phase_decision, reason)
@@ -257,11 +208,7 @@ def _phase_warning_limitations(summary: Optional[Mapping[str, Any]], *, language
     warnings = _list_strings(summary.get("warnings"))
     if not warnings:
         return []
-    if language in ("en", "vi"):
-        return [f"market phase warning: {item}" for item in warnings]
-    if language == "ko":
-        return [f"시장 단계 경고: {item}" for item in warnings]
-    return [f"市场阶段提醒：{item}" for item in warnings]
+    return [f"market phase warning: {item}" for item in warnings]
 
 
 def _merge_limitations(*groups: Any, limit: int = 5) -> List[str]:
@@ -277,7 +224,7 @@ def _merge_limitations(*groups: Any, limit: int = 5) -> List[str]:
 
 def _is_high_confidence(value: Any) -> bool:
     text = _safe_text(value).lower()
-    return text in {"高", "high", "높음"}
+    return text in {"high", "cao"}
 
 
 def _has_immediate_buy_sell_signal(
@@ -317,7 +264,7 @@ def _contains_non_negated_marker(text: str, markers: tuple[str, ...], *, languag
 
 
 def _is_negated_marker(text: str, marker_index: int, *, language: str) -> bool:
-    window = 24 if language in ("en", "vi") else 8
+    window = 24
     prefix = text[max(0, marker_index - window):marker_index].rstrip()
     negations = _negations_for(language)
     return any(prefix.endswith(item) for item in negations)
@@ -357,8 +304,6 @@ def _replace_postmarket_recap_fields(
             "This is an intraday phase; use live state, watch conditions, and the next "
             "check point rather than post-market recap wording."
         ),
-        zh="当前处于盘中阶段，应以实时状态、观察条件和下一次检查点为准，避免盘后复盘口径。",
-        ko="현재 장중 단계이므로 장 마감 후 리뷰 표현 대신 실시간 상태·관찰 조건·다음 점검 시점을 기준으로 합니다.",
     )
     if _contains_any(core.get("one_sentence"), _patterns(language)):
         core["one_sentence"] = safe_action
@@ -384,29 +329,21 @@ def _adjustment_limitation_text(adjustment: str, *, language: str) -> str:
         return _reason_text(
             language,
             en="post-market recap wording adjusted",
-            zh="已修正盘后复盘口吻",
-            ko="장 마감 후 리뷰 표현을 수정함",
         )
     if adjustment == "non_intraday_action_adjusted":
         return _reason_text(
             language,
             en="non-intraday immediate action adjusted",
-            zh="非盘中阶段已修正即时买卖动作",
-            ko="비장중 단계의 즉시 매매 동작을 수정함",
         )
     if adjustment == "confidence_capped_non_intraday_action":
         return _reason_text(
             language,
             en="confidence capped for non-intraday action",
-            zh="非盘中阶段已限制买卖置信度",
-            ko="비장중 단계 매매에 대해 신뢰도를 제한함",
         )
     if adjustment == "confidence_capped_core_data_degraded":
         return _reason_text(
             language,
             en="confidence capped due to degraded core data",
-            zh="核心数据受限已降低置信度",
-            ko="핵심 데이터 제한으로 신뢰도를 낮춤",
         )
     return adjustment
 
@@ -415,8 +352,6 @@ def _safe_wait_action(language: str) -> str:
     return _reason_text(
         language,
         en="Wait for intraday confirmation; do not chase.",
-        zh="等待盘中确认，禁止追高。",
-        ko="장중 확인을 기다리고 추격 매수하지 마세요.",
     )
 
 

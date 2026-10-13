@@ -289,7 +289,7 @@ class StrategySynthesizer:
         opinions: List[StrategyOpinion],
         final_score: float,
     ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """Dynamic bipartite grouping per multi-strategy-contract §动态二分阵营 (dynamic bipartite camps).
+        """Dynamic bipartite grouping per multi-strategy-contract §"dynamic bipartite camps (Supporting / Opposing)".
 
         Every valid opinion falls into exactly one of supporting/opposing.
         `neutral_skills` is deliberately removed to prevent render mismatch
@@ -329,7 +329,7 @@ class StrategySynthesizer:
         *,
         insufficient_evidence: bool = False,
     ) -> str:
-        """Consensus level per multi-strategy-contract §共识度门槛 (consensus thresholds).
+        """Consensus level per multi-strategy-contract §"consensus thresholds".
 
         Precedence:
         1. aggregator-signalled insufficient (zero valid_weight_sum) → insufficient

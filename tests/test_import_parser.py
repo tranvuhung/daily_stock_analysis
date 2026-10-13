@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Tests for import_parser.
+"""Kiểm thử import_parser (mã Việt Nam).
+
+Tests for import_parser.
 
 Covers:
 - CSV/Excel/text parsing
 - Column mapping (code, name aliases)
-- Encoding (utf-8, gbk)
+- Encoding (utf-8, Windows-1258)
 - Name-to-code resolution (mocked)
 - No-header mode (col 0 = code, col 1 = name)
 - File size and text size limits
@@ -28,55 +30,54 @@ from src.services.import_parser import (
 
 class TestParseImportFromBytesCsv:
     def test_parses_csv_with_header(self):
-        data = "code,name\n600519,贵州茅台\n00700,腾讯控股".encode("utf-8")
+        data = "code,name\nHPG,Hòa Phát\nVCB,Vietcombank".encode("utf-8")
         result = parse_import_from_bytes(data, "a.csv")
         assert len(result) == 2
-        assert result[0] == ("600519", "贵州茅台", "medium")
-        assert result[1] == ("00700", "腾讯控股", "medium")
+        assert result[0] == ("HPG", "Hòa Phát", "medium")
+        assert result[1] == ("VCB", "Vietcombank", "medium")
 
-    def test_parses_csv_chinese_column_names(self):
-        data = "股票代码,股票名称\n600519,贵州茅台".encode("utf-8")
+    def test_parses_csv_vietnamese_column_names(self):
+        data = "mã cổ phiếu,tên cổ phiếu\nHPG,Hòa Phát".encode("utf-8")
         result = parse_import_from_bytes(data, "a.csv")
-        assert result[0] == ("600519", "贵州茅台", "medium")
+        assert result[0] == ("HPG", "Hòa Phát", "medium")
 
     def test_parses_utf8_bom_csv_header(self):
-        data = "\ufeffcode,name\n600519,".encode("utf-8")
+        data = "\ufeffcode,name\nHPG,".encode("utf-8")
         result = parse_import_from_bytes(data, "a.csv")
-        assert result == [("600519", None, "medium")]
+        assert result == [("HPG", None, "medium")]
 
     def test_parses_csv_no_header(self):
-        # Use 300750 instead of 00700 to avoid pandas stripping leading zeros
-        data = "600519,贵州茅台\n300750,宁德时代".encode("utf-8")
+        data = "HPG,Hòa Phát\nFPT,FPT Corp".encode("utf-8")
         result = parse_import_from_bytes(data, "a.csv")
         assert len(result) == 2
-        assert result[0] == ("600519", "贵州茅台", "medium")
-        assert result[1] == ("300750", "宁德时代", "medium")
+        assert result[0] == ("HPG", "Hòa Phát", "medium")
+        assert result[1] == ("FPT", "FPT Corp", "medium")
 
     def test_skips_empty_rows(self):
-        data = "code,name\n600519,贵州茅台\n\n00700,腾讯控股".encode("utf-8")
+        data = "code,name\nHPG,Hòa Phát\n\nVCB,Vietcombank".encode("utf-8")
         result = parse_import_from_bytes(data, "a.csv")
         assert len(result) == 2
 
     def test_tab_separated(self):
-        data = "code\tname\n600519\t贵州茅台".encode("utf-8")
+        data = "code\tname\nHPG\tHòa Phát".encode("utf-8")
         result = parse_import_from_bytes(data, "paste.txt")
-        assert result[0] == ("600519", "贵州茅台", "medium")
+        assert result[0] == ("HPG", "Hòa Phát", "medium")
 
     @patch("src.services.import_parser.resolve_name_to_code")
     def test_resolves_name_when_code_empty(self, mock_resolve):
-        mock_resolve.return_value = "600519"
+        mock_resolve.return_value = "HPG"
         # code column empty, name column has value
-        data = "code,name\n,贵州茅台".encode("utf-8")
+        data = "code,name\n,Hòa Phát".encode("utf-8")
         result = parse_import_from_bytes(data, "a.csv")
-        assert result[0] == ("600519", "贵州茅台", "medium")
-        mock_resolve.assert_called_with("贵州茅台")
+        assert result[0] == ("HPG", "Hòa Phát", "medium")
+        mock_resolve.assert_called_with("Hòa Phát")
 
     @patch("src.services.import_parser.resolve_name_to_code")
     def test_returns_none_code_when_resolution_fails(self, mock_resolve):
         mock_resolve.return_value = None
-        data = "code,name\n,不存在的股票".encode("utf-8")
+        data = "code,name\n,Cổ phiếu không tồn tại".encode("utf-8")
         result = parse_import_from_bytes(data, "a.csv")
-        assert result[0] == (None, "不存在的股票", "medium")
+        assert result[0] == (None, "Cổ phiếu không tồn tại", "medium")
 
 
 # ---------------------------------------------------------------------------
@@ -93,16 +94,16 @@ class TestParseImportFromBytesExcel:
         wb = Workbook()
         ws = wb.active
         ws.append(["code", "name"])
-        ws.append(["600519", "贵州茅台"])
-        ws.append(["300750", "宁德时代"])
+        ws.append(["HPG", "Hòa Phát"])
+        ws.append(["FPT", "FPT Corp"])
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
         data = buf.read()
         result = parse_import_from_bytes(data, "a.xlsx")
         assert len(result) == 2
-        assert result[0] == ("600519", "贵州茅台", "medium")
-        assert result[1] == ("300750", "宁德时代", "medium")
+        assert result[0] == ("HPG", "Hòa Phát", "medium")
+        assert result[1] == ("FPT", "FPT Corp", "medium")
 
     def test_parses_xlsx_without_header(self):
         """Header-less Excel: first data row must NOT be consumed as column names."""
@@ -113,8 +114,8 @@ class TestParseImportFromBytesExcel:
         from openpyxl import Workbook
         wb = Workbook()
         ws = wb.active
-        ws.append(["600519", "贵州茅台"])
-        ws.append(["00700", "腾讯控股"])
+        ws.append(["HPG", "Hòa Phát"])
+        ws.append(["VCB", "Vietcombank"])
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
@@ -122,12 +123,12 @@ class TestParseImportFromBytesExcel:
         result = parse_import_from_bytes(data, "noheader.xlsx")
         assert len(result) == 2, f"Expected 2 rows, got {len(result)} — first row may have been eaten as header"
         codes = [r[0] for r in result]
-        assert "600519" in codes
-        assert "00700" in codes
+        assert "HPG" in codes
+        assert "VCB" in codes
 
     def test_rejects_xls(self):
         data = b"dummy"
-        with pytest.raises(ValueError, match="仅支持 .xlsx"):
+        with pytest.raises(ValueError, match="Chỉ hỗ trợ định dạng .xlsx"):
             parse_import_from_bytes(data, "a.xls")
 
     def test_excel_error_includes_actionable_hint(self):
@@ -137,7 +138,7 @@ class TestParseImportFromBytesExcel:
         with pytest.raises(ValueError) as exc_info:
             parse_import_from_bytes(data, "a.xlsx")
         msg = str(exc_info.value)
-        assert "请确认" in msg or ".xlsx" in msg
+        assert "Hãy kiểm tra" in msg or ".xlsx" in msg
 
 
 # ---------------------------------------------------------------------------
@@ -147,30 +148,30 @@ class TestParseImportFromBytesExcel:
 class TestParseImportLimits:
     def test_rejects_file_over_limit(self):
         data = b"x" * (MAX_FILE_BYTES + 1)
-        with pytest.raises(ValueError, match="超过"):
+        with pytest.raises(ValueError, match="vượt quá giới hạn"):
             parse_import_from_bytes(data, "a.csv")
 
     def test_rejects_text_over_limit(self):
         text = "x" * (MAX_TEXT_BYTES + 1)
-        with pytest.raises(ValueError, match="超过"):
+        with pytest.raises(ValueError, match="vượt quá giới hạn"):
             parse_import_from_text(text)
 
     def test_csv_parser_error_raises_helpful_message(self):
         """Malformed CSV (e.g. unclosed quote) should raise with actionable hint."""
-        data = 'code,name\n600519,"贵州茅台'.encode("utf-8")
+        data = 'code,name\nHPG,"Hòa Phát'.encode("utf-8")
         with pytest.raises(ValueError) as exc_info:
             parse_import_from_bytes(data, "a.csv")
         msg = str(exc_info.value)
-        assert "CSV 解析失败" in msg
-        assert "分隔符" in msg or "引号" in msg
+        assert "Phân tích CSV thất bại" in msg
+        assert "dấu phân cách" in msg or "dấu ngoặc kép" in msg
 
-    def test_accepts_gbk_encoded_csv(self):
-        # Build CSV with Chinese in GBK encoding
-        data = ("code,name\n600519," + "贵州茅台").encode("gbk")
+    def test_accepts_windows_1258_encoded_csv(self):
+        # CSV tiếng Việt xuất từ Excel cũ (Windows-1258). / Legacy Vietnamese Excel export.
+        data = "code,name\nPOM,Thép Pomina".encode("cp1258")
         result = parse_import_from_bytes(data, "a.csv")
         assert len(result) == 1
-        assert result[0][0] == "600519"
-        assert result[0][1] == "贵州茅台"
+        assert result[0][0] == "POM"
+        assert result[0][1] == "Thép Pomina"
 
 
 # ---------------------------------------------------------------------------
@@ -179,33 +180,33 @@ class TestParseImportLimits:
 
 class TestParseImportFromText:
     def test_parses_pasted_text(self):
-        text = "600519,贵州茅台\n300750,宁德时代"
+        text = "HPG,Hòa Phát\nFPT,FPT Corp"
         result = parse_import_from_text(text)
         assert len(result) == 2
-        assert result[0] == ("600519", "贵州茅台", "medium")
+        assert result[0] == ("HPG", "Hòa Phát", "medium")
 
     def test_parses_single_column_codes(self):
-        text = "00700\n600519"
+        text = "VCB\nHPG"
         result = parse_import_from_text(text)
         assert len(result) == 2
-        assert result[0] == ("00700", None, "medium")
-        assert result[1] == ("600519", None, "medium")
+        assert result[0] == ("VCB", None, "medium")
+        assert result[1] == ("HPG", None, "medium")
 
     def test_parses_single_column_with_header(self):
-        text = "code\n00700"
+        text = "code\nVCB"
         result = parse_import_from_text(text)
         assert len(result) == 1
-        assert result[0] == ("00700", None, "medium")
+        assert result[0] == ("VCB", None, "medium")
 
     def test_parses_space_separated_code_name_lines(self):
-        text = "600519 贵州茅台\n00700 腾讯控股"
+        text = "HPG Hòa Phát\nVCB Vietcombank"
         result = parse_import_from_text(text)
         assert len(result) == 2
-        assert result[0] == ("600519", "贵州茅台", "medium")
-        assert result[1] == ("00700", "腾讯控股", "medium")
+        assert result[0] == ("HPG", "Hòa Phát", "medium")
+        assert result[1] == ("VCB", "Vietcombank", "medium")
 
     def test_preserves_name_when_code_is_dirty(self):
-        data = "code,name\nINVALID,贵州茅台".encode("utf-8")
+        data = "code,name\nINVALID,Hòa Phát".encode("utf-8")
         result = parse_import_from_bytes(data, "a.csv")
         assert len(result) == 1
-        assert result[0] == ("600519", "贵州茅台", "medium")
+        assert result[0] == ("HPG", "Hòa Phát", "medium")

@@ -52,61 +52,52 @@ class EvaluationConfig:
 class BacktestEngine:
     """Long-only daily-bar backtesting engine."""
 
-    # Operation advice keywords (Chinese + English)
+    # Từ khoá khuyến nghị thao tác (tiếng Việt + tiếng Anh), viết thường.
+    # Operation advice keywords (Vietnamese + English), lowercase.
     _BULLISH_KEYWORDS = (
-        "买入",
-        "加仓",
-        "强烈买入",
-        "增持",
-        "建仓",
+        "mua mạnh",
+        "mua thêm",
+        "mua",
+        "tăng tỷ trọng",
         "strong buy",
         "buy",
         "add",
     )
     _BEARISH_KEYWORDS = (
-        "卖出",
-        "减仓",
-        "强烈卖出",
-        "清仓",
+        "bán mạnh",
+        "bán",
+        "giảm tỷ trọng",
+        "chốt lời",
         "strong sell",
         "sell",
         "reduce",
     )
     _HOLD_KEYWORDS = (
-        "持有",
-        "震荡观望",
-        "洗盘观察",
-        "持有观察",
+        "nắm giữ",
+        "giữ",
+        "đi ngang quan sát",
+        "quan sát rũ bỏ",
+        "nắm giữ quan sát",
         "hold",
         "range-bound watch",
         "shakeout watch",
         "hold and watch",
     )
     _WAIT_KEYWORDS = (
-        "观望",
-        "等待",
+        "quan sát",
+        "theo dõi",
+        "chờ",
+        "đứng ngoài",
         "wait",
     )
 
+    # Tiền tố phủ định (so khớp hậu tố sau khi bỏ khoảng trắng cuối).
     # Negation prefixes (trailing spaces stripped for suffix-matching against prefix text).
     # English patterns include trailing space in their canonical form; rstrip is
     # applied during matching so "do not" matches prefix "do not " or "do not".
     _NEGATION_PATTERNS = (
         "not", "don't", "do not", "no", "never", "avoid",  # English
-        "不要", "不", "别", "勿", "没有",  # Chinese
-    )
-
-    _NEGATION_CONNECTOR_WORDS = (
-        "建议",
-        "应",
-        "应当",
-        "宜",
-        "先",
-        "再",
-        "暂",
-        "不必",
-        "必须",
-        "无需",
+        "không", "đừng", "chưa", "tránh",  # Tiếng Việt / Vietnamese
     )
 
     @classmethod
@@ -486,7 +477,7 @@ class BacktestEngine:
     def _matches_intent(cls, text: str, keywords: Sequence[str]) -> bool:
         """Check if text expresses the intent of any keyword, accounting for negation.
 
-        Tier 1: exact match (covers clean labels like "买入", "hold").
+        Tier 1: exact match (covers clean labels like "mua", "hold").
         Tier 2: substring match with negation guard.
         Keywords are assumed to be lowercase (matching _normalize_text output).
         """
@@ -524,21 +515,6 @@ class BacktestEngine:
                             break
                     continue
 
-            # For non-ASCII terms (Chinese), use substring matching to keep
-            # natural language phrasings like "建议买入" effective.
-            if re.search(r"[\u4e00-\u9fff]", keyword):
-                start = 0
-                while True:
-                    match_idx = text.find(keyword, start)
-                    if match_idx < 0:
-                        break
-                    if not cls._is_negated(text[:match_idx], keyword):
-                        if best_pos is None or match_idx < best_pos:
-                            best_pos = match_idx
-                        break
-                    start = match_idx + len(keyword)
-                continue
-
         return best_pos
 
     @classmethod
@@ -570,14 +546,10 @@ class BacktestEngine:
             if cls._contains_keyword(suffix_gap, target):
                 return True
 
-            # Keep English short-gap behavior where negation words are followed by
+            # Khoảng cách ngắn sau từ phủ định (vd. "not to sell", "không nên bán") vẫn tính là phủ định.
+            # Keep short-gap behavior where negation words are followed by
             # connector words such as "to" (e.g. "not to sell").
-            if not any(ch >= "\u4e00" and ch <= "\u9fff" for ch in suffix_gap):
-                if len(suffix_gap) <= 6:
-                    return True
-                continue
-
-            if cls._is_negation_connector_gap(suffix_gap):
+            if len(suffix_gap) <= 6:
                 return True
 
         return False
@@ -590,14 +562,6 @@ class BacktestEngine:
         if bool(re.search(r"[a-z]", keyword)):
             return bool(re.search(rf"(?<![a-zA-Z0-9_]){re.escape(keyword)}(?![a-zA-Z0-9_])", text))
         return keyword in text
-
-    @classmethod
-    def _is_negation_connector_gap(cls, gap: str) -> bool:
-        """Whether a short Chinese negation gap is still a valid negation bridge."""
-        compact = re.sub(r"[\s,，。；;:!?！？]", "", gap).strip()
-        if not compact:
-            return True
-        return compact in cls._NEGATION_CONNECTOR_WORDS
 
     @classmethod
     def _classify_outcome(

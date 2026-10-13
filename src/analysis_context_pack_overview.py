@@ -20,7 +20,7 @@ from src.schemas.analysis_context_pack import ContextFieldStatus
 
 ANALYSIS_CONTEXT_PACK_OVERVIEW_KEY = "analysis_context_pack_overview"
 _ALL_STATUSES = tuple(status.value for status in ContextFieldStatus)
-_DATA_QUALITY_BLOCK_KEYS = {"quote", "daily_bars", "technical", "news", "fundamentals", "chip"}
+_DATA_QUALITY_BLOCK_KEYS = {"quote", "daily_bars", "technical", "news", "fundamentals"}
 logger = logging.getLogger(__name__)
 
 

@@ -15,7 +15,6 @@ Usage:
     app = create_app()
 """
 
-import asyncio
 import json
 import logging
 import mimetypes
@@ -32,8 +31,8 @@ if sys.platform == "win32" and not mimetypes.inited:
         mimetypes.init()
 import os
 import re
-from contextlib import asynccontextmanager, suppress
 from datetime import datetime
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import unquote
 from typing import List, Optional
@@ -42,7 +41,6 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from starlette.concurrency import run_in_threadpool
 
 logger = logging.getLogger(__name__)
 
@@ -178,11 +176,6 @@ from src.services.runtime_scheduler import (
     RUNTIME_SCHEDULER_SUPPRESS_START_ENV,
     RuntimeSchedulerService,
 )
-from src.services.stock_index_remote_service import (
-    get_remote_stock_index_cache_path,
-    refresh_remote_stock_index_cache,
-    settings_from_config,
-)
 
 
 _STOCK_INDEX_FILENAME = "stocks.index.json"
@@ -193,30 +186,6 @@ _STOCK_INDEX_HEADERS = {
 
 def _bundled_stock_index_path() -> Path:
     return Path(__file__).parent.parent / "apps" / "dsa-web" / "public" / _STOCK_INDEX_FILENAME
-
-
-async def _refresh_stock_index_cache_in_background(reason: str) -> None:
-    try:
-        from src.config import get_config
-
-        settings = settings_from_config(get_config())
-        result = await run_in_threadpool(refresh_remote_stock_index_cache, settings)
-        if result.refreshed:
-            logger.info("[stock-index] background refresh completed (%s): %s", reason, result.cache_path)
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:  # noqa: BLE001 - index refresh must stay best-effort.
-        logger.warning("[stock-index] background refresh failed (%s): %s", reason, exc)
-
-
-def _schedule_stock_index_background_refresh(app: FastAPI, reason: str) -> None:
-    task = getattr(app.state, "stock_index_refresh_task", None)
-    if task is not None and not task.done():
-        return
-
-    app.state.stock_index_refresh_task = asyncio.create_task(
-        _refresh_stock_index_cache_in_background(reason)
-    )
 
 
 def _load_runtime_scheduler_args() -> dict:
@@ -288,12 +257,6 @@ async def app_lifespan(app: FastAPI):
     app.state.system_config_service = SystemConfigService(
         runtime_scheduler=app.state.runtime_scheduler_service,
     )
-    _schedule_stock_index_background_refresh(app, "startup")
-    # Warm up the name resolver's AkShare cache: a disk cache hit loads with zero network; otherwise start
-    # a single-flight background fetch. Moves the cold-start wait from the first user request to process startup.
-    from src.services.name_to_code_resolver import warmup_akshare_cache
-
-    warmup_akshare_cache()
     # Feed giá realtime + engine cảnh báo realtime (tuỳ chọn, mặc định tắt).
     # Optional realtime price feed and alert engine (disabled by default).
     if not runtime_suppress_start:
@@ -306,11 +269,6 @@ async def app_lifespan(app: FastAPI):
         from src.services.realtime_alert_runtime import stop_realtime_alerts
 
         stop_realtime_alerts()
-        refresh_task = getattr(app.state, "stock_index_refresh_task", None)
-        if refresh_task is not None and not refresh_task.done():
-            refresh_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await refresh_task
         if hasattr(app.state, "system_config_service"):
             delattr(app.state, "system_config_service")
         runtime_scheduler = getattr(app.state, "runtime_scheduler_service", None)
@@ -339,7 +297,7 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
     app = FastAPI(
         title="Daily Stock Analysis API",
         description=(
-            "Watchlist analysis API for A-shares, Hong Kong and US stocks\n\n"
+            "Watchlist analysis API for Vietnamese stocks (HOSE/HNX/UPCoM)\n\n"
             "## Modules\n"
             "- Stock analysis: trigger AI analysis\n"
             "- History: query historical analysis reports\n"
@@ -411,7 +369,7 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
             return _frontend_index_response(static_dir)
     else:
         _FRONTEND_NOT_BUILT_HTML = """<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DSA - Frontend Not Built</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
@@ -463,24 +421,9 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
             timestamp=datetime.now().isoformat()
         )
 
-    def _stock_index_candidate_paths() -> tuple[Path, ...]:
-        local_candidates = (
-            static_dir / _STOCK_INDEX_FILENAME,
-            _bundled_stock_index_path(),
-        )
-        local_path = next((path for path in local_candidates if path.is_file()), None)
-        if local_path is None:
-            return (get_remote_stock_index_cache_path(),)
-        return (
-            get_remote_stock_index_cache_path(),
-            local_path,
-        )
-
     def _find_existing_stock_index_path() -> Optional[Path]:
-        remote_cache_path = get_remote_stock_index_cache_path()
         return find_existing_stock_index_path(
-            _stock_index_candidate_paths(),
-            remote_cache_path=remote_cache_path,
+            (static_dir / _STOCK_INDEX_FILENAME, _bundled_stock_index_path())
         )
 
     @app.api_route(
@@ -490,8 +433,6 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
     )
     async def serve_stock_index():
         """Serve the freshest available stock autocomplete index."""
-        _schedule_stock_index_background_refresh(app, "serve-stock-index")
-
         index_path = _find_existing_stock_index_path()
         if index_path is None:
             return Response(

@@ -28,7 +28,6 @@ from src.agent.runner import RunLoopResult, run_agent_loop
 from src.agent.skills.defaults import extract_skill_id
 from src.agent.tools.registry import ToolRegistry
 from src.market_phase_prompt import format_market_phase_prompt_section
-from src.market_structure_prompt import format_market_structure_prompt_section
 from src.report_language import normalize_report_language
 from src.services.daily_market_context import format_daily_market_context_prompt_section
 
@@ -190,7 +189,7 @@ class BaseAgent(ABC):
                 if role in {"user", "assistant", "system"} and isinstance(content, str) and content:
                     messages.append({"role": role, "content": content})
 
-        report_language = normalize_report_language(ctx.meta.get("report_language", "zh"))
+        report_language = normalize_report_language(ctx.meta.get("report_language", "vi"))
         market_phase_section = format_market_phase_prompt_section(
             ctx.meta.get("market_phase_context"),
             report_language=report_language,
@@ -204,13 +203,6 @@ class BaseAgent(ABC):
         )
         if daily_market_context_section:
             messages.append({"role": "user", "content": daily_market_context_section})
-
-        market_structure_section = format_market_structure_prompt_section(
-            ctx.meta.get("market_structure_context"),
-            report_language=report_language,
-        )
-        if market_structure_section:
-            messages.append({"role": "user", "content": market_structure_section})
 
         analysis_context_pack_summary = ctx.meta.get("analysis_context_pack_summary")
         if isinstance(analysis_context_pack_summary, str) and analysis_context_pack_summary:

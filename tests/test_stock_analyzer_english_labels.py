@@ -108,8 +108,3 @@ def test_trend_labels_localize_to_vietnamese(trend: TrendStatus, expected_vi: st
     assert localize_trend_prediction(trend.value, "vi") == expected_vi
     result = TrendAnalysisResult(code="LAS", trend_status=trend)
     assert StockAnalysisPipeline._trend_label_fallback(result, "vi") == expected_vi
-
-
-def test_legacy_chinese_trend_labels_still_localize() -> None:
-    assert localize_trend_prediction("多头排列", "vi") == "Tăng"
-    assert localize_trend_prediction("强势空头", "vi") == "Giảm mạnh"

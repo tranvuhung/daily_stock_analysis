@@ -844,25 +844,25 @@ Use RESTful naming and consistent validation.
         manager = SkillManager()
         manager.load_builtin_strategies()
 
-        # Verify dragon_head exists as builtin
-        original = manager.get("dragon_head")
+        # Verify bull_trend exists as builtin
+        original = manager.get("bull_trend")
         self.assertIsNotNone(original)
         self.assertEqual(original.source, "builtin")
 
         # Create a custom directory with an overriding strategy
         tmpdir = tempfile.mkdtemp()
         try:
-            with open(os.path.join(tmpdir, "dragon_head.yaml"), 'w', encoding='utf-8') as f:
+            with open(os.path.join(tmpdir, "bull_trend.yaml"), 'w', encoding='utf-8') as f:
                 f.write("""
-name: dragon_head
-display_name: 自定义龙头策略
-description: 我自己的龙头策略
-instructions: 按照我的规则分析龙头股
+name: bull_trend
+display_name: Chiến lược xu hướng tuỳ chỉnh
+description: Chiến lược xu hướng của tôi
+instructions: Phân tích theo quy tắc riêng của tôi
 """)
             manager.load_custom_strategies(tmpdir)
 
-            overridden = manager.get("dragon_head")
-            self.assertEqual(overridden.display_name, "自定义龙头策略")
+            overridden = manager.get("bull_trend")
+            self.assertEqual(overridden.display_name, "Chiến lược xu hướng tuỳ chỉnh")
             self.assertIn(tmpdir, overridden.source)
         finally:
             import shutil

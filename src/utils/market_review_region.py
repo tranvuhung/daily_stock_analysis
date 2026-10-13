@@ -1,20 +1,22 @@
 # -*- coding: utf-8 -*-
-"""Shared normalization rules for market-review region values.
+"""Quy tắc chuẩn hoá giá trị vùng điểm lại thị trường (chỉ Việt Nam).
 
-The region list is no longer hardcoded in this module; it is derived from the :mod:`src.core.markets`
-registry and filtered by ``SUPPORTED_MARKETS`` **at call time**. That way, once a market is
-disabled, the review entry points no longer accept it nor default it back to ``cn``.
+Hệ thống chỉ còn một vùng ``vn``. Để client / cấu hình cũ không bị vỡ, các giá trị
+vùng cũ (``cn``, ``hk``, ``us``, ``jp``, ``kr``, ``tw``, ``both`` hoặc danh sách phân
+cách bằng dấu phẩy) được chuẩn hoá về ``vn``.
 
-The module-level constants are kept (still the full set of known regions) because API schema descriptions, UI text and
-existing tests import them directly; they mean "which review regions the system knows about", while
-``enabled_market_review_regions()`` means "which ones are currently enabled".
+Normalization rules for market-review region values (Vietnam only). Legacy region
+values are accepted and normalized to ``vn`` for backward compatibility.
 """
 
+import logging
 from typing import Optional, Tuple
 
 from src.core.markets import ALL_MARKETS, market_review_regions
 
-# All known review regions (unaffected by SUPPORTED_MARKETS), in historical order cn,hk,us,jp,kr,vn
+logger = logging.getLogger(__name__)
+
+# Toàn bộ vùng điểm lại thị trường mà hệ thống biết (chỉ ``vn``).
 MARKET_REVIEW_REGION_ORDER: Tuple[str, ...] = tuple(
     spec.code
     for spec in sorted(
@@ -24,104 +26,84 @@ MARKET_REVIEW_REGION_ORDER: Tuple[str, ...] = tuple(
 )
 MARKET_REVIEW_REGION_SET = frozenset(MARKET_REVIEW_REGION_ORDER)
 MARKET_REVIEW_REGION_ALL = ",".join(MARKET_REVIEW_REGION_ORDER)
-MARKET_REVIEW_REGION_VALID_INPUTS = (*MARKET_REVIEW_REGION_ORDER, "both")
+MARKET_REVIEW_REGION_VALID_INPUTS = MARKET_REVIEW_REGION_ORDER
+
+# Giá trị vùng cũ của các thị trường đã bị loại bỏ; vẫn chấp nhận và quy về ``vn``.
+# Legacy region tokens from removed markets; accepted and normalized to ``vn``.
+_LEGACY_REGION_TOKENS = frozenset({"cn", "hk", "us", "jp", "kr", "tw", "both"})
 
 
 def enabled_market_review_regions() -> Tuple[str, ...]:
-    """Regions currently enabled and supporting market review, in historical order.
-
-    May be an empty tuple: e.g. when only Taiwan is enabled, Taiwan has no review profile/prompt yet,
-    so callers should skip the review rather than fall back to ``cn`` (which would run the review
-    against an A-share data source that does not exist).
-    """
+    """Các vùng đang bật và hỗ trợ điểm lại thị trường (``("vn",)``)."""
 
     return market_review_regions()
 
 
 def market_review_supported() -> bool:
-    """Whether any runnable review region remains under the current configuration."""
+    """Cấu hình hiện tại còn vùng điểm lại thị trường nào chạy được không."""
 
     return bool(enabled_market_review_regions())
 
 
-def _valid_hint() -> str:
-    enabled = enabled_market_review_regions()
-    if not enabled:
-        return "当前 SUPPORTED_MARKETS 下没有任何支持大盘复盘的市场"
-    joined = "/".join(enabled)
-    return f"{', '.join((*enabled, 'both'))}，或 {joined} 的合法逗号分隔组合"
+def _tokens(value: str) -> Tuple[str, ...]:
+    return tuple(token.strip() for token in value.strip().lower().split(","))
 
 
 def normalize_market_review_region_lenient(value: Optional[str]) -> Optional[str]:
-    """Normalize persistent config input while preserving legacy filtering.
+    """Chuẩn hoá cấu hình lưu trữ: mọi giá trị hợp lệ (kể cả vùng cũ) đều thành ``vn``.
 
-    ``None`` and empty strings keep the historical default behavior, but the default is now "the first enabled review
-    region" rather than a hardcoded ``cn``. Comma lists keep only enabled regions; ``both`` expands to all
-    enabled regions. Returns ``None`` when there is no valid token.
+    ``None`` / chuỗi rỗng trả vùng mặc định ``vn``. Trả ``None`` khi không có token
+    nào nhận diện được.
     """
 
     enabled = enabled_market_review_regions()
     if not enabled:
         return None
-
-    enabled_set = frozenset(enabled)
-    all_enabled = ",".join(enabled)
     default_region = enabled[0]
 
     normalized = str(value or default_region).strip().lower()
-    if normalized in enabled_set:
-        return normalized
-    if normalized == "both":
-        return all_enabled
-
-    if "," in normalized:
-        requested = {token.strip() for token in normalized.split(",") if token.strip()}
-        if "both" in requested:
-            return all_enabled
-        regions = [region for region in enabled if region in requested]
-        if regions:
-            return ",".join(regions)
-
+    if not normalized:
+        return default_region
+    known = set(enabled) | _LEGACY_REGION_TOKENS
+    tokens = [token for token in _tokens(normalized) if token]
+    if tokens and any(token in known for token in tokens):
+        if any(token in _LEGACY_REGION_TOKENS for token in tokens):
+            logger.warning(
+                "MARKET_REVIEW_REGION=%s chứa vùng không còn được hỗ trợ; đã quy về %s",
+                value,
+                default_region,
+            )
+        return default_region
     return None
 
 
 def normalize_market_review_region_strict(value: str) -> str:
-    """Validate and canonicalize a request-scoped market-review region.
+    """Kiểm tra và chuẩn hoá vùng điểm lại thị trường theo từng request.
 
-    Unlike persistent configuration parsing, request input is fail-fast: empty
-    values, empty tokens, unknown tokens, and mixing ``both`` with other tokens
-    raise ``ValueError`` instead of being filtered or defaulted.
+    Khác với cấu hình lưu trữ, input của request fail-fast: rỗng, token rỗng hoặc token
+    không nhận diện được sẽ ném ``ValueError``. Vùng cũ (``cn``/``both``…) vẫn được
+    chấp nhận để client cũ không vỡ và được quy về ``vn``.
+
+    Validate a request-scoped region; legacy tokens normalize to ``vn``.
     """
 
     enabled = enabled_market_review_regions()
-    normalized = value.strip().lower()
-    valid_hint = _valid_hint()
-
     if not enabled:
-        raise ValueError(
-            f"当前部署未启用任何支持大盘复盘的市场；{valid_hint}"
-        )
+        raise ValueError("Không có thị trường nào hỗ trợ điểm lại thị trường")
 
-    enabled_set = frozenset(enabled)
+    normalized = (value or "").strip().lower()
+    valid_hint = ", ".join(enabled)
     if not normalized:
-        raise ValueError(f"region 不能为空；合法值：{valid_hint}")
+        raise ValueError(f"region không được để trống; giá trị hợp lệ: {valid_hint}")
 
-    tokens = [token.strip() for token in normalized.split(",")]
+    tokens = _tokens(normalized)
     if any(not token for token in tokens):
-        raise ValueError(f"region 不能包含空项；合法值：{valid_hint}")
+        raise ValueError(f"region không được chứa mục rỗng; giá trị hợp lệ: {valid_hint}")
 
-    invalid_tokens = sorted(
-        {token for token in tokens if token not in enabled_set and token != "both"}
-    )
+    known = set(enabled) | _LEGACY_REGION_TOKENS
+    invalid_tokens = sorted({token for token in tokens if token not in known})
     if invalid_tokens:
         raise ValueError(
-            f"region 包含非法值：{', '.join(invalid_tokens)}；合法值：{valid_hint}"
+            f"region chứa giá trị không hợp lệ: {', '.join(invalid_tokens)}; giá trị hợp lệ: {valid_hint}"
         )
-
-    if "both" in tokens:
-        if len(tokens) != 1:
-            raise ValueError("region 中 both 必须单独使用，不能与其他市场混合")
-        return ",".join(enabled)
-
-    requested = set(tokens)
-    return ",".join(region for region in enabled if region in requested)
+    return enabled[0]

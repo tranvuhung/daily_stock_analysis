@@ -28,7 +28,7 @@ class BotCommand(ABC):
 
             @property
             def aliases(self) -> List[str]:
-                return ["mc", "我的命令"]
+                return ["mc", "lenhcuatoi"]
 
             @property
             def description(self) -> str:
@@ -58,7 +58,7 @@ class BotCommand(ABC):
         """
         List of command aliases
 
-        e.g. ["a", "分析"]; typing "/a" or "分析" also triggers it
+        e.g. ["a", "phantich"]; typing "/a" or "phantich" also triggers it
         """
         pass
 
@@ -133,4 +133,4 @@ class BotCommand(ABC):
 
     def get_help_text(self) -> str:
         """Get the help text"""
-        return f"**{self.name}** - {self.description}\n用法: `{self.usage}`"
+        return f"**{self.name}** - {self.description}\nCách dùng: `{self.usage}`"

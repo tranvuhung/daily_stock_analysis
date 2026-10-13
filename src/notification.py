@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-A-share Watchlist Intelligent Analysis System - Notification Layer
+Vietnam Stock Watchlist Intelligent Analysis System - Notification Layer
 ===================================
 
 Responsibilities:
 1. Aggregate analysis results into a daily report
 2. Support Markdown output
 3. Multi-channel push (auto-detected):
-   - WeCom (WeChat Work) Webhook
-   - Feishu Webhook
    - Telegram Bot
    - Email SMTP
-   - Pushover (mobile/desktop push)
+   - Discord / Slack
+   - Pushover / ntfy / Gotify
+   - Custom Webhook
 """
 from __future__ import annotations
 
@@ -30,7 +30,6 @@ from src.notification_routing import (
     get_notification_route_config,
     split_notification_route_channels,
 )
-from src.notification_contracts import is_feishu_static_configured
 from src.notification_noise import (
     NotificationNoiseDecision,
     evaluate_notification_noise,
@@ -43,9 +42,6 @@ from src.report_language import (
     get_localized_stock_name,
     get_report_labels,
     get_signal_level,
-    get_chip_unavailable_reason,
-    is_chip_structure_unavailable,
-    localize_chip_health,
     localize_conflict_severity,
     localize_consensus_level,
     localize_strategy_signal,
@@ -71,21 +67,14 @@ from src.utils.data_processing import (
     normalize_model_used,
 )
 from src.notification_sender import (
-    AstrbotSender,
     CustomWebhookSender,
-    DingtalkSender,
     DiscordSender,
     EmailSender,
-    FeishuSender,
     GotifySender,
     NtfySender,
     PushoverSender,
-    PushplusSender,
-    Serverchan3Sender,
     SlackSender,
     TelegramSender,
-    WechatSender,
-    WECHAT_IMAGE_MAX_BYTES,
     resolve_gotify_message_endpoint,
     resolve_ntfy_endpoint,
 )
@@ -93,27 +82,7 @@ from src.notification_sender import (
 logger = logging.getLogger(__name__)
 
 
-def _safe_float(value: Any) -> Optional[float]:
-    """Best-effort float conversion; handles `"3.2%"` and `"1,234"` shapes."""
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
-    text = str(value).strip().replace(",", "")
-    if text.endswith("%"):
-        text = text[:-1].strip()
-    if not text:
-        return None
-    try:
-        return float(text)
-    except (TypeError, ValueError):
-        return None
-
-
-def _format_strategy_skill_items(items: Any, report_language: str = "zh") -> str:
+def _format_strategy_skill_items(items: Any, report_language: str = "vi") -> str:
     none_text = get_report_labels(report_language).get("none_label", "None")
     if not isinstance(items, list):
         return none_text
@@ -186,20 +155,14 @@ if TYPE_CHECKING:
 
 class NotificationChannel(Enum):
     """Notification channel type"""
-    WECHAT = "wechat"      # WeCom (WeChat Work)
-    DINGTALK = "dingtalk"
-    FEISHU = "feishu"      # Feishu
     TELEGRAM = "telegram"  # Telegram
     EMAIL = "email"        # Email
     PUSHOVER = "pushover"  # Pushover (mobile/desktop push)
     NTFY = "ntfy"          # ntfy
     GOTIFY = "gotify"      # Gotify
-    PUSHPLUS = "pushplus"  # PushPlus (China-based push service)
-    SERVERCHAN3 = "serverchan3"  # ServerChan3 (mobile app push service)
     CUSTOM = "custom"      # Custom Webhook
     DISCORD = "discord"    # Discord bot
     SLACK = "slack"        # Slack
-    ASTRBOT = "astrbot"
     UNKNOWN = "unknown"    # Unknown
 
 
@@ -237,40 +200,28 @@ class ChannelDetector:
     def get_channel_name(channel: NotificationChannel) -> str:
         """Get the channel's display name"""
         names = {
-            NotificationChannel.WECHAT: "企业微信",
-            NotificationChannel.FEISHU: "飞书",
-            NotificationChannel.DINGTALK: "钉钉",
             NotificationChannel.TELEGRAM: "Telegram",
             NotificationChannel.EMAIL: "邮件",
             NotificationChannel.PUSHOVER: "Pushover",
             NotificationChannel.NTFY: "ntfy",
             NotificationChannel.GOTIFY: "Gotify",
-            NotificationChannel.PUSHPLUS: "PushPlus",
-            NotificationChannel.SERVERCHAN3: "Server酱3",
             NotificationChannel.CUSTOM: "自定义Webhook",
             NotificationChannel.DISCORD: "Discord机器人",
             NotificationChannel.SLACK: "Slack",
-            NotificationChannel.ASTRBOT: "ASTRBOT机器人",
             NotificationChannel.UNKNOWN: "未知渠道",
         }
         return names.get(channel, "未知渠道")
 
 
 class NotificationService(
-    AstrbotSender,
     CustomWebhookSender,
-    DingtalkSender,
     DiscordSender,
     EmailSender,
-    FeishuSender,
     GotifySender,
     NtfySender,
     PushoverSender,
-    PushplusSender,
-    Serverchan3Sender,
     SlackSender,
     TelegramSender,
-    WechatSender
 ):
     """
     Notification service
@@ -281,8 +232,6 @@ class NotificationService(
     3. Support saving the daily report locally
 
     Supported channels:
-    - WeCom (WeChat Work) Webhook
-    - Feishu Webhook
     - Telegram Bot
     - Email SMTP
     - Pushover (mobile/desktop push)
@@ -315,27 +264,17 @@ class NotificationService(
         self._history_compare_cache: Dict[Tuple[int, str, Tuple[Tuple[str, str], ...]], Dict[str, List[Dict[str, Any]]]] = {}
 
         # Initialize each channel
-        AstrbotSender.__init__(self, config)
         CustomWebhookSender.__init__(self, config)
         DiscordSender.__init__(self, config)
         EmailSender.__init__(self, config)
-        FeishuSender.__init__(self, config)
         GotifySender.__init__(self, config)
         NtfySender.__init__(self, config)
         PushoverSender.__init__(self, config)
-        PushplusSender.__init__(self, config)
-        Serverchan3Sender.__init__(self, config)
         SlackSender.__init__(self, config)
         TelegramSender.__init__(self, config)
-        WechatSender.__init__(self, config)
-        DingtalkSender.__init__(self, config)
 
         # Detect all configured channels
         self._available_channels = self._detect_all_channels()
-        if self._extract_dingtalk_session_webhook() is not None:
-            self._context_channels.append("钉钉会话")
-        if self._extract_feishu_reply_info() is not None:
-            self._context_channels.append("飞书会话")
 
         if not self._available_channels and not self._context_channels:
             logger.warning("未配置有效的通知渠道，将不发送推送通知")
@@ -413,7 +352,7 @@ class NotificationService(
         return {"history_by_code": history_by_code}
 
     @staticmethod
-    def _empty_news_disclosure(result: "AnalysisResult", language: str = "zh") -> Optional[str]:
+    def _empty_news_disclosure(result: "AnalysisResult", language: str = "vi") -> Optional[str]:
         """Return the matching disclosure text when news retrieval did not run or had zero hits.
 
         The decision and wording are owned by src/services/empty_news; the string-concatenation renderer and the
@@ -505,14 +444,6 @@ class NotificationService(
         """
         channels = []
 
-        if getattr(config, "wechat_webhook_url", None):
-            channels.append(NotificationChannel.WECHAT)
-        if getattr(config, "dingtalk_webhook_url", None):
-            channels.append(NotificationChannel.DINGTALK)    
-
-        if is_feishu_static_configured(config):
-            channels.append(NotificationChannel.FEISHU)
-
         if (
             getattr(config, "telegram_bot_token", None)
             and getattr(config, "telegram_chat_id", None)
@@ -536,12 +467,6 @@ class NotificationService(
         if gotify_endpoint and (getattr(config, "gotify_token", None) or "").strip():
             channels.append(NotificationChannel.GOTIFY)
 
-        if getattr(config, "pushplus_token", None):
-            channels.append(NotificationChannel.PUSHPLUS)
-
-        if getattr(config, "serverchan3_sendkey", None):
-            channels.append(NotificationChannel.SERVERCHAN3)
-
         if getattr(config, "custom_webhook_urls", None):
             channels.append(NotificationChannel.CUSTOM)
 
@@ -562,9 +487,6 @@ class NotificationService(
             )
         ):
             channels.append(NotificationChannel.SLACK)
-
-        if getattr(config, "astrbot_url", None):
-            channels.append(NotificationChannel.ASTRBOT)
 
         return channels
 
@@ -625,7 +547,7 @@ class NotificationService(
         """Get the names of all configured channels"""
         names = [ChannelDetector.get_channel_name(ch) for ch in self._available_channels]
         if self._has_context_channel():
-            names.append("钉钉会话")
+            names.append("Telegram context")
         return ', '.join(names)
 
     def evaluate_noise_control(
@@ -659,12 +581,8 @@ class NotificationService(
 
     # ===== Context channel =====
     def _has_context_channel(self) -> bool:
-        """Whether there is a temporary channel based on message context (e.g. DingTalk or Feishu session)"""
-        return (
-            self._extract_dingtalk_session_webhook() is not None
-            or self._extract_feishu_reply_info() is not None
-            or self._extract_telegram_context_chat_id() is not None
-        )
+        """Whether there is a temporary channel based on message context (e.g. a Telegram chat)"""
+        return self._extract_telegram_context_chat_id() is not None
 
     def _source_platform(self) -> str:
         """Return normalized platform from the source bot message."""
@@ -697,42 +615,9 @@ class NotificationService(
         """Whether static notification channels should receive this dispatch."""
         return not self._has_context_channel()
 
-    def _extract_dingtalk_session_webhook(self) -> Optional[str]:
-        """Extract the DingTalk session Webhook from the source message (for Stream-mode replies)"""
-        if not isinstance(self._source_message, BotMessage):
-            return None
-        raw_data = getattr(self._source_message, "raw_data", {}) or {}
-        if not isinstance(raw_data, dict):
-            return None
-        session_webhook = (
-            raw_data.get("_session_webhook")
-            or raw_data.get("sessionWebhook")
-            or raw_data.get("session_webhook")
-            or raw_data.get("session_webhook_url")
-        )
-        if not session_webhook and isinstance(raw_data.get("headers"), dict):
-            session_webhook = raw_data["headers"].get("sessionWebhook")
-        return session_webhook
-
-    def _extract_feishu_reply_info(self) -> Optional[Dict[str, str]]:
-        """
-        Extract Feishu reply info from the source message (for Stream-mode replies)
-
-        Returns:
-            Dict containing chat_id, or None
-        """
-        if not isinstance(self._source_message, BotMessage):
-            return None
-        if getattr(self._source_message, "platform", "") != "feishu":
-            return None
-        chat_id = getattr(self._source_message, "chat_id", "")
-        if not chat_id:
-            return None
-        return {"chat_id": chat_id}
-
     def send_to_context(self, content: str) -> bool:
         """
-        Send a message to message-context-based channels (e.g. a DingTalk Stream session)
+        Send a message to message-context-based channels (e.g. the source Telegram chat)
 
         Args:
             content: Markdown content
@@ -741,36 +626,11 @@ class NotificationService(
 
     def _send_via_source_context(self, content: str) -> bool:
         """
-        Send a report using the message context (e.g. DingTalk/Feishu session)
+        Send a report using the message context (e.g. the source Telegram chat)
 
-        Mainly for tasks triggered from bot Stream mode, so the result goes back to the triggering session.
+        Mainly for bot-triggered tasks, so the result goes back to the triggering session.
         """
         success = False
-
-        # Try the DingTalk session
-        session_webhook = self._extract_dingtalk_session_webhook()
-        if session_webhook:
-            try:
-                if self._send_dingtalk_chunked(session_webhook, content, max_bytes=20000):
-                    logger.info("已通过钉钉会话（Stream）推送报告")
-                    success = True
-                else:
-                    logger.error("钉钉会话（Stream）推送失败")
-            except Exception as e:
-                logger.error(f"钉钉会话（Stream）推送异常: {e}")
-
-        # Try the Feishu session
-        feishu_info = self._extract_feishu_reply_info()
-        if feishu_info:
-            try:
-                sanitized_content = strip_hidden_markdown_metadata(content).strip()
-                if self._send_feishu_stream_reply(feishu_info["chat_id"], sanitized_content):
-                    logger.info("已通过飞书会话（Stream）推送报告")
-                    success = True
-                else:
-                    logger.error("飞书会话（Stream）推送失败")
-            except Exception as e:
-                logger.error(f"飞书会话（Stream）推送异常: {e}")
 
         # Try the Telegram session context (reply to the source chat_id)
         telegram_chat_id = self._extract_telegram_context_chat_id()
@@ -783,122 +643,6 @@ class NotificationService(
                     logger.error("Telegram 上下文会话推送失败")
             except Exception as e:
                 logger.error(f"Telegram 上下文会话推送异常: {e}")
-
-        return success
-
-    def _send_feishu_stream_reply(self, chat_id: str, content: str) -> bool:
-        """
-        Send a message to the given session via Feishu Stream mode
-
-        Args:
-            chat_id: Feishu session ID
-            content: Message content
-
-        Returns:
-            Whether sending succeeded
-        """
-        try:
-            from bot.platforms.feishu_stream import FeishuReplyClient, FEISHU_SDK_AVAILABLE
-            if not FEISHU_SDK_AVAILABLE:
-                logger.warning("飞书 SDK 不可用，无法发送 Stream 回复")
-                return False
-
-            from src.config import get_config
-            config = get_config()
-
-            app_id = getattr(config, 'feishu_app_id', None)
-            app_secret = getattr(config, 'feishu_app_secret', None)
-
-            if not app_id or not app_secret:
-                logger.warning("飞书 APP_ID 或 APP_SECRET 未配置")
-                return False
-
-            # Create the reply client
-            reply_client = FeishuReplyClient(app_id, app_secret)
-
-            # Feishu text messages have a length limit; send in batches
-            max_bytes = getattr(config, 'feishu_max_bytes', 20000)
-            content = strip_hidden_markdown_metadata(content).strip()
-            content_bytes = len(content.encode('utf-8'))
-
-            if content_bytes > max_bytes:
-                return self._send_feishu_stream_chunked(reply_client, chat_id, content, max_bytes)
-
-            return reply_client.send_to_chat(chat_id, content)
-
-        except ImportError as e:
-            logger.error(f"导入飞书 Stream 模块失败: {e}")
-            return False
-        except Exception as e:
-            logger.error(f"飞书 Stream 回复异常: {e}")
-            return False
-
-    def _send_feishu_stream_chunked(
-        self,
-        reply_client,
-        chat_id: str,
-        content: str,
-        max_bytes: int
-    ) -> bool:
-        """
-        Send a long message to Feishu in batches (Stream mode)
-
-        Args:
-            reply_client: FeishuReplyClient instance
-            chat_id: Feishu session ID
-            content: Full message content
-            max_bytes: Max bytes per message
-
-        Returns:
-            Whether all batches were sent successfully
-        """
-        import time
-
-        def get_bytes(s: str) -> int:
-            return len(s.encode('utf-8'))
-
-        # Split by paragraph or separator line
-        if "\n---\n" in content:
-            sections = content.split("\n---\n")
-            separator = "\n---\n"
-        elif "\n### " in content:
-            parts = content.split("\n### ")
-            sections = [parts[0]] + [f"### {p}" for p in parts[1:]]
-            separator = "\n"
-        else:
-            # Split by line
-            sections = content.split("\n")
-            separator = "\n"
-
-        chunks = []
-        current_chunk = []
-        current_bytes = 0
-        separator_bytes = get_bytes(separator)
-
-        for section in sections:
-            section_bytes = get_bytes(section) + separator_bytes
-
-            if current_bytes + section_bytes > max_bytes:
-                if current_chunk:
-                    chunks.append(separator.join(current_chunk))
-                current_chunk = [section]
-                current_bytes = section_bytes
-            else:
-                current_chunk.append(section)
-                current_bytes += section_bytes
-
-        if current_chunk:
-            chunks.append(separator.join(current_chunk))
-
-        # Send each chunk
-        success = True
-        for i, chunk in enumerate(chunks):
-            if i > 0:
-                time.sleep(0.5)  # Avoid sending requests too fast
-
-            if not reply_client.send_to_chat(chat_id, chunk):
-                success = False
-                logger.error(f"飞书 Stream 分块 {i+1}/{len(chunks)} 发送失败")
 
         return success
 
@@ -1432,7 +1176,6 @@ class NotificationService(
                     trend_data = data_persp.get('trend_status', {})
                     price_data = data_persp.get('price_position', {})
                     vol_data = data_persp.get('volume_analysis', {})
-                    chip_data = data_persp.get('chip_structure', {})
 
                     report_lines.extend([
                         f"### 📊 {labels['data_perspective_heading']}",
@@ -1474,27 +1217,6 @@ class NotificationService(
                             f"💡 *{vol_data.get('volume_meaning', '')}*",
                             "",
                         ])
-                    # Chip distribution
-                    if chip_data:
-                        if is_chip_structure_unavailable(chip_data):
-                            report_lines.extend([
-                                f"**{labels['chip_label']}**: {get_chip_unavailable_reason(chip_data, report_language)}",
-                                "",
-                            ])
-                        else:
-                            chip_health = localize_chip_health(chip_data.get('chip_health', 'N/A'), report_language)
-                            report_lines.extend([
-                                f"**{labels['chip_label']}**: {chip_data.get('profit_ratio', 'N/A')} | {chip_data.get('avg_cost', 'N/A')} | "
-                                f"{chip_data.get('concentration', 'N/A')} {chip_health}",
-                                "",
-                            ])
-                    else:
-                        chip_unavailable_reason = get_chip_unavailable_reason(data_persp, report_language)
-                        if chip_unavailable_reason:
-                            report_lines.extend([
-                                f"**{labels['chip_label']}**: {chip_unavailable_reason}",
-                                "",
-                            ])
 
                 self._append_phase_decision_block(report_lines, dashboard, labels)
 
@@ -1629,276 +1351,6 @@ class NotificationService(
             report_lines.append(f"*{labels['analysis_model_label']}{label_sep}{', '.join(models)}*")
 
         return "\n".join(report_lines)
-
-    def generate_wechat_dashboard(self, results: List[AnalysisResult]) -> str:
-        """
-        Generate the compact WeCom decision dashboard (kept within 4000 characters)
-
-        Keeps only the core conclusion and sniper price levels
-
-        Args:
-            results: List of analysis results
-
-        Returns:
-            Compact decision dashboard
-        """
-        config = get_config()
-        report_language = self._get_report_language(results)
-        labels = get_report_labels(report_language)
-        if getattr(config, 'report_renderer_enabled', False) and results:
-            from src.services.report_renderer import render
-            out = render(
-                platform='wechat',
-                results=results,
-                report_date=datetime.now().strftime('%Y-%m-%d'),
-                summary_only=self._report_summary_only,
-                extra_context={"report_language": report_language},
-            )
-            if out:
-                return out
-
-        report_date = datetime.now().strftime('%Y-%m-%d')
-
-        # Sort by score
-        sorted_results = sorted(results, key=lambda x: x.sentiment_score, reverse=True)
-
-        buy_count, sell_count, hold_count = self._count_display_decisions(results, report_language)
-
-        lines = [
-            f"## 🎯 {report_date} {labels['dashboard_title']}",
-            "",
-            f"> {len(results)} {labels['stock_unit']} | "
-            f"🟢{labels['buy_label']}:{buy_count} 🟡{labels['watch_label']}:{hold_count} 🔴{labels['sell_label']}:{sell_count}",
-        ]
-        self._append_market_status_line(lines, results, report_language)
-
-        # Issue #262: with summary_only, output only the summary list
-        if self._report_summary_only:
-            lines.append(f"**📊 {labels['summary_heading']}**")
-            lines.append("")
-            for r in sorted_results:
-                signal_text, signal_emoji, _ = self._get_signal_level(r)
-                stock_name = self._get_display_name(r, report_language)
-                lines.append(
-                    f"{signal_emoji} **{stock_name}({r.code})**: "
-                    f"{signal_text} | "
-                    f"{labels['score_label']} {r.sentiment_score} | "
-                    f"{localize_trend_prediction(r.trend_prediction, report_language)}"
-                )
-                news_disclosure = self._empty_news_disclosure(r, report_language)
-                if news_disclosure:
-                    lines.append(news_disclosure)
-        else:
-            for result in sorted_results:
-                signal_text, signal_emoji, _ = self._get_signal_level(result)
-                dashboard = result.dashboard if hasattr(result, 'dashboard') and result.dashboard else {}
-                core = dashboard.get('core_conclusion', {}) if dashboard else {}
-                battle = dashboard.get('battle_plan', {}) if dashboard else {}
-                intel = dashboard.get('intelligence', {}) if dashboard else {}
-
-                # Stock name
-                stock_name = self._get_display_name(result, report_language)
-
-                # Title line: signal level + stock name
-                lines.append(f"### {signal_emoji} **{signal_text}** | {stock_name}({result.code})")
-                lines.append("")
-
-                # Core decision (one sentence)
-                one_sentence = core.get('one_sentence', result.analysis_summary) if core else result.analysis_summary
-                if one_sentence:
-                    lines.append(f"📌 **{one_sentence[:80]}**")
-                    lines.append("")
-                # Key info section (sentiment + fundamentals)
-                info_lines = []
-
-                # Zero news hits must be disclosed, otherwise the WeCom path would silently omit it
-                news_disclosure = self._empty_news_disclosure(result, report_language)
-                if news_disclosure:
-                    info_lines.append(news_disclosure)
-
-                # Earnings outlook
-                if intel.get('earnings_outlook'):
-                    outlook = str(intel['earnings_outlook'])[:60]
-                    info_lines.append(f"📊 {labels['earnings_outlook_label']}: {outlook}")
-                if intel.get('sentiment_summary'):
-                    sentiment = str(intel['sentiment_summary'])[:50]
-                    info_lines.append(f"💭 {labels['sentiment_summary_label']}: {sentiment}")
-                if info_lines:
-                    lines.extend(info_lines)
-                    lines.append("")
-
-                # Risk alerts (most important, highlighted)
-                risks = intel.get('risk_alerts', []) if intel else []
-                if risks:
-                    lines.append(f"🚨 **{labels['risk_alerts_label']}**:")
-                    for risk in risks[:2]:  # Show at most 2
-                        risk_str = str(risk)
-                        risk_text = risk_str[:50] + "..." if len(risk_str) > 50 else risk_str
-                        lines.append(f"   • {risk_text}")
-                    lines.append("")
-
-                # Positive catalysts
-                catalysts = intel.get('positive_catalysts', []) if intel else []
-                if catalysts:
-                    lines.append(f"✨ **{labels['positive_catalysts_label']}**:")
-                    for cat in catalysts[:2]:  # Show at most 2
-                        cat_str = str(cat)
-                        cat_text = cat_str[:50] + "..." if len(cat_str) > 50 else cat_str
-                        lines.append(f"   • {cat_text}")
-                    lines.append("")
-
-                # Sniper price levels
-                sniper = battle.get('sniper_points', {}) if battle else {}
-                if sniper:
-                    ideal_buy = str(sniper.get('ideal_buy', ''))
-                    stop_loss = str(sniper.get('stop_loss', ''))
-                    take_profit = str(sniper.get('take_profit', ''))
-                    points = []
-                    if ideal_buy:
-                        points.append(f"🎯{labels['ideal_buy_label']}:{ideal_buy[:15]}")
-                    if stop_loss:
-                        points.append(f"🛑{labels['stop_loss_label']}:{stop_loss[:15]}")
-                    if take_profit:
-                        points.append(f"🎊{labels['take_profit_label']}:{take_profit[:15]}")
-                    if points:
-                        lines.append(" | ".join(points))
-                        lines.append("")
-
-                # Position advice
-                pos_advice = core.get('position_advice', {}) if core else {}
-                if pos_advice:
-                    no_pos = str(pos_advice.get('no_position', ''))
-                    has_pos = str(pos_advice.get('has_position', ''))
-                    if no_pos:
-                        lines.append(f"🆕 {labels['no_position_label']}: {no_pos[:50]}")
-                    if has_pos:
-                        lines.append(f"💼 {labels['has_position_label']}: {has_pos[:50]}")
-                    lines.append("")
-
-                # Multi-strategy synthesis
-                strategy_synthesis = normalize_strategy_synthesis_payload(
-                    dashboard.get('strategy_synthesis') if dashboard else None
-                )
-                if strategy_synthesis:
-                    lines.append(
-                        f"🧩 **{labels['strategy_synthesis_heading']}**: "
-                        f"{localize_strategy_signal(strategy_synthesis.get('final_signal', 'N/A'), report_language)} | "
-                        f"{labels['strategy_consensus_level_label']} "
-                        f"{localize_consensus_level(strategy_synthesis.get('consensus_level', 'N/A'), report_language)} | "
-                        f"{labels['strategy_conflict_label']} "
-                        f"{localize_conflict_severity(strategy_synthesis.get('conflict_severity', 'none'), report_language)}"
-                        f"({strategy_synthesis.get('conflict_count', 0)})"
-                    )
-                    invalid_count = strategy_invalid_opinion_count(strategy_synthesis)
-                    if invalid_count:
-                        lines.append(
-                            labels.get(
-                                'strategy_invalid_opinions_label', ''
-                            ).format(count=invalid_count)
-                        )
-                    summary = localize_strategy_synthesis_summary(strategy_synthesis, report_language)
-                    if summary:
-                        lines.append(summary[:80])
-                    lines.append("")
-
-                # Simplified checklist
-                checklist = battle.get('action_checklist', []) if battle else []
-                if checklist:
-                    # Show only the items that failed
-                    failed_checks = [str(c) for c in checklist if str(c).startswith('❌') or str(c).startswith('⚠️')]
-                    if failed_checks:
-                        lines.append(f"**{labels['failed_checks_heading']}**:")
-                        for check in failed_checks[:3]:
-                            lines.append(f"   {check[:40]}")
-                        lines.append("")
-
-                lines.append("---")
-                lines.append("")
-
-        # Footer
-        lines.append(f"*{labels['report_time_label']}: {datetime.now().strftime('%H:%M')}*")
-        models = self._collect_models_used(results)
-        if models:
-            lines.append(f"*{labels['analysis_model_label']}: {', '.join(models)}*")
-
-        content = "\n".join(lines)
-
-        return content
-
-    def generate_wechat_summary(self, results: List[AnalysisResult]) -> str:
-        """
-        Generate the compact WeCom daily report (kept within 4000 characters)
-
-        Args:
-            results: List of analysis results
-
-        Returns:
-            Compact Markdown content
-        """
-        report_date = datetime.now().strftime('%Y-%m-%d')
-        report_language = self._get_report_language(results)
-        labels = get_report_labels(report_language)
-
-        # Sort by score
-        sorted_results = sorted(results, key=lambda x: x.sentiment_score, reverse=True)
-
-        buy_count, sell_count, hold_count = self._count_display_decisions(results, report_language)
-        avg_score = sum(r.sentiment_score for r in results) / len(results) if results else 0
-
-        lines = [
-            f"## 📅 {report_date} {labels['report_title']}",
-            "",
-            f"> {labels['analyzed_prefix']} **{len(results)}** {labels['stock_unit_compact']} | "
-            f"🟢{labels['buy_label']}:{buy_count} 🟡{labels['watch_label']}:{hold_count} 🔴{labels['sell_label']}:{sell_count} | "
-            f"{labels['avg_score_label']}:{avg_score:.0f}",
-        ]
-        self._append_market_status_line(lines, results, report_language)
-
-        # Compact info per stock (length-controlled)
-        for result in sorted_results:
-            signal_text, emoji, _ = self._get_signal_level(result)
-
-            # Core info line
-            lines.append(f"### {emoji} {self._get_display_name(result, report_language)}({result.code})")
-            lines.append(
-                f"**{signal_text}** | "
-                f"{labels['score_label']}:{result.sentiment_score} | "
-                f"{localize_trend_prediction(result.trend_prediction, report_language)}"
-            )
-            news_disclosure = self._empty_news_disclosure(result, report_language)
-            if news_disclosure:
-                lines.append(news_disclosure)
-
-            # Rationale (truncated)
-            if hasattr(result, 'buy_reason') and result.buy_reason:
-                reason = result.buy_reason[:80] + "..." if len(result.buy_reason) > 80 else result.buy_reason
-                lines.append(f"💡 {reason}")
-
-            # Key highlights
-            if hasattr(result, 'key_points') and result.key_points:
-                points = result.key_points[:60] + "..." if len(result.key_points) > 60 else result.key_points
-                lines.append(f"🎯 {points}")
-
-            # Risk warnings (truncated)
-            if hasattr(result, 'risk_warning') and result.risk_warning:
-                risk = result.risk_warning[:50] + "..." if len(result.risk_warning) > 50 else result.risk_warning
-                lines.append(f"⚠️ {risk}")
-
-            lines.append("")
-
-        # Footer (model line goes before ---, Issue #528)
-        models = self._collect_models_used(results)
-        if models:
-            lines.append(f"*{labels['analysis_model_label']}: {', '.join(models)}*")
-        lines.extend([
-            "---",
-            f"*{labels['not_investment_advice']}*",
-            f"*{labels['details_report_hint']} reports/report_{report_date.replace('-', '')}.md*"
-        ])
-
-        content = "\n".join(lines)
-
-        return content
 
     def generate_brief_report(
         self,
@@ -2187,20 +1639,21 @@ class NotificationService(
 
         lines.append("")
 
-    _CURRENCY_SUFFIX = {
-        "USD": "美元",
-        "HKD": "港元",
-        "CNY": "元",
-        "RMB": "元",
-        "CNH": "元",
-        "TWD": "新台币",  # Taiwan stocks (TWSE/TPEx) are priced in New Taiwan dollars; avoid confusion with the A-share yuan (RMB)
-    }
+    # Tiền tệ mặc định của báo cáo là VND (repo chỉ còn thị trường Việt Nam).
+    # Default report currency is VND (Vietnam-only market).
+    _DEFAULT_CURRENCY = "VND"
 
     @classmethod
-    def _format_amount_cn(cls, value: Any, currency: Optional[str] = None) -> str:
-        """Format absolute amounts in yi (1e8) / wan (1e4) units + currency suffix; returns N/A on non-numeric.
+    def _currency_code(cls, currency: Optional[str]) -> str:
+        code = (currency or "").strip().upper()
+        return code or cls._DEFAULT_CURRENCY
 
-        ``currency`` accepts ``USD``/``HKD``/``CNY``; unknown values fall back to the yuan suffix.
+    @classmethod
+    def _format_amount_vn(cls, value: Any, currency: Optional[str] = None) -> str:
+        """Định dạng số tiền theo tỷ (1e9) / triệu (1e6) + mã tiền tệ; N/A nếu không phải số.
+
+        Format absolute amounts in ty (1e9) / trieu (1e6) units plus the currency code
+        (``VND`` by default); returns N/A on non-numeric input.
         """
         try:
             amount = float(value)
@@ -2210,12 +1663,12 @@ class NotificationService(
             return "N/A"
         sign = "-" if amount < 0 else ""
         abs_amount = abs(amount)
-        suffix = cls._CURRENCY_SUFFIX.get((currency or "").upper(), "元")
-        if abs_amount >= 1e8:
-            return f"{sign}{abs_amount / 1e8:.2f} 亿{suffix}"
-        if abs_amount >= 1e4:
-            return f"{sign}{abs_amount / 1e4:.2f} 万{suffix}"
-        return f"{sign}{abs_amount:.0f} {suffix}"
+        code = cls._currency_code(currency)
+        if abs_amount >= 1e9:
+            return f"{sign}{abs_amount / 1e9:.2f} tỷ {code}"
+        if abs_amount >= 1e6:
+            return f"{sign}{abs_amount / 1e6:.2f} triệu {code}"
+        return f"{sign}{abs_amount:.0f} {code}"
 
     @staticmethod
     def _format_percent(value: Any) -> str:
@@ -2232,8 +1685,7 @@ class NotificationService(
             return "N/A"
         if amount != amount:  # NaN
             return "N/A"
-        suffix = cls._CURRENCY_SUFFIX.get((currency or "").upper(), "元")
-        return f"{amount:.4f} {suffix}"
+        return f"{amount:,.2f} {cls._currency_code(currency)}"
 
     @staticmethod
     def _format_text(value: Any) -> str:
@@ -2243,10 +1695,11 @@ class NotificationService(
         return text if text else "N/A"
 
     def _get_fundamental_blocks(self, result: AnalysisResult) -> Dict[str, Any]:
-        """Extract financial_report / dividend / belong_boards / board rankings.
+        """Lấy financial_report / growth / dividend từ fundamental_context.
 
-        Falls back to empty containers when fundamental_context is missing or partial,
-        so callers can rely on dict shape without re-checking types.
+        Extract financial_report / growth / dividend. Falls back to empty containers
+        when fundamental_context is missing or partial, so callers can rely on dict
+        shape without re-checking types.
         """
         ctx = getattr(result, "fundamental_context", None)
         if not isinstance(ctx, dict):
@@ -2254,13 +1707,6 @@ class NotificationService(
                 "financial_report": {},
                 "growth": {},
                 "dividend": {},
-                "belong_boards": [],
-                "sector_top": [],
-                "sector_bottom": [],
-                "concept_top": [],
-                "concept_bottom": [],
-                "institution": {},
-                "institution_status": None,
             }
 
         earnings_block = ctx.get("earnings") if isinstance(ctx.get("earnings"), dict) else {}
@@ -2271,43 +1717,14 @@ class NotificationService(
         growth_block = ctx.get("growth") if isinstance(ctx.get("growth"), dict) else {}
         growth_data = growth_block.get("data") if isinstance(growth_block.get("data"), dict) else {}
 
-        boards_block = ctx.get("boards") if isinstance(ctx.get("boards"), dict) else {}
-        boards_data = boards_block.get("data") if isinstance(boards_block.get("data"), dict) else {}
-        sector_top = boards_data.get("top") if isinstance(boards_data.get("top"), list) else []
-        sector_bottom = boards_data.get("bottom") if isinstance(boards_data.get("bottom"), list) else []
-        concept_block = ctx.get("concept_boards") if isinstance(ctx.get("concept_boards"), dict) else {}
-        if not concept_block and isinstance(ctx.get("concepts"), dict):
-            concept_block = ctx.get("concepts")
-        if not concept_block and isinstance(ctx.get("concept_rankings"), dict):
-            concept_block = ctx.get("concept_rankings")
-        concept_data = concept_block.get("data") if isinstance(concept_block.get("data"), dict) else concept_block
-        if not isinstance(concept_data, dict):
-            concept_data = {}
-        concept_top = concept_data.get("top") if isinstance(concept_data.get("top"), list) else []
-        concept_bottom = concept_data.get("bottom") if isinstance(concept_data.get("bottom"), list) else []
-
-        belong_boards = ctx.get("belong_boards") if isinstance(ctx.get("belong_boards"), list) else []
-
-        # Three major institutional investors (institutional flows) — tw-only; other markets keep status='not_supported'
-        # and an empty data dict, so this block only renders for a Taiwan stock with data.
-        institution_block = ctx.get("institution") if isinstance(ctx.get("institution"), dict) else {}
-        institution_data = institution_block.get("data") if isinstance(institution_block.get("data"), dict) else {}
-
         return {
             "financial_report": financial_report,
             "growth": growth_data,
             "dividend": dividend,
-            "belong_boards": belong_boards,
-            "sector_top": sector_top,
-            "sector_bottom": sector_bottom,
-            "concept_top": concept_top,
-            "concept_bottom": concept_bottom,
-            "institution": institution_data,
-            "institution_status": institution_block.get("status"),
         }
 
     def _append_fundamental_blocks(self, lines: List[str], result: AnalysisResult) -> None:
-        """Append financial summary / shareholder returns / related sectors markdown blocks.
+        """Append financial summary / shareholder returns markdown blocks.
 
         Each block is only rendered when at least one cell has data; this keeps
         the email compact when the fundamental pipeline returned partial/failed
@@ -2319,8 +1736,6 @@ class NotificationService(
 
         self._append_financial_summary(lines, blocks, labels)
         self._append_shareholder_return(lines, blocks, labels)
-        self._append_institutional_flow(lines, blocks, labels)
-        self._append_related_boards(lines, blocks, labels)
 
     def _append_financial_summary(
         self,
@@ -2333,9 +1748,9 @@ class NotificationService(
         currency = report.get("currency") if isinstance(report.get("currency"), str) else None
         cells = {
             "report_date": self._format_text(report.get("report_date")),
-            "revenue": self._format_amount_cn(report.get("revenue"), currency),
-            "net_profit": self._format_amount_cn(report.get("net_profit_parent"), currency),
-            "operating_cash_flow": self._format_amount_cn(report.get("operating_cash_flow"), currency),
+            "revenue": self._format_amount_vn(report.get("revenue"), currency),
+            "net_profit": self._format_amount_vn(report.get("net_profit_parent"), currency),
+            "operating_cash_flow": self._format_amount_vn(report.get("operating_cash_flow"), currency),
             "roe": self._format_percent(report.get("roe") if report.get("roe") is not None else growth.get("roe")),
             "revenue_yoy": self._format_percent(growth.get("revenue_yoy")),
             "net_profit_yoy": self._format_percent(growth.get("net_profit_yoy")),
@@ -2407,166 +1822,6 @@ class NotificationService(
             "",
         ])
 
-    @classmethod
-    def _format_net_shares(cls, value: Any) -> str:
-        """Format an institutional net buy/sell in wan-shares (1e4) / yi-shares (1e8), signed (+ = net buy).
-
-        Thresholds: abs >= 1e8 -> yi-shares, >= 1e4 -> wan-shares, else shares. None/NaN/non-numeric -> N/A.
-        """
-        try:
-            amount = float(value)
-        except (TypeError, ValueError):
-            return "N/A"
-        if amount != amount:  # NaN
-            return "N/A"
-        sign = "+" if amount > 0 else ("-" if amount < 0 else "")
-        a = abs(amount)
-        if a >= 1e8:
-            return f"{sign}{a / 1e8:.2f} 亿股"
-        if a >= 1e4:
-            return f"{sign}{a / 1e4:.2f} 万股"
-        return f"{sign}{a:.0f} 股"
-
-    def _append_institutional_flow(
-        self,
-        lines: List[str],
-        blocks: Dict[str, Any],
-        labels: Dict[str, str],
-    ) -> None:
-        """Append the three major institutional investors (institutional flows) table — tw-only.
-
-        Renders only when the institution block reached status='ok' (a Taiwan stock
-        whose TWSE T86 / TPEx fetch succeeded); every other market keeps
-        status='not_supported' and is skipped, so this is strictly additive.
-        """
-        if blocks.get("institution_status") != "ok":
-            return
-        inst = blocks.get("institution") or {}
-        cells = {
-            "foreign": self._format_net_shares(inst.get("foreign_net")),
-            "trust": self._format_net_shares(inst.get("trust_net")),
-            "dealer": self._format_net_shares(inst.get("dealer_net")),
-            "total": self._format_net_shares(inst.get("total_net")),
-        }
-        if all(v == "N/A" for v in cells.values()):
-            return
-        date = self._format_text(inst.get("date"))
-        source = self._format_text(inst.get("source"))
-        lines.extend([
-            f"### 📊 {labels['institutional_flow_heading']}（{date} · {source}）",
-            "",
-            f"> {labels['institutional_flow_note']}",
-            "",
-            (
-                f"| {labels['inst_foreign_label']} | {labels['inst_trust_label']} | "
-                f"{labels['inst_dealer_label']} | {labels['inst_total_label']} |"
-            ),
-            "|-----:|-----:|------:|------------:|",
-            f"| {cells['foreign']} | {cells['trust']} | {cells['dealer']} | {cells['total']} |",
-            "",
-        ])
-
-    def _append_related_boards(
-        self,
-        lines: List[str],
-        blocks: Dict[str, Any],
-        labels: Dict[str, str],
-    ) -> None:
-        belong_boards = blocks.get("belong_boards") or []
-        if not belong_boards:
-            return
-
-        sector_signals: Dict[str, Tuple[str, float]] = {}
-        concept_signals: Dict[str, Tuple[str, float]] = {}
-
-        def add_signals(target: Dict[str, Tuple[str, float]], rows: Any, label: str) -> None:
-            for item in rows or []:
-                if not isinstance(item, dict):
-                    continue
-                name = str(item.get("name") or "").strip()
-                if not name or name in target:
-                    continue
-                change_pct = _safe_float(item.get("change_pct"))
-                if change_pct is not None:
-                    target[name] = (label, change_pct)
-
-        add_signals(sector_signals, blocks.get("sector_top"), labels["leading_board_label"])
-        add_signals(sector_signals, blocks.get("sector_bottom"), labels["lagging_board_label"])
-        add_signals(concept_signals, blocks.get("concept_top"), labels["leading_board_label"])
-        add_signals(concept_signals, blocks.get("concept_bottom"), labels["lagging_board_label"])
-
-        def resolve_board_type(name: str, board_type: str) -> str:
-            normalized_type = board_type.strip().lower()
-            sector_signal = sector_signals.get(name)
-            concept_signal = concept_signals.get(name)
-            if concept_signal and not sector_signal:
-                return "concept"
-            if sector_signal and not concept_signal:
-                return "sector"
-
-            normalized_name = name.strip().lower()
-            if any(marker in normalized_name for marker in ("概念", "题材", "concept", "theme")):
-                return "concept"
-            if any(marker in normalized_name for marker in ("行业", "industry", "sector")):
-                return "sector"
-
-            if normalized_type in {"概念", "概念板块", "题材", "concept", "theme"}:
-                return "concept"
-            if normalized_type in {"行业", "行业板块", "industry", "sector"}:
-                return "sector"
-            # A-share belong_boards may omit type for concept/theme labels.
-            # Keep a deterministic display type instead of leaking N/A.
-            return "concept"
-
-        def resolve_signal(name: str, board_group: str) -> Tuple[Optional[str], Optional[float]]:
-            if board_group == "sector":
-                return sector_signals.get(name, (None, None))
-            if board_group == "concept":
-                return concept_signals.get(name, (None, None))
-            sector_signal = sector_signals.get(name)
-            concept_signal = concept_signals.get(name)
-            if sector_signal and not concept_signal:
-                return sector_signal
-            if concept_signal and not sector_signal:
-                return concept_signal
-            return None, None
-
-        def board_type_label(board_group: str) -> str:
-            if board_group == "sector":
-                return labels["industry_boards_heading"]
-            return labels["concept_boards_heading"]
-
-        # Pre-resolve rows so signal-bearing boards can show their own
-        # percentage, while boards without a matching change stay plain.
-        prepared: List[Tuple[str, str, Optional[str], Optional[float]]] = []
-        for raw in belong_boards[:5]:
-            if not isinstance(raw, dict):
-                continue
-            name = str(raw.get("name") or "").strip()
-            if not name:
-                continue
-            board_type = self._format_text(raw.get("type"))
-            board_group = resolve_board_type(name, board_type)
-            status_text, change_pct = resolve_signal(name, board_group)
-            prepared.append((name, board_type_label(board_group), status_text, change_pct))
-
-        if not prepared:
-            return
-
-        lines.append(f"### 🧩 {labels['related_boards_heading']}")
-        lines.append("")
-        has_signal = any(status is not None and change_pct is not None for _, _, status, change_pct in prepared)
-        if has_signal:
-            for name, board_type, status_text, change_pct in prepared:
-                details = []
-                if status_text is not None and change_pct is not None:
-                    details.append(f"{board_type} {status_text} {change_pct:+.2f}%")
-                suffix = f" ({', '.join(details)})" if details else ""
-                lines.append(f"- {name}{suffix}")
-        else:
-            lines.append(" / ".join(name for name, _, _, _ in prepared))
-        lines.append("")
-
     def _should_use_image_for_channel(
         self, channel: NotificationChannel, image_bytes: Optional[bytes]
     ) -> bool:
@@ -2575,15 +1830,8 @@ class NotificationService(
 
         Fallback rules (send as Markdown text instead of image):
         - image_bytes is None: conversion failed / imgkit not installed / content over max_chars
-        - WeChat: image exceeds ~2MB limit
         """
         if channel.value not in self._markdown_to_image_channels or image_bytes is None:
-            return False
-        if channel == NotificationChannel.WECHAT and len(image_bytes) > WECHAT_IMAGE_MAX_BYTES:
-            logger.warning(
-                "企业微信图片超限 (%d bytes)，回退为 Markdown 文本发送",
-                len(image_bytes),
-            )
             return False
         return True
 
@@ -2603,20 +1851,6 @@ class NotificationService(
     ) -> bool:
         use_image = self._should_use_image_for_channel(channel, image_bytes)
         sanitized_content = strip_hidden_markdown_metadata(content).strip()
-        if channel == NotificationChannel.WECHAT:
-            if use_image:
-                return self._send_wechat_image(image_bytes)
-            return self.send_to_wechat(content)
-        if channel == NotificationChannel.FEISHU:
-            if getattr(self, "_feishu_send_as_file", False) and route_type == "report":
-                date_str = datetime.now().strftime('%Y%m%d')
-                filepath = self.save_report_to_file(
-                    sanitized_content, filename=f"report_{date_str}.md"
-                )
-                return self.send_feishu_file(filepath)
-            return self.send_to_feishu(sanitized_content)
-        if channel == NotificationChannel.DINGTALK:
-            return self.send_to_dingtalk(sanitized_content)
         if channel == NotificationChannel.TELEGRAM:
             if use_image:
                 return self._send_telegram_photo(image_bytes)
@@ -2639,10 +1873,6 @@ class NotificationService(
             return self.send_to_ntfy(sanitized_content)
         if channel == NotificationChannel.GOTIFY:
             return self.send_to_gotify(sanitized_content)
-        if channel == NotificationChannel.PUSHPLUS:
-            return self.send_to_pushplus(sanitized_content)
-        if channel == NotificationChannel.SERVERCHAN3:
-            return self.send_to_serverchan3(sanitized_content)
         if channel == NotificationChannel.CUSTOM:
             if use_image:
                 return self._send_custom_webhook_image(image_bytes, fallback_content=content)
@@ -2653,8 +1883,6 @@ class NotificationService(
             if use_image:
                 return self._send_slack_image(image_bytes, fallback_content=content)
             return self.send_to_slack(content)
-        if channel == NotificationChannel.ASTRBOT:
-            return self.send_to_astrbot(sanitized_content)
         logger.warning(f"不支持的通知渠道: {channel}")
         return False
 
@@ -2678,7 +1906,6 @@ class NotificationService(
         - When image_bytes is None (conversion failed / imgkit not installed /
           content over max_chars): all channels configured for image will send
           as Markdown text instead.
-        - When WeChat image exceeds ~2MB: that channel falls back to Markdown text.
 
         Args:
             content: Message content (Markdown)
@@ -2937,32 +2164,6 @@ class NotificationService(
 
         logger.info(f"日报已保存到: {filepath}")
         return str(filepath)
-
-    def save_and_send_feishu_file(
-        self,
-        content: str,
-        filename: Optional[str] = None,
-    ) -> bool:
-        """
-        Save report content to a local markdown file and upload it to Feishu.
-
-        This is a convenience wrapper around :meth:`save_report_to_file` +
-        :meth:`send_feishu_file`.
-
-        Args:
-            content: Report content (Markdown).
-            filename: Optional file name; auto-generated from date when omitted.
-
-        Returns:
-            Whether the Feishu file upload succeeded.
-        """
-        filepath = self.save_report_to_file(
-            strip_hidden_markdown_metadata(content).strip(),
-            filename=filename,
-        )
-        logger.info("将上传文件到飞书: %s", filepath)
-        return self.send_feishu_file(filepath)
-
 
 class NotificationBuilder:
     """

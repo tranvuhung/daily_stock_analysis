@@ -31,14 +31,12 @@ class NotificationDiagnosticsTestCase(unittest.TestCase):
 
         self.assertTrue(expected.issubset(spec_channels))
         self.assertIn(NotificationChannel.UNKNOWN.value, spec_channels)
-        self.assertIn("dingtalk_context", spec_channels)
-        self.assertIn("feishu_context", spec_channels)
+        self.assertNotIn("dingtalk_context", spec_channels)
+        self.assertNotIn("feishu_context", spec_channels)
 
     def test_key_specs_include_minimal_and_advanced_keys(self):
         key_tiers = {(spec.key, spec.tier) for spec in KEY_SPECS}
 
-        self.assertIn(("ASTRBOT_URL", "minimal"), key_tiers)
-        self.assertIn(("ASTRBOT_TOKEN", "advanced"), key_tiers)
         self.assertIn(("NTFY_URL", "minimal"), key_tiers)
         self.assertIn(("NTFY_TOKEN", "advanced"), key_tiers)
         self.assertIn(("GOTIFY_URL", "minimal"), key_tiers)
@@ -87,16 +85,15 @@ class NotificationDiagnosticsTestCase(unittest.TestCase):
     def test_configured_channels_use_runtime_detector(self):
         result = run_notification_diagnostics(
             _config(
-                wechat_webhook_url="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=1",
                 ntfy_url="https://ntfy.sh/dsa-topic",
                 gotify_url="https://gotify.example",
                 gotify_token="app-token",
-                astrbot_url="https://astrbot.example/webhook",
+                discord_webhook_url="https://discord.com/api/webhooks/1/abc",
             )
         )
 
         self.assertTrue(result.ok)
-        self.assertEqual(result.configured_channels, ("wechat", "ntfy", "gotify", "astrbot"))
+        self.assertEqual(result.configured_channels, ("ntfy", "gotify", "discord"))
 
     def test_ntfy_url_without_topic_reports_error(self):
         result = run_notification_diagnostics(_config(ntfy_url="https://ntfy.sh"))
@@ -131,18 +128,18 @@ class NotificationDiagnosticsTestCase(unittest.TestCase):
         self.assertIn("GOTIFY_URL", {item.key for item in result.errors})
 
     def test_advanced_key_without_minimal_warns_but_is_structured(self):
-        result = run_notification_diagnostics(_config(pushplus_topic="topic-only"))
+        result = run_notification_diagnostics(_config(ntfy_token="token-only"))
 
         self.assertFalse(result.ok)
         warning_keys = {item.key for item in result.warnings}
-        self.assertIn("PUSHPLUS_TOKEN", warning_keys)
+        self.assertIn("NTFY_URL", warning_keys)
         self.assertIn("context_channels_runtime_only", {item.code for item in result.info})
 
     def test_route_unknown_channel_reports_error(self):
         result = run_notification_diagnostics(
             _config(
-                wechat_webhook_url="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=1",
-                notification_report_channels=["wechat", "not-a-channel"],
+                discord_webhook_url="https://discord.com/api/webhooks/1/abc",
+                notification_report_channels=["discord", "not-a-channel"],
             )
         )
 
@@ -153,8 +150,8 @@ class NotificationDiagnosticsTestCase(unittest.TestCase):
     def test_route_target_not_configured_reports_warning(self):
         result = run_notification_diagnostics(
             _config(
-                wechat_webhook_url="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=1",
-                notification_alert_channels=["wechat", "telegram"],
+                discord_webhook_url="https://discord.com/api/webhooks/1/abc",
+                notification_alert_channels=["discord", "telegram"],
             )
         )
 
@@ -167,7 +164,7 @@ class NotificationDiagnosticsTestCase(unittest.TestCase):
     def test_noise_invalid_quiet_hours_reports_error(self):
         result = run_notification_diagnostics(
             _config(
-                wechat_webhook_url="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=1",
+                discord_webhook_url="https://discord.com/api/webhooks/1/abc",
                 notification_quiet_hours="9:00-18:00",
             )
         )
@@ -178,7 +175,7 @@ class NotificationDiagnosticsTestCase(unittest.TestCase):
     def test_noise_invalid_timezone_reports_error(self):
         result = run_notification_diagnostics(
             _config(
-                wechat_webhook_url="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=1",
+                discord_webhook_url="https://discord.com/api/webhooks/1/abc",
                 notification_timezone="Mars/Olympus",
             )
         )
@@ -189,7 +186,7 @@ class NotificationDiagnosticsTestCase(unittest.TestCase):
     def test_noise_daily_digest_reserved_reports_warning(self):
         result = run_notification_diagnostics(
             _config(
-                wechat_webhook_url="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=1",
+                discord_webhook_url="https://discord.com/api/webhooks/1/abc",
                 notification_daily_digest_enabled=True,
             )
         )

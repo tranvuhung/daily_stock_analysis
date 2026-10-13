@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for LLM usage dashboard API."""
 
+import os
 import tempfile
 import unittest
 from datetime import datetime
@@ -8,8 +9,18 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+import src.auth as auth
 from api.app import create_app
 from api.deps import get_database_manager
+from src.config import Config
+
+
+def _reset_auth_globals() -> None:
+    auth._auth_enabled = None
+    auth._session_secret = None
+    auth._password_hash_salt = None
+    auth._password_hash_stored = None
+    auth._rate_limit = {}
 
 
 class FakeUsageDbManager:
@@ -47,10 +58,10 @@ class FakeUsageDbManager:
                 "called_at": datetime(2026, 6, 11, 9, 30, 0),
                 "call_type": "analysis",
                 "model": "openai/gpt-test",
-                "stock_code": "600519",
+                "stock_code": "HPG",
                 "provider": "openai",
-                "language": "zh",
-                "market_group": "cn",
+                "language": "vi",
+                "market_group": "vn",
                 "analysis_mode": "stock_analysis",
                 "legacy_prompt_mode": "skill_aware",
                 "skill_config_hmac": "a" * 64,
@@ -70,11 +81,27 @@ class FakeUsageDbManager:
 class UsageDashboardApiTestCase(unittest.TestCase):
     def test_dashboard_returns_token_summary_and_recent_calls(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            app = create_app(static_dir=Path(temp_dir))
-            app.dependency_overrides[get_database_manager] = lambda: FakeUsageDbManager()
-            client = TestClient(app)
+            # File .env cô lập để cấu hình cục bộ ADMIN_AUTH_ENABLED=true không làm API trả 401.
+            # Isolated .env so a local admin-auth config cannot turn this call into a 401.
+            env_path = Path(temp_dir) / ".env"
+            env_path.write_text("ADMIN_AUTH_ENABLED=false\n", encoding="utf-8")
+            old_env_file = os.environ.get("ENV_FILE")
+            os.environ["ENV_FILE"] = str(env_path)
+            Config.reset_instance()
+            _reset_auth_globals()
+            try:
+                app = create_app(static_dir=Path(temp_dir))
+                app.dependency_overrides[get_database_manager] = lambda: FakeUsageDbManager()
+                client = TestClient(app)
 
-            response = client.get("/api/v1/usage/dashboard?period=today&limit=10")
+                response = client.get("/api/v1/usage/dashboard?period=today&limit=10")
+            finally:
+                if old_env_file is None:
+                    os.environ.pop("ENV_FILE", None)
+                else:
+                    os.environ["ENV_FILE"] = old_env_file
+                Config.reset_instance()
+                _reset_auth_globals()
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
@@ -85,7 +112,7 @@ class UsageDashboardApiTestCase(unittest.TestCase):
         self.assertNotIn("provider", body["by_model"][0])
         self.assertNotIn("context_window", body["by_model"][0])
         self.assertNotIn("context_usage_ratio", body["by_model"][0])
-        self.assertEqual(body["recent_calls"][0]["stock_code"], "600519")
+        self.assertEqual(body["recent_calls"][0]["stock_code"], "HPG")
         p05a_internal_fields = {
             "provider",
             "language",

@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-Market review command
+Lệnh điểm lại thị trường / Market review command
 ===================================
 
-Runs a market review analysis and generates a market overview report.
+Chạy phân tích điểm lại thị trường Việt Nam và sinh báo cáo tổng quan.
+Runs a Vietnam market review analysis and generates a market overview report.
 """
 
 import logging
@@ -19,16 +20,16 @@ logger = logging.getLogger(__name__)
 
 class MarketCommand(BotCommand):
     """
-    Market review command
+    Lệnh điểm lại thị trường / Market review command
 
-    Runs a market review analysis, including:
-    - Major index performance
-    - Sector hotspots
-    - Market sentiment
-    - Outlook
+    Chạy điểm lại thị trường Việt Nam, gồm:
+    - Diễn biến các chỉ số chính (VN-Index, VN30, HNX-Index, UPCoM)
+    - Nhóm ngành nổi bật
+    - Tâm lý thị trường
+    - Triển vọng
 
     Usage:
-        /market - run market review
+        /market - chạy điểm lại thị trường
     """
 
     @property
@@ -37,22 +38,22 @@ class MarketCommand(BotCommand):
 
     @property
     def aliases(self) -> List[str]:
-        return ["m", "大盘", "复盘", "行情"]
+        return ["m", "thitruong", "diemlai", "tongquan"]
 
     @property
     def description(self) -> str:
-        return "大盘复盘分析"
+        return "Điểm lại thị trường Việt Nam"
 
     @property
     def usage(self) -> str:
         return "/market"
 
     def execute(self, message: BotMessage, args: List[str]) -> BotResponse:
-        """Execute the market review command"""
+        """Thực thi lệnh điểm lại thị trường / Execute the market review command"""
         config = self._get_config()
         lock_token = self._try_acquire_market_review_lock(config)
         if lock_token is None:
-            return BotResponse.markdown_response("⚠️ 大盘复盘正在执行中，请稍后再试。")
+            return BotResponse.markdown_response("⚠️ Tác vụ điểm lại thị trường đang chạy, vui lòng thử lại sau.")
 
         thread = threading.Thread(
             target=self._run_market_review,
@@ -63,22 +64,22 @@ class MarketCommand(BotCommand):
             thread.start()
         except Exception as exc:
             logger.error(
-                "[MarketCommand] 大盘复盘后台线程启动失败: %s",
+                "[MarketCommand] Không khởi động được luồng nền điểm lại thị trường: %s",
                 exc,
             )
             self._release_market_review_lock(lock_token)
             return BotResponse.error_response(
-                "大盘复盘启动失败，已释放运行锁；请稍后重试"
+                "Khởi động điểm lại thị trường thất bại, đã giải phóng khoá chạy; vui lòng thử lại sau"
             )
 
         return BotResponse.markdown_response(
-            "✅ **大盘复盘任务已启动**\n\n"
-            "正在分析：\n"
-            "• 主要指数表现\n"
-            "• 板块热点分析\n"
-            "• 市场情绪判断\n"
-            "• 后市展望\n\n"
-            "分析完成后将自动推送结果。"
+            "✅ **Đã khởi động điểm lại thị trường**\n\n"
+            "Đang phân tích:\n"
+            "• Diễn biến các chỉ số chính\n"
+            "• Nhóm ngành nổi bật\n"
+            "• Tâm lý thị trường\n"
+            "• Triển vọng phiên tới\n\n"
+            "Kết quả sẽ được gửi tự động khi phân tích hoàn tất."
         )
 
     def _get_config(self):
@@ -104,12 +105,14 @@ class MarketCommand(BotCommand):
             )
 
             open_markets = get_open_markets_today()
+            # Chỉ còn vùng ``vn``; giá trị cấu hình cũ được chuẩn hoá ở tầng dưới.
+            # Only the ``vn`` region remains; legacy config values are normalized downstream.
             return compute_effective_region(
-                getattr(config, "market_review_region", "cn") or "cn",
+                getattr(config, "market_review_region", "vn") or "vn",
                 open_markets,
             )
         except Exception as exc:
-            logger.warning("交易日过滤失败，按配置继续执行大盘复盘: %s", exc)
+            logger.warning("Lọc ngày giao dịch thất bại, vẫn tiếp tục điểm lại thị trường theo cấu hình: %s", exc)
             return None
 
     def _run_market_review(
@@ -118,16 +121,16 @@ class MarketCommand(BotCommand):
         config,
         lock_token: Optional[Any],
     ) -> None:
-        """Run the market review in the background"""
+        """Chạy điểm lại thị trường ở nền / Run the market review in the background"""
         try:
             override_region = self._compute_market_review_override_region(config)
             if override_region == "":
                 from src.notification import NotificationService
                 notifier = NotificationService(source_message=message)
-                logger.info("[MarketCommand] 今日相关市场休市，跳过大盘复盘")
+                logger.info("[MarketCommand] Hôm nay thị trường nghỉ giao dịch, bỏ qua điểm lại thị trường")
                 if notifier.is_available():
                     notifier.send(
-                        "🎯 大盘复盘\n\n今日相关市场休市，已跳过大盘复盘。",
+                        "🎯 Điểm lại thị trường\n\nHôm nay thị trường Việt Nam nghỉ giao dịch, đã bỏ qua điểm lại thị trường.",
                         email_send_to_all=True,
                         route_type="report",
                     )
@@ -149,11 +152,11 @@ class MarketCommand(BotCommand):
                 trigger_source="bot",
             )
             if review_report:
-                logger.info("[MarketCommand] 大盘复盘完成并已推送")
+                logger.info("[MarketCommand] Điểm lại thị trường hoàn tất và đã gửi")
             else:
-                logger.warning("[MarketCommand] 大盘复盘返回空结果")
+                logger.warning("[MarketCommand] Điểm lại thị trường trả về kết quả rỗng")
         except Exception as e:
-            logger.error("[MarketCommand] 大盘复盘失败: %s", e)
+            logger.error("[MarketCommand] Điểm lại thị trường thất bại: %s", e)
             logger.exception(e)
         finally:
             self._release_market_review_lock(lock_token)

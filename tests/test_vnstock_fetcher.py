@@ -6,6 +6,7 @@
 ``tests/litellm_stub.py`` 一致。
 """
 
+import os
 import sys
 import types
 import unittest
@@ -111,12 +112,17 @@ class VnstockFetcherTestCase(unittest.TestCase):
 
 
 class VnstockRegistrationTestCase(unittest.TestCase):
-    def test_declared_as_vietnam_only_source(self):
+    def test_not_registered_by_default(self):
+        # vnstock là tuỳ chọn: chỉ đăng ký khi VNSTOCK_ENABLED=true.
+        # vnstock is optional and only registered when VNSTOCK_ENABLED=true.
         from data_provider.base import DataFetcherManager
 
-        self.assertEqual(
-            DataFetcherManager._DAILY_MARKET_FETCHER_SUPPORT["VnstockFetcher"], {"vn"}
-        )
+        with patch.dict(os.environ, {"VNSTOCK_ENABLED": "false"}):
+            manager = DataFetcherManager()
+        names = [f.name for f in manager._get_fetchers_snapshot()]
+        self.assertNotIn("VnstockFetcher", names)
+        self.assertEqual(names[:2], ["VciFetcher", "SsiFetcher"])
+        self.assertIn("YfinanceFetcher", names)
 
 
 if __name__ == "__main__":

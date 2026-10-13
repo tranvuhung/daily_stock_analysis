@@ -49,8 +49,6 @@ from src.schemas.decision_action import build_action_fields
 from src.utils.data_processing import (
     normalize_model_used,
     extract_fundamental_detail_fields,
-    extract_board_detail_fields,
-    extract_market_structure_detail_field,
     extract_realtime_detail_fields,
 )
 from src.analysis_context_pack_overview import (
@@ -648,14 +646,6 @@ def get_history_detail(
             context_snapshot=result.get("context_snapshot"),
             fallback_fundamental_payload=fallback_fundamental,
         )
-        extracted_boards = extract_board_detail_fields(
-            context_snapshot=result.get("context_snapshot"),
-            fallback_fundamental_payload=fallback_fundamental,
-        )
-        market_structure = extract_market_structure_detail_field(
-            result.get("context_snapshot"),
-            result.get("raw_result"),
-        )
 
         details = ReportDetails(
             news_content=result.get("news_content"),
@@ -665,10 +655,6 @@ def get_history_detail(
             analysis_context_pack_overview=analysis_context_pack_overview,
             financial_report=extracted_fundamental.get("financial_report"),
             dividend_metrics=extracted_fundamental.get("dividend_metrics"),
-            belong_boards=extracted_boards.get("belong_boards"),
-            sector_rankings=extracted_boards.get("sector_rankings"),
-            concept_rankings=extracted_boards.get("concept_rankings"),
-            market_structure=market_structure,
         )
         
         return AnalysisReport(

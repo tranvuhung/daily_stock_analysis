@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""PR2 tests for portfolio CSV import, risk thresholds and FX stale fallback."""
+"""PR2 tests for portfolio CSV import, risk thresholds and decision-signal risk (VN only)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -50,7 +49,7 @@ class PortfolioPr2TestCase(unittest.TestCase):
         self.env_path.write_text(
             "\n".join(
                 [
-                    "STOCK_LIST=600519",
+                    "STOCK_LIST=HPG",
                     "GEMINI_API_KEY=test",
                     "ADMIN_AUTH_ENABLED=false",
                     "PORTFOLIO_RISK_CONCENTRATION_ALERT_PCT=70.0",
@@ -74,8 +73,6 @@ class PortfolioPr2TestCase(unittest.TestCase):
         self.service = PortfolioService()
         self.import_service = PortfolioImportService(portfolio_service=self.service)
         self.risk_service = PortfolioRiskService(portfolio_service=self.service)
-        self._board_fetch_patcher = patch.object(PortfolioRiskService, "_fetch_belong_boards", return_value=[])
-        self._board_fetch_patcher.start()
         self.client = TestClient(create_app(static_dir=data_dir / "empty-static"))
 
     def tearDown(self) -> None:
@@ -83,7 +80,6 @@ class PortfolioPr2TestCase(unittest.TestCase):
         Config.reset_instance()
         os.environ.pop("ENV_FILE", None)
         os.environ.pop("DATABASE_PATH", None)
-        self._board_fetch_patcher.stop()
         self.temp_dir.cleanup()
 
     def _save_close(self, symbol: str, on_date: date, close: float) -> None:
@@ -103,7 +99,7 @@ class PortfolioPr2TestCase(unittest.TestCase):
         )
         self.db.save_daily_data(df, code=symbol, data_source="portfolio-pr2-test")
 
-    def _create_position(self, account_id: int, symbol: str, price: float = 100.0, *, market: str = "cn") -> None:
+    def _create_position(self, account_id: int, symbol: str, price: float = 100.0, *, market: str = "vn") -> None:
         self.service.record_trade(
             account_id=account_id,
             symbol=symbol,
@@ -112,7 +108,7 @@ class PortfolioPr2TestCase(unittest.TestCase):
             quantity=10,
             price=price,
             market=market,
-            currency="CNY" if market == "cn" else "USD",
+            currency="VND",
         )
         self._save_close(symbol, date(2026, 1, 1), price)
 
@@ -120,7 +116,7 @@ class PortfolioPr2TestCase(unittest.TestCase):
         payload = {
             "stock_code": symbol,
             "stock_name": symbol,
-            "market": "cn",
+            "market": "vn",
             "source_type": "manual",
             "trace_id": f"signal-{symbol}-{action}-{len(overrides)}",
             "trigger_source": "api",
@@ -135,46 +131,46 @@ class PortfolioPr2TestCase(unittest.TestCase):
     def _csv_bytes(with_trade_uid: bool = True) -> bytes:
         if with_trade_uid:
             csv_text = (
-                "成交日期,证券代码,买卖标志,成交数量,成交均价,成交编号,手续费,印花税\n"
-                "2026-01-02,600519,买入,10,100,HT-001,1,0\n"
+                "Ngày giao dịch,Mã CK,Loại lệnh,Khối lượng khớp,Giá khớp,Số hiệu lệnh\n"
+                "2026-01-02,HPG,Mua,10,100,HT-001\n"
             )
         else:
             csv_text = (
-                "成交日期,证券代码,买卖标志,成交数量,成交均价,手续费,印花税\n"
-                "2026-01-02,600519,买入,10,100,1,0\n"
+                "Ngày giao dịch,Mã CK,Loại lệnh,Khối lượng khớp,Giá khớp\n"
+                "2026-01-02,HPG,Mua,10,100\n"
             )
         return csv_text.encode("utf-8")
 
     def test_import_dedup_trade_uid_and_hash(self) -> None:
-        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+        account = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")
         aid = account["id"]
 
-        parsed_uid = self.import_service.parse_trade_csv(broker="huatai", content=self._csv_bytes(with_trade_uid=True))
+        parsed_uid = self.import_service.parse_trade_csv(broker="generic", content=self._csv_bytes(with_trade_uid=True))
         first_uid = self.import_service.commit_trade_records(
             account_id=aid,
-            broker="huatai",
+            broker="generic",
             records=parsed_uid["records"],
         )
         second_uid = self.import_service.commit_trade_records(
             account_id=aid,
-            broker="huatai",
+            broker="generic",
             records=parsed_uid["records"],
         )
         self.assertEqual(first_uid["inserted_count"], 1)
         self.assertEqual(second_uid["duplicate_count"], 1)
 
         parsed_hash = self.import_service.parse_trade_csv(
-            broker="huatai",
+            broker="generic",
             content=self._csv_bytes(with_trade_uid=False),
         )
         first_hash = self.import_service.commit_trade_records(
             account_id=aid,
-            broker="huatai",
+            broker="generic",
             records=parsed_hash["records"],
         )
         second_hash = self.import_service.commit_trade_records(
             account_id=aid,
-            broker="huatai",
+            broker="generic",
             records=parsed_hash["records"],
         )
         self.assertEqual(first_hash["inserted_count"], 0)
@@ -183,11 +179,11 @@ class PortfolioPr2TestCase(unittest.TestCase):
 
     def test_import_side_parser_avoids_false_sell_match(self) -> None:
         csv_text = (
-            "成交日期,证券代码,买卖标志,成交数量,成交均价,成交编号\n"
-            "2026-01-02,600519,Asset Transfer,10,100,HT-002\n"
+            "Ngày giao dịch,Mã CK,Loại lệnh,Khối lượng khớp,Giá khớp,Số hiệu lệnh\n"
+            "2026-01-02,HPG,Asset Transfer,10,100,HT-002\n"
         )
         parsed = self.import_service.parse_trade_csv(
-            broker="huatai",
+            broker="generic",
             content=csv_text.encode("utf-8"),
         )
         self.assertEqual(parsed["record_count"], 0)
@@ -195,39 +191,38 @@ class PortfolioPr2TestCase(unittest.TestCase):
     def test_import_supported_broker_registry(self) -> None:
         items = self.import_service.list_supported_brokers()
         broker_map = {item["broker"]: item for item in items}
-        self.assertIn("huatai", broker_map)
-        self.assertIn("citic", broker_map)
-        self.assertIn("cmb", broker_map)
-        self.assertIn("zhongxin", broker_map["citic"]["aliases"])
-        self.assertIn("zhaoshang", broker_map["cmb"]["aliases"])
+        # Chỉ còn parser chung cho Việt Nam / Only the generic Vietnam parser remains.
+        self.assertEqual(set(broker_map), {"generic"})
+        self.assertIn("vn", broker_map["generic"]["aliases"])
+        self.assertIn("default", broker_map["generic"]["aliases"])
 
-    def test_import_preserves_leading_zero_symbol(self) -> None:
+    def test_import_preserves_fund_certificate_symbol(self) -> None:
         csv_text = (
-            "成交日期,证券代码,买卖标志,成交数量,成交均价,成交编号\n"
-            "2026-01-02,000001,买入,10,100,HT-003\n"
+            "Ngày giao dịch,Mã CK,Loại lệnh,Khối lượng khớp,Giá khớp,Số hiệu lệnh\n"
+            "2026-01-02,FUEVN100,Mua,10,100,HT-003\n"
         )
         parsed = self.import_service.parse_trade_csv(
-            broker="huatai",
+            broker="generic",
             content=csv_text.encode("utf-8"),
         )
         self.assertEqual(parsed["record_count"], 1)
-        self.assertEqual(parsed["records"][0]["symbol"], "000001")
+        self.assertEqual(parsed["records"][0]["symbol"], "FUEVN100")
 
     def test_import_dry_run_counts_in_file_duplicates(self) -> None:
-        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+        account = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")
         aid = account["id"]
         csv_text = (
-            "成交日期,证券代码,买卖标志,成交数量,成交均价,成交编号,手续费,印花税\n"
-            "2026-01-02,600519,买入,10,100,HT-004,1,0\n"
-            "2026-01-02,600519,买入,10,100,HT-004,1,0\n"
+            "Ngày giao dịch,Mã CK,Loại lệnh,Khối lượng khớp,Giá khớp,Số hiệu lệnh\n"
+            "2026-01-02,HPG,Mua,10,100,HT-004\n"
+            "2026-01-02,HPG,Mua,10,100,HT-004\n"
         )
         parsed = self.import_service.parse_trade_csv(
-            broker="huatai",
+            broker="generic",
             content=csv_text.encode("utf-8"),
         )
         result = self.import_service.commit_trade_records(
             account_id=aid,
-            broker="huatai",
+            broker="generic",
             records=parsed["records"],
             dry_run=True,
         )
@@ -236,15 +231,15 @@ class PortfolioPr2TestCase(unittest.TestCase):
         self.assertEqual(result["duplicate_count"], 1)
 
     def test_import_allows_identical_split_fills_without_trade_uid(self) -> None:
-        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+        account = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")
         aid = account["id"]
         csv_text = (
-            "成交日期,证券代码,买卖标志,成交数量,成交均价,手续费,印花税\n"
-            "2026-01-02,600519,买入,10,100,1,0\n"
-            "2026-01-02,600519,买入,10,100,1,0\n"
+            "Ngày giao dịch,Mã CK,Loại lệnh,Khối lượng khớp,Giá khớp\n"
+            "2026-01-02,HPG,Mua,10,100\n"
+            "2026-01-02,HPG,Mua,10,100\n"
         )
         parsed = self.import_service.parse_trade_csv(
-            broker="huatai",
+            broker="generic",
             content=csv_text.encode("utf-8"),
         )
         self.assertEqual(parsed["record_count"], 2)
@@ -252,12 +247,12 @@ class PortfolioPr2TestCase(unittest.TestCase):
 
         first_commit = self.import_service.commit_trade_records(
             account_id=aid,
-            broker="huatai",
+            broker="generic",
             records=parsed["records"],
         )
         second_commit = self.import_service.commit_trade_records(
             account_id=aid,
-            broker="huatai",
+            broker="generic",
             records=parsed["records"],
         )
 
@@ -267,26 +262,26 @@ class PortfolioPr2TestCase(unittest.TestCase):
         self.assertEqual(second_commit["duplicate_count"], 2)
 
     def test_import_oversell_counts_failed_not_duplicate(self) -> None:
-        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+        account = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")
         aid = account["id"]
         self.service.record_trade(
             account_id=aid,
-            symbol="600519",
+            symbol="HPG",
             trade_date=date(2026, 1, 1),
             side="buy",
             quantity=10,
             price=100,
-            market="cn",
-            currency="CNY",
+            market="vn",
+            currency="VND",
         )
 
         result = self.import_service.commit_trade_records(
             account_id=aid,
-            broker="huatai",
+            broker="generic",
             records=[
                 {
                     "trade_date": "2026-01-02",
-                    "symbol": "600519",
+                    "symbol": "HPG",
                     "side": "sell",
                     "quantity": 20,
                     "price": 90,
@@ -294,8 +289,8 @@ class PortfolioPr2TestCase(unittest.TestCase):
                     "tax": 0.0,
                     "trade_uid": "HT-SELL-001",
                     "dedup_hash": "oversell-hash-001",
-                    "market": "cn",
-                    "currency": "CNY",
+                    "market": "vn",
+                    "currency": "VND",
                 }
             ],
         )
@@ -306,7 +301,7 @@ class PortfolioPr2TestCase(unittest.TestCase):
         self.assertEqual(len(result["errors"]), 1)
 
     def test_import_busy_counts_failed_not_duplicate(self) -> None:
-        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+        account = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")
         aid = account["id"]
 
         with patch.object(
@@ -316,11 +311,11 @@ class PortfolioPr2TestCase(unittest.TestCase):
         ):
             result = self.import_service.commit_trade_records(
                 account_id=aid,
-                broker="huatai",
+                broker="generic",
                 records=[
                     {
                         "trade_date": "2026-01-02",
-                        "symbol": "600519",
+                        "symbol": "HPG",
                         "side": "buy",
                         "quantity": 10,
                         "price": 90,
@@ -328,8 +323,8 @@ class PortfolioPr2TestCase(unittest.TestCase):
                         "tax": 0.0,
                         "trade_uid": "HT-BUSY-001",
                         "dedup_hash": "busy-hash-001",
-                        "market": "cn",
-                        "currency": "CNY",
+                        "market": "vn",
+                        "currency": "VND",
                     }
                 ],
             )
@@ -340,42 +335,42 @@ class PortfolioPr2TestCase(unittest.TestCase):
         self.assertIn("portfolio_busy", result["errors"][0])
 
     def test_risk_threshold_boundary(self) -> None:
-        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+        account = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")
         aid = account["id"]
         self.service.record_cash_ledger(
             account_id=aid,
             event_date=date(2026, 1, 1),
             direction="in",
             amount=20000,
-            currency="CNY",
+            currency="VND",
         )
         self.service.record_trade(
             account_id=aid,
-            symbol="600519",
+            symbol="HPG",
             trade_date=date(2026, 1, 1),
             side="buy",
             quantity=100,
             price=100,
-            market="cn",
-            currency="CNY",
+            market="vn",
+            currency="VND",
         )
         self.service.record_trade(
             account_id=aid,
-            symbol="000001",
+            symbol="VCB",
             trade_date=date(2026, 1, 1),
             side="buy",
             quantity=100,
             price=20,
-            market="cn",
-            currency="CNY",
+            market="vn",
+            currency="VND",
         )
 
-        self._save_close("600519", date(2026, 1, 1), 100.0)
-        self._save_close("000001", date(2026, 1, 1), 20.0)
+        self._save_close("HPG", date(2026, 1, 1), 100.0)
+        self._save_close("VCB", date(2026, 1, 1), 20.0)
         self.service.get_portfolio_snapshot(account_id=aid, as_of=date(2026, 1, 1), cost_method="fifo")
 
-        self._save_close("600519", date(2026, 1, 2), 70.0)
-        self._save_close("000001", date(2026, 1, 2), 20.0)
+        self._save_close("HPG", date(2026, 1, 2), 70.0)
+        self._save_close("VCB", date(2026, 1, 2), 20.0)
         report = self.risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 2), cost_method="fifo")
 
         self.assertTrue(report["concentration"]["alert"])
@@ -385,165 +380,71 @@ class PortfolioPr2TestCase(unittest.TestCase):
         self.assertAlmostEqual(report["thresholds"]["drawdown_alert_pct"], 10.0, places=6)
 
     def test_risk_drawdown_backfills_snapshot_window_on_first_call(self) -> None:
-        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+        account = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")
         aid = account["id"]
         self.service.record_cash_ledger(
             account_id=aid,
             event_date=date(2026, 1, 1),
             direction="in",
             amount=20000,
-            currency="CNY",
+            currency="VND",
         )
         self.service.record_trade(
             account_id=aid,
-            symbol="600519",
+            symbol="HPG",
             trade_date=date(2026, 1, 1),
             side="buy",
             quantity=100,
             price=100,
-            market="cn",
-            currency="CNY",
+            market="vn",
+            currency="VND",
         )
-        self._save_close("600519", date(2026, 1, 1), 100.0)
-        self._save_close("600519", date(2026, 1, 2), 70.0)
+        self._save_close("HPG", date(2026, 1, 1), 100.0)
+        self._save_close("HPG", date(2026, 1, 2), 70.0)
 
         report = self.risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 2), cost_method="fifo")
         self.assertGreaterEqual(report["drawdown"]["series_points"], 2)
         self.assertGreater(report["drawdown"]["max_drawdown_pct"], 10.0)
         self.assertTrue(report["drawdown"]["alert"])
 
-    def test_concentration_uses_cny_normalized_exposure(self) -> None:
-        cn_account = self.service.create_account(name="CN", broker="Demo", market="cn", base_currency="CNY")
-        us_account = self.service.create_account(name="US", broker="Demo", market="us", base_currency="USD")
-        cn_id = cn_account["id"]
-        us_id = us_account["id"]
-
-        self.service.record_cash_ledger(
-            account_id=cn_id,
-            event_date=date(2026, 1, 1),
-            direction="in",
-            amount=1000.0,
-            currency="CNY",
-        )
-        self.service.record_trade(
-            account_id=cn_id,
-            symbol="600519",
-            trade_date=date(2026, 1, 1),
-            side="buy",
-            quantity=10,
-            price=100,
-            market="cn",
-            currency="CNY",
-        )
-
-        self.service.record_cash_ledger(
-            account_id=us_id,
-            event_date=date(2026, 1, 1),
-            direction="in",
-            amount=100.0,
-            currency="USD",
-        )
-        self.service.record_trade(
-            account_id=us_id,
-            symbol="AAPL",
-            trade_date=date(2026, 1, 1),
-            side="buy",
-            quantity=1,
-            price=100,
-            market="us",
-            currency="USD",
-        )
-        self._save_close("600519", date(2026, 1, 1), 100.0)
-        self._save_close("AAPL", date(2026, 1, 1), 100.0)
-        self.service.repo.save_fx_rate(
-            from_currency="USD",
-            to_currency="CNY",
-            rate_date=date(2026, 1, 1),
-            rate=7.0,
-            source="manual",
-            is_stale=False,
-        )
-        self.service.get_portfolio_snapshot(as_of=date(2026, 1, 1), cost_method="fifo")
-
-        report = self.risk_service.get_risk_report(as_of=date(2026, 1, 1), cost_method="fifo")
-        positions = {item["symbol"]: item for item in report["concentration"]["top_positions"]}
-        self.assertIn("AAPL", positions)
-        self.assertAlmostEqual(positions["AAPL"]["market_value_base"], 700.0, places=6)
-
-    def test_sector_concentration_uses_unclassified_for_non_cn(self) -> None:
-        us_account = self.service.create_account(name="US", broker="Demo", market="us", base_currency="USD")
-        us_id = us_account["id"]
-        self.service.record_cash_ledger(
-            account_id=us_id,
-            event_date=date(2026, 1, 1),
-            direction="in",
-            amount=100.0,
-            currency="USD",
-        )
-        self.service.record_trade(
-            account_id=us_id,
-            symbol="AAPL",
-            trade_date=date(2026, 1, 1),
-            side="buy",
-            quantity=1,
-            price=100,
-            market="us",
-            currency="USD",
-        )
-        self._save_close("AAPL", date(2026, 1, 1), 100.0)
-        report = self.risk_service.get_risk_report(account_id=us_id, as_of=date(2026, 1, 1), cost_method="fifo")
-        self.assertIn("sector_concentration", report)
-        sectors = report["sector_concentration"]["top_sectors"]
-        self.assertTrue(len(sectors) >= 1)
-        self.assertEqual(sectors[0]["sector"], "UNCLASSIFIED")
-
-    @patch.object(PortfolioRiskService, "_fetch_belong_boards", return_value=[{"name": "白酒", "type": "行业"}])
-    def test_sector_concentration_cn_board_mapping(self, _mock_fetch) -> None:
-        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
-        aid = account["id"]
-        self.service.record_cash_ledger(
-            account_id=aid,
-            event_date=date(2026, 1, 1),
-            direction="in",
-            amount=10000.0,
-            currency="CNY",
-        )
-        self.service.record_trade(
-            account_id=aid,
-            symbol="600519",
-            trade_date=date(2026, 1, 1),
-            side="buy",
-            quantity=100,
-            price=100,
-            market="cn",
-            currency="CNY",
-        )
-        self._save_close("600519", date(2026, 1, 1), 100.0)
-        report = self.risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 1), cost_method="fifo")
-        sectors = report["sector_concentration"]["top_sectors"]
-        self.assertTrue(len(sectors) >= 1)
-        self.assertEqual(sectors[0]["sector"], "白酒")
-
-    def test_risk_report_aggregates_active_defensive_decision_signals_for_holdings(self) -> None:
-        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+    def test_sector_concentration_marks_vn_positions_unclassified(self) -> None:
+        account = self.service.create_account(name="VN", broker="Demo", market="vn", base_currency="VND")
         aid = account["id"]
         self.service.record_cash_ledger(
             account_id=aid,
             event_date=date(2026, 1, 1),
             direction="in",
             amount=100000.0,
-            currency="CNY",
+            currency="VND",
         )
-        for symbol in ("SH600519", "300750", "000001", "000002", "000003"):
+        self._create_position(aid, "HPG")
+        report = self.risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 1), cost_method="fifo")
+        self.assertIn("sector_concentration", report)
+        sectors = report["sector_concentration"]["top_sectors"]
+        self.assertTrue(len(sectors) >= 1)
+        self.assertEqual(sectors[0]["sector"], "UNCLASSIFIED")
+        self.assertEqual(report["sector_concentration"]["coverage"]["unclassified_count"], 1)
+
+    def test_risk_report_aggregates_active_defensive_decision_signals_for_holdings(self) -> None:
+        account = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")
+        aid = account["id"]
+        self.service.record_cash_ledger(
+            account_id=aid,
+            event_date=date(2026, 1, 1),
+            direction="in",
+            amount=100000.0,
+            currency="VND",
+        )
+        for symbol in ("HPG", "FPT", "VCB", "MWG", "VNM"):
             self._create_position(aid, symbol)
 
-        self._create_signal("600519.SH", "sell")
-        self._create_signal("300750", "reduce")
-        self._create_signal("000001", "alert")
-        self._create_signal("000002", "buy")
-        self._create_signal("000003", "watch")
-        self._create_signal("002000", "sell")
-        self._create_signal("600519", "alert", status="expired", trace_id="expired-alert-600519")
+        self._create_signal("HPG.VN", "sell")
+        self._create_signal("FPT", "reduce")
+        self._create_signal("VCB", "alert")
+        self._create_signal("MWG", "buy")
+        self._create_signal("VNM", "watch")
+        self._create_signal("TCB", "sell")
+        self._create_signal("HPG", "alert", status="expired", trace_id="expired-alert-HPG")
 
         report = self.risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 1), cost_method="fifo")
 
@@ -552,49 +453,49 @@ class PortfolioPr2TestCase(unittest.TestCase):
         self.assertEqual(block["total"], 3)
         self.assertEqual(block["actions"], {"sell": 1, "reduce": 1, "alert": 1})
         symbols = {item["symbol"] for item in block["items"]}
-        self.assertEqual(symbols, {"SH600519", "300750", "000001"})
+        self.assertEqual(symbols, {"HPG", "FPT", "VCB"})
         signal_actions = {item["symbol"]: item["signal"]["action"] for item in block["items"]}
-        self.assertNotIn("000002", signal_actions)
-        self.assertNotIn("000003", signal_actions)
-        self.assertNotIn("002000", signal_actions)
-        self.assertEqual(signal_actions["SH600519"], "sell")
-        self.assertEqual(signal_actions["300750"], "reduce")
-        self.assertEqual(signal_actions["000001"], "alert")
+        self.assertNotIn("MWG", signal_actions)
+        self.assertNotIn("VNM", signal_actions)
+        self.assertNotIn("TCB", signal_actions)
+        self.assertEqual(signal_actions["HPG"], "sell")
+        self.assertEqual(signal_actions["FPT"], "reduce")
+        self.assertEqual(signal_actions["VCB"], "alert")
 
     def test_risk_report_uses_requested_snapshot_for_decision_signal_filters(self) -> None:
-        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+        account = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")
         aid = account["id"]
         self.service.record_cash_ledger(
             account_id=aid,
             event_date=date(2026, 1, 1),
             direction="in",
             amount=100000.0,
-            currency="CNY",
+            currency="VND",
         )
         self.service.record_trade(
             account_id=aid,
-            symbol="600519",
+            symbol="HPG",
             trade_date=date(2026, 1, 1),
             side="buy",
             quantity=10,
             price=100,
-            market="cn",
-            currency="CNY",
+            market="vn",
+            currency="VND",
         )
-        self._save_close("600519", date(2026, 1, 1), 100.0)
-        self._save_close("600519", date(2026, 1, 2), 100.0)
+        self._save_close("HPG", date(2026, 1, 1), 100.0)
+        self._save_close("HPG", date(2026, 1, 2), 100.0)
         self.service.record_trade(
             account_id=aid,
-            symbol="000001",
+            symbol="VCB",
             trade_date=date(2026, 1, 2),
             side="buy",
             quantity=10,
             price=20,
-            market="cn",
-            currency="CNY",
+            market="vn",
+            currency="VND",
         )
-        self._save_close("000001", date(2026, 1, 2), 20.0)
-        self._create_signal("000001", "sell")
+        self._save_close("VCB", date(2026, 1, 2), 20.0)
+        self._create_signal("VCB", "sell")
 
         original = self.risk_service.decision_signal_service.list_signals
         with patch.object(
@@ -611,7 +512,7 @@ class PortfolioPr2TestCase(unittest.TestCase):
         block = report["decision_signal_risk"]
         self.assertTrue(block["available"])
         self.assertEqual(block["total"], 1)
-        self.assertEqual(block["items"][0]["symbol"], "000001")
+        self.assertEqual(block["items"][0]["symbol"], "VCB")
         self.assertEqual(block["items"][0]["signal"]["action"], "sell")
         for call in spy.mock_calls:
             self.assertIsNot(call.kwargs.get("holding_only"), True)
@@ -625,20 +526,20 @@ class PortfolioPr2TestCase(unittest.TestCase):
             for ids in identity_calls
             for identity in ids
         }
-        self.assertIn(("cn", "000001"), observed_identities)
-        self.assertIn(("cn", "600519"), observed_identities)
+        self.assertIn(("vn", "VCB"), observed_identities)
+        self.assertIn(("vn", "HPG"), observed_identities)
 
     def test_risk_report_decision_signal_fail_open(self) -> None:
-        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+        account = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")
         aid = account["id"]
         self.service.record_cash_ledger(
             account_id=aid,
             event_date=date(2026, 1, 1),
             direction="in",
             amount=10000.0,
-            currency="CNY",
+            currency="VND",
         )
-        self._create_position(aid, "600519")
+        self._create_position(aid, "HPG")
 
         class BrokenSignalService:
             def list_signals(self, **_kwargs):
@@ -655,17 +556,17 @@ class PortfolioPr2TestCase(unittest.TestCase):
         self.assertEqual(report["decision_signal_risk"]["items"], [])
 
     def test_portfolio_risk_endpoint_returns_defensive_decision_signals(self) -> None:
-        account = self.service.create_account(name="Main", broker="Demo", market="cn", base_currency="CNY")
+        account = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")
         aid = account["id"]
         self.service.record_cash_ledger(
             account_id=aid,
             event_date=date(2026, 1, 1),
             direction="in",
             amount=10000.0,
-            currency="CNY",
+            currency="VND",
         )
-        self._create_position(aid, "600519")
-        self._create_signal("600519", "sell")
+        self._create_position(aid, "HPG")
+        self._create_signal("HPG", "sell")
 
         response = self.client.get(
             "/api/v1/portfolio/risk",
@@ -678,203 +579,23 @@ class PortfolioPr2TestCase(unittest.TestCase):
         self.assertEqual(payload["decision_signal_risk"]["total"], 1)
         self.assertEqual(payload["decision_signal_risk"]["items"][0]["signal"]["action"], "sell")
 
-    def test_snapshot_does_not_trigger_online_fx_refresh(self) -> None:
-        account = self.service.create_account(name="US", broker="Demo", market="us", base_currency="CNY")
-        aid = account["id"]
-        self.service.record_cash_ledger(
-            account_id=aid,
-            event_date=date(2026, 1, 1),
-            direction="in",
-            amount=1000.0,
-            currency="USD",
-        )
-        self.service.record_trade(
-            account_id=aid,
-            symbol="AAPL",
-            trade_date=date(2026, 1, 1),
-            side="buy",
-            quantity=1,
-            price=100,
-            market="us",
-            currency="USD",
-        )
-        self._save_close("AAPL", date(2026, 1, 1), 100.0)
-        self.service.repo.save_fx_rate(
-            from_currency="USD",
-            to_currency="CNY",
-            rate_date=date(2026, 1, 1),
-            rate=7.0,
-            source="manual",
-            is_stale=False,
-        )
-
-        with patch.object(PortfolioService, "_fetch_fx_rate_from_yfinance", side_effect=AssertionError("should not call")):
-            self.service.get_portfolio_snapshot(account_id=aid, as_of=date(2026, 1, 1), cost_method="fifo")
-
-    def test_fx_refresh_fallback_marks_stale(self) -> None:
-        account = self.service.create_account(name="US", broker="Demo", market="us", base_currency="CNY")
-        aid = account["id"]
-        self.service.record_cash_ledger(
-            account_id=aid,
-            event_date=date(2026, 1, 1),
-            direction="in",
-            amount=1000.0,
-            currency="USD",
-        )
-        self.service.repo.save_fx_rate(
-            from_currency="USD",
-            to_currency="CNY",
-            rate_date=date(2026, 1, 1),
-            rate=7.0,
-            source="manual",
-            is_stale=False,
-        )
-
-        with patch.object(PortfolioService, "_fetch_fx_rate_from_yfinance", return_value=None):
-            summary = self.service.refresh_fx_rates(account_id=aid, as_of=date(2026, 1, 2))
-
-        self.assertEqual(summary["pair_count"], 1)
-        self.assertEqual(summary["updated_count"], 0)
-        self.assertEqual(summary["stale_count"], 1)
-        latest = self.service.repo.get_latest_fx_rate(
-            from_currency="USD",
-            to_currency="CNY",
-            as_of=date(2026, 1, 2),
-        )
-        self.assertIsNotNone(latest)
-        self.assertTrue(bool(latest.is_stale))
-        self.assertAlmostEqual(float(latest.rate), 7.0, places=6)
-
-    def test_fx_refresh_disabled_returns_real_pair_count_without_fetching(self) -> None:
-        account = self.service.create_account(name="US", broker="Demo", market="us", base_currency="CNY")
-        aid = account["id"]
-        self.service.record_cash_ledger(
-            account_id=aid,
-            event_date=date(2026, 1, 1),
-            direction="in",
-            amount=1000.0,
-            currency="USD",
-        )
-
-        disabled_config = SimpleNamespace(portfolio_fx_update_enabled=False)
-        with patch("src.services.portfolio_service.get_config", return_value=disabled_config) as get_config_mock, patch.object(
-            PortfolioService,
-            "_fetch_fx_rate_from_yfinance",
-            side_effect=AssertionError("should not call"),
-        ), patch.object(self.service.repo, "save_fx_rate", wraps=self.service.repo.save_fx_rate) as save_fx_rate_mock:
-            summary = self.service.refresh_fx_rates(account_id=aid, as_of=date(2026, 1, 2))
-
-        self.assertFalse(summary["refresh_enabled"])
-        self.assertEqual(summary["disabled_reason"], "portfolio_fx_update_disabled")
-        self.assertEqual(summary["pair_count"], 1)
-        self.assertEqual(summary["updated_count"], 0)
-        self.assertEqual(summary["stale_count"], 0)
-        self.assertEqual(summary["error_count"], 0)
-        get_config_mock.assert_called_once()
-        save_fx_rate_mock.assert_not_called()
-
-    def test_fx_refresh_disabled_skips_invalid_currency_rows(self) -> None:
-        account = self.service.create_account(name="US", broker="Demo", market="us", base_currency="CNY")
-        aid = account["id"]
-
-        disabled_config = SimpleNamespace(portfolio_fx_update_enabled=False)
-        invalid_row = SimpleNamespace(currency="")
-        valid_row = SimpleNamespace(currency="USD")
-        with patch("src.services.portfolio_service.get_config", return_value=disabled_config), patch.object(
-            self.service.repo,
-            "list_trades",
-            return_value=[invalid_row, valid_row],
-        ), patch.object(
-            self.service.repo,
-            "list_cash_ledger",
-            return_value=[],
-        ), patch.object(
-            PortfolioService,
-            "_fetch_fx_rate_from_yfinance",
-            side_effect=AssertionError("should not call"),
-        ):
-            summary = self.service.refresh_fx_rates(account_id=aid, as_of=date(2026, 1, 2))
-
-        self.assertFalse(summary["refresh_enabled"])
-        self.assertEqual(summary["pair_count"], 1)
-        self.assertEqual(summary["updated_count"], 0)
-        self.assertEqual(summary["stale_count"], 0)
-        self.assertEqual(summary["error_count"], 0)
-
-    def test_fx_refresh_endpoint_returns_disabled_status_fields(self) -> None:
-        account = self.service.create_account(name="US", broker="Demo", market="us", base_currency="CNY")
-        account_id = account["id"]
-        self.service.record_cash_ledger(
-            account_id=account_id,
-            event_date=date(2026, 1, 1),
-            direction="in",
-            amount=1000.0,
-            currency="USD",
-        )
-
-        disabled_config = SimpleNamespace(portfolio_fx_update_enabled=False)
-        with patch("src.services.portfolio_service.get_config", return_value=disabled_config), patch.object(
-            PortfolioService,
-            "_fetch_fx_rate_from_yfinance",
-            side_effect=AssertionError("should not call"),
-        ):
-            response = self.client.post(
-                "/api/v1/portfolio/fx/refresh",
-                params={"account_id": account_id, "as_of": "2026-01-02"},
-            )
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertFalse(payload["refresh_enabled"])
-        self.assertEqual(payload["disabled_reason"], "portfolio_fx_update_disabled")
-        self.assertEqual(payload["pair_count"], 1)
-        self.assertEqual(payload["updated_count"], 0)
-        self.assertEqual(payload["stale_count"], 0)
-        self.assertEqual(payload["error_count"], 0)
-
-    def test_fx_refresh_endpoint_returns_enabled_status_fields(self) -> None:
-        account = self.service.create_account(name="US", broker="Demo", market="us", base_currency="CNY")
-        account_id = account["id"]
-        self.service.record_cash_ledger(
-            account_id=account_id,
-            event_date=date(2026, 1, 1),
-            direction="in",
-            amount=1000.0,
-            currency="USD",
-        )
-
-        with patch.object(PortfolioService, "_fetch_fx_rate_from_yfinance", return_value=None):
-            response = self.client.post(
-                "/api/v1/portfolio/fx/refresh",
-                params={"account_id": account_id, "as_of": "2026-01-02"},
-            )
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertTrue(payload["refresh_enabled"])
-        self.assertIsNone(payload["disabled_reason"])
-        self.assertEqual(payload["pair_count"], 1)
-        self.assertEqual(payload["updated_count"], 0)
-        self.assertEqual(payload["stale_count"], 0)
-        self.assertEqual(payload["error_count"], 1)
-
     def test_import_and_risk_endpoints(self) -> None:
         create_resp = self.client.post(
             "/api/v1/portfolio/accounts",
-            json={"name": "Main", "broker": "Demo", "market": "cn", "base_currency": "CNY"},
+            json={"name": "Main", "broker": "Demo", "market": "vn", "base_currency": "VND"},
         )
         self.assertEqual(create_resp.status_code, 200)
         account_id = create_resp.json()["id"]
 
         import_resp = self.client.post(
             "/api/v1/portfolio/imports/csv/commit",
-            data={"account_id": str(account_id), "broker": "huatai", "dry_run": "false"},
-            files={"file": ("huatai.csv", self._csv_bytes(with_trade_uid=True), "text/csv")},
+            data={"account_id": str(account_id), "broker": "generic", "dry_run": "false"},
+            files={"file": ("generic.csv", self._csv_bytes(with_trade_uid=True), "text/csv")},
         )
         self.assertEqual(import_resp.status_code, 200)
         self.assertEqual(import_resp.json()["inserted_count"], 1)
 
-        self._save_close("600519", date(2026, 1, 2), 95.0)
+        self._save_close("HPG", date(2026, 1, 2), 95.0)
         self.service.get_portfolio_snapshot(account_id=account_id, as_of=date(2026, 1, 2), cost_method="fifo")
         risk_resp = self.client.get(
             "/api/v1/portfolio/risk",

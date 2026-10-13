@@ -234,7 +234,7 @@ class BacktestService:
 
             except Exception as exc:
                 errors += 1
-                logger.error(f"回测失败: {analysis.code}#{analysis.id}: {exc}")
+                logger.error(f"Backtest thất bại: {analysis.code}#{analysis.id}: {exc}")
                 results_to_save.append(
                     BacktestResult(
                         analysis_history_id=analysis.id,
@@ -428,7 +428,7 @@ class BacktestService:
 
         identity = resolve_daily_stock_identity(str(code).strip())
         if identity is None:
-            raise ValueError(f"非法股票代码格式: {code}")
+            raise ValueError(f"Định dạng mã cổ phiếu không hợp lệ: {code}")
         return identity.normalized_code
 
     @staticmethod
@@ -478,19 +478,19 @@ class BacktestService:
         if processed == 0:
             if has_matching_analysis:
                 diagnostics["empty_reason"] = "no_new_results"
-                message = "历史分析记录已存在，当前筛选条件下没有新的回测任务可执行。"
+                message = "Bản ghi phân tích lịch sử đã tồn tại, với bộ lọc hiện tại không có tác vụ backtest mới để chạy."
             else:
                 diagnostics["empty_reason"] = "no_matching_analysis"
-                message = "未找到符合条件的历史分析记录，请检查股票代码、分析日期范围、最小天龄或是否已生成历史分析。"
+                message = "Không tìm thấy bản ghi phân tích lịch sử phù hợp, hãy kiểm tra mã cổ phiếu, khoảng ngày phân tích, số ngày tối thiểu hoặc đã có lịch sử phân tích chưa."
         elif completed == 0 and insufficient > 0 and errors == 0:
             diagnostics["empty_reason"] = "insufficient_daily_data"
-            message = "已找到历史分析记录，但可用日线行情不足，无法完成回测。"
+            message = "Đã tìm thấy bản ghi phân tích lịch sử, nhưng dữ liệu giá ngày không đủ để hoàn tất backtest."
         elif completed == 0 and errors > 0:
             diagnostics["empty_reason"] = "evaluation_error"
-            message = "已找到历史分析记录，但回测计算失败，请查看后端日志或放宽筛选条件。"
+            message = "Đã tìm thấy bản ghi phân tích lịch sử, nhưng tính toán backtest thất bại, hãy xem log backend hoặc nới lỏng bộ lọc."
         elif saved == 0 and completed == 0:
             diagnostics["empty_reason"] = "no_new_results"
-            message = "没有写入新的回测结果；如需覆盖已有结果，请启用强制重跑。"
+            message = "Không ghi kết quả backtest mới; nếu muốn ghi đè kết quả cũ, hãy bật chạy lại bắt buộc."
 
         if message:
             diagnostics["message"] = message
@@ -827,7 +827,7 @@ class BacktestService:
             return parsed
         if getattr(analysis, "created_at", None):
             return analysis.created_at.date()
-        logger.warning(f"无法确定分析日期，跳过记录: {analysis.code}#{getattr(analysis, 'id', '?')}")
+        logger.warning(f"Không xác định được ngày phân tích, bỏ qua bản ghi: {analysis.code}#{getattr(analysis, 'id', '?')}")
         return None
 
     def _try_fill_daily_data(self, *, code: str, analysis_date: date, eval_window_days: int) -> None:
@@ -851,7 +851,7 @@ class BacktestService:
                 return
             self.db.save_daily_data(df, code=refill_code, data_source=source)
         except Exception as exc:
-            logger.warning(f"补全日线数据失败({refill_code}): {exc}")
+            logger.warning(f"Bổ sung dữ liệu giá ngày thất bại ({refill_code}): {exc}")
 
     def _recompute_summaries(self, *, touched_codes: List[str], eval_window_days: int, engine_version: str) -> None:
         with self.db.get_session() as session:

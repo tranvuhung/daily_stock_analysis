@@ -52,197 +52,19 @@ from src.services.history_service import HistoryService
 import src.auth as auth
 
 
-class TestHistoryCsiCandidateConvergence(unittest.TestCase):
-    """PR #2267 review remediation: registered CSI explicit identities must
-    converge in history filter candidates so a record saved under any
-    equivalent form is reachable from every equivalent query input."""
-
-    def test_registered_csi_forms_include_canonical_uppercase_and_aliases(self):
-        """A registered CSI identity is a *persisted-read* filter path: the
-        candidate set must include the parser canonical (``csi930955``), the
-        old resolver's uppercase canonical (``CSI930955`` — how pre-fix records
-        were saved) and the IndexEntry's explicit aliases (``930955.CSI``) so a
-        record stored under any of them is hit by any equivalent input."""
-        for code in ("csi930955", "930955.CSI", "CSI930955", "  csi930955  "):
-            candidates = HistoryService._history_code_filter_candidates(code)
-            self.assertEqual(
-                set(candidates),
-                {"csi930955", "CSI930955", "930955.CSI"},
-            )
-            self.assertEqual(len(candidates), len(set(candidates)))
-
-    def test_bare_csi_base_remains_stock_candidates(self):
-        candidates = HistoryService._history_code_filter_candidates("930955")
-        self.assertIn("930955", candidates)
-        self.assertNotIn("csi930955", candidates)
-
-    def test_unregistered_csi_form_is_not_converged(self):
-        candidates = HistoryService._history_code_filter_candidates("csi930956")
-        self.assertNotIn("csi930956", candidates)
-
-    def test_market_aware_offshore_lookup_keeps_same_market_bare_numeric_alias(self):
-        db = MagicMock()
-        db.get_analysis_history_paginated.return_value = ([], 0)
-
-        HistoryService(db).get_history_list(
-            stock_code="005930.KS",
-            page=1,
-            limit=5,
-            include_ambiguous_numeric_aliases=False,
-            market_hint="kr",
-        )
-
-        queried_codes = db.get_analysis_history_paginated.call_args.kwargs["code"]
-        self.assertIn("005930.KS", queried_codes)
-        self.assertIn("005930", queried_codes)
-
-    def test_market_hint_blocks_indexed_cross_market_reexpansion(self):
-        db = MagicMock()
-        db.get_analysis_history_paginated.return_value = ([], 0)
-
-        HistoryService(db).get_history_list(
-            stock_code="000660",
-            page=1,
-            limit=5,
-            market_hint="cn",
-        )
-
-        queried_codes = db.get_analysis_history_paginated.call_args.kwargs["code"]
-        self.assertIn("SZ000660", queried_codes)
-        self.assertIn("000660.SZ", queried_codes)
-        self.assertNotIn("000660", queried_codes)
-        self.assertNotIn("000660.KS", queried_codes)
-
-    def test_market_hint_keeps_unambiguous_same_market_bare_numeric_alias(self):
-        db = MagicMock()
-        db.get_analysis_history_paginated.return_value = ([], 0)
-
-        HistoryService(db).get_history_list(
-            stock_code="600519",
-            page=1,
-            limit=5,
-            market_hint="cn",
-        )
-
-        queried_codes = db.get_analysis_history_paginated.call_args.kwargs["code"]
-        self.assertIn("600519", queried_codes)
-
-    def test_empty_market_qualified_candidate_set_fails_closed(self):
-        db = MagicMock()
-
-        result = HistoryService(db).get_history_list(
-            stock_code="AAPL",
-            page=1,
-            limit=5,
-            market_hint="cn",
-        )
-
-        self.assertEqual(result, {"total": 0, "items": []})
-        db.get_analysis_history_paginated.assert_not_called()
-
-
-class TestHistoryIndexCanonicalCandidates(unittest.TestCase):
-    """PR #2312 review remediation: registered SH/SZ indices (not just CSI)
-    must use parser-aware persisted-read candidates — lowercase canonical +
-    uppercase legacy canonical + explicit aliases — and must never include the
-    bare same-code stock, so an index record is never reachable through a
-    stock query and vice versa."""
-
-    def test_registered_sh_index_forms_include_canonical_uppercase_and_aliases(self):
-        """``sh000016`` must map to canonical + uppercase legacy + ``000016.SH``
-        alias, and must NOT include the bare ``000016`` stock."""
-        for code in ("sh000016", "SH000016", "000016.SH", "  sh000016  "):
-            candidates = HistoryService._history_code_filter_candidates(code)
-            self.assertEqual(
-                set(candidates),
-                {"sh000016", "SH000016", "000016.SH"},
-            )
-            self.assertEqual(len(candidates), len(set(candidates)))
-            self.assertNotIn("000016", candidates)
-
-    def test_registered_sz_index_forms_include_canonical_uppercase_and_aliases(self):
-        for code in ("sz399001", "SZ399001", "399001.SZ"):
-            candidates = HistoryService._history_code_filter_candidates(code)
-            self.assertEqual(
-                set(candidates),
-                {"sz399001", "SZ399001", "399001.SZ"},
-            )
-            self.assertNotIn("399001", candidates)
-
-    def test_multi_alias_sh300_index_candidates_include_uppercase_alias_forms(self):
-        """sqlite `IN` 大小写敏感：`sz399300` 的旧 uppercase 持久化形态
-        `SZ399300` 必须进入候选集，否则旧记录查不到。"""
-        expected = {
-            "sh000300",
-            "SH000300",
-            "sz399300",
-            "SZ399300",
-            "000300.SH",
-            "000300.CSI",
-        }
-        for code in ("sh000300", "sz399300", "SZ399300", "000300.SH", "000300.CSI"):
-            candidates = HistoryService._history_code_filter_candidates(code)
-            self.assertEqual(set(candidates), expected)
-            self.assertEqual(len(candidates), len(set(candidates)))
-            self.assertNotIn("000300", candidates)
-
-    def test_registered_csi_forms_keep_existing_converged_candidates(self):
-        """The unified parser-aware branch must preserve the PR #2267 CSI
-        candidate contract exactly."""
-        for code in ("csi930955", "930955.CSI", "CSI930955", "  csi930955  "):
-            candidates = HistoryService._history_code_filter_candidates(code)
-            self.assertEqual(
-                set(candidates),
-                {"csi930955", "CSI930955", "930955.CSI"},
-            )
-            self.assertEqual(len(candidates), len(set(candidates)))
-            self.assertNotIn("930955", candidates)
-
-    def test_multi_alias_sh300_index_converges_all_explicit_forms(self):
-        """``sh000300`` owns ``sz399300`` / ``000300.SH`` / ``000300.CSI``
-        aliases; every explicit form must converge to the same candidate set,
-        including the uppercase alias form ``SZ399300`` (case-sensitive SQL)."""
-        for code in ("sh000300", "sz399300", "SZ399300", "000300.SH", "000300.CSI"):
-            candidates = HistoryService._history_code_filter_candidates(code)
-            self.assertEqual(
-                set(candidates),
-                {"sh000300", "SH000300", "sz399300", "SZ399300", "000300.SH", "000300.CSI"},
-            )
-            self.assertNotIn("000300", candidates)
-
-    def test_bare_stock_does_not_include_index_identity(self):
-        """Filtering the bare stock ``000016`` must not reach the ``sh000016``
-        index or its ``000016.SH`` alias."""
-        candidates = HistoryService._history_code_filter_candidates("000016")
-        self.assertIn("000016", candidates)
-        self.assertNotIn("sh000016", candidates)
-        self.assertNotIn("000016.SH", candidates)
-
-    def test_unregistered_prefixed_index_form_stays_stock(self):
-        """An unregistered ``sh``-prefixed token parses as a stock and must
-        keep the legacy stock candidate path untouched — no lowercase index
-        canonical (``sh900999``) and no registry alias are invented."""
-        candidates = HistoryService._history_code_filter_candidates("sh900999")
-        self.assertEqual(
-            set(candidates),
-            {"SH900999", "900999", "900999.SH", "900999.SS", "SS900999"},
-        )
-        self.assertNotIn("sh900999", candidates)
-
-
 def _analysis_context_pack_overview() -> dict:
     return {
         "pack_version": "1.0",
         "created_at": "2026-04-10T08:30:00+00:00",
         "subject": {
-            "code": "600519",
-            "stock_name": "贵州茅台",
-            "market": "cn",
+            "code": "HPG",
+            "stock_name": "Hòa Phát",
+            "market": "vn",
         },
         "blocks": [
             {
                 "key": "quote",
-                "label": "行情",
+                "label": "Quote",
                 "status": "available",
                 "source": "mock",
                 "warnings": [],
@@ -268,7 +90,6 @@ def _analysis_context_pack_overview() -> dict:
                 "technical": 100,
                 "news": 100,
                 "fundamentals": 100,
-                "chip": 100,
             },
             "limitations": [],
         },
@@ -282,9 +103,9 @@ def _analysis_context_pack_overview() -> dict:
 
 def _market_phase_summary() -> dict:
     return {
-        "market": "cn",
+        "market": "vn",
         "phase": "intraday",
-        "market_local_time": "2026-03-27T10:00:00+08:00",
+        "market_local_time": "2026-03-27T10:00:00+07:00",
         "session_date": "2026-03-27",
         "effective_daily_bar_date": "2026-03-26",
         "is_trading_day": True,
@@ -315,7 +136,7 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         }
         self._env_path = os.path.join(self._temp_dir.name, ".env")
         with open(self._env_path, "w", encoding="utf-8") as env_file:
-            env_file.write("STOCK_LIST=600519,000001\n")
+            env_file.write("STOCK_LIST=HPG,FPT\n")
 
         os.environ["ENV_FILE"] = self._env_path
         os.environ["DATABASE_PATH"] = self._db_path
@@ -385,7 +206,7 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         db.get_analysis_history_paginated.side_effect = get_records
         db.delete_analysis_history_records.side_effect = delete_records
 
-        response = delete_history_by_code("600519", db_manager=db)
+        response = delete_history_by_code("HPG", db_manager=db)
 
         self.assertEqual(response.deleted, 10_001)
         self.assertEqual(remaining, {})
@@ -420,12 +241,12 @@ class AnalysisHistoryTestCase(unittest.TestCase):
     def _build_result(self) -> AnalysisResult:
         """构造分析结果"""
         return AnalysisResult(
-            code="600519",
-            name="贵州茅台",
+            code="HPG",
+            name="Hòa Phát",
             sentiment_score=78,
-            trend_prediction="看多",
-            operation_advice="持有",
-            analysis_summary="基本面稳健，短期震荡",
+            trend_prediction="Tăng",
+            operation_advice="Nắm giữ",
+            analysis_summary="Cơ bản vững, ngắn hạn đi ngang",
         )
 
     def _save_history(self, query_id: str) -> int:
@@ -461,7 +282,7 @@ class AnalysisHistoryTestCase(unittest.TestCase):
                 }
             }
         }
-        context_snapshot = {"enhanced_context": {"code": "600519"}}
+        context_snapshot = {"enhanced_context": {"code": "HPG"}}
 
         saved = self.db.save_analysis_history(
             result=result,
@@ -474,7 +295,7 @@ class AnalysisHistoryTestCase(unittest.TestCase):
 
         self.assertGreater(saved, 0)
 
-        history = self.db.get_analysis_history(code="600519", days=7, limit=10)
+        history = self.db.get_analysis_history(code="HPG", days=7, limit=10)
         self.assertEqual(len(history), 1)
 
         with self.db.get_session() as session:
@@ -488,138 +309,6 @@ class AnalysisHistoryTestCase(unittest.TestCase):
             self.assertEqual(row.secondary_buy, 120.0)
             self.assertEqual(row.stop_loss, 110.0)
             self.assertEqual(row.take_profit, 150.0)
-
-    def test_history_display_resolves_bare_jp_kr_code_from_stock_pool(self) -> None:
-        result = self._build_result()
-        result.code = "005930"
-        result.name = "Samsung Electronics"
-        persisted_phase_summary = {
-            **_market_phase_summary(),
-            "phase": "postmarket",
-            "market_local_time": "2025-01-02T16:10:00+09:00",
-            "session_date": "2025-01-02",
-            "effective_daily_bar_date": "2025-01-02",
-            "is_market_open_now": False,
-            "is_partial_bar": False,
-            "minutes_to_open": 900,
-            "minutes_to_close": None,
-            "trigger_source": "scheduled_job",
-            "analysis_intent": "postmarket",
-            "warnings": ["legacy_snapshot"],
-        }
-        expected_phase_summary = {**persisted_phase_summary, "market": "kr"}
-        expected_phase_summary["minutes_to_open"] = None
-
-        saved = self.db.save_analysis_history(
-            result=result,
-            query_id="query_kr_bare",
-            report_type="simple",
-            news_content="news",
-            context_snapshot={"market_phase_summary": persisted_phase_summary},
-            save_snapshot=True,
-        )
-        self.assertGreater(saved, 0)
-
-        service = HistoryService(self.db)
-        with patch("src.services.history_service.resolve_index_stock_code", return_value="005930.KS"):
-            listing = service.get_history_list(page=1, limit=5)
-            detail = service.resolve_and_get_detail("query_kr_bare")
-
-        self.assertEqual(listing["items"][0]["stock_code"], "005930.KS")
-        self.assertEqual(listing["items"][0]["market_phase_summary"], expected_phase_summary)
-        self.assertIsNotNone(detail)
-        self.assertEqual(detail["stock_code"], "005930.KS")
-        self.assertEqual(detail["market_phase_summary"], expected_phase_summary)
-
-    def test_history_display_rebuilds_market_phase_summary_for_legacy_cn_snapshot(self) -> None:
-        result = self._build_result()
-        result.code = "005930"
-        result.name = "Samsung Electronics"
-        persisted_phase_summary = {
-            **_market_phase_summary(),
-            "phase": "postmarket",
-            "market_local_time": "2026-01-01T10:00:00+08:00",
-            "session_date": "2026-01-01",
-            "effective_daily_bar_date": "2025-12-31",
-            "is_market_open_now": False,
-            "is_partial_bar": False,
-            "minutes_to_open": 900,
-            "minutes_to_close": None,
-            "trigger_source": "scheduled_job",
-            "analysis_intent": "postmarket",
-            "warnings": ["legacy_snapshot"],
-        }
-
-        saved = self.db.save_analysis_history(
-            result=result,
-            query_id="query_kr_legacy_snapshot",
-            report_type="simple",
-            news_content="news",
-            context_snapshot={"market_phase_summary": persisted_phase_summary},
-            save_snapshot=True,
-        )
-        self.assertGreater(saved, 0)
-
-        service = HistoryService(self.db)
-        with patch("src.services.history_service.resolve_index_stock_code", return_value="005930.KS"):
-            items = service.get_history_list(page=1, limit=5)["items"]
-
-        self.assertEqual(items[0]["stock_code"], "005930.KS")
-        rebuilt = items[0]["market_phase_summary"]
-        self.assertIsNotNone(rebuilt)
-        self.assertEqual(rebuilt["market"], "kr")
-        self.assertEqual(rebuilt["market_local_time"], "2026-01-01T11:00:00+09:00")
-        self.assertEqual(rebuilt["effective_daily_bar_date"], "2025-12-30")
-        self.assertIsNone(rebuilt["minutes_to_open"])
-
-    def test_history_filter_and_stock_bar_merge_bare_and_resolved_jp_kr_codes(self) -> None:
-        if get_stock_bar is None:
-            self.skipTest("fastapi is not installed in this test environment")
-
-        legacy = self._build_result()
-        legacy.code = "005930"
-        legacy.name = "Samsung Electronics"
-        current = self._build_result()
-        current.code = "005930.KS"
-        current.name = "Samsung Electronics"
-
-        self.assertGreater(
-            self.db.save_analysis_history(
-                result=legacy,
-                query_id="query_kr_legacy",
-                report_type="simple",
-                news_content="news",
-                context_snapshot={"market_phase_summary": _market_phase_summary()},
-                save_snapshot=True,
-            ),
-            0,
-        )
-        self.assertGreater(
-            self.db.save_analysis_history(
-                result=current,
-                query_id="query_kr_current",
-                report_type="simple",
-                news_content="news",
-                context_snapshot={"market_phase_summary": _market_phase_summary()},
-                save_snapshot=True,
-            ),
-            0,
-        )
-
-        with patch("src.services.history_service.resolve_index_stock_code", side_effect=lambda code: "005930.KS" if str(code).split(".", 1)[0] == "005930" else None):
-            listing = HistoryService(self.db).get_history_list(stock_code="005930.KS", page=1, limit=10)
-            stock_bar = get_stock_bar(
-                start_date=None,
-                end_date=None,
-                limit=10,
-                db_manager=self.db,
-            )
-
-        self.assertEqual(listing["total"], 2)
-        self.assertEqual({item["query_id"] for item in listing["items"]}, {"query_kr_legacy", "query_kr_current"})
-        self.assertEqual(len(stock_bar.items), 1)
-        self.assertEqual(stock_bar.items[0].stock_code, "005930.KS")
-        self.assertEqual(stock_bar.items[0].analysis_count, 2)
 
     def test_save_analysis_history_persists_sniper_columns_via_shared_parser(self) -> None:
         """迁出 sniper parser 后历史狙击点位列仍按原规则保存。"""
@@ -672,12 +361,12 @@ class AnalysisHistoryTestCase(unittest.TestCase):
 
         simple_id = self.db.get_latest_analysis_history_id(
             query_id="query_latest_id",
-            code="600519",
+            code="HPG",
             report_type="simple",
         )
         full_id = self.db.get_latest_analysis_history_id(
             query_id="query_latest_id",
-            code="600519",
+            code="HPG",
             report_type="full",
         )
 
@@ -688,7 +377,7 @@ class AnalysisHistoryTestCase(unittest.TestCase):
     def test_get_latest_analysis_history_id_requires_report_type(self) -> None:
         """report_type 是必传参数，避免误取同 query/code 的其他报告。"""
         with self.assertRaises(TypeError):
-            self.db.get_latest_analysis_history_id(query_id="query", code="600519")
+            self.db.get_latest_analysis_history_id(query_id="query", code="HPG")
 
     def test_save_analysis_history_without_snapshot(self) -> None:
         """关闭快照保存时不写入 context_snapshot"""
@@ -743,11 +432,11 @@ class AnalysisHistoryTestCase(unittest.TestCase):
             report_type="simple",
             news_content="新闻摘要",
             context_snapshot={
-                "enhanced_context": {"code": "600519"},
+                "enhanced_context": {"code": "HPG"},
                 "diagnostics": {
                     "trace_id": "trace-1",
                     "query_id": "query_diag_patch",
-                    "stock_code": "600519",
+                    "stock_code": "HPG",
                     "notification_runs": [],
                 },
             },
@@ -757,7 +446,7 @@ class AnalysisHistoryTestCase(unittest.TestCase):
 
         updated = self.db.update_analysis_history_diagnostics(
             query_id="query_diag_patch",
-            code="600519",
+            code="HPG",
             notification_runs=[
                 {
                     "channel": "report",
@@ -776,7 +465,7 @@ class AnalysisHistoryTestCase(unittest.TestCase):
                 self.fail("未找到保存的历史记录")
             self.assertEqual(row.id, saved)
             snapshot = json.loads(row.context_snapshot or "{}")
-            self.assertEqual(snapshot["enhanced_context"]["code"], "600519")
+            self.assertEqual(snapshot["enhanced_context"]["code"], "HPG")
             notification_run = snapshot["diagnostics"]["notification_runs"][-1]
             self.assertEqual(notification_run["status"], "success")
             self.assertEqual(notification_run["trace_id"], "trace-1")
@@ -835,16 +524,16 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         self.assertGreater(saved, 0)
 
         service = HistoryService(self.db)
-        payload = service.get_history_list(stock_code="600519.SH", page=1, limit=5)
+        payload = service.get_history_list(stock_code="HPG.VN", page=1, limit=5)
 
         self.assertEqual(payload["total"], 1)
         item = payload["items"][0]
-        self.assertEqual(item["stock_code"], "600519")
-        self.assertEqual(item["trend_prediction"], "看多")
-        self.assertEqual(item["analysis_summary"], "基本面稳健，短期震荡")
-        self.assertEqual(item["operation_advice"], "持有")
+        self.assertEqual(item["stock_code"], "HPG")
+        self.assertEqual(item["trend_prediction"], "Tăng")
+        self.assertEqual(item["analysis_summary"], "Cơ bản vững, ngắn hạn đi ngang")
+        self.assertEqual(item["operation_advice"], "Nắm giữ")
         self.assertEqual(item["action"], "buy")
-        self.assertEqual(item["action_label"], "买入")
+        self.assertEqual(item["action_label"], "Mua")
         self.assertEqual(item["model_used"], "gemini/gemini-2.5-pro")
         self.assertEqual(item["current_price"], 51.5)
         self.assertEqual(item["change_pct"], -4.61)
@@ -857,17 +546,17 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         """Conservative-market guardrail short operation_advice is persisted and exposed to history list."""
         result = self._build_result()
         result.decision_type = "buy"
-        result.operation_advice = "立即买入并积极加仓"
+        result.operation_advice = "Mua ngay và gia tăng tỷ trọng mạnh"
 
         apply_daily_market_context_guardrail(
             result,
             daily_market_context={
-                "region": "cn",
+                "region": "vn",
                 "trade_date": "2026-06-06",
-                "summary": "大盘退潮，高风险，建议观望，仓位上限30%。",
+                "summary": "Thị trường suy yếu, rủi ro cao, nên quan sát, tỷ trọng tối đa 30%.",
                 "risk_tags": ["high_risk", "low_position_cap"],
             },
-            report_language="zh",
+            report_language="vi",
         )
 
         saved = self.db.save_analysis_history(
@@ -881,10 +570,10 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         self.assertGreater(saved, 0)
 
         service = HistoryService(self.db)
-        payload = service.get_history_list(stock_code="600519", page=1, limit=10)
+        payload = service.get_history_list(stock_code="HPG", page=1, limit=10)
 
         self.assertEqual(payload["total"], 1)
-        self.assertEqual(payload["items"][0]["operation_advice"], "观望")
+        self.assertEqual(payload["items"][0]["operation_advice"], "Quan sát")
         self.assertLessEqual(len(payload["items"][0]["operation_advice"]), 20)
 
         with self.db.get_session() as session:
@@ -894,7 +583,7 @@ class AnalysisHistoryTestCase(unittest.TestCase):
             if row is None:
                 self.fail("未找到保存的历史记录")
             self.assertEqual(row.id, saved)
-            self.assertEqual(row.operation_advice, "观望")
+            self.assertEqual(row.operation_advice, "Quan sát")
 
     def test_market_review_history_can_be_filtered_without_stock_records(self) -> None:
         """Market review records should be queryable as a dedicated history collection."""
@@ -1003,14 +692,14 @@ class AnalysisHistoryTestCase(unittest.TestCase):
 
         records = self.db.get_distinct_stocks_from_history(limit=10)
 
-        self.assertEqual([record.code for record in records], ["600519"])
+        self.assertEqual([record.code for record in records], ["HPG"])
 
     def test_stock_bar_item_derives_action_fields_from_legacy_advice(self) -> None:
         if get_stock_bar is None:
             self.skipTest("fastapi is not installed in this test environment")
 
         result = self._build_result()
-        result.operation_advice = "不建议买入"
+        result.operation_advice = "Không nên mua"
 
         saved = self.db.save_analysis_history(
             result=result,
@@ -1030,16 +719,16 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         )
 
         self.assertEqual(len(response.items), 1)
-        self.assertEqual(response.items[0].operation_advice, "不建议买入")
+        self.assertEqual(response.items[0].operation_advice, "Không nên mua")
         self.assertEqual(response.items[0].action, "avoid")
-        self.assertEqual(response.items[0].action_label, "回避")
+        self.assertEqual(response.items[0].action_label, "Tránh")
 
     def test_stock_bar_item_aligns_score_and_legacy_advice(self) -> None:
         if get_stock_bar is None:
             self.skipTest("fastapi is not installed in this test environment")
 
         result = self._build_result()
-        result.operation_advice = "持有"
+        result.operation_advice = "Nắm giữ"
         result.sentiment_score = 78
 
         saved = self.db.save_analysis_history(
@@ -1060,10 +749,10 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         )
 
         self.assertEqual(len(response.items), 1)
-        self.assertEqual(response.items[0].operation_advice, "持有")
+        self.assertEqual(response.items[0].operation_advice, "Nắm giữ")
         self.assertEqual(response.items[0].sentiment_score, 78)
         self.assertEqual(response.items[0].action, "buy")
-        self.assertEqual(response.items[0].action_label, "买入")
+        self.assertEqual(response.items[0].action_label, "Mua")
 
     def test_stock_bar_item_falls_back_to_raw_result_summary_fields(self) -> None:
         if get_stock_bar is None:
@@ -1112,8 +801,8 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         service.resolve_and_get_detail.return_value = {
             "id": 1,
             "query_id": "query_action_conflict",
-            "stock_code": "600519",
-            "stock_name": "贵州茅台",
+            "stock_code": "HPG",
+            "stock_name": "Hòa Phát",
             "report_type": "detailed",
             "report_language": "zh",
             "created_at": "2026-05-21T17:40:00",
@@ -1138,98 +827,10 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         self.assertEqual(response.summary.action_label, "观望")
 
     def test_history_list_matches_equivalent_suffixed_stock_codes(self) -> None:
-        """Same-stock history should include rows saved with supported suffixed codes."""
+        """Lịch sử cùng mã phải gộp bản ghi lưu dạng hậu tố ``.VN``.
 
-        def save_record(code: str, query_id: str) -> None:
-            result = self._build_result()
-            result.code = code
-            if "HK" in code:
-                result.name = "腾讯控股"
-            saved = self.db.save_analysis_history(
-                result=result,
-                query_id=query_id,
-                report_type="simple",
-                news_content="新闻摘要",
-                context_snapshot=None,
-                save_snapshot=False,
-            )
-            self.assertGreater(saved, 0)
-
-        save_record("600519.SH", "query_cn_suffix")
-        save_record("600519", "query_cn_plain")
-        save_record("00700.HK", "query_hk_suffix")
-        save_record("HK00700", "query_hk_prefix")
-
-        service = HistoryService(self.db)
-
-        cn_from_suffix = service.get_history_list(stock_code="600519.SH", page=1, limit=10)
-        self.assertEqual(cn_from_suffix["total"], 2)
-        self.assertEqual(
-            {item["stock_code"] for item in cn_from_suffix["items"]},
-            {"600519.SH", "600519"},
-        )
-
-        cn_from_plain = service.get_history_list(stock_code="600519", page=1, limit=10)
-        self.assertEqual(cn_from_plain["total"], 2)
-        self.assertEqual(
-            {item["stock_code"] for item in cn_from_plain["items"]},
-            {"600519.SH", "600519"},
-        )
-
-        hk_from_suffix = service.get_history_list(stock_code="00700.HK", page=1, limit=10)
-        self.assertEqual(hk_from_suffix["total"], 2)
-        self.assertEqual(
-            {item["stock_code"] for item in hk_from_suffix["items"]},
-            {"00700.HK", "HK00700"},
-        )
-
-        hk_from_prefix = service.get_history_list(stock_code="HK00700", page=1, limit=10)
-        self.assertEqual(hk_from_prefix["total"], 2)
-        self.assertEqual(
-            {item["stock_code"] for item in hk_from_prefix["items"]},
-            {"00700.HK", "HK00700"},
-        )
-
-    def test_history_list_matches_unpadded_hk_suffix_variants(self) -> None:
-        """HK short suffix forms (e.g. 1810.HK) should match 5-digit canonical suffix/prefix forms."""
-
-        def save_record(code: str, query_id: str) -> None:
-            result = self._build_result()
-            result.code = code
-            if "HK" in code:
-                result.name = "腾讯控股"
-            saved = self.db.save_analysis_history(
-                result=result,
-                query_id=query_id,
-                report_type="simple",
-                news_content="新闻摘要",
-                context_snapshot=None,
-                save_snapshot=False,
-            )
-            self.assertGreater(saved, 0)
-
-        save_record("1810.HK", "query_hk_unpadded")
-        save_record("01810.HK", "query_hk_padded")
-        save_record("HK01810", "query_hk_prefix")
-
-        service = HistoryService(self.db)
-
-        hk_from_suffix = service.get_history_list(stock_code="01810.HK", page=1, limit=10)
-        self.assertEqual(hk_from_suffix["total"], 3)
-        self.assertEqual(
-            {item["stock_code"] for item in hk_from_suffix["items"]},
-            {"1810.HK", "01810.HK", "HK01810"},
-        )
-
-        hk_from_prefix = service.get_history_list(stock_code="HK01810", page=1, limit=10)
-        self.assertEqual(hk_from_prefix["total"], 3)
-        self.assertEqual(
-            {item["stock_code"] for item in hk_from_prefix["items"]},
-            {"1810.HK", "01810.HK", "HK01810"},
-        )
-
-    def test_history_list_matches_sh_and_ss_suffixed_variants(self) -> None:
-        """SH suffix and legacy `.SS` variants should be treated as the same A-share stock."""
+        Same-stock history includes rows saved with the legacy ``.VN`` suffix.
+        """
 
         def save_record(code: str, query_id: str) -> None:
             result = self._build_result()
@@ -1238,30 +839,23 @@ class AnalysisHistoryTestCase(unittest.TestCase):
                 result=result,
                 query_id=query_id,
                 report_type="simple",
-                news_content="新闻摘要",
+                news_content="Tóm tắt tin tức",
                 context_snapshot=None,
                 save_snapshot=False,
             )
             self.assertGreater(saved, 0)
 
-        save_record("600519.SH", "query_cn_sh")
-        save_record("600519.SS", "query_cn_ss")
-        save_record("600519", "query_cn_plain")
+        save_record("HPG.VN", "query_vn_suffix")
+        save_record("HPG", "query_vn_plain")
+        save_record("FPT", "query_other_stock")
 
         service = HistoryService(self.db)
-        expected = {"600519.SH", "600519.SS", "600519"}
+        expected = {"HPG.VN", "HPG"}
 
-        from_sh = service.get_history_list(stock_code="600519.SH", page=1, limit=10)
-        self.assertEqual(from_sh["total"], 3)
-        self.assertEqual({item["stock_code"] for item in from_sh["items"]}, expected)
-
-        from_ss = service.get_history_list(stock_code="600519.SS", page=1, limit=10)
-        self.assertEqual(from_ss["total"], 3)
-        self.assertEqual({item["stock_code"] for item in from_ss["items"]}, expected)
-
-        from_plain = service.get_history_list(stock_code="600519", page=1, limit=10)
-        self.assertEqual(from_plain["total"], 3)
-        self.assertEqual({item["stock_code"] for item in from_plain["items"]}, expected)
+        for query in ("HPG.VN", "HPG", "hpg"):
+            payload = service.get_history_list(stock_code=query, page=1, limit=10)
+            self.assertEqual(payload["total"], 2, query)
+            self.assertEqual({item["stock_code"] for item in payload["items"]}, expected, query)
 
     def test_history_detail_preserves_zero_change_pct(self) -> None:
         """change_pct=0.0（平盘）应原样返回，而不是被当成缺失值丢失。
@@ -1336,43 +930,6 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         report = get_history_detail(str(record_id), db_manager=self.db)
         self.assertEqual(report.meta.current_price, 200.0)
         self.assertEqual(report.meta.change_pct, 1.23)
-
-    def test_history_detail_reports_index_asset_type_from_canonical_code(self) -> None:
-        """Index reports must expose meta.asset_type='index' so the Web can hide
-        the stock-only watchlist action, and bare same-digit stock codes must
-        remain 'stock' (never index via display normalization)."""
-        if get_history_detail is None:
-            self.skipTest("fastapi is not installed in this test environment")
-
-        def save_record(code: str, query_id: str) -> int:
-            result = self._build_result()
-            result.code = code
-            saved = self.db.save_analysis_history(
-                result=result,
-                query_id=query_id,
-                report_type="simple",
-                news_content="新闻摘要",
-                context_snapshot=None,
-                save_snapshot=False,
-            )
-            self.assertGreater(saved, 0)
-            with self.db.get_session() as session:
-                row = session.query(AnalysisHistory).filter(AnalysisHistory.query_id == query_id).first()
-                self.assertIsNotNone(row)
-                return row.id
-
-        index_id = save_record("sh000016", "query_asset_type_index")
-        stock_id = save_record("000016", "query_asset_type_stock")
-        stock_id2 = save_record("600519", "query_asset_type_stock2")
-
-        index_report = get_history_detail(str(index_id), db_manager=self.db)
-        self.assertEqual(index_report.meta.asset_type, "index")
-
-        stock_report = get_history_detail(str(stock_id), db_manager=self.db)
-        self.assertEqual(stock_report.meta.asset_type, "stock")
-
-        stock_report2 = get_history_detail(str(stock_id2), db_manager=self.db)
-        self.assertEqual(stock_report2.meta.asset_type, "stock")
 
     def test_history_detail_omits_asset_type_for_market_review(self) -> None:
         """Market review records must omit the optional asset_type field."""
@@ -1559,21 +1116,8 @@ class AnalysisHistoryTestCase(unittest.TestCase):
 
         self.db.save_fundamental_snapshot(
             query_id=query_id,
-            code="600519",
+            code="HPG",
             payload={
-                "belong_boards": [{"name": "白酒", "type": "行业"}],
-                "boards": {
-                    "data": {
-                        "top": [{"name": "白酒", "change_pct": 2.6}],
-                        "bottom": [],
-                    }
-                },
-                "concept_boards": {
-                    "data": {
-                        "top": [{"name": "机器人概念", "change_pct": 4.2}],
-                        "bottom": [],
-                    }
-                },
                 "earnings": {
                     "data": {
                         "financial_report": {"report_date": "2025-12-31", "revenue": 1000},
@@ -1593,96 +1137,6 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         report = get_history_detail(str(record_id), db_manager=self.db)
         self.assertEqual(report.details.financial_report["report_date"], "2025-12-31")
         self.assertEqual(report.details.dividend_metrics["ttm_dividend_yield_pct"], 2.6)
-        self.assertEqual(report.details.belong_boards, [{"name": "白酒", "type": "行业"}])
-        self.assertEqual(report.details.sector_rankings["top"][0]["name"], "白酒")
-        self.assertEqual(report.details.concept_rankings["top"][0]["name"], "机器人概念")
-
-    def test_history_detail_uses_raw_code_for_legacy_jp_kr_fundamental_snapshot(self) -> None:
-        """Legacy bare JP/KR history rows should display suffixes but read snapshots by stored code."""
-        if get_history_detail is None:
-            self.skipTest("fastapi is not installed in this test environment")
-
-        result = self._build_result()
-        result.code = "005930"
-        result.name = "Samsung Electronics"
-        query_id = "query_kr_raw_fundamental_fallback"
-        saved = self.db.save_analysis_history(
-            result=result,
-            query_id=query_id,
-            report_type="simple",
-            news_content="news",
-            context_snapshot=None,
-            save_snapshot=False,
-        )
-        self.assertGreater(saved, 0)
-
-        self.db.save_fundamental_snapshot(
-            query_id=query_id,
-            code="005930",
-            payload={
-                "earnings": {
-                    "data": {
-                        "financial_report": {"report_date": "2025-12-31", "revenue": 1000},
-                        "dividend": {"ttm_dividend_yield_pct": 2.6},
-                    }
-                }
-            },
-        )
-
-        with self.db.get_session() as session:
-            row = session.query(AnalysisHistory).filter(AnalysisHistory.query_id == query_id).first()
-            if row is None:
-                self.fail("未找到保存的历史记录")
-            self.assertEqual(row.id, saved)
-            record_id = row.id
-
-        with patch("src.services.history_service.resolve_index_stock_code", return_value="005930.KS"):
-            report = get_history_detail(str(record_id), db_manager=self.db)
-
-        self.assertEqual(report.meta.stock_code, "005930.KS")
-        self.assertEqual(report.details.financial_report["report_date"], "2025-12-31")
-        self.assertEqual(report.details.dividend_metrics["ttm_dividend_yield_pct"], 2.6)
-
-    def test_history_detail_preserves_unavailable_board_rankings_state(self) -> None:
-        """Failed board ranking blocks should remain unavailable in detail response."""
-        if get_history_detail is None:
-            self.skipTest("fastapi is not installed in this test environment")
-
-        query_id = "query_fundamental_failed_boards_001"
-        saved = self.db.save_analysis_history(
-            result=self._build_result(),
-            query_id=query_id,
-            report_type="simple",
-            news_content="新闻摘要",
-            context_snapshot=None,
-            save_snapshot=False,
-        )
-        self.assertGreater(saved, 0)
-
-        fallback_fundamental = {
-            "belong_boards": [{"name": "白酒", "type": "行业"}],
-            "boards": {
-                "status": "failed",
-                "data": {},
-            },
-        }
-        saved_snapshot = self.db.save_fundamental_snapshot(
-            query_id=query_id,
-            code="600519",
-            payload=fallback_fundamental,
-        )
-        self.assertGreater(saved_snapshot, 0)
-
-        with self.db.get_session() as session:
-            row = session.query(AnalysisHistory).filter(AnalysisHistory.query_id == query_id).first()
-            if row is None:
-                self.fail("未找到保存的历史记录")
-            self.assertEqual(row.id, saved)
-            record_id = row.id
-
-        report = get_history_detail(str(record_id), db_manager=self.db)
-        self.assertEqual(report.details.belong_boards, [{"name": "白酒", "type": "行业"}])
-        self.assertIsNone(report.details.sector_rankings)
 
     def test_history_detail_returns_null_fundamental_fields_when_snapshot_absent(self) -> None:
         """Detail API should keep new fields nullable when no context/fundamental snapshot exists."""
@@ -1710,86 +1164,6 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         report = get_history_detail(str(record_id), db_manager=self.db)
         self.assertIsNone(report.details.financial_report)
         self.assertIsNone(report.details.dividend_metrics)
-        self.assertEqual(report.details.belong_boards, [])
-        self.assertIsNone(report.details.sector_rankings)
-
-    def test_history_detail_returns_empty_related_boards_for_non_cn(self) -> None:
-        if get_history_detail is None:
-            self.skipTest("fastapi is not installed in this test environment")
-
-        result = AnalysisResult(
-            code="AAPL",
-            name="Apple",
-            sentiment_score=65,
-            trend_prediction="Bullish",
-            operation_advice="Hold",
-            analysis_summary="US stock test",
-        )
-        query_id = "query_non_cn_board_001"
-        saved = self.db.save_analysis_history(
-            result=result,
-            query_id=query_id,
-            report_type="simple",
-            news_content="news",
-            context_snapshot=None,
-            save_snapshot=False,
-        )
-        self.assertGreater(saved, 0)
-
-        with self.db.get_session() as session:
-            row = session.query(AnalysisHistory).filter(AnalysisHistory.query_id == query_id).first()
-            if row is None:
-                self.fail("未找到保存的历史记录")
-            self.assertEqual(row.id, saved)
-            record_id = row.id
-
-        report = get_history_detail(str(record_id), db_manager=self.db)
-        self.assertEqual(report.details.belong_boards, [])
-        self.assertIsNone(report.details.sector_rankings)
-
-    def test_history_detail_reads_agent_snapshot_related_boards_shape(self) -> None:
-        """Agent-mode snapshots store fundamental_context/realtime_quote at the top level."""
-        if get_history_detail is None:
-            self.skipTest("fastapi is not installed in this test environment")
-
-        context_snapshot = {
-            "fundamental_context": {
-                "belong_boards": [{"name": "白酒", "type": "行业"}],
-                "boards": {
-                    "data": {
-                        "top": [{"name": "白酒", "change_pct": 2.8}],
-                        "bottom": [],
-                    }
-                },
-            },
-            "realtime_quote": {
-                "price": 1888.0,
-                "change_pct": 1.56,
-            },
-        }
-        query_id = "query_agent_snapshot_boards_001"
-        saved = self.db.save_analysis_history(
-            result=self._build_result(),
-            query_id=query_id,
-            report_type="simple",
-            news_content="新闻摘要",
-            context_snapshot=context_snapshot,
-            save_snapshot=True,
-        )
-        self.assertGreater(saved, 0)
-
-        with self.db.get_session() as session:
-            row = session.query(AnalysisHistory).filter(AnalysisHistory.query_id == query_id).first()
-            if row is None:
-                self.fail("未找到保存的历史记录")
-            self.assertEqual(row.id, saved)
-            record_id = row.id
-
-        report = get_history_detail(str(record_id), db_manager=self.db)
-        self.assertEqual(report.meta.current_price, 1888.0)
-        self.assertEqual(report.meta.change_pct, 1.56)
-        self.assertEqual(report.details.belong_boards, [{"name": "白酒", "type": "行业"}])
-        self.assertEqual(report.details.sector_rankings["top"][0]["name"], "白酒")
 
     def test_history_detail_returns_overview_and_sanitizes_snapshot(self) -> None:
         """History detail exposes the public overview separately from raw snapshot JSON."""
@@ -1805,7 +1179,7 @@ class AnalysisHistoryTestCase(unittest.TestCase):
             report_type="simple",
             news_content="新闻摘要",
             context_snapshot={
-                "enhanced_context": {"code": "600519"},
+                "enhanced_context": {"code": "HPG"},
                 "analysis_context_pack_overview": overview,
                 "market_phase_summary": {
                     **phase_summary,
@@ -1857,7 +1231,7 @@ class AnalysisHistoryTestCase(unittest.TestCase):
             report_type="simple",
             news_content="新闻摘要",
             context_snapshot={
-                "enhanced_context": {"code": "600519"},
+                "enhanced_context": {"code": "HPG"},
                 "analysis_context_pack_overview": _analysis_context_pack_overview(),
             },
             save_snapshot=False,
@@ -1877,70 +1251,11 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         self.assertIsNone(report.details.analysis_context_pack_overview)
         self.assertIsNone(report.details.context_snapshot)
 
-    def test_history_detail_restores_market_structure_from_raw_result_without_snapshot(self) -> None:
-        """SAVE_CONTEXT_SNAPSHOT=false should still expose market_structure saved in raw_result."""
-        if get_history_detail is None:
-            self.skipTest("fastapi is not installed in this test environment")
-
-        market_structure = {
-            "schema_version": "market-structure-v1",
-            "status": "partial",
-            "market": "cn",
-            "market_theme_context": {
-                "schema_version": "market-theme-v1",
-                "status": "partial",
-                "market": "cn",
-                "active_themes": [{"name": "机器人概念"}],
-            },
-            "stock_market_position": {
-                "schema_version": "stock-market-position-v1",
-                "status": "partial",
-                "stock_code": "300024",
-                "market": "cn",
-                "primary_theme": {"name": "机器人概念"},
-            },
-        }
-        result = self._build_result()
-        result.market_structure_context = market_structure
-        query_id = "query_market_structure_snapshot_disabled_001"
-        saved = self.db.save_analysis_history(
-            result=result,
-            query_id=query_id,
-            report_type="simple",
-            news_content="新闻摘要",
-            context_snapshot={"market_structure_context": {"ignored": True}},
-            save_snapshot=False,
-        )
-        self.assertGreater(saved, 0)
-
-        with self.db.get_session() as session:
-            row = session.query(AnalysisHistory).filter(AnalysisHistory.query_id == query_id).first()
-            if row is None:
-                self.fail("未找到保存的历史记录")
-            self.assertEqual(row.id, saved)
-            self.assertIsNone(row.context_snapshot)
-            record_id = row.id
-
-        report = get_history_detail(str(record_id), db_manager=self.db)
-        self.assertIsNone(report.details.context_snapshot)
-        self.assertEqual(
-            report.details.market_structure["market_theme_context"]["active_themes"][0]["name"],
-            "机器人概念",
-        )
-        self.assertEqual(
-            report.details.raw_result["market_structure_context"]["market_theme_context"]["active_themes"][0]["name"],
-            "机器人概念",
-        )
-        self.assertNotIn(
-            "raw_result",
-            report.details.raw_result,
-        )
-
     def test_history_markdown_localizes_english_report_and_placeholder_name(self) -> None:
         """History markdown should preserve report_language for English reports."""
         result = AnalysisResult(
-            code="AAPL",
-            name="股票AAPL",
+            code="FPT",
+            name="Cổ phiếu FPT",
             sentiment_score=78,
             trend_prediction="Bullish",
             operation_advice="Buy",
@@ -1991,13 +1306,13 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         self.assertIsNotNone(markdown)
         self.assertIn("Stock Analysis Report", markdown)
         self.assertIn("Core Conclusion", markdown)
-        self.assertIn("Unnamed Stock (AAPL)", markdown)
+        self.assertIn("Unnamed Stock (FPT)", markdown)
         self.assertNotIn("核心结论", markdown)
 
     def test_history_markdown_signal_metadata_uses_explicit_avoid_action(self) -> None:
         result = AnalysisResult(
-            code="AAPL",
-            name="Apple",
+            code="FPT",
+            name="FPT Corp",
             sentiment_score=90,
             trend_prediction="Bullish",
             operation_advice="Hold",
@@ -2021,14 +1336,14 @@ class AnalysisHistoryTestCase(unittest.TestCase):
 
         for malformed in ("bad-shape", ["bad-shape"], 42, True):
             result = AnalysisResult(
-                code="600519",
-                name="贵州茅台",
+                code="HPG",
+                name="Hòa Phát",
                 sentiment_score=50,
-                trend_prediction="震荡",
-                operation_advice="观望",
-                report_language="zh",
+                trend_prediction="Đi ngang",
+                operation_advice="Quan sát",
+                report_language="vi",
                 dashboard={
-                    "core_conclusion": {"one_sentence": "测试"},
+                    "core_conclusion": {"one_sentence": "Kiểm thử"},
                     "intelligence": {},
                     "battle_plan": {},
                     "strategy_synthesis": malformed,
@@ -2037,17 +1352,17 @@ class AnalysisHistoryTestCase(unittest.TestCase):
 
             markdown = service._generate_single_stock_markdown(result, record)
 
-            self.assertNotIn("多策略综合", markdown)
+            self.assertNotIn("Tổng hợp chiến lược", markdown)
 
         result = AnalysisResult(
-            code="600519",
-            name="贵州茅台",
+            code="HPG",
+            name="Hòa Phát",
             sentiment_score=50,
-            trend_prediction="震荡",
-            operation_advice="观望",
-            report_language="zh",
+            trend_prediction="Đi ngang",
+            operation_advice="Quan sát",
+            report_language="vi",
             dashboard={
-                "core_conclusion": {"one_sentence": "测试"},
+                "core_conclusion": {"one_sentence": "Kiểm thử"},
                 "intelligence": {},
                 "battle_plan": {},
                 "strategy_synthesis": {
@@ -2065,8 +1380,8 @@ class AnalysisHistoryTestCase(unittest.TestCase):
 
         markdown = service._generate_single_stock_markdown(result, record)
 
-        self.assertIn("多策略综合", markdown)
-        self.assertIn("另有 3 个策略解析失败", markdown)
+        self.assertIn("Tổng hợp chiến lược", markdown)
+        self.assertIn("Có 3 chiến lược khác không tạo được tín hiệu hợp lệ", markdown)
 
     def test_history_markdown_returns_persisted_market_review_report(self) -> None:
         """Market review history should return the saved Markdown without rebuilding a stock report."""
@@ -2102,51 +1417,6 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         markdown = HistoryService(self.db).get_markdown_report(str(record_id))
 
         self.assertEqual(markdown, "# 🎯 大盘复盘\n\n## 今日大盘\n\n复盘正文")
-
-    def test_history_markdown_collapses_unavailable_chip_structure(self) -> None:
-        result = AnalysisResult(
-            code="600519",
-            name="贵州茅台",
-            sentiment_score=72,
-            trend_prediction="看多",
-            operation_advice="持有",
-            analysis_summary="稳健",
-            dashboard={
-                "data_perspective": {
-                    "chip_structure": {
-                        "profit_ratio": "数据缺失，无法判断",
-                        "avg_cost": "数据缺失，无法判断",
-                        "concentration": "数据缺失，无法判断",
-                        "chip_health": "数据缺失，无法判断",
-                    }
-                }
-            },
-        )
-
-        saved = self.db.save_analysis_history(
-            result=result,
-            query_id="query_chip_unavailable_001",
-            report_type="full",
-            news_content="news",
-            context_snapshot=None,
-            save_snapshot=False,
-        )
-        self.assertGreater(saved, 0)
-
-        with self.db.get_session() as session:
-            row = session.query(AnalysisHistory).filter(
-                AnalysisHistory.query_id == "query_chip_unavailable_001"
-            ).first()
-            if row is None:
-                self.fail("未找到保存的历史记录")
-            self.assertEqual(row.id, saved)
-            record_id = row.id
-
-        markdown = HistoryService(self.db).get_markdown_report(str(record_id))
-
-        self.assertIsNotNone(markdown)
-        self.assertIn("**筹码**: 筹码分布未启用或数据源暂不可用，未纳入筹码判断。", markdown)
-        self.assertEqual(markdown.count("数据缺失，无法判断"), 0)
 
     def test_history_detail_returns_persisted_market_review_report(self) -> None:
         """Market review detail should surface the saved recap content for Web history clicks."""
@@ -2227,11 +1497,11 @@ class AnalysisHistoryTestCase(unittest.TestCase):
             self.skipTest("fastapi is not installed in this test environment")
 
         result = AnalysisResult(
-            code="AAPL",
-            name="股票AAPL",
+            code="HPG",
+            name="Cổ phiếu HPG",
             sentiment_score=78,
-            trend_prediction="看多",
-            operation_advice="买入",
+            trend_prediction="Tăng",
+            operation_advice="Mua",
             analysis_summary="Momentum remains constructive.",
             report_language="en",
         )
@@ -2268,8 +1538,8 @@ class AnalysisHistoryTestCase(unittest.TestCase):
     def test_history_markdown_uses_safe_bias_emoji_for_english_status(self) -> None:
         """English bias status should keep the correct non-risk emoji in markdown."""
         result = AnalysisResult(
-            code="AAPL",
-            name="股票AAPL",
+            code="HPG",
+            name="Cổ phiếu HPG",
             sentiment_score=80,
             trend_prediction="Bullish",
             operation_advice="Buy",
@@ -2324,16 +1594,16 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         with self.db.session_scope() as session:
             session.add(BacktestResult(
                 analysis_history_id=record_id,
-                code="600519",
+                code="HPG",
                 analysis_date=None,
                 eval_window_days=10,
                 engine_version="v1",
                 eval_status="pending",
             ))
             linked_signal = DecisionSignalRecord(
-                stock_code="600519",
-                stock_name="贵州茅台",
-                market="cn",
+                stock_code="HPG",
+                stock_name="Hòa Phát",
+                market="vn",
                 source_type="analysis",
                 source_report_id=record_id,
                 trace_id="trace-delete-linked",
@@ -2355,7 +1625,7 @@ class AnalysisHistoryTestCase(unittest.TestCase):
                 eval_status="completed",
                 outcome="hit",
                 action="buy",
-                market="cn",
+                market="vn",
                 source_type="analysis",
                 plan_quality="minimal",
                 holding_state="holding",
@@ -2366,9 +1636,9 @@ class AnalysisHistoryTestCase(unittest.TestCase):
                 source="api",
             ))
             session.add(DecisionSignalRecord(
-                stock_code="000001",
-                stock_name="平安银行",
-                market="cn",
+                stock_code="FPT",
+                stock_name="FPT Corp",
+                market="vn",
                 source_type="analysis",
                 source_report_id=record_id + 999,
                 trace_id="trace-delete-unrelated",
@@ -2417,9 +1687,9 @@ class AnalysisHistoryTestCase(unittest.TestCase):
 
         with self.db.session_scope() as session:
             session.add(DecisionSignalRecord(
-                stock_code="600519",
-                stock_name="贵州茅台",
-                market="cn",
+                stock_code="HPG",
+                stock_name="Hòa Phát",
+                market="vn",
                 source_type="manual",
                 source_report_id=missing_id,
                 trace_id="trace-delete-missing-history",
@@ -2449,9 +1719,9 @@ class AnalysisHistoryTestCase(unittest.TestCase):
 
         with self.db.session_scope() as session:
             session.add(DecisionSignalRecord(
-                stock_code="600519",
-                stock_name="贵州茅台",
-                market="cn",
+                stock_code="HPG",
+                stock_name="Hòa Phát",
+                market="vn",
                 source_type="analysis",
                 source_report_id=record_id,
                 trace_id="trace-delete-analysis-bound",
@@ -2464,9 +1734,9 @@ class AnalysisHistoryTestCase(unittest.TestCase):
                 status="active",
             ))
             session.add(DecisionSignalRecord(
-                stock_code="600519",
-                stock_name="贵州茅台",
-                market="cn",
+                stock_code="HPG",
+                stock_name="Hòa Phát",
+                market="vn",
                 source_type="manual",
                 source_report_id=record_id,
                 trace_id="trace-delete-manual-weak-ref",
@@ -2504,16 +1774,16 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         with self.db.session_scope() as session:
             session.add(BacktestResult(
                 analysis_history_id=record_id,
-                code="600519",
+                code="HPG",
                 analysis_date=None,
                 eval_window_days=10,
                 engine_version="v1",
                 eval_status="pending",
             ))
             session.add(DecisionSignalRecord(
-                stock_code="600519",
-                stock_name="贵州茅台",
-                market="cn",
+                stock_code="HPG",
+                stock_name="Hòa Phát",
+                market="vn",
                 source_type="analysis",
                 source_report_id=record_id,
                 trace_id="trace-delete-mixed-linked",
@@ -2526,9 +1796,9 @@ class AnalysisHistoryTestCase(unittest.TestCase):
                 status="active",
             ))
             session.add(DecisionSignalRecord(
-                stock_code="000001",
-                stock_name="平安银行",
-                market="cn",
+                stock_code="FPT",
+                stock_name="FPT Corp",
+                market="vn",
                 source_type="manual",
                 source_report_id=missing_id,
                 trace_id="trace-delete-mixed-missing",
@@ -2591,8 +1861,14 @@ class AnalysisHistoryTestCase(unittest.TestCase):
 
     def test_empty_news_state_round_trips_through_history_markdown(self) -> None:
         """持久化、重建和历史 Markdown 必须保留三态披露。"""
-        no_channel = "⚠️ 未配置搜索渠道，本次分析未纳入新闻面证据。"
-        zero_hit = "⚠️ 本次未获取到可用的新闻面数据，以下结论未纳入新闻维度证据。"
+        no_channel = (
+            "⚠️ Chưa cấu hình kênh tìm kiếm tin tức; "
+            "phân tích này không sử dụng bằng chứng từ tin tức."
+        )
+        zero_hit = (
+            "⚠️ Lần chạy này không lấy được dữ liệu tin tức nào; "
+            "các kết luận bên dưới không dựa trên bằng chứng tin tức."
+        )
         service = HistoryService(self.db)
 
         for suffix, count, expected in (
@@ -2644,8 +1920,14 @@ class AnalysisHistoryTestCase(unittest.TestCase):
 
     def test_legacy_history_without_news_count_stays_silent(self) -> None:
         """旧记录缺少计数字段时状态未知，不能倒推为未配置渠道。"""
-        no_channel = "⚠️ 未配置搜索渠道，本次分析未纳入新闻面证据。"
-        zero_hit = "⚠️ 本次未获取到可用的新闻面数据，以下结论未纳入新闻维度证据。"
+        no_channel = (
+            "⚠️ Chưa cấu hình kênh tìm kiếm tin tức; "
+            "phân tích này không sử dụng bằng chứng từ tin tức."
+        )
+        zero_hit = (
+            "⚠️ Lần chạy này không lấy được dữ liệu tin tức nào; "
+            "các kết luận bên dưới không dựa trên bằng chứng tin tức."
+        )
         record_id = self.db.save_analysis_history(
             result=self._build_result(),
             query_id="query_legacy_empty_news_unknown",
@@ -2679,7 +1961,7 @@ class AnalysisHistoryTestCase(unittest.TestCase):
             self.assertIsNone(report.details.empty_news_disclosure)
 
     # ------------------------------------------------------------------
-    # PR #2312: 指数 canonical 历史隔离（并入本类，避免子类重复继承放大测试）
+    # asset_type theo parser (chỉ mã Việt Nam). / Parser asset_type (Vietnam codes only).
     # ------------------------------------------------------------------
     def _save_result_with_code(self, code: str, query_id: str) -> int:
         result = self._build_result()
@@ -2695,286 +1977,18 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         self.assertGreater(saved, 0)
         return saved
 
-    def test_history_filter_isolates_index_from_same_code_stock(self):
-        self._save_result_with_code("sh000016", "query_index")
-        self._save_result_with_code("000016", "query_stock")
-
-        index_listing = HistoryService(self.db).get_history_list(
-            stock_code="sh000016", page=1, limit=10
-        )
-        stock_listing = HistoryService(self.db).get_history_list(
-            stock_code="000016", page=1, limit=10
-        )
-
-        self.assertEqual(index_listing["total"], 1)
-        self.assertEqual(
-            {item["query_id"] for item in index_listing["items"]},
-            {"query_index"},
-        )
-        self.assertEqual(stock_listing["total"], 1)
-        self.assertEqual(
-            {item["query_id"] for item in stock_listing["items"]},
-            {"query_stock"},
-        )
-
-    def test_history_filter_reaches_legacy_uppercase_and_alias_index_records(self):
-        self._save_result_with_code("sh000016", "query_canonical")
-        self._save_result_with_code("SH000016", "query_upper")
-        self._save_result_with_code("000016.SH", "query_alias")
-
-        for code in ("sh000016", "SH000016", "000016.SH"):
-            listing = HistoryService(self.db).get_history_list(
-                stock_code=code, page=1, limit=10
-            )
-            self.assertEqual(listing["total"], 3)
-            self.assertEqual(
-                {item["query_id"] for item in listing["items"]},
-                {"query_canonical", "query_upper", "query_alias"},
-            )
-
-        stock_listing = HistoryService(self.db).get_history_list(
-            stock_code="000016", page=1, limit=10
-        )
-        self.assertEqual(stock_listing["total"], 0)
-
-    def test_sz_index_history_filter_and_delete_isolate_from_same_code_stock(self):
-        """I/O matrix INDEX_HISTORY 的 SZ 侧真实 SQL 路径：``sz399001``
-        lowercase canonical 筛选、删除与计数均命中自身记录，不并入裸
-        ``399001`` 股票。"""
-        self._save_result_with_code("sz399001", "query_sz_index")
-        self._save_result_with_code("399001", "query_sz_stock")
-
-        sz_listing = HistoryService(self.db).get_history_list(
-            stock_code="sz399001", page=1, limit=10
-        )
-        stock_listing = HistoryService(self.db).get_history_list(
-            stock_code="399001", page=1, limit=10
-        )
-        self.assertEqual(sz_listing["total"], 1)
-        self.assertEqual(
-            {item["query_id"] for item in sz_listing["items"]},
-            {"query_sz_index"},
-        )
-        self.assertEqual(stock_listing["total"], 1)
-        self.assertEqual(
-            {item["query_id"] for item in stock_listing["items"]},
-            {"query_sz_stock"},
-        )
-
-        if delete_history_by_code is not None:
-            response = delete_history_by_code("sz399001", db_manager=self.db)
-            self.assertEqual(response.deleted, 1)
-            remaining = HistoryService(self.db).get_history_list(
-                stock_code="399001", page=1, limit=10
-            )
-            self.assertEqual(remaining["total"], 1)
-            self.assertEqual(
-                {item["query_id"] for item in remaining["items"]},
-                {"query_sz_stock"},
-            )
-
-    def test_history_detail_displays_parser_canonical_for_legacy_index_record(self):
-        """报告详情 meta 对旧 uppercase/alias 指数记录输出 parser canonical。"""
-        if get_history_detail is None:
-            self.skipTest("fastapi is not installed in this test environment")
-
-        self._save_result_with_code("SZ399300", "query_sz399300_upper")
-        with self.db.get_session() as session:
-            row = session.query(AnalysisHistory).filter(
-                AnalysisHistory.query_id == "query_sz399300_upper"
-            ).first()
-            if row is None:
-                self.fail("未找到保存的历史记录")
-
-        report = get_history_detail(str(row.id), db_manager=self.db)
-        self.assertEqual(report.meta.stock_code, "sh000300")
-        self.assertEqual(report.meta.asset_type, "index")
-
-    def test_history_list_displays_parser_canonical_for_legacy_index_records(self):
-        """已登记指数旧记录（uppercase legacy / 显式 alias）的 API
-        ``stock_code`` 输出 parser canonical（``sz399300``/``000300.CSI`` ->
-        ``sh000300``），前端只做大小写折叠即可，无需前缀/后缀正则猜 canonical。"""
-        self._save_result_with_code("SZ399300", "query_sz399300_upper")
-        self._save_result_with_code("000300.CSI", "query_000300_csi")
-
-        listing = HistoryService(self.db).get_history_list(page=1, limit=10)
-        by_query = {item["query_id"]: item for item in listing["items"]}
-        self.assertEqual(by_query["query_sz399300_upper"]["stock_code"], "sh000300")
-        self.assertEqual(by_query["query_000300_csi"]["stock_code"], "sh000300")
-
-    def test_sh300_uppercase_alias_filter_delete_and_stock_bar_count_real_sql(self):
-        """sqlite ``IN`` 大小写敏感回归：``SZ399300``/``sz399300``/
-        ``000300.CSI``/``sh000300`` 任一查询都命中全部显式形态旧记录（含
-        uppercase alias 持久化记录），并与裸 ``000300`` 股票隔离。"""
-        self._save_result_with_code("sh000300", "query_canonical")
-        self._save_result_with_code("SZ399300", "query_uppercase_alias")
-        self._save_result_with_code("000300.CSI", "query_dotted_alias")
-        self._save_result_with_code("000300", "query_bare_stock")
-
-        for code in ("sh000300", "sz399300", "SZ399300", "000300.CSI"):
-            listing = HistoryService(self.db).get_history_list(
-                stock_code=code, page=1, limit=10
-            )
-            self.assertEqual(listing["total"], 3)
-            self.assertEqual(
-                {item["query_id"] for item in listing["items"]},
-                {"query_canonical", "query_uppercase_alias", "query_dotted_alias"},
-            )
-
-        stock_listing = HistoryService(self.db).get_history_list(
-            stock_code="000300", page=1, limit=10
-        )
-        self.assertEqual(stock_listing["total"], 1)
-        self.assertEqual(
-            {item["query_id"] for item in stock_listing["items"]},
-            {"query_bare_stock"},
-        )
-
-        if get_stock_bar is not None:
-            stock_bar = get_stock_bar(
-                start_date=None,
-                end_date=None,
-                limit=10,
-                db_manager=self.db,
-            )
-            self.assertEqual(len(stock_bar.items), 2)
-            index_item = next(
-                item for item in stock_bar.items if item.asset_type == "index"
-            )
-            stock_item = next(
-                item for item in stock_bar.items if item.asset_type == "stock"
-            )
-            self.assertEqual(index_item.stock_code, "sh000300")
-            self.assertEqual(index_item.analysis_count, 3)
-            self.assertEqual(stock_item.stock_code, "000300")
-            self.assertEqual(stock_item.analysis_count, 1)
-
-        if delete_history_by_code is not None:
-            response = delete_history_by_code("SZ399300", db_manager=self.db)
-            self.assertEqual(response.deleted, 3)
-            remaining = HistoryService(self.db).get_history_list(
-                stock_code="000300", page=1, limit=10
-            )
-            self.assertEqual(remaining["total"], 1)
-            self.assertEqual(
-                {item["query_id"] for item in remaining["items"]},
-                {"query_bare_stock"},
-            )
-
-    def test_stock_bar_isolates_index_and_same_code_stock(self):
-        if get_stock_bar is None:
-            self.skipTest("fastapi is not installed in this test environment")
-
-        self._save_result_with_code("sh000016", "query_index")
-        self._save_result_with_code("000016", "query_stock")
-
-        stock_bar = get_stock_bar(
-            start_date=None,
-            end_date=None,
-            limit=10,
-            db_manager=self.db,
-        )
-
-        self.assertEqual(len(stock_bar.items), 2)
-        by_code = {item.stock_code: item for item in stock_bar.items}
-        self.assertIn("sh000016", by_code)
-        self.assertIn("000016", by_code)
-        self.assertEqual(by_code["sh000016"].analysis_count, 1)
-        self.assertEqual(by_code["000016"].analysis_count, 1)
-        self.assertEqual(by_code["sh000016"].asset_type, "index")
-        self.assertEqual(by_code["000016"].asset_type, "stock")
-
-    def test_stock_bar_merges_index_explicit_forms_and_counts_them(self):
-        if get_stock_bar is None:
-            self.skipTest("fastapi is not installed in this test environment")
-
-        self._save_result_with_code("sh000016", "query_canonical")
-        self._save_result_with_code("SH000016", "query_upper")
-        self._save_result_with_code("000016.SH", "query_alias")
-        self._save_result_with_code("000016", "query_stock")
-
-        stock_bar = get_stock_bar(
-            start_date=None,
-            end_date=None,
-            limit=10,
-            db_manager=self.db,
-        )
-
-        self.assertEqual(len(stock_bar.items), 2)
-        index_item = next(
-            item for item in stock_bar.items if item.asset_type == "index"
-        )
-        stock_item = next(
-            item for item in stock_bar.items if item.asset_type == "stock"
-        )
-        self.assertEqual(index_item.analysis_count, 3)
-        self.assertEqual(index_item.stock_code, "sh000016")
-        self.assertEqual(stock_item.stock_code, "000016")
-        self.assertEqual(stock_item.analysis_count, 1)
-
-    def test_stock_bar_exposes_sz_index_canonical_row_with_independent_count(self):
-        """``sz399001`` 在 stock-bar 以 canonical 单行展示，``analysis_count``
-        只计自身记录，不与裸 ``399001`` 股票合并。"""
-        if get_stock_bar is None:
-            self.skipTest("fastapi is not installed in this test environment")
-
-        self._save_result_with_code("sz399001", "query_sz_index")
-        self._save_result_with_code("399001", "query_sz_stock")
-
-        stock_bar = get_stock_bar(
-            start_date=None,
-            end_date=None,
-            limit=10,
-            db_manager=self.db,
-        )
-
-        self.assertEqual(len(stock_bar.items), 2)
-        by_code = {item.stock_code: item for item in stock_bar.items}
-        self.assertIn("sz399001", by_code)
-        self.assertIn("399001", by_code)
-        self.assertEqual(by_code["sz399001"].analysis_count, 1)
-        self.assertEqual(by_code["sz399001"].asset_type, "index")
-        self.assertEqual(by_code["399001"].analysis_count, 1)
-        self.assertEqual(by_code["399001"].asset_type, "stock")
-
-    def test_delete_index_by_code_deletes_all_explicit_forms_only(self):
-        if delete_history_by_code is None:
-            self.skipTest("fastapi is not installed in this test environment")
-
-        self._save_result_with_code("sh000016", "query_canonical")
-        self._save_result_with_code("SH000016", "query_upper")
-        self._save_result_with_code("000016.SH", "query_alias")
-        self._save_result_with_code("000016", "query_stock")
-
-        response = delete_history_by_code("sh000016", db_manager=self.db)
-        self.assertEqual(response.deleted, 3)
-
-        remaining = HistoryService(self.db).get_history_list(
-            stock_code="000016", page=1, limit=10
-        )
-        self.assertEqual(remaining["total"], 1)
-        self.assertEqual(
-            {item["query_id"] for item in remaining["items"]},
-            {"query_stock"},
-        )
-
-    def test_delete_index_with_no_records_returns_zero(self):
-        if delete_history_by_code is None:
-            self.skipTest("fastapi is not installed in this test environment")
-
-        response = delete_history_by_code("sh000016", db_manager=self.db)
-        self.assertEqual(response.deleted, 0)
-
     def test_history_list_exposes_parser_asset_type(self):
-        self._save_result_with_code("sh000016", "query_index")
-        self._save_result_with_code("000016", "query_stock")
-        self._save_result_with_code("600519", "query_stock2")
+        # Chỉ số VN (VNINDEX) không còn là asset_type riêng: parser trả "stock".
+        # Vietnam indices are not a separate asset type; the parser reports "stock".
+        self._save_result_with_code("HPG", "query_stock")
+        self._save_result_with_code("FUEVN100", "query_fund")
+        self._save_result_with_code("VNINDEX", "query_vn_index")
 
         listing = HistoryService(self.db).get_history_list(page=1, limit=10)
         by_query = {item["query_id"]: item for item in listing["items"]}
-        self.assertEqual(by_query["query_index"]["asset_type"], "index")
         self.assertEqual(by_query["query_stock"]["asset_type"], "stock")
-        self.assertEqual(by_query["query_stock2"]["asset_type"], "stock")
+        self.assertEqual(by_query["query_fund"]["asset_type"], "stock")
+        self.assertEqual(by_query["query_vn_index"]["asset_type"], "stock")
 
     def test_history_list_omits_asset_type_for_market_review(self):
         self._save_result_with_code("MARKET", "query_market_review")
@@ -3004,7 +2018,7 @@ class HistoryItemSchemaNegativeSentimentTest(unittest.TestCase):
         if self.HistoryItem is None:
             self.skipTest("fastapi / pydantic not installed in this test environment")
 
-        item = self.HistoryItem(query_id="q1", stock_code="600519", sentiment_score=-22)
+        item = self.HistoryItem(query_id="q1", stock_code="HPG", sentiment_score=-22)
         self.assertEqual(item.sentiment_score, -22)
 
     def test_out_of_range_high_sentiment_score_does_not_raise(self) -> None:
@@ -3012,7 +2026,7 @@ class HistoryItemSchemaNegativeSentimentTest(unittest.TestCase):
         if self.HistoryItem is None:
             self.skipTest("fastapi / pydantic not installed in this test environment")
 
-        item = self.HistoryItem(query_id="q2", stock_code="600519", sentiment_score=150)
+        item = self.HistoryItem(query_id="q2", stock_code="HPG", sentiment_score=150)
         self.assertEqual(item.sentiment_score, 150)
 
     def test_none_sentiment_score_is_allowed(self) -> None:
@@ -3020,7 +2034,7 @@ class HistoryItemSchemaNegativeSentimentTest(unittest.TestCase):
         if self.HistoryItem is None:
             self.skipTest("fastapi / pydantic not installed in this test environment")
 
-        item = self.HistoryItem(query_id="q3", stock_code="600519", sentiment_score=None)
+        item = self.HistoryItem(query_id="q3", stock_code="HPG", sentiment_score=None)
         self.assertIsNone(item.sentiment_score)
 
     def test_report_summary_negative_sentiment_score_does_not_raise(self) -> None:

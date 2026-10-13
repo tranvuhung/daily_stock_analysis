@@ -12,6 +12,7 @@ import logging
 import re
 import threading
 import time
+import unicodedata
 from collections import defaultdict
 from typing import Dict, List, Optional, Type, Callable
 
@@ -131,18 +132,18 @@ class CommandDispatcher:
         name = command.name.lower()
 
         if name in self._commands:
-            logger.warning(f"[Dispatcher] 命令 '{name}' 已存在，将被覆盖")
+            logger.warning(f"[Dispatcher] Lệnh '{name}' đã tồn tại, sẽ bị ghi đè")
 
         self._commands[name] = command
-        logger.debug(f"[Dispatcher] 注册命令: {name}")
+        logger.debug(f"[Dispatcher] Đăng ký lệnh: {name}")
 
         # Register aliases
         for alias in command.aliases:
             alias_lower = alias.lower()
             if alias_lower in self._aliases:
-                logger.warning(f"[Dispatcher] 别名 '{alias_lower}' 已存在，将被覆盖")
+                logger.warning(f"[Dispatcher] Bí danh '{alias_lower}' đã tồn tại, sẽ bị ghi đè")
             self._aliases[alias_lower] = name
-            logger.debug(f"[Dispatcher] 注册别名: {alias_lower} -> {name}")
+            logger.debug(f"[Dispatcher] Đăng ký bí danh: {alias_lower} -> {name}")
 
     def register_class(self, command_class: Type[BotCommand]) -> None:
         """
@@ -174,7 +175,7 @@ class CommandDispatcher:
         for alias in command.aliases:
             self._aliases.pop(alias.lower(), None)
 
-        logger.debug(f"[Dispatcher] 注销命令: {name}")
+        logger.debug(f"[Dispatcher] Huỷ đăng ký lệnh: {name}")
         return True
 
     def get_command(self, name: str) -> Optional[BotCommand]:
@@ -256,36 +257,36 @@ class CommandDispatcher:
         if "error" in error_holder:
             raise error_holder["error"]
 
-        return result_holder.get("response", BotResponse.error_response("命令执行失败"))
+        return result_holder.get("response", BotResponse.error_response("Thực thi lệnh thất bại"))
 
     def _prepare_dispatch(self, message: BotMessage) -> tuple[Optional[str], List[str], Optional[BotCommand], Optional[BotResponse]]:
         """Run shared dispatch pre-checks for sync/async entrypoints."""
         if not self._rate_limiter.is_allowed(message.user_id):
             remaining_time = self._rate_limiter.window_seconds
             return None, [], None, BotResponse.error_response(
-                f"请求过于频繁，请 {remaining_time} 秒后再试"
+                f"Yêu cầu quá thường xuyên, vui lòng thử lại sau {remaining_time} giây"
             )
 
         cmd_name, args = message.get_command_and_args(self.command_prefix)
         if cmd_name is None:
             return None, args, None, None
 
-        logger.info(f"[Dispatcher] 收到命令: {cmd_name}, 参数: {args}, 用户: {message.user_name}")
+        logger.info(f"[Dispatcher] Nhận lệnh: {cmd_name}, tham số: {args}, người dùng: {message.user_name}")
 
         command = self.get_command(cmd_name)
         if command is None:
             return cmd_name, args, None, BotResponse.error_response(
-                f"未知命令: {cmd_name}\n"
-                f"发送 `{self.command_prefix}help` 查看可用命令。"
+                f"Lệnh không tồn tại: {cmd_name}\n"
+                f"Gửi `{self.command_prefix}help` để xem các lệnh khả dụng."
             )
 
         if command.admin_only and not self.is_admin(message.user_id):
-            return cmd_name, args, None, BotResponse.error_response("此命令需要管理员权限")
+            return cmd_name, args, None, BotResponse.error_response("Lệnh này yêu cầu quyền quản trị")
 
         error_msg = command.validate_args(args)
         if error_msg:
             return cmd_name, args, None, BotResponse.error_response(
-                f"{error_msg}\n用法: `{command.usage}`"
+                f"{error_msg}\nCách dùng: `{command.usage}`"
             )
 
         return cmd_name, args, command, None
@@ -302,22 +303,22 @@ class CommandDispatcher:
                 return nl_result
             if message.mentioned:
                 return BotResponse.text_response(
-                    "你好！我是股票分析助手。\n"
-                    f"发送 `{self.command_prefix}help` 查看可用命令。"
+                    "Xin chào! Tôi là trợ lý phân tích chứng khoán.\n"
+                    f"Gửi `{self.command_prefix}help` để xem các lệnh khả dụng."
                 )
             return BotResponse.text_response("")
 
         if command is None:
-            return BotResponse.error_response("命令执行失败")
+            return BotResponse.error_response("Thực thi lệnh thất bại")
 
         try:
             response = command.execute(message, args)
-            logger.info(f"[Dispatcher] 命令 {cmd_name} 执行成功")
+            logger.info(f"[Dispatcher] Lệnh {cmd_name} thực thi thành công")
             return response
         except Exception as e:
-            logger.error(f"[Dispatcher] 命令 {cmd_name} 执行失败: {e}")
+            logger.error(f"[Dispatcher] Lệnh {cmd_name} thực thi thất bại: {e}")
             logger.exception(e)
-            return BotResponse.error_response(f"命令执行失败: {str(e)[:100]}")
+            return BotResponse.error_response(f"Thực thi lệnh thất bại: {str(e)[:100]}")
 
     async def dispatch_async(self, message: BotMessage) -> BotResponse:
         """
@@ -341,24 +342,24 @@ class CommandDispatcher:
             # No NL match — check if @mentioned for a help hint
             if message.mentioned:
                 return BotResponse.text_response(
-                    "你好！我是股票分析助手。\n"
-                    f"发送 `{self.command_prefix}help` 查看可用命令。"
+                    "Xin chào! Tôi là trợ lý phân tích chứng khoán.\n"
+                    f"Gửi `{self.command_prefix}help` để xem các lệnh khả dụng."
                 )
             # Not a command message, ignore
             return BotResponse.text_response("")
 
         if command is None:
-            return BotResponse.error_response("命令执行失败")
+            return BotResponse.error_response("Thực thi lệnh thất bại")
 
         # 6. Execute the command
         try:
             response = await command.execute_async(message, args)
-            logger.info(f"[Dispatcher] 命令 {cmd_name} 执行成功")
+            logger.info(f"[Dispatcher] Lệnh {cmd_name} thực thi thành công")
             return response
         except Exception as e:
-            logger.error(f"[Dispatcher] 命令 {cmd_name} 执行失败: {e}")
+            logger.error(f"[Dispatcher] Lệnh {cmd_name} thực thi thất bại: {e}")
             logger.exception(e)
-            return BotResponse.error_response(f"命令执行失败: {str(e)[:100]}")
+            return BotResponse.error_response(f"Thực thi lệnh thất bại: {str(e)[:100]}")
 
     def set_help_command_getter(self, getter: Callable) -> None:
         """
@@ -378,65 +379,68 @@ class CommandDispatcher:
     # Lightweight intent-parsing prompt.  Asks the LLM to output a small
     # JSON object so we can route to the right command.
     _NL_PARSE_PROMPT = """\
-You are a stock analysis assistant router.  Given a user's natural-language
-message, determine whether it contains a stock-analysis request.
+You are a Vietnam stock analysis assistant router.  Given a user's
+natural-language message (usually Vietnamese or English), determine whether it
+contains a stock-analysis request.
 
 Return a JSON object (and NOTHING else) with these fields:
 - "intent": one of "analysis", "chat", "none"
   * "analysis" → the user wants stock analysis / diagnosis / comparison
   * "chat" → the user is asking a general question related to finance
   * "none" → the message is irrelevant or you are unsure
-- "codes": a list of stock codes mentioned (may be empty).
-  Format: A-share 6-digit ("600519"), HK with prefix ("hk00700"), US ticker uppercase ("AAPL").
+- "codes": a list of Vietnam stock codes mentioned (may be empty).
+  Format: uppercase HOSE/HNX/UPCoM ticker ("HPG", "FPT", "VCB"), fund
+  certificate ("FUEVN100") or index ("VNINDEX", "VN30").
+  Do NOT invent a code from a company name; leave "codes" empty instead.
 - "strategy": strategy/technique name if the user specified one, else null.
-  e.g. "缠论", "MACD", "趋势跟踪", "chan_theory", etc.
+  e.g. "chan_theory", "MACD", "bull_trend", "wave_theory", etc.
 
 Examples:
-User: "帮我分析一下600519和000858"
-{"intent":"analysis","codes":["600519","000858"],"strategy":null}
+User: "Phân tích giúp tôi HPG và FPT"
+{"intent":"analysis","codes":["HPG","FPT"],"strategy":null}
 
-User: "用缠论看看AAPL"
-{"intent":"analysis","codes":["AAPL"],"strategy":"缠论"}
+User: "Xem VCB theo lý thuyết sóng"
+{"intent":"analysis","codes":["VCB"],"strategy":"wave_theory"}
 
-User: "今天大盘怎么样"
+User: "Thị trường hôm nay thế nào?"
 {"intent":"chat","codes":[],"strategy":null}
 
-User: "明天天气如何"
+User: "Ngày mai thời tiết ra sao?"
 {"intent":"none","codes":[],"strategy":null}
 
-User: "600519"
-{"intent":"analysis","codes":["600519"],"strategy":null}
+User: "HPG"
+{"intent":"analysis","codes":["HPG"],"strategy":null}
 
-User: "帮我分析茅台"
+User: "Phân tích Hòa Phát"
 {"intent":"analysis","codes":[],"strategy":null}
 
-User: "analyze TSLA and NVDA using trend strategy"
-{"intent":"analysis","codes":["TSLA","NVDA"],"strategy":"trend"}
+User: "analyze FPT and VCB using trend strategy"
+{"intent":"analysis","codes":["FPT","VCB"],"strategy":"bull_trend"}
 """
 
-    # Cheap pre-filter: only invoke LLM when the message plausibly contains
+    # Bộ lọc rẻ trước khi gọi LLM: chỉ gọi khi câu có khả năng liên quan cổ phiếu.
+    # Cheap pre-filter: only invoke the LLM when the message plausibly contains
     # stock-related content.  This regex checks for:
-    #   - 6-digit A-share / BSE codes (0/3/6 and 43/83/87/88/92 prefixes)
-    #   - HK codes like hk00700
-    #   - 2-5 uppercase ASCII letters (US tickers)
-    #   - Common finance/analysis keywords (Chinese and English)
+    #   - Uppercase Vietnam tickers / fund / index codes (HPG, FUEVN100, VN30)
+    #   - Common finance/analysis keywords (Vietnamese and English)
     _NL_PREFILTER = re.compile(
-        r'(?:[036]\d{5}|(?:43|83|87|88|92)\d{4})'  # A-share / BSE 6-digit codes
-        r'|(?:hk|HK)\d{5}'                    # HK code
-        r'|(?<![a-zA-Z])[A-Z]{2,5}(?![a-zA-Z])'  # US ticker — UPPERCASE only, no IGNORECASE
-        r'|分析|看看|查一?下|研究|诊断|怎么样|走势|趋势'
-        r'|能买|可以买|涨还是跌|怎么看|能追|建议|目标价'
-        r'|支撑|压力|阻力|止损|买点|卖点|技术面|基本面|筹码'
+        r'(?<![A-Za-z0-9])[A-Z][A-Z0-9]{2,9}(?![A-Za-z0-9])'  # Mã VN viết hoa / uppercase VN code
+        r'|(?i:phân tích|nghiên cứu|đánh giá|nhận định|\bxem\b|\bsoi\b'
+        r'|thế nào|ra sao|xu hướng|diễn biến|có nên|nên mua|nên bán|khuyến nghị'
+        r'|giá mục tiêu|hỗ trợ|kháng cự|cắt lỗ|điểm mua|điểm bán'
+        r'|kỹ thuật|cơ bản|cổ phiếu|chứng khoán|thị trường)'
         r'|(?i:analyz|stock|buy|sell|trend|backtest|strateg)',
     )
 
+    # Mẫu loại bỏ từ đệm để tách tên công ty (vd: "phân tích giúp tôi Hòa Phát" -> "Hòa Phát").
+    # Filler-word cleanup patterns used to isolate a company name.
     _NL_NAME_CLEANUP_PATTERNS = (
         r'[，,。.!！?？:：;；`\'"“”‘’（）()\[\]{}<>]+',
         r'(?i:\b(?:please|analy[sz]e|analysis|research|check|look\s+at|stock|ticker|trend|price)\b)',
-        r'(?:帮我|帮忙|麻烦|请|想请你|我想|想|用|按照|基于|关于|对)\s*',
-        r'(?:分析|看看|研究|诊断|查一?下|聊聊|说说|问问|评估)\s*',
-        r'(?:最近|近期|当前|今天|这只|这个|个股|股票)\s*',
-        r'(?:走势|情况|表现|如何|怎么样|怎么看|可以吗|能买吗|值不值得买|技术面|基本面|策略)\s*',
+        r'(?i:\b(?:giúp|giùm|hộ|cho|tôi|mình|em|làm ơn|hãy|vui lòng|muốn|dùng|theo|về)\b)',
+        r'(?i:\b(?:phân tích|xem|soi|nghiên cứu|đánh giá|nhận định|kiểm tra|nói về)\b)',
+        r'(?i:\b(?:gần đây|hiện tại|hôm nay|mã|cổ phiếu|này|đó)\b)',
+        r'(?i:\b(?:xu hướng|diễn biến|tình hình|thế nào|ra sao|có nên mua|có nên|nên mua không|không|kỹ thuật|cơ bản|chiến lược)\b)',
         r'\s+',
     )
 
@@ -673,57 +677,44 @@ User: "analyze TSLA and NVDA using trend strategy"
 
     @classmethod
     def _resolve_stock_code_from_text(cls, text: str) -> Optional[str]:
-        """Best-effort stock name/code resolution for NL-routed analysis requests."""
-        from data_provider.base import canonical_stock_code
-        from src.data.stock_mapping import STOCK_NAME_MAP
+        """Phân giải tên/mã cổ phiếu Việt Nam từ câu tự nhiên (best-effort, offline).
+
+        Thứ tự: mã VN viết hoa xuất hiện trong câu -> cả câu / câu đã bỏ từ đệm
+        qua :func:`resolve_name_to_code` (vd: "phân tích Hòa Phát" -> HPG).
+        Từ viết thường 3 ký tự (vd: "cho") không được coi là mã để tránh nhận nhầm.
+
+        Best-effort Vietnam stock name/code resolution for NL-routed analysis requests.
+        """
+        from src.agent.stock_scope import extract_stock_codes
         from src.services.name_to_code_resolver import resolve_name_to_code
+        from src.services.stock_code_utils import is_code_like
 
-        def _iter_candidates(raw_text: str) -> List[str]:
-            candidates: List[str] = []
-            stripped = (raw_text or "").strip()
-            if stripped:
-                candidates.append(stripped)
-
-            cleaned = stripped
-            for pattern in cls._NL_NAME_CLEANUP_PATTERNS:
-                cleaned = re.sub(pattern, " ", cleaned)
-            cleaned = cleaned.strip(" 的").strip()
-            if cleaned and cleaned not in candidates:
-                candidates.append(cleaned)
-
-            for source in list(candidates):
-                for token in re.findall(r'[A-Za-z][A-Za-z0-9\.]{0,9}|[\u4e00-\u9fff]{2,12}', source):
-                    normalized = token.strip(" 的").strip()
-                    if normalized and normalized not in candidates:
-                        candidates.append(normalized)
-
-            return sorted(candidates, key=len, reverse=True)
-
-        def _unique_partial_match(candidate: str) -> Optional[str]:
-            if not re.search(r'[\u4e00-\u9fff]', candidate):
-                return None
-            matches = [
-                code for code, stock_name in STOCK_NAME_MAP.items()
-                if candidate and candidate in stock_name
-            ]
-            unique_matches = list(dict.fromkeys(matches))
-            if len(unique_matches) == 1:
-                return canonical_stock_code(unique_matches[0])
+        stripped = unicodedata.normalize("NFC", text or "").strip()
+        if not stripped:
             return None
 
-        candidates = _iter_candidates(text)
+        # 1) Mã viết hoa trong câu (HPG, FUEVN100, VN30) / explicit uppercase codes.
+        explicit_codes = extract_stock_codes(stripped)
+        if explicit_codes:
+            return explicit_codes[0]
 
-        # Prefer deterministic local alias/partial-name matches before any
-        # resolver path that may touch online market data providers.
-        for candidate in candidates:
-            partial = _unique_partial_match(candidate)
-            if partial:
-                return partial
+        # 2) Tên công ty: cả câu, rồi câu đã loại từ đệm / company names.
+        candidates: List[str] = [stripped]
+        cleaned = stripped
+        for pattern in cls._NL_NAME_CLEANUP_PATTERNS:
+            cleaned = re.sub(pattern, " ", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        if cleaned and cleaned not in candidates:
+            candidates.append(cleaned)
 
         for candidate in candidates:
+            # Từ viết thường giống mã (vd: "cho") không phải ý định chỉ định mã.
+            # A lowercase code-like word is not an explicit code request.
+            if is_code_like(candidate) and candidate != candidate.upper():
+                continue
             resolved = resolve_name_to_code(candidate)
             if resolved:
-                return canonical_stock_code(resolved)
+                return resolved
 
         return None
 
@@ -758,7 +749,7 @@ def get_dispatcher() -> CommandDispatcher:
         for command_class in ALL_COMMANDS:
             _dispatcher.register_class(command_class)
 
-        logger.info(f"[Dispatcher] 初始化完成，已注册 {len(_dispatcher._commands)} 个命令")
+        logger.info(f"[Dispatcher] Khởi tạo xong, đã đăng ký {len(_dispatcher._commands)} lệnh")
 
     return _dispatcher
 

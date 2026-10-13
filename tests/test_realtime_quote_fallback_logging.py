@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Regression tests for realtime quote fallback logging semantics."""
+"""Kiểm thử hồi quy ngữ nghĩa log khi chuyển nguồn giá realtime (Việt Nam).
+
+Regression tests for realtime quote fallback logging semantics (Vietnam).
+"""
 
 import asyncio
 import importlib.util
@@ -41,16 +44,16 @@ class _DummyFetcher:
 
 
 def _make_quote(
-    code: str = "600519",
-    name: str = "贵州茅台",
-    source: RealtimeSource = RealtimeSource.AKSHARE_EM,
+    code: str = "HPG",
+    name: str = "Hòa Phát",
+    source: RealtimeSource = RealtimeSource.FALLBACK,
     **overrides,
 ) -> UnifiedRealtimeQuote:
     return UnifiedRealtimeQuote(
         code=code,
         name=name,
         source=source,
-        price=1688.0,
+        price=27500.0,
         change_pct=1.2,
         **overrides,
     )
@@ -64,10 +67,10 @@ def _make_pipeline(enable_realtime_quote: bool, realtime_quote=None) -> StockAna
         agent_mode=False,
         agent_skills=[],
         fundamental_stage_timeout_seconds=1.5,
-        report_language="zh",
+        report_language="vi",
     )
     pipeline.fetcher_manager = MagicMock()
-    pipeline.fetcher_manager.get_stock_name.return_value = "贵州茅台"
+    pipeline.fetcher_manager.get_stock_name.return_value = "Hòa Phát"
     pipeline.fetcher_manager.get_realtime_quote.return_value = realtime_quote
     pipeline.fetcher_manager.get_chip_distribution.return_value = None
     pipeline.fetcher_manager.get_fundamental_context.return_value = {
@@ -96,92 +99,67 @@ def _make_pipeline(enable_realtime_quote: bool, realtime_quote=None) -> StockAna
 
 @patch("src.config.get_config")
 def test_manager_does_not_warn_when_fallback_source_succeeds(mock_get_config, caplog):
+    # SSI hỏng thì VCI phục vụ, không được log cảnh báo.
+    # SSI fails and VCI serves the quote without warning logs.
     mock_get_config.return_value = SimpleNamespace(
         enable_realtime_quote=True,
-        realtime_source_priority="efinance,akshare_em",
+        realtime_source_priority="ssi,vci",
     )
     manager = DataFetcherManager(
         fetchers=[
-            _DummyFetcher("EfinanceFetcher", 0, error=RuntimeError("efinance timeout")),
-            _DummyFetcher("AkshareFetcher", 1, result=_make_quote()),
+            _DummyFetcher("SsiFetcher", 0, error=RuntimeError("ssi timeout")),
+            _DummyFetcher("VciFetcher", 1, result=_make_quote()),
         ]
     )
 
     with caplog.at_level(logging.INFO):
-        quote = manager.get_realtime_quote("600519")
+        quote = manager.get_realtime_quote("HPG")
 
     assert quote is not None
-    assert quote.name == "贵州茅台"
+    assert quote.name == "Hòa Phát"
     assert quote.fetched_at is not None
-    assert quote.fallback_from == "efinance"
     assert not [record for record in caplog.records if record.levelno >= logging.WARNING]
-    assert "所有数据源均不可用" not in caplog.text
 
 
 @patch("src.config.get_config")
-def test_manager_supplement_does_not_mark_fallback_from(mock_get_config):
+def test_manager_respects_configured_vn_source_order(mock_get_config):
     mock_get_config.return_value = SimpleNamespace(
         enable_realtime_quote=True,
-        realtime_source_priority="efinance,akshare_em",
+        realtime_source_priority="vci,ssi",
     )
-    primary = _make_quote(source=RealtimeSource.EFINANCE)
-    supplement = _make_quote(source=RealtimeSource.AKSHARE_EM, volume_ratio=1.7)
+    vci_quote = _make_quote(name="VCI")
+    ssi_quote = _make_quote(name="SSI")
     manager = DataFetcherManager(
         fetchers=[
-            _DummyFetcher("EfinanceFetcher", 0, result=primary),
-            _DummyFetcher("AkshareFetcher", 1, result=supplement),
+            _DummyFetcher("SsiFetcher", 0, result=ssi_quote),
+            _DummyFetcher("VciFetcher", 1, result=vci_quote),
         ]
     )
 
-    quote = manager.get_realtime_quote("600519")
-
-    assert quote is primary
-    assert quote.fetched_at is not None
-    assert quote.fallback_from is None
-    assert quote.source == RealtimeSource.EFINANCE
-    assert quote.volume_ratio == 1.7
+    assert manager.get_realtime_quote("HPG") is vci_quote
 
 
 @patch("src.config.get_config")
-def test_manager_fallback_from_records_highest_priority_failed_source(mock_get_config):
-    mock_get_config.return_value = SimpleNamespace(
-        enable_realtime_quote=True,
-        realtime_source_priority="efinance,tushare,akshare_em",
-    )
-    manager = DataFetcherManager(
-        fetchers=[
-            _DummyFetcher("EfinanceFetcher", 0, error=RuntimeError("efinance timeout")),
-            _DummyFetcher("TushareFetcher", 1, error=RuntimeError("tushare timeout")),
-            _DummyFetcher("AkshareFetcher", 2, result=_make_quote()),
-        ]
-    )
+def test_manager_returns_none_for_non_vn_code_without_fetcher_calls(mock_get_config):
+    mock_get_config.return_value = SimpleNamespace(enable_realtime_quote=True, realtime_source_priority="")
+    ssi = _DummyFetcher("SsiFetcher", 0, error=AssertionError("must not be called"))
+    manager = DataFetcherManager(fetchers=[ssi])
 
-    quote = manager.get_realtime_quote("600519")
-
-    assert quote is not None
-    assert quote.source == RealtimeSource.AKSHARE_EM
-    assert quote.fallback_from == "efinance"
-    assert quote.fetched_at is not None
+    assert manager.get_realtime_quote("AAPL") is None
+    assert manager.get_realtime_quote("600519") is None
 
 
 @patch("src.config.get_config")
 def test_manager_drops_invalid_provider_timestamp_before_return(mock_get_config):
     mock_get_config.return_value = SimpleNamespace(
         enable_realtime_quote=True,
-        realtime_source_priority="efinance",
+        realtime_source_priority="ssi",
         realtime_cache_ttl=600,
     )
-    raw_quote = _make_quote(
-        source=RealtimeSource.EFINANCE,
-        provider_timestamp="not-a-date",
-    )
-    manager = DataFetcherManager(
-        fetchers=[
-            _DummyFetcher("EfinanceFetcher", 0, result=raw_quote),
-        ]
-    )
+    raw_quote = _make_quote(provider_timestamp="not-a-date")
+    manager = DataFetcherManager(fetchers=[_DummyFetcher("SsiFetcher", 0, result=raw_quote)])
 
-    quote = manager.get_realtime_quote("600519")
+    quote = manager.get_realtime_quote("HPG")
 
     assert quote is raw_quote
     assert quote.fetched_at is not None
@@ -194,17 +172,17 @@ def test_pipeline_warns_once_when_all_realtime_sources_fail(caplog):
     pipeline = _make_pipeline(enable_realtime_quote=True, realtime_quote=None)
 
     with caplog.at_level(logging.INFO):
-        result = pipeline.analyze_stock("600519", ReportType.SIMPLE, "q1")
+        result = pipeline.analyze_stock("HPG", ReportType.SIMPLE, "q1")
 
     assert result is None
-    pipeline.fetcher_manager.get_stock_name.assert_called_once_with("600519", allow_realtime=False)
-    pipeline.fetcher_manager.get_realtime_quote.assert_called_once_with("600519", log_final_failure=False)
+    pipeline.fetcher_manager.get_stock_name.assert_called_once_with("HPG", allow_realtime=False)
+    pipeline.fetcher_manager.get_realtime_quote.assert_called_once_with("HPG", log_final_failure=False)
     downgrade_logs = [
         record.message
         for record in caplog.records
-        if "历史收盘价继续分析" in record.message
+        if "giá đóng cửa lịch sử để tiếp tục phân tích" in record.message
     ]
-    assert downgrade_logs == ["贵州茅台(600519) 所有实时行情数据源均不可用，已降级为历史收盘价继续分析"]
+    assert downgrade_logs == ["Hòa Phát(HPG) mọi nguồn báo giá realtime đều không khả dụng, đã hạ cấp sang giá đóng cửa lịch sử để tiếp tục phân tích"]
 
 
 @patch("src.config.get_config")
@@ -213,15 +191,15 @@ def test_event_monitor_keeps_manager_failure_summary_for_direct_quote_call(mock_
 
     mock_get_config.return_value = SimpleNamespace(
         enable_realtime_quote=True,
-        realtime_source_priority="efinance",
+        realtime_source_priority="ssi",
     )
     manager = DataFetcherManager(
         fetchers=[
-            _DummyFetcher("EfinanceFetcher", 0, error=RuntimeError("efinance timeout")),
+            _DummyFetcher("SsiFetcher", 0, error=RuntimeError("ssi timeout")),
         ]
     )
     monitor = EventMonitor()
-    rule = PriceAlert(stock_code="600519", direction="above", price=1800.0)
+    rule = PriceAlert(stock_code="HPG", direction="above", price=30000.0)
 
     async def _run_inline(func, *args, **kwargs):
         return func(*args, **kwargs)
@@ -232,21 +210,21 @@ def test_event_monitor_keeps_manager_failure_summary_for_direct_quote_call(mock_
         result = asyncio.run(monitor._check_price(rule))
 
     assert result is None
-    assert "[实时行情] 600519 所有数据源均失败: [efinance] 失败: efinance timeout" in caplog.text
+    assert "[Giá realtime] HPG không có nguồn dữ liệu khả dụng" in caplog.text
 
 
 def test_pipeline_logs_disabled_realtime_once_without_fetching_quote(caplog):
     pipeline = _make_pipeline(enable_realtime_quote=False, realtime_quote=_make_quote())
 
     with caplog.at_level(logging.INFO):
-        result = pipeline.analyze_stock("600519", ReportType.SIMPLE, "q1")
+        result = pipeline.analyze_stock("HPG", ReportType.SIMPLE, "q1")
 
     assert result is None
-    pipeline.fetcher_manager.get_stock_name.assert_called_once_with("600519", allow_realtime=False)
+    pipeline.fetcher_manager.get_stock_name.assert_called_once_with("HPG", allow_realtime=False)
     pipeline.fetcher_manager.get_realtime_quote.assert_not_called()
     downgrade_logs = [
         record.message
         for record in caplog.records
-        if "历史收盘价继续分析" in record.message
+        if "giá đóng cửa lịch sử để tiếp tục phân tích" in record.message
     ]
-    assert downgrade_logs == ["贵州茅台(600519) 实时行情已禁用，使用历史收盘价继续分析"]
+    assert downgrade_logs == ["Hòa Phát(HPG) báo giá realtime đã tắt, dùng giá đóng cửa lịch sử để tiếp tục phân tích"]

@@ -30,7 +30,7 @@ instructions: |
   - **Turnover rate < 0.5%/day**: the market is cold and ignored; a potential bottom zone (buy into others' panic).
   - **Turnover rate 0.5%~2%**: normal trading, stable sentiment.
   - **Turnover rate 2%~5%**: active; the market is starting to pay attention; do not chase highs.
-  - **Turnover rate > 5%**: high heat, speculative hot money / retail investors flooding in; beware of a sentiment top.
+  - **Turnover rate > 5%**: high heat, speculative retail money flooding in; beware of a sentiment top.
   - **Turnover rate > 10% (daily average)**: extremely overheated; usually a short-term top.
 
   ### Step 2: Turnover Rate Trend
@@ -41,7 +41,7 @@ instructions: |
 
   ### Step 3: News Sentiment Analysis
   Use `search_stock_news` to search recent news and analyze the sentiment bias:
-  - News clustering around "good news priced in, earnings beat, limit-up, institutional recommendations" → sentiment may be overheated.
+  - News clustering around "good news priced in, earnings beat, ceiling-price sessions, broker recommendations" → sentiment may be overheated.
   - News clustering around "earnings decline, negative news, break below support" → pessimism may be forming a bottom.
   - Extremely negative sentiment on retail forums / social media → contrarian indicator; may be near a bottom.
 

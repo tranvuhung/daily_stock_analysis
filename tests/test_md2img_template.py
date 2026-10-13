@@ -20,7 +20,7 @@ from src.share_image import (
 
 TEST_BRANDING = ShareImageBranding(
     xiaohongshu_url="https://example.com/xhs",
-    xiaohongshu_handle="@示例账号",
+    xiaohongshu_handle="@demo_account",
     xiaohongshu_id="123456",
     xiaohongshu_qr_path=str(
         Path(__file__).parents[1] / "src" / "assets" / "share_image" / "xiaohongshu_qr.jpg"
@@ -31,7 +31,7 @@ TEST_BRANDING = ShareImageBranding(
 def test_wkhtml_renderer_uses_share_poster_dimensions_and_qr_template():
     with patch("imgkit.from_string", return_value=b"png") as render:
         assert _markdown_to_image_wkhtml(
-            "# 大盘复盘\n\n## 结论\n\n震荡",
+            "# Điểm lại thị trường\n\n## Kết luận\n\nĐi ngang",
             branding=TEST_BRANDING,
         ) == b"png"
 
@@ -41,7 +41,7 @@ def test_wkhtml_renderer_uses_share_poster_dimensions_and_qr_template():
     assert 'class="poster market"' in html
     assert "项目主页二维码" not in html
     assert "ZhuLinsen/daily_stock_analysis" in html
-    assert "<b>小红书</b>@示例账号" in html
+    assert "<b>Xiaohongshu</b>@demo_account" in html
     assert "123456" not in html
     assert options["width"] == 1080
     assert options["disable-smart-width"] == ""
@@ -63,14 +63,14 @@ def test_markdown_to_file_renderer_receives_the_same_share_poster(tmp_path, monk
     monkeypatch.setattr("src.md2img.shutil.rmtree", lambda _path: None)
 
     assert _markdown_to_image_m2f(
-        "# 贵州茅台 600519\n\n## 结论\n\n偏多",
+        "# Hòa Phát HPG\n\n## Kết luận\n\nTích cực",
         branding=TEST_BRANDING,
     ) == b"png"
     assert captured["command"] == resolved_m2f
     assert 'class="poster stock"' in captured["html"]
     assert "项目主页二维码" not in captured["html"]
     assert "ZhuLinsen/daily_stock_analysis" in captured["html"]
-    assert "<b>小红书</b>@示例账号" in captured["html"]
+    assert "<b>Xiaohongshu</b>@demo_account" in captured["html"]
     assert "123456" not in captured["html"]
 
 
@@ -90,7 +90,7 @@ def test_playwright_renderer_receives_the_same_share_poster(tmp_path, monkeypatc
     monkeypatch.setattr("src.md2img.shutil.rmtree", lambda _path: None)
 
     assert _markdown_to_image_playwright(
-        "# 贵州茅台 600519\n\n## 结论\n\n偏多",
+        "# Hòa Phát HPG\n\n## Kết luận\n\nTích cực",
         branding=TEST_BRANDING,
     ) == b"png"
     assert captured["args"][0] == resolved_playwright
@@ -104,7 +104,7 @@ def test_playwright_renderer_receives_the_same_share_poster(tmp_path, monkeypatc
     assert "--full-page" in captured["args"]
     assert 'class="poster stock"' in captured["html"]
     assert "ZhuLinsen/daily_stock_analysis" in captured["html"]
-    assert "<b>小红书</b>@示例账号" in captured["html"]
+    assert "<b>Xiaohongshu</b>@demo_account" in captured["html"]
     assert "123456" not in captured["html"]
 
 
@@ -116,7 +116,7 @@ def test_markdown_to_image_forwards_social_branding_from_config():
     config = SimpleNamespace(
         md2img_engine="wkhtmltoimage",
         share_image_xiaohongshu_url="https://example.com/xhs",
-        share_image_xiaohongshu_handle="@自定义账号",
+        share_image_xiaohongshu_handle="@custom_account",
         share_image_xiaohongshu_id="987654",
         share_image_xiaohongshu_qr_path="custom-qr.png",
     )
@@ -124,12 +124,12 @@ def test_markdown_to_image_forwards_social_branding_from_config():
         patch("src.config.get_config", return_value=config),
         patch("src.md2img._markdown_to_image_wkhtml", return_value=b"png") as render,
     ):
-        assert markdown_to_image("# 大盘复盘") == b"png"
+        assert markdown_to_image("# Điểm lại thị trường") == b"png"
 
     branding = render.call_args.args[2]
     assert branding == ShareImageBranding(
         xiaohongshu_url="https://example.com/xhs",
-        xiaohongshu_handle="@自定义账号",
+        xiaohongshu_handle="@custom_account",
         xiaohongshu_id="987654",
         xiaohongshu_qr_path="custom-qr.png",
     )
@@ -141,7 +141,7 @@ def test_markdown_to_image_uses_bundled_qr_when_branding_is_unconfigured():
         patch("src.config.get_config", return_value=config),
         patch("src.md2img._markdown_to_image_wkhtml", return_value=b"png") as render,
     ):
-        assert markdown_to_image("# 大盘复盘") == b"png"
+        assert markdown_to_image("# Điểm lại thị trường") == b"png"
 
     branding = render.call_args.args[2]
     assert branding.xiaohongshu_handle == DEFAULT_XIAOHONGSHU_HANDLE
@@ -151,30 +151,30 @@ def test_markdown_to_image_uses_bundled_qr_when_branding_is_unconfigured():
 
 def test_wkhtml_renderer_forwards_structured_analysis_payload():
     payload = {
-        "name": "中钨高新",
-        "code": "000657",
-        "operation_advice": "观望",
+        "name": "Hòa Phát",
+        "code": "HPG",
+        "operation_advice": "Quan sát",
         "sentiment_score": 40,
-        "dashboard": {"core_conclusion": {"one_sentence": "等待企稳"}},
+        "dashboard": {"core_conclusion": {"one_sentence": "Chờ ổn định"}},
     }
     with patch("imgkit.from_string", return_value=b"png") as render:
         assert _markdown_to_image_wkhtml(
-            "# 占位名称 000657\n\n## 核心结论\n\n占位文本",
+            "# Tên tạm HPG\n\n## Kết luận cốt lõi\n\nVăn bản tạm",
             structured_payload=payload,
         ) == b"png"
 
     html = render.call_args.args[0]
-    assert "中钨高新" in html
-    assert "等待企稳" in html
+    assert "Hòa Phát" in html
+    assert "Chờ ổn định" in html
 
 
 def test_wkhtml_renderer_returns_none_when_share_poster_build_fails():
     with patch("src.md2img.build_share_image_html", side_effect=FileNotFoundError("missing qr")):
-        assert _markdown_to_image_wkhtml("# 大盘复盘") is None
+        assert _markdown_to_image_wkhtml("# Điểm lại thị trường") is None
 
 
 def test_markdown_to_file_renderer_returns_none_when_share_poster_build_fails(monkeypatch):
     monkeypatch.setattr("src.md2img.shutil.which", lambda _name: "m2f")
 
     with patch("src.md2img.build_share_image_html", side_effect=FileNotFoundError("missing qr")):
-        assert _markdown_to_image_m2f("# 贵州茅台 600519") is None
+        assert _markdown_to_image_m2f("# Hòa Phát HPG") is None

@@ -23,45 +23,9 @@ LEGACY_STRATEGY_AGENT_PREFIX = "strategy_"
 SKILL_CONSENSUS_AGENT_NAME = "skill_consensus"
 LEGACY_STRATEGY_CONSENSUS_AGENT_NAME = "strategy_consensus"
 
-CORE_TRADING_SKILL_POLICY_ZH = """## 默认技能基线（必须严格遵守）
-
-当前激活的 skills 可以补充细化分析视角，但默认风险控制和交易节奏必须遵守以下基线。
-
-### 1. 严进策略（不追高）
-- **绝对不追高**：当股价偏离 MA5 超过 5% 时，坚决不买入
-- 乖离率 < 2%：最佳买点区间
-- 乖离率 2-5%：可小仓介入
-- 乖离率 > 5%：严禁追高！直接判定为"观望"
-
-### 2. 趋势交易（顺势而为）
-- **多头排列必须条件**：MA5 > MA10 > MA20
-- 只做多头排列的股票，空头排列坚决不碰
-- 均线发散上行优于均线粘合
-
-### 3. 效率优先（筹码结构）
-- 关注筹码集中度：90%集中度 < 15% 表示筹码集中
-- 获利比例分析：70-90% 获利盘时需警惕获利回吐
-- 平均成本与现价关系：现价高于平均成本 5-15% 为健康
-
-### 4. 买点偏好（回踩支撑）
-- **最佳买点**：缩量回踩 MA5 获得支撑
-- **次优买点**：回踩 MA10 获得支撑
-- **观望情况**：跌破 MA20 时观望
-
-### 5. 风险排查重点
-- 减持公告、业绩预亏、监管处罚、行业政策利空、大额解禁
-
-### 6. 估值关注（PE/PB）
-- PE 明显偏高时需在风险点中说明
-
-### 7. 强势趋势股放宽
-- 强势趋势股可适当放宽乖离率要求，轻仓追踪但需设止损
-"""
-
-# Bản tiếng Anh của cùng bộ quy tắc, dùng cho prompt của GeminiAnalyzer.
-# Phải giữ đồng bộ từng mục với bản _ZH ở trên.
-# English variant of the same baseline, used by the GeminiAnalyzer prompt.
-# Keep it section-for-section in sync with the _ZH version above.
+# Bộ quy tắc nền mặc định (prompt viết bằng tiếng Anh; ngôn ngữ đầu ra do phần
+# "Output Language" quyết định).
+# Default trading baseline (prompt bodies are English; output language is set separately).
 CORE_TRADING_SKILL_POLICY_EN = """## Default Skill Baseline (must be followed strictly)
 
 The currently activated skills may add or refine analysis perspectives, but the default
@@ -78,23 +42,18 @@ risk controls and trading rhythm below must always be respected.
 - Only trade bullish alignment; never touch bearish alignment
 - Moving averages fanning out upward is better than moving averages converging
 
-### 3. Efficiency first (chip structure)
-- Watch chip concentration: a 90% concentration below 15% means chips are concentrated
-- Profit-ratio analysis: be wary of profit taking when 70-90% of holders are in profit
-- Average cost vs current price: 5-15% above average cost is healthy
-
-### 4. Entry preference (pullback to support)
+### 3. Entry preference (pullback to support)
 - **Best entry**: a low-volume pullback that finds support at MA5
 - **Second-best entry**: a pullback that finds support at MA10
 - **Stand aside**: when price breaks below MA20
 
-### 5. Risk review focus
-- Share-reduction announcements, profit warnings, regulatory penalties, adverse industry policy, large lock-up expiries
+### 4. Risk review focus
+- Insider/major-shareholder selling disclosures, profit warnings, regulatory penalties, adverse industry policy, large lock-up expiries
 
-### 6. Valuation watch (PE/PB)
+### 5. Valuation watch (PE/PB)
 - Call out a clearly elevated PE in the risk section
 
-### 7. Relaxation for strong trends
+### 6. Relaxation for strong trends
 - For a strongly trending stock the bias requirement may be relaxed: track it with a light position, but always set a stop loss
 """
 

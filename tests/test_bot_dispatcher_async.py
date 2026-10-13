@@ -42,7 +42,7 @@ class DummyCommand(BotCommand):
 
 def _make_message(content: str, mentioned: bool = False) -> BotMessage:
     return BotMessage(
-        platform="feishu",
+        platform="telegram",
         message_id="m1",
         user_id="u1",
         user_name="tester",
@@ -71,11 +71,25 @@ class TestBotCommandAsync(unittest.IsolatedAsyncioTestCase):
 
 
 class TestCommandDispatcherAsync(unittest.IsolatedAsyncioTestCase):
-    def test_nl_prefilter_matches_bse_codes(self):
-        self.assertIsNotNone(CommandDispatcher._NL_PREFILTER.search("帮我分析430001"))
+    def test_nl_prefilter_matches_uppercase_vn_codes(self):
+        for text in ("HPG", "so sánh FPT với VCB", "FUEVN100", "VN30"):
+            with self.subTest(text=text):
+                self.assertIsNotNone(CommandDispatcher._NL_PREFILTER.search(text))
 
-    def test_nl_prefilter_accepts_bare_lowercase_us_ticker(self):
-        self.assertTrue(CommandDispatcher._passes_nl_prefilter("tsla"))
+    def test_nl_prefilter_matches_vietnamese_keywords(self):
+        for text in ("phân tích giúp tôi Hòa Phát", "thị trường hôm nay thế nào", "có nên mua không"):
+            with self.subTest(text=text):
+                self.assertTrue(CommandDispatcher._passes_nl_prefilter(text))
+
+    def test_nl_prefilter_accepts_bare_lowercase_vn_code(self):
+        self.assertTrue(CommandDispatcher._passes_nl_prefilter("hpg"))
+
+    def test_nl_prompt_uses_vn_examples_only(self):
+        prompt = CommandDispatcher._NL_PARSE_PROMPT
+        for code in ("HPG", "FPT", "VCB"):
+            self.assertIn(code, prompt)
+        for legacy in ("600519", "hk00700", "AAPL"):
+            self.assertNotIn(legacy, prompt)
 
     def test_nl_prefilter_rejects_common_lowercase_word(self):
         self.assertFalse(CommandDispatcher._passes_nl_prefilter("hello"))
@@ -93,7 +107,7 @@ class TestCommandDispatcherAsync(unittest.IsolatedAsyncioTestCase):
 
     async def test_parse_intent_via_llm_offloads_to_thread(self):
         fake_response = SimpleNamespace(
-            content='{"intent":"analysis","codes":["600519"],"strategy":null}',
+            content='{"intent":"analysis","codes":["HPG"],"strategy":null}',
             provider="gemini",
             usage={"total_tokens": 12},
         )
@@ -107,10 +121,10 @@ class TestCommandDispatcherAsync(unittest.IsolatedAsyncioTestCase):
                 adapter = MagicMock()
                 adapter.call_text.return_value = fake_response
                 adapter_cls.return_value = adapter
-                result = await CommandDispatcher._parse_intent_via_llm("分析600519", config)
+                result = await CommandDispatcher._parse_intent_via_llm("phân tích HPG", config)
 
         self.assertEqual(result["intent"], "analysis")
-        self.assertEqual(result["codes"], ["600519"])
+        self.assertEqual(result["codes"], ["HPG"])
         to_thread.assert_awaited_once()
         adapter.call_text.assert_called_once()
 
@@ -130,14 +144,16 @@ class TestCommandDispatcherAsync(unittest.IsolatedAsyncioTestCase):
         with patch("src.config.get_config", return_value=config):
             with patch.object(dispatcher, "_parse_intent_via_llm", new=AsyncMock(return_value={
                 "intent": "analysis",
-                "codes": ["600519"],
-                "strategy": "缠论",
+                "codes": ["HPG"],
+                "strategy": "chan_theory",
             })):
-                result = await dispatcher._try_nl_routing(_make_message("帮我分析600519", mentioned=True))
+                result = await dispatcher._try_nl_routing(_make_message("phân tích giúp tôi HPG", mentioned=True))
 
         self.assertIsNotNone(result)
         self.assertEqual(result.text, "ask-ok")
         ask_command.execute_async.assert_awaited_once()
+        _, args = ask_command.execute_async.await_args.args
+        self.assertEqual(args, ["HPG", "chan_theory"])
 
     async def test_try_nl_routing_resolves_name_only_analysis_request(self):
         dispatcher = CommandDispatcher()
@@ -154,8 +170,9 @@ class TestCommandDispatcherAsync(unittest.IsolatedAsyncioTestCase):
 
         with patch("src.config.get_config", return_value=config):
             with patch(
-                "src.services.name_to_code_resolver._get_akshare_name_to_code"
-            ) as mock_akshare:
+                "src.services.name_to_code_resolver.resolve_name_to_code",
+                side_effect=lambda text: "HPG" if text == "Hòa Phát" else None,
+            ) as mock_resolve:
                 with patch.object(
                     dispatcher,
                     "_parse_intent_via_llm",
@@ -165,14 +182,27 @@ class TestCommandDispatcherAsync(unittest.IsolatedAsyncioTestCase):
                         "strategy": None,
                     }),
                 ):
-                    result = await dispatcher._try_nl_routing(_make_message("帮我分析茅台", mentioned=True))
+                    result = await dispatcher._try_nl_routing(_make_message("phân tích giúp tôi Hòa Phát", mentioned=True))
 
         self.assertIsNotNone(result)
         self.assertEqual(result.text, "ask-ok")
         ask_command.execute_async.assert_awaited_once()
-        mock_akshare.assert_not_called()
+        mock_resolve.assert_any_call("Hòa Phát")
         _, args = ask_command.execute_async.await_args.args
-        self.assertEqual(args, ["600519"])
+        self.assertEqual(args, ["HPG"])
+
+
+class TestResolveStockCodeFromText(unittest.TestCase):
+    def test_uppercase_code_in_text_wins(self):
+        self.assertEqual(CommandDispatcher._resolve_stock_code_from_text("xem giúp mình FPT nhé"), "FPT")
+
+    def test_lowercase_common_word_is_not_treated_as_code(self):
+        with patch(
+            "src.services.name_to_code_resolver.resolve_name_to_code",
+            return_value=None,
+        ) as mock_resolve:
+            self.assertIsNone(CommandDispatcher._resolve_stock_code_from_text("cho"))
+        mock_resolve.assert_not_called()
 
 
 class TestCommandDispatcherSyncCompatibility(unittest.TestCase):
@@ -219,7 +249,7 @@ class TestHandleWebhookAsync(unittest.IsolatedAsyncioTestCase):
             mock_dispatcher.dispatch_async = AsyncMock(return_value=BotResponse.text_response("async-resp"))
             mock_get_disp.return_value = mock_dispatcher
 
-            await handle_webhook_async("feishu", {}, b'{}')
+            await handle_webhook_async("telegram", {}, b'{}')
 
         mock_dispatcher.dispatch_async.assert_awaited_once()
 
@@ -230,7 +260,7 @@ class TestHandleWebhookAsync(unittest.IsolatedAsyncioTestCase):
         fake_config.bot_enabled = False
 
         with patch("src.config.get_config", return_value=fake_config):
-            result = await handle_webhook_async("feishu", {}, b'{}')
+            result = await handle_webhook_async("telegram", {}, b'{}')
 
         # WebhookResponse.success() returns status_code 200
         self.assertEqual(result.status_code, 200)
@@ -245,7 +275,7 @@ class TestChatCommandCompatibility(unittest.TestCase):
         executor = MagicMock()
         executor.chat.return_value = SimpleNamespace(success=True, content="ok", error=None)
         db = MagicMock()
-        db.conversation_session_exists.side_effect = lambda session_id: session_id == "feishu_u1"
+        db.conversation_session_exists.side_effect = lambda session_id: session_id == "telegram_u1"
 
         with patch("bot.commands.chat.get_config", return_value=config), \
              patch("src.storage.get_db", return_value=db), \
@@ -254,7 +284,7 @@ class TestChatCommandCompatibility(unittest.TestCase):
 
         self.assertEqual(response.text, "ok")
         executor.chat.assert_called_once()
-        self.assertEqual(executor.chat.call_args.kwargs["session_id"], "feishu_u1")
+        self.assertEqual(executor.chat.call_args.kwargs["session_id"], "telegram_u1")
 
     def test_chat_command_scopes_group_session_by_chat_id(self):
         from bot.commands.chat import ChatCommand
@@ -264,7 +294,7 @@ class TestChatCommandCompatibility(unittest.TestCase):
         executor = MagicMock()
         executor.chat.return_value = SimpleNamespace(success=True, content="ok", error=None)
         db = MagicMock()
-        db.conversation_session_exists.side_effect = lambda session_id: session_id == "feishu_u1"
+        db.conversation_session_exists.side_effect = lambda session_id: session_id == "telegram_u1"
         message = _make_message("/chat hello")
         message.chat_type = ChatType.GROUP
         message.chat_id = "group-1"
@@ -276,7 +306,7 @@ class TestChatCommandCompatibility(unittest.TestCase):
 
         self.assertEqual(response.text, "ok")
         executor.chat.assert_called_once()
-        self.assertEqual(executor.chat.call_args.kwargs["session_id"], "feishu_u1:group-1:chat")
+        self.assertEqual(executor.chat.call_args.kwargs["session_id"], "telegram_u1:group-1:chat")
 
 
 class TestHistoryCommandCompatibility(unittest.TestCase):
@@ -285,7 +315,7 @@ class TestHistoryCommandCompatibility(unittest.TestCase):
 
         command = HistoryCommand()
         db = MagicMock()
-        db.delete_conversation_session.side_effect = lambda session_id: 1 if session_id == "feishu_u1:group-1:chat" else 0
+        db.delete_conversation_session.side_effect = lambda session_id: 1 if session_id == "telegram_u1:group-1:chat" else 0
         message = _make_message("/history clear")
         message.chat_type = ChatType.GROUP
         message.chat_id = "group-1"
@@ -293,8 +323,8 @@ class TestHistoryCommandCompatibility(unittest.TestCase):
         with patch("src.storage.get_db", return_value=db):
             response = command.execute(message, ["clear"])
 
-        self.assertIn("1 条消息", response.text)
-        db.delete_conversation_session.assert_called_once_with("feishu_u1:group-1:chat")
+        self.assertIn("1 tin nhắn", response.text)
+        db.delete_conversation_session.assert_called_once_with("telegram_u1:group-1:chat")
 
 
 class TestDispatcherBaseException(unittest.TestCase):

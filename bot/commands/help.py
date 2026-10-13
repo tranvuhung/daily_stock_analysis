@@ -31,15 +31,15 @@ class HelpCommand(BotCommand):
     
     @property
     def aliases(self) -> List[str]:
-        return ["h", "帮助", "?"]
+        return ["h", "trogiup", "?"]
     
     @property
     def description(self) -> str:
-        return "显示帮助信息"
+        return "Hiển thị hướng dẫn sử dụng"
     
     @property
     def usage(self) -> str:
-        return "/help [命令名]"
+        return "/help [tên lệnh]"
     
     def execute(self, message: BotMessage, args: List[str]) -> BotResponse:
         """Execute the help command"""
@@ -54,7 +54,7 @@ class HelpCommand(BotCommand):
             command = dispatcher.get_command(cmd_name)
             
             if command is None:
-                return BotResponse.error_response(f"未知命令: {cmd_name}")
+                return BotResponse.error_response(f"Lệnh không tồn tại: {cmd_name}")
             
             # Build the detailed help
             help_text = self._format_command_help(command, dispatcher.command_prefix)
@@ -70,9 +70,9 @@ class HelpCommand(BotCommand):
     def _format_help_list(self, commands: List[BotCommand], prefix: str) -> str:
         """Format the command list"""
         lines = [
-            "📚 **股票分析助手 - 命令帮助**",
+            "📚 **Trợ lý phân tích chứng khoán - Hướng dẫn lệnh**",
             "",
-            "可用命令：",
+            "Các lệnh khả dụng:",
             "",
         ]
         
@@ -80,7 +80,8 @@ class HelpCommand(BotCommand):
             # Command name and aliases
             aliases_str = ""
             if cmd.aliases:
-                # Filter out Chinese aliases, show only English ones
+                # Chỉ hiển thị alias ASCII (bỏ alias có dấu/ký tự đặc biệt)
+                # Show only ASCII aliases
                 en_aliases = [a for a in cmd.aliases if a.isascii()]
                 if en_aliases:
                     aliases_str = f" ({', '.join(prefix + a for a in en_aliases[:2])})"
@@ -91,15 +92,15 @@ class HelpCommand(BotCommand):
         lines.extend([
             "",
             "---",
-            f"💡 输入 {prefix}help <命令名> 查看详细用法",
+            f"💡 Gõ {prefix}help <tên lệnh> để xem hướng dẫn chi tiết",
             "",
-            "**示例：**",
+            "**Ví dụ:**",
             "",
-            f"• {prefix}analyze 301023 - 奕帆传动",
+            f"• {prefix}analyze HPG - Phân tích Hòa Phát",
             "",
-            f"• {prefix}market - 查看大盘复盘",
+            f"• {prefix}market - Điểm lại thị trường",
             "",
-            f"• {prefix}batch - 批量分析自选股",
+            f"• {prefix}batch - Phân tích hàng loạt danh mục theo dõi",
         ])
         
         return "\n".join(lines)
@@ -109,19 +110,19 @@ class HelpCommand(BotCommand):
         lines = [
             f"📖 **{prefix}{command.name}** - {command.description}",
             "",
-            f"**用法：** `{command.usage}`",
+            f"**Cách dùng:** `{command.usage}`",
             "",
         ]
         
         # Aliases
         if command.aliases:
             aliases = [f"`{prefix}{a}`" if a.isascii() else f"`{a}`" for a in command.aliases]
-            lines.append(f"**别名：** {', '.join(aliases)}")
+            lines.append(f"**Bí danh:** {', '.join(aliases)}")
             lines.append("")
         
         # Permissions
         if command.admin_only:
-            lines.append("⚠️ **需要管理员权限**")
+            lines.append("⚠️ **Yêu cầu quyền quản trị**")
             lines.append("")
         
         return "\n".join(lines)

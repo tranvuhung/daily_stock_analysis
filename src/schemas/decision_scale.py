@@ -18,35 +18,45 @@ class DecisionScaleBand:
     signal_key: str
     action: str
     decision_type: str
-    label_zh: str
-    description_zh: str
+    label_vi: str
+    label_en: str
+    description_vi: str
+    description_en: str
 
 
 CANONICAL_DECISION_SCALE: tuple[DecisionScaleBand, ...] = (
-    DecisionScaleBand(80, 100, "strong_buy", "buy", "buy", "强烈买入", "高胜率机会，可执行买入/加仓计划"),
-    DecisionScaleBand(60, 79, "buy", "buy", "buy", "买入", "偏积极机会，允许少量待确认项"),
-    DecisionScaleBand(40, 59, "watch", "watch", "hold", "观望", "信号分歧或确认不足，等待触发条件"),
-    DecisionScaleBand(20, 39, "reduce", "reduce", "sell", "减仓", "风险明显抬升，优先降低暴露"),
-    DecisionScaleBand(0, 19, "sell", "sell", "sell", "卖出", "趋势或风险显著恶化，优先退出"),
+    DecisionScaleBand(
+        80, 100, "strong_buy", "buy", "buy", "Mua mạnh", "Strong Buy",
+        "Cơ hội xác suất thắng cao, có thể thực hiện kế hoạch mua/mua thêm",
+        "High-probability opportunity; the buy/add plan can be executed",
+    ),
+    DecisionScaleBand(
+        60, 79, "buy", "buy", "buy", "Mua", "Buy",
+        "Cơ hội tích cực, chấp nhận một vài điểm còn chờ xác nhận",
+        "Positive opportunity; a few items may still await confirmation",
+    ),
+    DecisionScaleBand(
+        40, 59, "watch", "watch", "hold", "Quan sát", "Watch",
+        "Tín hiệu phân kỳ hoặc thiếu xác nhận, chờ điều kiện kích hoạt",
+        "Signals disagree or lack confirmation; wait for the trigger",
+    ),
+    DecisionScaleBand(
+        20, 39, "reduce", "reduce", "sell", "Giảm tỷ trọng", "Reduce",
+        "Rủi ro tăng rõ rệt, ưu tiên giảm mức độ nắm giữ",
+        "Risk has clearly risen; prioritise cutting exposure",
+    ),
+    DecisionScaleBand(
+        0, 19, "sell", "sell", "sell", "Bán", "Sell",
+        "Xu hướng hoặc rủi ro xấu đi đáng kể, ưu tiên thoát vị thế",
+        "Trend or risk has deteriorated significantly; prioritise exiting",
+    ),
 )
 
 
-CANONICAL_DECISION_SCALE_PROMPT_ZH = """## Canonical 评分与动作口径
-
-- `sentiment_score`、`operation_advice`、三态 `decision_type` 与八态 `action` 必须按同一口径表达。
-- 80-100：强烈买入，`action=buy`，`decision_type=buy`。
-- 60-79：买入，`action=buy`，`decision_type=buy`。
-- 40-59：观望，`action=watch`，`decision_type=hold`。
-- 20-39：减仓，`action=reduce`，`decision_type=sell`。
-- 0-19：卖出，`action=sell`，`decision_type=sell`。
-- `decision_type` 只保留 `buy|hold|sell` 兼容统计；更细建议必须写入 `action`。
-- 若 score >= 60 但最终 `action` 是 `hold/watch`，或 score < 40 但最终 `action` 是 `hold/watch`，必须在 `guardrail_reason` 或 `dashboard.decision_stability.reason` 中说明降级原因。"""
-
-
-# Bản tiếng Anh dùng cho prompt của GeminiAnalyzer. Nội dung phải khớp từng dòng
-# với bản _ZH ở trên — đây là cùng một khế ước chấm điểm, chỉ khác ngôn ngữ.
-# English variant used by the GeminiAnalyzer prompt; must stay line-for-line in
-# sync with the _ZH version above — same scoring contract, different language.
+# Khế ước chấm điểm chuẩn chèn vào prompt (prompt viết bằng tiếng Anh; ngôn ngữ đầu ra
+# do phần "Output Language" quyết định).
+# Canonical scoring contract injected into prompts (prompt bodies are English; the
+# output language is controlled by the separate "Output Language" section).
 CANONICAL_DECISION_SCALE_PROMPT_EN = """## Canonical Scoring and Action Contract
 
 - `sentiment_score`, `operation_advice`, the three-state `decision_type` and the eight-state `action` must all express the same view.

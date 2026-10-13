@@ -32,11 +32,12 @@ def test_vietnam_only_deployment_uses_vietnam_market_role(supported_markets, cod
     assert "Vietnamese stock" in get_market_guidelines(code, "vi")
 
 
-def test_non_vietnamese_codes_keep_legacy_roles(supported_markets) -> None:
+def test_non_vietnamese_codes_also_get_vietnam_role(supported_markets) -> None:
+    # Chỉ còn thị trường Việt Nam: mọi mã đều dùng vai trò Việt Nam.
+    # Vietnam-only: every code resolves to the Vietnam role.
     supported_markets("vn")
 
-    assert get_market_role("AAPL", "en") == "US stock"
-    assert get_market_role("600519", "en") == "China A-shares"
+    assert get_market_role("AAPL", "en") == "Vietnam stock"
 
 
 def test_chat_market_scope_lists_only_enabled_markets(supported_markets) -> None:
@@ -48,7 +49,9 @@ def test_chat_market_scope_lists_only_enabled_markets(supported_markets) -> None
     assert "HOSE / HNX / UPCoM" in section
 
 
-def test_chat_market_scope_is_empty_when_all_markets_enabled(supported_markets) -> None:
+def test_chat_market_scope_ignores_legacy_all_markets_value(supported_markets) -> None:
+    # Giá trị cũ "all" bị bỏ qua và rơi về "vn": mục phạm vi vẫn phải có.
+    # Legacy "all" is ignored (falls back to "vn"), so the scope section is still emitted.
     supported_markets("all")
 
-    assert build_chat_market_scope_section() == ""
+    assert "only supports these markets: **Vietnam**" in build_chat_market_scope_section()

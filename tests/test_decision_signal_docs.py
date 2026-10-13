@@ -20,7 +20,6 @@ def test_decision_signal_topic_references_live_api_schema_and_docs() -> None:
     topic = _read("docs/decision-signals.md")
     alerts = _read("docs/alerts.md")
     notifications = _read("docs/notifications.md")
-    full_guide = _read("docs/full-guide.md")
     full_guide_en = _read("docs/full-guide_EN.md")
     index = _read("docs/INDEX.md")
     index_en = _read("docs/INDEX_EN.md")
@@ -69,25 +68,17 @@ def test_decision_signal_topic_references_live_api_schema_and_docs() -> None:
     assert "completed >= 30" in topic
     assert "样本不足，仅供观察。" in topic
     assert "max_adverse_excursion_pct" in topic
-    assert "decision-signals.md" in full_guide
     assert "decision-signals.md" in full_guide_en
     assert "decision-signals.md" in index
     assert "decision-signals.md" in index_en
     assert "decision-signals.md" in alerts
     assert "decision-signals.md" in notifications
-    assert "(source_report_id, source_type, market, stock_code, decision_profile" in full_guide
     assert "(source_report_id, source_type, market, stock_code, decision_profile" in full_guide_en
-    assert "顶层显式 `null`、空值或非法值会被拒绝" in full_guide
     assert "top-level explicit `null`, empty value, or invalid value is rejected" in full_guide_en
-    assert "metadata 省略或显式 `null` 均按无 metadata 处理" in full_guide
     assert "Omitted or explicit `null` metadata is treated as absent" in full_guide_en
-    assert "显式 `null` 时清空为 SQL `NULL`" in full_guide
     assert "explicit `null` clears it to SQL `NULL`" in full_guide_en
-    assert "正式字段为 legacy `NULL` 时会移除请求 object 中的 profile key" in full_guide
     assert "for a legacy formal `NULL`, the profile key is removed" in full_guide_en
-    assert "API 响应 schema 不变" not in full_guide
     assert "The API response schema is unchanged" not in full_guide_en
-    assert "profile_calibration" in full_guide
     assert "profile_calibration" in full_guide_en
     assert "legacy servers without the new field" in full_guide_en
 
@@ -99,8 +90,8 @@ def test_decision_signal_topic_references_live_api_schema_and_docs() -> None:
         if parameter["name"] == "market"
     ]
     assert market_descriptions == [
-        "Optional market filter: cn/hk/us/jp/kr/tw",
-        "Optional market filter: cn/hk/us/jp/kr/tw",
+        "Optional market filter, e.g. vn",
+        "Optional market filter, e.g. vn",
     ]
 
 

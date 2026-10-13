@@ -35,15 +35,15 @@ class BatchCommand(BotCommand):
     
     @property
     def aliases(self) -> List[str]:
-        return ["b", "批量", "全部"]
+        return ["b", "hangloat", "tatca"]
     
     @property
     def description(self) -> str:
-        return "批量分析自选股"
+        return "Phân tích hàng loạt danh mục theo dõi"
     
     @property
     def usage(self) -> str:
-        return "/batch [数量]"
+        return "/batch [số lượng]"
     
     @property
     def admin_only(self) -> bool:
@@ -61,7 +61,7 @@ class BatchCommand(BotCommand):
         
         if not stock_list:
             return BotResponse.error_response(
-                "自选股列表为空，请先配置 STOCK_LIST"
+                "Danh mục theo dõi đang trống, vui lòng cấu hình STOCK_LIST trước"
             )
         
         # Parse the count argument
@@ -70,15 +70,15 @@ class BatchCommand(BotCommand):
             try:
                 limit = int(args[0])
                 if limit <= 0:
-                    return BotResponse.error_response("数量必须大于0")
+                    return BotResponse.error_response("Số lượng phải lớn hơn 0")
             except ValueError:
-                return BotResponse.error_response(f"无效的数量: {args[0]}")
+                return BotResponse.error_response(f"Số lượng không hợp lệ: {args[0]}")
         
         # Limit the number of stocks analyzed
         if limit:
             stock_list = stock_list[:limit]
         
-        logger.info(f"[BatchCommand] 开始批量分析 {len(stock_list)} 只股票")
+        logger.info(f"[BatchCommand] Bắt đầu phân tích hàng loạt {len(stock_list)} mã")
         
         # Run the analysis in a background thread
         thread = threading.Thread(
@@ -89,11 +89,11 @@ class BatchCommand(BotCommand):
         thread.start()
         
         return BotResponse.markdown_response(
-            f"✅ **批量分析任务已启动**\n\n"
-            f"• 分析数量: {len(stock_list)} 只\n"
-            f"• 股票列表: {', '.join(stock_list[:5])}"
+            f"✅ **Đã khởi động phân tích hàng loạt**\n\n"
+            f"• Số lượng: {len(stock_list)} mã\n"
+            f"• Danh sách mã: {', '.join(stock_list[:5])}"
             f"{'...' if len(stock_list) > 5 else ''}\n\n"
-            f"分析完成后将自动推送汇总报告。"
+            f"Báo cáo tổng hợp sẽ được gửi tự động khi phân tích hoàn tất."
         )
     
     def _run_batch_analysis(self, stock_list: List[str], message: BotMessage) -> None:
@@ -119,8 +119,8 @@ class BatchCommand(BotCommand):
                 send_notification=True
             )
             
-            logger.info(f"[BatchCommand] 批量分析完成，成功 {len(results)} 只")
+            logger.info(f"[BatchCommand] Phân tích hàng loạt hoàn tất, thành công {len(results)} mã")
             
         except Exception as e:
-            logger.error(f"[BatchCommand] 批量分析失败: {e}")
+            logger.error(f"[BatchCommand] Phân tích hàng loạt thất bại: {e}")
             logger.exception(e)

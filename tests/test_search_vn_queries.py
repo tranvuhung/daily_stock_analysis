@@ -1,17 +1,14 @@
 # -*- coding: utf-8 -*-
 """Tầng tìm kiếm tin tức cho thị trường Việt Nam.
 
-Bối cảnh: ``src/search_service.py`` không hề được điều chỉnh trong đợt chuyển sang
-thị trường Việt Nam. Nó chọn ngôn ngữ truy vấn bằng heuristic ký tự CJK cộng regex
-ticker Mỹ ``_US_STOCK_RE = ^[A-Za-z]{1,5}(\\.[A-Za-z])?$`` — mà regex này khớp
-**mọi** mã Việt Nam trần (HPG/FPT/VNM), nên mã Việt Nam bị xếp nhầm vào nhánh cổ
-phiếu Mỹ; còn chỉ số Việt Nam (mã bị truyền rỗng) thì rơi xuống nhánh tiếng Trung.
+Hệ thống chỉ còn thị trường Việt Nam: mọi truy vấn tin tức phải là tiếng Việt,
+gợi ý locale hướng về Việt Nam, và nhận diện chỉ số / chứng chỉ quỹ dựa trên
+``data_provider.base`` (nguồn sự thật duy nhất).
 
 Mock chỉ đặt ở biên provider; toàn bộ dựng truy vấn, chọn nhánh và định dạng báo
 cáo vẫn chạy code thật.
 """
 
-import os
 import sys
 import unittest
 from contextlib import contextmanager
@@ -23,18 +20,7 @@ if "newspaper" not in sys.modules:  # phụ thuộc tuỳ chọn, theo quy ướ
     _mock_np.Config = MagicMock()
     sys.modules["newspaper"] = _mock_np
 
-from src.core import markets
 from src.search_service import SearchResponse, SearchService
-
-
-@contextmanager
-def supported_markets(value):
-    with patch.dict(os.environ, {"SUPPORTED_MARKETS": value}):
-        markets.reset_cache()
-        try:
-            yield
-        finally:
-            markets.reset_cache()
 
 
 def _service():
@@ -65,26 +51,37 @@ def _captured_queries(service):
 
 class VnSymbolDetectionTestCase(unittest.TestCase):
     def test_bare_vn_codes_and_indices_are_detected(self):
-        with supported_markets("vn"):
-            for code in ("HPG", "FPT", "VNM", "BSR", "VNINDEX", "VN30", "HNXIndex"):
-                self.assertTrue(SearchService._is_vn_symbol(code), code)
+        for code in ("HPG", "FPT", "VNM", "BSR", "VNINDEX", "VN30", "HNXIndex"):
+            self.assertTrue(SearchService._is_vn_symbol(code), code)
 
     def test_explicit_vn_forms_are_detected(self):
-        with supported_markets("vn,us"):
-            # Dạng tường minh không phụ thuộc trạng thái cờ thị trường.
-            self.assertTrue(SearchService._is_vn_symbol("HPG.VN"))
-            self.assertTrue(SearchService._is_vn_symbol("vnHPG"))
+        self.assertTrue(SearchService._is_vn_symbol("HPG.VN"))
+        self.assertTrue(SearchService._is_vn_symbol("vnHPG"))
 
-    def test_other_markets_are_not_claimed(self):
-        with supported_markets("vn"):
-            for code in ("AAPL", "600519", "00700", "7203.T"):
-                self.assertFalse(SearchService._is_vn_symbol(code), code)
+    def test_non_vn_shapes_are_not_claimed(self):
+        # Hình dạng mã không thuộc Việt Nam không được nhận là mã VN.
+        for code in ("AAPL", "600519", "00700", "7203.T"):
+            self.assertFalse(SearchService._is_vn_symbol(code), code)
+
+
+class VnIndexOrEtfTestCase(unittest.TestCase):
+    def test_vn_indices_are_index_or_etf(self):
+        for code in ("VNINDEX", "VN30", "HNXIndex", "HNXUpcomIndex"):
+            self.assertTrue(SearchService.is_index_or_etf(code, code), code)
+
+    def test_vn_fund_certificates_are_index_or_etf(self):
+        for code in ("FUEVN100", "E1VFVN30", "FUEVN100.VN"):
+            self.assertTrue(SearchService.is_index_or_etf(code, ""), code)
+
+    def test_vn_stocks_are_not_index_or_etf(self):
+        for code in ("HPG", "FPT", "VNM", "HPG.VN", ""):
+            self.assertFalse(SearchService.is_index_or_etf(code, "Hòa Phát"), code)
 
 
 class VnQueryLanguageTestCase(unittest.TestCase):
     def test_vn_stock_gets_vietnamese_queries(self):
         service = _service()
-        with supported_markets("vn"), _captured_queries(service) as queries:
+        with _captured_queries(service) as queries:
             service.search_comprehensive_intel(
                 stock_code="HPG", stock_name="Hòa Phát", max_searches=5
             )
@@ -93,33 +90,34 @@ class VnQueryLanguageTestCase(unittest.TestCase):
         joined = " ".join(queries)
         self.assertIn("tin tức mới nhất", joined)
         self.assertIn("khuyến nghị giá mục tiêu", joined)
-        # Không được lẫn truy vấn tiếng Trung hay tiếng Anh của nhánh khác.
         self.assertNotIn("最新", joined)
         self.assertNotIn("latest news events", joined)
 
-    def test_vn_index_is_not_searched_with_chinese_terms(self):
-        """Hồi quy: VNINDEX từng bị tìm bằng ``研报 目标价 评级``.
-
-        Nguyên nhân: ``src/core/pipeline.py`` truyền ``stock_code=""`` cho mọi chỉ
-        số (Story 1.5 V7, tránh đưa mã máy 6 chữ số của chỉ số A-share vào truy
-        vấn), mã rỗng khiến nhánh nhận diện thất bại và rơi về bộ chiều tiếng Trung.
-        """
-
+    def test_vn_index_uses_index_dimensions(self):
         service = _service()
-        with supported_markets("vn"), _captured_queries(service) as queries:
+        with _captured_queries(service) as queries:
             service.search_comprehensive_intel(
                 stock_code="VNINDEX", stock_name="VN-Index", max_searches=5
             )
 
         joined = " ".join(queries)
-        for chinese_term in ("研报", "目标价", "评级", "上交所", "深交所", "cninfo"):
-            self.assertNotIn(chinese_term, joined)
         self.assertIn("tin tức mới nhất", joined)
+        self.assertIn("nhận định thị trường xu hướng", joined)
+        self.assertNotIn("khuyến nghị giá mục tiêu", joined)
+
+    def test_empty_code_index_subject_still_vietnamese(self):
+        # pipeline có thể truyền stock_code="" cho chỉ số; truy vấn vẫn phải tiếng Việt.
+        service = _service()
+        with _captured_queries(service) as queries:
+            service.search_comprehensive_intel(
+                stock_code="", stock_name="VN-Index", max_searches=1
+            )
+        self.assertEqual(queries, ["VN-Index tin tức mới nhất"])
 
     def test_index_subject_is_not_duplicated(self):
         # VN30 có tên trùng mã; truy vấn không được thành "VN30 VN30 ...".
         service = _service()
-        with supported_markets("vn"), _captured_queries(service) as queries:
+        with _captured_queries(service) as queries:
             service.search_comprehensive_intel(
                 stock_code="VN30", stock_name="VN30", max_searches=1
             )
@@ -128,47 +126,37 @@ class VnQueryLanguageTestCase(unittest.TestCase):
 
     def test_search_stock_news_uses_vietnamese(self):
         service = _service()
-        with supported_markets("vn"), _captured_queries(service) as queries:
+        with _captured_queries(service) as queries:
             service.search_stock_news("HPG", "Hòa Phát")
-        self.assertTrue(queries)
-        self.assertIn("tin tức mới nhất", queries[0])
+        self.assertEqual(queries[0], "Hòa Phát HPG cổ phiếu tin tức mới nhất")
 
-    def test_us_and_a_share_queries_are_unchanged(self):
-        """Chống hồi quy: nhánh VN đứng trước nên phải chứng minh không cướp mã khác."""
-
+    def test_search_stock_news_without_code(self):
         service = _service()
-        with supported_markets("vn,us,cn,hk"), _captured_queries(service) as queries:
-            service.search_comprehensive_intel(
-                stock_code="AAPL", stock_name="Apple", max_searches=1
-            )
-            us_query = queries[-1]
-            service.search_comprehensive_intel(
-                stock_code="600519", stock_name="贵州茅台", max_searches=1
-            )
-            cn_query = queries[-1]
+        with _captured_queries(service) as queries:
+            service.search_stock_news("", "VN-Index")
+        self.assertEqual(queries[0], "VN-Index tin tức mới nhất")
 
-        self.assertIn("latest news events", us_query)
-        self.assertIn("最新", cn_query)
+    def test_stock_events_default_to_vietnamese_event_types(self):
+        service = _service()
+        with _captured_queries(service) as queries:
+            service.search_stock_events("HPG", "Hòa Phát")
+        self.assertTrue(queries)
+        self.assertIn("kết quả kinh doanh", queries[0])
+        self.assertTrue(queries[0].startswith("Hòa Phát ("))
+
+    def test_topic_news_default_query_is_vietnamese(self):
+        service = _service()
+        with _captured_queries(service) as queries:
+            service.search_topic_news("thép")
+        self.assertEqual(queries, ['"thép" chứng khoán Việt Nam tin mới nhất'])
 
 
 class VnLocaleTestCase(unittest.TestCase):
-    def test_brave_locale_targets_vietnam_not_us(self):
-        # ``_is_us_stock`` dùng chung ``_US_STOCK_RE`` nên HPG từng nhận country=US.
-        with supported_markets("vn"):
+    def test_brave_locale_targets_vietnam(self):
+        for code in ("HPG", "VNINDEX", ""):
             self.assertEqual(
-                SearchService._brave_search_locale("HPG", prefer_chinese=False),
+                SearchService._brave_search_locale(code),
                 {"search_lang": "vi", "country": "VN"},
-            )
-
-    def test_brave_locale_for_other_markets_is_unchanged(self):
-        with supported_markets("vn,us"):
-            self.assertEqual(
-                SearchService._brave_search_locale("AAPL", prefer_chinese=False),
-                {"search_lang": "en", "country": "US"},
-            )
-            self.assertEqual(
-                SearchService._brave_search_locale("600519", prefer_chinese=True),
-                {"search_lang": "zh-hans", "country": "CN"},
             )
 
 
@@ -199,6 +187,28 @@ class VnIntelReportLanguageTestCase(unittest.TestCase):
         self.assertIn("Tin mới nhất", rendered)
         self.assertNotIn("情报搜索结果", rendered)
         self.assertNotIn("未找到相关信息", rendered)
+
+    def test_report_labels_in_english(self):
+        service = _service()
+        payload = {
+            "latest_news": SearchResponse(
+                query="q", results=[], provider="tavily", success=True
+            )
+        }
+        with patch.object(SearchService, "_resolve_report_language", return_value="en"):
+            rendered = service.format_intel_report(payload, "Hoa Phat")
+
+        self.assertIn("News search results: Hoa Phat", rendered)
+        self.assertIn("Latest news", rendered)
+        self.assertIn("No relevant information found", rendered)
+
+    def test_legacy_zh_language_falls_back_to_vietnamese(self):
+        fake_config = MagicMock(report_language="zh")
+        with patch("src.config.get_config", return_value=fake_config):
+            self.assertEqual(SearchService._resolve_report_language(), "vi")
+        fake_config = MagicMock(report_language="en")
+        with patch("src.config.get_config", return_value=fake_config):
+            self.assertEqual(SearchService._resolve_report_language(), "en")
 
     def test_placeholder_still_returns_non_empty_text(self):
         """Giữ nguyên bẫy đã biết: zero-hit vẫn trả chuỗi không rỗng.

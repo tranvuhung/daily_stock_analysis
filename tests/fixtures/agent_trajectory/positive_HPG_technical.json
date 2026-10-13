@@ -4,7 +4,7 @@
     {
       "step": 1,
       "tool": "get_realtime_quote",
-      "arguments": {"stock_code": "600519"},
+      "arguments": {"stock_code": "HPG"},
       "success": true,
       "duration": 0.5,
       "result_length": 100,
@@ -13,7 +13,7 @@
     {
       "step": 2,
       "tool": "get_daily_history",
-      "arguments": {"stock_code": "600519", "days": 30},
+      "arguments": {"stock_code": "HPG", "days": 30},
       "success": true,
       "duration": 0.8,
       "result_length": 200,
@@ -22,7 +22,7 @@
     {
       "step": 3,
       "tool": "analyze_trend",
-      "arguments": {"stock_code": "600519"},
+      "arguments": {"stock_code": "HPG"},
       "success": true,
       "duration": 1.2,
       "result_length": 150,
@@ -31,7 +31,7 @@
     {
       "step": 4,
       "tool": "search_stock_news",
-      "arguments": {"query": "贵州茅台"},
+      "arguments": {"query": "Hòa Phát"},
       "success": true,
       "duration": 2.0,
       "result_length": 300,

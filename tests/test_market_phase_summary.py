@@ -33,9 +33,9 @@ SUMMARY_KEYS = {
 
 def _phase_context() -> dict:
     return {
-        "market": "cn",
+        "market": "vn",
         "phase": "intraday",
-        "market_local_time": "2026-03-27T10:00:00+08:00",
+        "market_local_time": "2026-03-27T10:00:00+07:00",
         "session_date": "2026-03-27",
         "effective_daily_bar_date": "2026-03-26",
         "is_trading_day": True,
@@ -79,7 +79,7 @@ def test_extract_market_phase_summary_re_sanitizes_persisted_snapshot() -> None:
         **_phase_context(),
         "prompt": "raw prompt should not pass through",
         "market_phase_context": {"raw": True},
-        "quote_timestamp": "2026-03-27T10:00:00+08:00",
+        "quote_timestamp": "2026-03-27T10:00:00+07:00",
         "fallback_provider": "secret-provider",
         "trigger_source": {"prompt": "raw prompt should not pass through"},
         "analysis_intent": "api_key=secret",
@@ -87,7 +87,7 @@ def test_extract_market_phase_summary_re_sanitizes_persisted_snapshot() -> None:
     snapshot = json.dumps(
         {
             MARKET_PHASE_SUMMARY_KEY: summary,
-            "enhanced_context": {"code": "600519"},
+            "enhanced_context": {"code": "FPT"},
         },
         ensure_ascii=False,
     )
@@ -107,7 +107,7 @@ def test_extract_market_phase_summary_re_sanitizes_persisted_snapshot() -> None:
 
 def test_extract_market_phase_summary_returns_none_for_missing_or_malformed_snapshot() -> None:
     assert extract_market_phase_summary(None) is None
-    assert extract_market_phase_summary({"enhanced_context": {"code": "600519"}}) is None
+    assert extract_market_phase_summary({"enhanced_context": {"code": "FPT"}}) is None
     assert extract_market_phase_summary({MARKET_PHASE_SUMMARY_KEY: "not-a-dict"}) is None
     assert extract_market_phase_summary(
         {MARKET_PHASE_SUMMARY_KEY: {**_phase_context(), "phase": "bad_phase"}}
@@ -126,52 +126,28 @@ def test_normalize_analysis_phase_bucket_maps_public_statistics_buckets() -> Non
     assert normalize_analysis_phase_bucket("bad_phase") == "unknown"
 
 
-def test_rebuild_market_phase_summary_uses_auto_for_result_only_phases(monkeypatch) -> None:
-    calls = []
-
-    class FakeContext:
-        def to_dict(self) -> dict:
-            return {
-                **_phase_context(),
-                "market": "jp",
-                "phase": "non_trading",
-                "analysis_intent": "auto",
-                "warnings": [],
-            }
-
-    def fake_build_market_phase_context(**kwargs):
-        calls.append(kwargs)
-        return FakeContext()
-
-    monkeypatch.setattr(
-        "src.market_phase_summary.build_market_phase_context",
-        fake_build_market_phase_context,
-    )
-
+def test_rebuild_market_phase_summary_returns_sanitized_summary_without_rebuild() -> None:
     summary = {
         **_phase_context(),
-        "market": "cn",
+        "market": "vn",
         "phase": "non_trading",
         "analysis_intent": "non_trading",
     }
 
     rebuilt = rebuild_market_phase_summary_for_stock_code(
-        "7203.T",
+        "FPT",
         {MARKET_PHASE_SUMMARY_KEY: summary},
     )
 
-    assert rebuilt is not None
-    assert rebuilt["phase"] == "non_trading"
-    assert calls[0]["market"] == "jp"
-    assert calls[0]["analysis_phase"] == "auto"
-    assert calls[0]["analysis_intent"] == "auto"
+    assert rebuilt == extract_market_phase_summary({MARKET_PHASE_SUMMARY_KEY: summary})
+    assert rebuild_market_phase_summary_for_stock_code("FPT", None) is None
 
 
 def test_format_public_phase_pack_excerpt_limits_and_redacts_public_fields() -> None:
     excerpt = format_public_phase_pack_excerpt(
         {
             "phase": "intraday",
-            "market": "cn",
+            "market": "vn",
             "trigger_source": "portfolio",
             "is_partial_bar": True,
         },
@@ -189,15 +165,17 @@ def test_format_public_phase_pack_excerpt_limits_and_redacts_public_fields() -> 
         report_language="zh",
     )
 
-    assert "阶段：intraday" in excerpt
-    assert "触发来源：portfolio" in excerpt
-    assert "摘要来源：最近分析快照" in excerpt
-    assert "盘中数据提示" in excerpt
-    assert "数据质量: limited" in excerpt
-    assert "限制: quote stale" in excerpt
-    assert "限制: [REDACTED]" in excerpt
+    # zh không còn được hỗ trợ: quy về tiếng Việt. / zh is no longer supported: falls back to Vietnamese.
+    assert "giai đoạn: intraday" in excerpt
+    assert "nguồn kích hoạt: portfolio" in excerpt
+    assert "nguồn tóm tắt: snapshot phân tích gần nhất" in excerpt
+    assert "cảnh báo nến chưa đóng" in excerpt
+    assert "chất lượng dữ liệu: limited" in excerpt
+    assert "hạn chế: quote stale" in excerpt
+    assert "hạn chế: [REDACTED]" in excerpt
     assert "news missing" not in excerpt
     assert "api_key=secret" not in excerpt
+    assert not any("一" <= ch <= "鿿" for ch in excerpt)
 
 
 def test_format_public_phase_pack_excerpt_returns_empty_without_summary_or_pack() -> None:
@@ -207,26 +185,26 @@ def test_format_public_phase_pack_excerpt_returns_empty_without_summary_or_pack(
 def test_format_public_market_status_line_localizes_compact_summary() -> None:
     assert (
         format_public_market_status_line(
-            {"market": "cn", "phase": "postmarket"},
+            {"market": "vn", "phase": "postmarket"},
             report_language="zh",
         )
-        == "市场状态：A股 · 盘后"
+        == "Trạng thái thị trường: Việt Nam · Sau phiên"
     )
     assert (
         format_public_market_status_line(
-            {"market": "us", "phase": "premarket"},
+            {"market": "vn", "phase": "premarket"},
             report_language="en",
         )
-        == "Market status: US · Pre-market"
+        == "Market status: Vietnam · Pre-market"
     )
 
 
 def test_format_public_market_status_line_returns_empty_without_valid_phase() -> None:
     assert format_public_market_status_line(None, report_language="zh") == ""
-    assert format_public_market_status_line({"market": "cn"}, report_language="zh") == ""
+    assert format_public_market_status_line({"market": "vn"}, report_language="zh") == ""
     assert (
         format_public_market_status_line(
-            {"market": "cn", "phase": "bad_phase"},
+            {"market": "vn", "phase": "bad_phase"},
             report_language="zh",
         )
         == ""

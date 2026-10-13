@@ -11,7 +11,7 @@ Responsibilities:
 
 from typing import Optional, List, Any, Dict, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from api.v1.schemas.market_phase import MarketPhaseSummary
 from api.v1.schemas.research_artifact import ResearchArtifact
@@ -61,8 +61,8 @@ class HistoryItem(BaseModel):
         "example": {
             "id": 1234,
             "query_id": "abc123",
-            "stock_code": "600519",
-            "stock_name": "贵州茅台",
+            "stock_code": "HPG",
+            "stock_name": "Hoa Phat Group",
             "report_type": "detailed",
             "sentiment_score": 75,
             "operation_advice": "Hold",
@@ -141,7 +141,7 @@ class ReportMeta(BaseModel):
     stock_code: str = Field(..., description="Stock code")
     stock_name: Optional[str] = Field(None, description="Stock name")
     report_type: Optional[str] = Field(None, description="Report type")
-    report_language: Optional[str] = Field(None, description="Report output language. New reports are Vietnamese (vi); historical records may still carry zh/en/ko")
+    report_language: Optional[str] = Field(None, description="Report output language. New reports are Vietnamese (vi) or English (en); legacy zh/ko values on historical records are rendered as vi")
     created_at: Optional[str] = Field(None, description="Created at")
     current_price: Optional[float] = Field(None, description="Price at analysis time")
     change_pct: Optional[float] = Field(None, description="Change percent at analysis time (%)")
@@ -275,32 +275,6 @@ class ReportDetails(BaseModel):
     )
     financial_report: Optional[Any] = Field(None, description="Structured financial report summary (from fundamental_context)")
     dividend_metrics: Optional[Any] = Field(None, description="Structured dividend metrics (including TTM basis)")
-    belong_boards: Optional[Any] = Field(None, description="Related sector list")
-    sector_rankings: Optional[Any] = Field(None, description="Sector gainers/losers board (shape: {top, bottom})")
-    concept_rankings: Optional[Any] = Field(None, description="Concept sector gainers/losers board (shape: {top, bottom})")
-    market_structure: Optional[Any] = Field(None, description="Market structure context (theme layer plus per-stock position layer)")
-
-    @model_validator(mode="after")
-    def populate_context_derived_details(self) -> "ReportDetails":
-        if self.concept_rankings is None and self.context_snapshot is not None:
-            try:
-                from src.utils.data_processing import extract_board_detail_fields
-
-                extracted = extract_board_detail_fields(self.context_snapshot)
-                self.concept_rankings = extracted.get("concept_rankings")
-            except Exception:
-                self.concept_rankings = None
-        if self.market_structure is None:
-            try:
-                from src.utils.data_processing import extract_market_structure_detail_field
-
-                self.market_structure = extract_market_structure_detail_field(
-                    self.context_snapshot,
-                    self.raw_result,
-                )
-            except Exception:
-                self.market_structure = None
-        return self
 
 
 class AnalysisReport(BaseModel):
@@ -319,8 +293,8 @@ class AnalysisReport(BaseModel):
         "example": {
             "meta": {
                 "query_id": "abc123",
-                "stock_code": "600519",
-                "stock_name": "贵州茅台",
+                "stock_code": "HPG",
+                "stock_name": "Hoa Phat Group",
                 "report_type": "detailed",
                 "report_language": "vi",
                 "created_at": "2024-01-01T12:00:00"
@@ -350,7 +324,7 @@ class MarkdownReportResponse(BaseModel):
 
     model_config = ConfigDict(json_schema_extra={
         "example": {
-            "content": "# 📊 贵州茅台 (600519) 分析报告\n\n> 分析日期：**2024-01-01**\n\n..."
+            "content": "# 📊 Hoa Phat Group (HPG) Analysis Report\n\n> Analysis date: **2024-01-01**\n\n..."
         }
     })
 
@@ -386,8 +360,8 @@ class StockBarItem(BaseModel):
     model_config = ConfigDict(json_schema_extra={
         "example": {
             "id": 1234,
-            "stock_code": "600519",
-            "stock_name": "贵州茅台",
+            "stock_code": "HPG",
+            "stock_name": "Hoa Phat Group",
             "report_type": "detailed",
             "sentiment_score": 75,
             "operation_advice": "Hold",
@@ -450,11 +424,11 @@ class RunDiagnosticSummaryResponse(BaseModel):
         "example": {
             "trace_id": "task_abc123",
             "query_id": "task_abc123",
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "status": "degraded",
             "status_label": "Partially degraded",
             "reason": "Realtime quote failed: timeout",
             "components": {},
-            "copy_text": "trace_id: task_abc123\nstock_code: 600519\n...",
+            "copy_text": "trace_id: task_abc123\nstock_code: HPG\n...",
         }
     })

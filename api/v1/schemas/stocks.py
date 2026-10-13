@@ -38,8 +38,8 @@ class StockQuote(BaseModel):
     
     model_config = ConfigDict(json_schema_extra={
         "example": {
-            "stock_code": "600519",
-            "stock_name": "贵州茅台",
+            "stock_code": "HPG",
+            "stock_name": "Hoa Phat Group",
             "current_price": 1800.00,
             "change": 15.00,
             "change_percent": 0.84,
@@ -106,8 +106,8 @@ class StockHistoryResponse(BaseModel):
     
     model_config = ConfigDict(json_schema_extra={
         "example": {
-            "stock_code": "600519",
-            "stock_name": "贵州茅台",
+            "stock_code": "HPG",
+            "stock_name": "Hoa Phat Group",
             "period": "daily",
             "data": []
         }
@@ -177,7 +177,7 @@ class StockProfileEvidenceQuality(BaseModel):
 class StockProfileResponse(BaseModel):
     requested_code: str
     canonical_code: str
-    market: Literal["cn", "hk", "us", "jp", "kr", "tw"]
+    market: Literal["vn"]
     as_of: str
     quote: StockProfileQuoteBlock
     history: StockProfileHistoryBlock

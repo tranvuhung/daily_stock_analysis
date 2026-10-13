@@ -21,8 +21,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from src.notification import NotificationService
 
 
-ZERO_HIT_DISCLOSURE = "⚠️ 本次未获取到可用的新闻面数据，以下结论未纳入新闻维度证据。"
-NO_CHANNEL_DISCLOSURE = "⚠️ 未配置搜索渠道，本次分析未纳入新闻面证据。"
 EN_ZERO_HIT_DISCLOSURE = (
     "⚠️ No news data could be retrieved for this run; "
     "the conclusions below do not incorporate news-based evidence."
@@ -31,21 +29,24 @@ EN_NO_CHANNEL_DISCLOSURE = (
     "⚠️ No news search channel is configured; "
     "this analysis does not incorporate news-based evidence."
 )
-KO_ZERO_HIT_DISCLOSURE = (
-    "⚠️ 이번 분석에서 사용 가능한 뉴스 데이터를 가져오지 못해 "
-    "아래 결론에는 뉴스 근거를 반영하지 않았습니다."
+VI_NO_CHANNEL_DISCLOSURE = (
+    "⚠️ Chưa cấu hình kênh tìm kiếm tin tức; "
+    "phân tích này không sử dụng bằng chứng từ tin tức."
 )
-KO_NO_CHANNEL_DISCLOSURE = (
-    "⚠️ 뉴스 검색 채널이 설정되지 않아 이번 분석에는 "
-    "뉴스 근거를 반영하지 않았습니다."
+VI_ZERO_HIT_DISCLOSURE = (
+    "⚠️ Lần chạy này không lấy được dữ liệu tin tức nào; "
+    "các kết luận bên dưới không dựa trên bằng chứng tin tức."
 )
+# Ngôn ngữ mặc định của báo cáo là tiếng Việt. / Default report language is Vietnamese.
+ZERO_HIT_DISCLOSURE = VI_ZERO_HIT_DISCLOSURE
+NO_CHANNEL_DISCLOSURE = VI_NO_CHANNEL_DISCLOSURE
 
 
 def _make_result(
     *,
     news_summary="",
     news_result_count=None,
-    report_language="zh",
+    report_language="vi",
     news_evidence_present=False,
 ):
     """构造一个最小可渲染的分析结果。
@@ -55,12 +56,12 @@ def _make_result(
     from src.analyzer import AnalysisResult
 
     return AnalysisResult(
-        code="600519",
-        name="测试标的",
+        code="HPG",
+        name="Mã kiểm thử",
         sentiment_score=50,
-        trend_prediction="震荡",
-        operation_advice="观望",
-        analysis_summary="用于测试的综合分析。",
+        trend_prediction="Đi ngang",
+        operation_advice="Quan sát",
+        analysis_summary="Phân tích tổng hợp dùng cho kiểm thử.",
         report_language=report_language,
         news_summary=news_summary,
         news_result_count=news_result_count,
@@ -78,15 +79,6 @@ def _make_service():
     return NotificationService()
 
 
-VI_NO_CHANNEL_DISCLOSURE = (
-    "⚠️ Chưa cấu hình kênh tìm kiếm tin tức; "
-    "phân tích này không sử dụng bằng chứng từ tin tức."
-)
-VI_ZERO_HIT_DISCLOSURE = (
-    "⚠️ Lần chạy này không lấy được dữ liệu tin tức nào; "
-    "các kết luận bên dưới không dựa trên bằng chứng tin tức."
-)
-
 
 class EmptyNewsDisclosureTestCase(unittest.TestCase):
     def setUp(self):
@@ -103,7 +95,7 @@ class EmptyNewsDisclosureTestCase(unittest.TestCase):
 
         self.assertIn(ZERO_HIT_DISCLOSURE, report)
         self.assertNotIn(NO_CHANNEL_DISCLOSURE, report)
-        self.assertIn("消息面", report)
+
 
     def test_discloses_when_search_was_not_performed(self):
         """未配置搜索渠道时，报告必须说明新闻面证据没有纳入。"""
@@ -115,10 +107,10 @@ class EmptyNewsDisclosureTestCase(unittest.TestCase):
     def test_unchanged_when_news_is_available(self):
         """拿到新闻时行为与改动前一致：渲染正文，不出现提示。"""
         report = self._render(
-            _make_result(news_summary="公司发布季度财报，营收同比增长。", news_result_count=3)
+            _make_result(news_summary="Doanh nghiệp công bố BCTC quý, doanh thu tăng.", news_result_count=3)
         )
 
-        self.assertIn("公司发布季度财报", report)
+        self.assertIn("Doanh nghiệp công bố BCTC quý", report)
         self.assertNotIn(ZERO_HIT_DISCLOSURE, report)
         self.assertNotIn(NO_CHANNEL_DISCLOSURE, report)
 
@@ -126,7 +118,7 @@ class EmptyNewsDisclosureTestCase(unittest.TestCase):
         """提示要说清后果，让读者知道结论该打几折，而不只是「没数据」。"""
         report = self._render(_make_result(news_result_count=0))
 
-        self.assertIn("未纳入新闻维度证据", report)
+        self.assertIn("không dựa trên bằng chứng tin tức", report)
 
 
 class ResultFieldContractTestCase(unittest.TestCase):
@@ -195,15 +187,15 @@ class DisclosureIndependentOfModelTextTestCase(unittest.TestCase):
 
     def test_warns_even_when_model_supplied_sentiment(self):
         result = _make_result(news_result_count=0)
-        result.market_sentiment = "市场情绪偏中性。"
-        result.hot_topics = "暂无明显热点。"
+        result.market_sentiment = "Tâm lý thị trường trung tính."
+        result.hot_topics = "Chưa có chủ đề nổi bật."
 
         report = NotificationService.generate_daily_report(
             self.service, [result], report_date="2026-08-18"
         )
 
         self.assertIn(ZERO_HIT_DISCLOSURE, report)
-        self.assertIn("市场情绪偏中性", report)
+        self.assertIn("Tâm lý thị trường trung tính", report)
 
 
 class TemplateRendererDiscloseTestCase(unittest.TestCase):
@@ -232,7 +224,7 @@ class TemplateRendererDiscloseTestCase(unittest.TestCase):
             results=[_make_result(news_result_count=0)],
             report_date="2026-08-18",
             summary_only=False,
-            extra_context={"report_language": "zh"},
+            extra_context={"report_language": "vi"},
         )
         self.assertTrue(out)
         self.assertIn(ZERO_HIT_DISCLOSURE, out)
@@ -245,20 +237,7 @@ class TemplateRendererDiscloseTestCase(unittest.TestCase):
             results=[_make_result(news_result_count=0)],
             report_date="2026-08-18",
             summary_only=False,
-            extra_context={"report_language": "zh"},
-        )
-        self.assertTrue(out)
-        self.assertIn(ZERO_HIT_DISCLOSURE, out)
-
-    def test_wechat_template_discloses_empty_news(self):
-        from src.services.report_renderer import render
-
-        out = render(
-            platform="wechat",
-            results=[_make_result(news_result_count=0)],
-            report_date="2026-08-18",
-            summary_only=False,
-            extra_context={"report_language": "zh"},
+            extra_context={"report_language": "vi"},
         )
         self.assertTrue(out)
         self.assertIn(ZERO_HIT_DISCLOSURE, out)
@@ -266,38 +245,17 @@ class TemplateRendererDiscloseTestCase(unittest.TestCase):
     def test_templates_disclose_when_search_not_performed(self):
         from src.services.report_renderer import render
 
-        for platform in ("markdown", "brief", "wechat"):
+        for platform in ("markdown", "brief"):
             with self.subTest(platform=platform):
                 out = render(
                     platform=platform,
                     results=[_make_result(news_result_count=None)],
                     report_date="2026-08-18",
                     summary_only=False,
-                    extra_context={"report_language": "zh"},
+                    extra_context={"report_language": "vi"},
                 )
                 self.assertIn(NO_CHANNEL_DISCLOSURE, out or "")
                 self.assertNotIn(ZERO_HIT_DISCLOSURE, out or "")
-
-
-class WechatDashboardDiscloseTestCase(unittest.TestCase):
-    """generate_wechat_dashboard 是企业微信非 brief 场景的真实入口，
-    pipeline 会直接调用它，此前完全没有接入披露。"""
-
-    def setUp(self):
-        self.service = _make_service()
-
-    def test_wechat_dashboard_discloses_empty_news(self):
-        out = NotificationService.generate_wechat_dashboard(
-            self.service, [_make_result(news_result_count=0)]
-        )
-        self.assertIn(ZERO_HIT_DISCLOSURE, out)
-
-    def test_wechat_dashboard_discloses_when_search_not_performed(self):
-        out = NotificationService.generate_wechat_dashboard(
-            self.service, [_make_result(news_result_count=None)]
-        )
-        self.assertIn(NO_CHANNEL_DISCLOSURE, out)
-        self.assertNotIn(ZERO_HIT_DISCLOSURE, out)
 
 
 class NoSearchProviderDisclosureTestCase(unittest.TestCase):
@@ -322,9 +280,7 @@ class SupportedLanguageDisclosureTestCase(unittest.TestCase):
 
     EXPECTED = {
         "vi": (VI_NO_CHANNEL_DISCLOSURE, VI_ZERO_HIT_DISCLOSURE),
-        "zh": (NO_CHANNEL_DISCLOSURE, ZERO_HIT_DISCLOSURE),
         "en": (EN_NO_CHANNEL_DISCLOSURE, EN_ZERO_HIT_DISCLOSURE),
-        "ko": (KO_NO_CHANNEL_DISCLOSURE, KO_ZERO_HIT_DISCLOSURE),
     }
 
     def setUp(self):
@@ -343,12 +299,6 @@ class SupportedLanguageDisclosureTestCase(unittest.TestCase):
             ),
             "single": NotificationService.generate_single_stock_report(
                 self.service, result
-            ),
-            "wechat_dashboard": NotificationService.generate_wechat_dashboard(
-                self.service, [result]
-            ),
-            "wechat_summary": NotificationService.generate_wechat_summary(
-                self.service, [result]
             ),
         }
 
@@ -370,7 +320,7 @@ class SupportedLanguageDisclosureTestCase(unittest.TestCase):
                         renderer=renderer,
                     ):
                         self.assertIn(expected, report)
-                        if language != "zh":
+                        if language != "vi":
                             self.assertNotIn(NO_CHANNEL_DISCLOSURE, report)
                             self.assertNotIn(ZERO_HIT_DISCLOSURE, report)
 
@@ -380,7 +330,7 @@ class SupportedLanguageDisclosureTestCase(unittest.TestCase):
 
         for language in SUPPORTED_REPORT_LANGUAGES:
             result = _make_result(news_result_count=0, report_language=language)
-            for platform in ("markdown", "brief", "wechat"):
+            for platform in ("markdown", "brief"):
                 for summary_only in (False, True):
                     with self.subTest(
                         language=language,
@@ -395,7 +345,7 @@ class SupportedLanguageDisclosureTestCase(unittest.TestCase):
                             extra_context={"report_language": language},
                         )
                         self.assertIn(self.EXPECTED[language][1], out or "")
-                        if language != "zh":
+                        if language != "vi":
                             self.assertNotIn(ZERO_HIT_DISCLOSURE, out or "")
 
     def test_summary_only_string_renderers_keep_disclosure(self):
@@ -414,10 +364,6 @@ class SupportedLanguageDisclosureTestCase(unittest.TestCase):
                 NotificationService.generate_dashboard_report(
                     self.service, [result], report_date="2026-08-18"
                 ),
-            ),
-            (
-                "wechat",
-                NotificationService.generate_wechat_dashboard(self.service, [result]),
             ),
         ):
             with self.subTest(renderer=renderer):
@@ -450,7 +396,7 @@ class PipelineCountSemanticsTestCase(unittest.TestCase):
     def test_count_set_to_zero_once_search_is_attempted(self):
         """检索一旦发起就置 0，不能等到拿到结果对象才赋值。"""
         src = self._read_pipeline_source()
-        idx = src.index("开始多维度情报搜索")
+        idx = src.index("bắt đầu tìm kiếm tin tức đa chiều")
         # Chỉ xét phần mã, giống cách làm của ca kiểm thử ngay bên dưới: ràng buộc ở đây
         # là thứ tự câu lệnh, nên độ dài của comment không được phép làm hỏng nó.
         window = "\n".join(
@@ -472,7 +418,7 @@ class PipelineCountSemanticsTestCase(unittest.TestCase):
         src/agent/news_evidence.py 的证据作用域收集。
         """
         src = self._read_pipeline_source()
-        idx = src.index("Agent 模式: 新闻情报已保存")
+        idx = src.index("Chế độ Agent: đã lưu")
         window = src[max(0, idx - 1200) : idx]
         # 只看代码：解释这条约束的注释本身就含有该标识符。
         code_only = "\n".join(
@@ -484,8 +430,8 @@ class PipelineCountSemanticsTestCase(unittest.TestCase):
 
 class _StubSearchResult:
     def __init__(self, index):
-        self.title = f"标题{index}"
-        self.snippet = f"摘要{index}"
+        self.title = f"Tiêu đề {index}"
+        self.snippet = f"Tóm tắt {index}"
         self.url = f"https://example.invalid/{index}"
         self.source = "stub"
         self.published_date = "2026-08-20"
@@ -570,10 +516,10 @@ class AgentNewsEvidenceTestCase(unittest.TestCase):
         )
         self._install_service(service)
 
-        _handle_search_comprehensive_intel("600519", "测试标的")
+        _handle_search_comprehensive_intel("HPG", "Mã kiểm thử")
 
         # pipeline 事后的持久化补查返回完全不同的结果，且不经过证据作用域
-        post_hoc = service.search_stock_news("600519", "测试标的", max_results=5)
+        post_hoc = service.search_stock_news("HPG", "Mã kiểm thử", max_results=5)
         self.assertEqual(0, len(post_hoc.results))
 
         self.assertEqual(6, self.accumulator.resolve(search_available=True))
@@ -587,9 +533,9 @@ class AgentNewsEvidenceTestCase(unittest.TestCase):
         )
         self._install_service(service)
 
-        _handle_search_comprehensive_intel("600519", "测试标的")
+        _handle_search_comprehensive_intel("HPG", "Mã kiểm thử")
 
-        post_hoc = service.search_stock_news("600519", "测试标的", max_results=5)
+        post_hoc = service.search_stock_news("HPG", "Mã kiểm thử", max_results=5)
         self.assertEqual(5, len(post_hoc.results))
 
         self.assertEqual(0, self.accumulator.resolve(search_available=True))
@@ -601,7 +547,7 @@ class AgentNewsEvidenceTestCase(unittest.TestCase):
         service = _StubSearchService(news_count=0, news_success=False)
         self._install_service(service)
 
-        _handle_search_stock_news("600519", "测试标的")
+        _handle_search_stock_news("HPG", "Mã kiểm thử")
 
         self.assertEqual(0, self.accumulator.resolve(search_available=True))
 
@@ -612,7 +558,7 @@ class AgentNewsEvidenceTestCase(unittest.TestCase):
         service = _StubSearchService(available=False)
         self._install_service(service)
 
-        _handle_search_stock_news("600519", "测试标的")
+        _handle_search_stock_news("HPG", "Mã kiểm thử")
 
         self.assertIsNone(self.accumulator.resolve(search_available=False))
 
@@ -677,8 +623,8 @@ class NewsEvidenceSourcesTestCase(unittest.TestCase):
         self.assertNotIn(NO_CHANNEL_DISCLOSURE, report)
         self.assertNotIn(ZERO_HIT_DISCLOSURE, report)
 
-    def test_social_sentiment_without_search_hits_is_not_reported_as_missing(self):
-        """社交情绪同样进入 news_context，零命中也不能否认已用证据。"""
+    def test_local_intel_with_zero_search_hits_is_not_reported_as_missing(self):
+        """Kho tin cục bộ đã vào news_context: dù tìm kiếm 0 kết quả cũng không được phủ nhận bằng chứng."""
         report = NotificationService.generate_daily_report(
             _make_service(),
             [self._result(count=0, evidence=True)],
@@ -707,8 +653,8 @@ class NewsEvidenceSourcesTestCase(unittest.TestCase):
 
         # 真实命中数 / 社交情绪 / 本地资讯池，任一为真即算有证据
         self.assertTrue(news_evidence_present(4, None, None))
-        self.assertTrue(news_evidence_present(0, "reddit 讨论……", None))
-        self.assertTrue(news_evidence_present(0, None, "## 本地资讯证据池"))
+        self.assertTrue(news_evidence_present(0, "thảo luận trên diễn đàn", None))
+        self.assertTrue(news_evidence_present(0, None, "## Kho bằng chứng tin tức cục bộ"))
         self.assertFalse(news_evidence_present(0, None, None))
         self.assertFalse(news_evidence_present(0, "", "   \n\t "))
         self.assertFalse(news_evidence_present(None, None, None))
@@ -734,7 +680,7 @@ class NewsEvidenceSourcesTestCase(unittest.TestCase):
         placeholder = SearchService.format_intel_report(
             service,
             {"latest_news": _FailedResponse(), "risk_check": _FailedResponse()},
-            "测试标的",
+            "Mã kiểm thử",
         )
 
         # 前提：这段占位文本确实非空，否则这条反例就失去意义。
@@ -766,7 +712,7 @@ class NewsEvidenceSourcesTestCase(unittest.TestCase):
         stored = self._result(count=None, evidence=True).to_dict()
         self.assertIn("news_evidence_present", stored)
         self.assertTrue(persisted_news_evidence_present(stored, None))
-        self.assertIsNone(empty_news_disclosure_from_stored(stored, None, "zh"))
+        self.assertIsNone(empty_news_disclosure_from_stored(stored, None, "vi"))
 
     def test_legacy_record_without_the_flag_keeps_its_original_behaviour(self):
         """旧记录没有该字段时按计数推断，不追溯改变当时的报告表现。"""
@@ -793,8 +739,9 @@ class NewsEvidenceSourcesTestCase(unittest.TestCase):
         calls = code_only.count("result.news_evidence_present = news_evidence_present(")
         self.assertEqual(2, calls, "普通路径与 Agent 路径各要有一次登记")
 
-        # 三路来源都要出现在登记参数里
-        self.assertIn("social_evidence_context", code_only)
+        # Nguồn còn lại: số kết quả tìm kiếm + kho tin cục bộ (social sentiment đã bị gỡ).
+        # Remaining sources: search hit count + local intelligence (social sentiment removed).
+        self.assertNotIn("social_evidence_context", code_only)
         self.assertIn("persisted_intelligence_context", code_only)
 
         # 整段 news_context 不许再被交给判定函数

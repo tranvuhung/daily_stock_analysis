@@ -36,7 +36,6 @@ instructions: |
 
   4. **Confirming factors** (linked to Principle 5: risk screening):
      - Use `search_stock_news` to confirm whether there is a fundamental catalyst.
-     - Chip distribution (holder cost structure): average cost close to the current price (cost convergence).
 
   5. **Risk warnings** (linked to Principle 2: trend trading):
      - This is a reversal signal; its risk is higher than trend following.

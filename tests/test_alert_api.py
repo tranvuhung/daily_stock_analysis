@@ -51,7 +51,7 @@ class AlertApiTestCase(unittest.TestCase):
         self.env_path.write_text(
             "\n".join(
                 [
-                    "STOCK_LIST=600519",
+                    "STOCK_LIST=HPG",
                     "GEMINI_API_KEY=test",
                     "ADMIN_AUTH_ENABLED=false",
                     'AGENT_EVENT_ALERT_RULES_JSON=[{"stock_code":"000001","alert_type":"price_cross","direction":"above","price":10}]',
@@ -82,7 +82,7 @@ class AlertApiTestCase(unittest.TestCase):
         body = {
             "name": "Moutai breakout",
             "target_scope": "single_symbol",
-            "target": "600519",
+            "target": "HPG",
             "alert_type": "price_cross",
             "parameters": {"direction": "above", "price": 1800},
             "severity": "warning",
@@ -97,7 +97,7 @@ class AlertApiTestCase(unittest.TestCase):
     def test_rule_crud_enable_disable_and_delete(self) -> None:
         created = self._create_rule()
         rule_id = created["id"]
-        self.assertEqual(created["target"], "600519")
+        self.assertEqual(created["target"], "HPG")
         self.assertEqual(created["alert_type"], "price_cross")
         self.assertEqual(created["parameters"]["price"], 1800.0)
         self.assertTrue(created["enabled"])
@@ -148,8 +148,8 @@ class AlertApiTestCase(unittest.TestCase):
         cooldown_until = now_dt + timedelta(minutes=5)
         repo.upsert_cooldown(
             rule_id=created["id"],
-            rule_key="single_symbol:600519:price_cross:{}",
-            target="600519",
+            rule_key="single_symbol:HPG:price_cross:{}",
+            target="HPG",
             severity="warning",
             last_triggered_at=now_dt,
             cooldown_until=cooldown_until,
@@ -166,8 +166,8 @@ class AlertApiTestCase(unittest.TestCase):
         expired_at = datetime.now() - timedelta(minutes=5)
         repo.upsert_cooldown(
             rule_id=created["id"],
-            rule_key="single_symbol:600519:price_cross:{}",
-            target="600519",
+            rule_key="single_symbol:HPG:price_cross:{}",
+            target="HPG",
             severity="warning",
             last_triggered_at=expired_at,
             cooldown_until=expired_at,
@@ -187,7 +187,7 @@ class AlertApiTestCase(unittest.TestCase):
             repo.upsert_cooldown(
                 rule_id=created["id"],
                 rule_key=None,
-                target="600519",
+                target="HPG",
                 severity="warning",
                 last_triggered_at=now_dt,
                 cooldown_until=now_dt + timedelta(hours=24),
@@ -214,7 +214,7 @@ class AlertApiTestCase(unittest.TestCase):
         )
         self.assertEqual(changed.status_code, 200, changed.text)
         self.assertFalse(changed.json()["cooldown_active"])
-        self.assertIsNone(repo.get_active_cooldown(rule_id=created["id"], target="600519", severity="warning"))
+        self.assertIsNone(repo.get_active_cooldown(rule_id=created["id"], target="HPG", severity="warning"))
 
     def test_rule_update_rejects_empty_payload(self) -> None:
         rule = self._create_rule()
@@ -356,7 +356,7 @@ class AlertApiTestCase(unittest.TestCase):
                 "/api/v1/alerts/rules",
                 json={
                     "target_scope": "single_symbol",
-                    "target": "600519",
+                    "target": "HPG",
                     "alert_type": alert_type,
                     "parameters": parameters,
                 },
@@ -368,8 +368,8 @@ class AlertApiTestCase(unittest.TestCase):
         account = PortfolioService().create_account(
             name="Main",
             broker="Demo",
-            market="us",
-            base_currency="USD",
+            market="vn",
+            base_currency="VND",
         )
         valid_cases = [
             {
@@ -399,7 +399,7 @@ class AlertApiTestCase(unittest.TestCase):
         invalid_cases = [
             {
                 "target_scope": "watchlist",
-                "target": "600519",
+                "target": "HPG",
                 "alert_type": "price_cross",
                 "parameters": {"direction": "above", "price": 10},
             },
@@ -437,7 +437,7 @@ class AlertApiTestCase(unittest.TestCase):
         })
 
         async def _quote(_monitor, stock_code):
-            return SimpleNamespace(price=11.0 if stock_code == "600519" else 9.0)
+            return SimpleNamespace(price=11.0 if stock_code == "HPG" else 9.0)
 
         with patch("src.agent.events.EventMonitor._get_realtime_quote", new=_quote):
             resp = self.client.post(f"/api/v1/alerts/rules/{rule['id']}/test")
@@ -448,7 +448,7 @@ class AlertApiTestCase(unittest.TestCase):
         self.assertTrue(payload["triggered"])
         self.assertGreaterEqual(payload["evaluated_count"], 1)
         self.assertEqual(payload["triggered_count"], 1)
-        self.assertEqual(payload["target_results"][0]["target"], "600519")
+        self.assertEqual(payload["target_results"][0]["target"], "HPG")
 
     def test_p6_watchlist_dry_run_timeout_counts_target_as_skipped(self) -> None:
         rule = self._create_rule({
@@ -509,7 +509,7 @@ class AlertApiTestCase(unittest.TestCase):
             "/api/v1/alerts/rules",
             json={
                 "target_scope": "single_symbol",
-                "target": "600519",
+                "target": "HPG",
                 "alert_type": "sentiment_shift",
                 "parameters": {},
             },
@@ -521,7 +521,7 @@ class AlertApiTestCase(unittest.TestCase):
             "/api/v1/alerts/rules",
             json={
                 "target_scope": "single_symbol",
-                "target": "600519",
+                "target": "HPG",
                 "alert_type": "price_cross",
                 "parameters": {"direction": "sideways", "price": 0},
             },
@@ -539,18 +539,18 @@ class AlertApiTestCase(unittest.TestCase):
         created = self._create_rule({
             "name": "Market red/yellow",
             "target_scope": "market",
-            "target": " CN ",
+            "target": " VN ",
             "alert_type": "market_light_status",
             "parameters": {"statuses": ["red", "yellow"]},
         })
-        self.assertEqual(created["target"], "cn")
+        self.assertEqual(created["target"], "vn")
         self.assertEqual(created["parameters"], {"statuses": ["red", "yellow"]})
 
         invalid_symbol_rule = self.client.post(
             "/api/v1/alerts/rules",
             json={
                 "target_scope": "market",
-                "target": "cn",
+                "target": "vn",
                 "alert_type": "price_cross",
                 "parameters": {"direction": "above", "price": 10},
             },
@@ -562,7 +562,7 @@ class AlertApiTestCase(unittest.TestCase):
             "/api/v1/alerts/rules",
             json={
                 "target_scope": "single_symbol",
-                "target": "600519",
+                "target": "HPG",
                 "alert_type": "market_light_status",
                 "parameters": {"statuses": ["red"]},
             },
@@ -582,7 +582,8 @@ class AlertApiTestCase(unittest.TestCase):
         self.assertEqual(invalid_target.status_code, 400, invalid_target.text)
         self.assertEqual(invalid_target.json()["error"], "validation_error")
 
-        for market in ("jp", "kr"):
+        # Vùng của các thị trường đã loại bỏ bị từ chối / Removed-market regions are rejected.
+        for market in ("cn", "hk", "us", "jp", "kr"):
             with self.subTest(market=market):
                 unsupported_market = self.client.post(
                     "/api/v1/alerts/rules",
@@ -595,7 +596,7 @@ class AlertApiTestCase(unittest.TestCase):
                 )
                 self.assertEqual(unsupported_market.status_code, 400, unsupported_market.text)
                 self.assertEqual(unsupported_market.json()["error"], "validation_error")
-                self.assertIn("vn, cn, hk, us", unsupported_market.json()["message"])
+                self.assertIn("must be one of vn", unsupported_market.json()["message"])
 
     def test_market_regions_endpoint_follows_supported_markets(self) -> None:
         with patch.dict(os.environ, {"SUPPORTED_MARKETS": "vn"}):
@@ -603,90 +604,27 @@ class AlertApiTestCase(unittest.TestCase):
         self.assertEqual(resp.status_code, 200, resp.text)
         self.assertEqual(resp.json(), {"regions": ["vn"], "default": "vn"})
 
+        # Giá trị cũ đa thị trường vẫn chỉ cho ra vùng "vn".
+        # Legacy multi-market values still resolve to the single "vn" region.
         with patch.dict(os.environ, {"SUPPORTED_MARKETS": "us,vn,hk"}):
             resp = self.client.get("/api/v1/alerts/market-regions")
-        self.assertEqual(resp.json(), {"regions": ["vn", "hk", "us"], "default": "vn"})
-
-        with patch.dict(os.environ, {"SUPPORTED_MARKETS": "jp"}):
-            resp = self.client.get("/api/v1/alerts/market-regions")
-        self.assertEqual(resp.json(), {"regions": [], "default": None})
-
-    def test_market_rule_requires_enabled_market_to_be_enabled(self) -> None:
-        with patch.dict(os.environ, {"SUPPORTED_MARKETS": "vn"}):
-            vn_rule = self.client.post(
-                "/api/v1/alerts/rules",
-                json={
-                    "target_scope": "market",
-                    "target": "vn",
-                    "alert_type": "market_light_status",
-                    "parameters": {"statuses": ["red"]},
-                },
-            )
-            self.assertEqual(vn_rule.status_code, 200, vn_rule.text)
-            self.assertEqual(vn_rule.json()["target"], "vn")
-
-            disabled_market = self.client.post(
-                "/api/v1/alerts/rules",
-                json={
-                    "target_scope": "market",
-                    "target": "cn",
-                    "alert_type": "market_light_status",
-                    "parameters": {"statuses": ["red"]},
-                },
-            )
-            self.assertEqual(disabled_market.status_code, 400, disabled_market.text)
-            self.assertEqual(disabled_market.json()["error"], "validation_error")
-            self.assertIn("SUPPORTED_MARKETS", disabled_market.json()["message"])
-
-        # Rule cn được tạo khi cn còn bật; sau khi tắt cn vẫn disable/xoá được nhưng không bật lại được.
-        cn_rule = self._create_rule({
-            "target_scope": "market",
-            "target": "cn",
-            "alert_type": "market_light_status",
-            "parameters": {"statuses": ["red"]},
-        })
-        with patch.dict(os.environ, {"SUPPORTED_MARKETS": "vn"}):
-            listed = self.client.get("/api/v1/alerts/rules", params={"target_scope": "market"})
-            self.assertIn(cn_rule["id"], [item["id"] for item in listed.json()["items"]])
-
-            disabled = self.client.post(f"/api/v1/alerts/rules/{cn_rule['id']}/disable")
-            self.assertEqual(disabled.status_code, 200, disabled.text)
-            self.assertFalse(disabled.json()["enabled"])
-
-            renamed = self.client.patch(f"/api/v1/alerts/rules/{cn_rule['id']}", json={"name": "cn off"})
-            self.assertEqual(renamed.status_code, 200, renamed.text)
-
-            enabled = self.client.post(f"/api/v1/alerts/rules/{cn_rule['id']}/enable")
-            self.assertEqual(enabled.status_code, 400, enabled.text)
-            self.assertIn("not enabled", enabled.json()["message"])
-
-            patched_enable = self.client.patch(f"/api/v1/alerts/rules/{cn_rule['id']}", json={"enabled": True})
-            self.assertEqual(patched_enable.status_code, 400, patched_enable.text)
-
-            retarget = self.client.patch(
-                f"/api/v1/alerts/rules/{cn_rule['id']}", json={"target": "vn", "enabled": True}
-            )
-            self.assertEqual(retarget.status_code, 200, retarget.text)
-            self.assertEqual(retarget.json()["target"], "vn")
-
-            deleted = self.client.delete(f"/api/v1/alerts/rules/{vn_rule.json()['id']}")
-            self.assertEqual(deleted.status_code, 200, deleted.text)
+        self.assertEqual(resp.json(), {"regions": ["vn"], "default": "vn"})
 
     def test_dry_run_market_light_rule_uses_snapshot_and_does_not_write_history(self) -> None:
         rule = self._create_rule({
             "name": "Market risk-off",
             "target_scope": "market",
-            "target": "cn",
+            "target": "vn",
             "alert_type": "market_light_status",
             "parameters": {"statuses": ["red", "yellow"]},
         })
         snapshot = {
-            "region": "cn",
+            "region": "vn",
             "trade_date": "2026-03-07",
             "status": "red",
             "score": 35,
-            "label": "偏防守",
-            "temperature_label": "偏弱",
+            "label": "Phòng thủ",
+            "temperature_label": "Yếu",
             "reasons": ["test"],
             "guidance": "test",
             "dimensions": {
@@ -700,7 +638,7 @@ class AlertApiTestCase(unittest.TestCase):
         async def _run_inline(func, *args, **kwargs):
             return func(*args, **kwargs)
 
-        with patch("src.services.market_light_alerts.get_open_markets_today", return_value={"cn"}), patch(
+        with patch("src.services.market_light_alerts.get_open_markets_today", return_value={"vn"}), patch(
             "src.services.market_light_alerts.build_current_snapshot", return_value=snapshot
         ) as build_snapshot, patch("src.services.alert_service.asyncio.to_thread", new=_run_inline):
             resp = self.client.post(f"/api/v1/alerts/rules/{rule['id']}/test")
@@ -713,10 +651,10 @@ class AlertApiTestCase(unittest.TestCase):
         self.assertEqual(payload["observed_value"], 35.0)
         self.assertEqual(payload["evaluated_count"], 1)
         self.assertEqual(payload["triggered_count"], 1)
-        self.assertEqual(payload["target_results"][0]["target"], "cn")
-        self.assertEqual(payload["target_results"][0]["display_target"], "Trung Quốc (A)")
+        self.assertEqual(payload["target_results"][0]["target"], "vn")
+        self.assertEqual(payload["target_results"][0]["display_target"], "Việt Nam")
         self.assertEqual(payload["target_results"][0]["observed_value"], 35.0)
-        build_snapshot.assert_called_once_with("cn")
+        build_snapshot.assert_called_once_with("vn")
 
         self.assertEqual(self.client.get("/api/v1/alerts/triggers").json()["total"], 0)
         self.assertEqual(self.client.get("/api/v1/alerts/notifications").json()["total"], 0)
@@ -735,7 +673,7 @@ class AlertApiTestCase(unittest.TestCase):
         self.assertTrue(payload["triggered"])
         self.assertEqual(payload["status"], "triggered")
         self.assertEqual(payload["observed_value"], 1800.0)
-        quote.assert_awaited_once_with("600519")
+        quote.assert_awaited_once_with("HPG")
 
         self.assertEqual(self.client.get("/api/v1/alerts/triggers").json()["total"], 0)
         self.assertEqual(self.client.get("/api/v1/alerts/notifications").json()["total"], 0)
@@ -843,7 +781,7 @@ class AlertApiTestCase(unittest.TestCase):
     def test_dry_run_p5_technical_indicator_rules_use_mocked_daily_data(self) -> None:
         triggered_rule = self._create_rule(
             {
-                "target": "600519",
+                "target": "HPG",
                 "alert_type": "ma_price_cross",
                 "parameters": {"window": 2, "direction": "above"},
             }
@@ -926,7 +864,7 @@ class AlertApiTestCase(unittest.TestCase):
         with self.db.get_session() as session:
             trigger = AlertTriggerRecord(
                 rule_id=rule["id"],
-                target="600519",
+                target="HPG",
                 observed_value=1810.0,
                 threshold=1800.0,
                 reason="breakout",
@@ -977,13 +915,13 @@ class AlertApiTestCase(unittest.TestCase):
                 "source": "analysis_history_snapshot",
                 "market_phase_summary": {
                     "phase": "postmarket",
-                    "market": "cn",
+                    "market": "vn",
                     "trigger_source": "alert",
                     "is_partial_bar": False,
                 },
                 "analysis_context_pack_overview": {
                     "pack_version": "1.0",
-                    "subject": {"code": "600519", "market": "cn"},
+                    "subject": {"code": "HPG", "market": "vn"},
                     "data_quality": {
                         "overall_score": 88,
                         "level": "good",
@@ -1000,7 +938,7 @@ class AlertApiTestCase(unittest.TestCase):
             session.add(
                 AlertTriggerRecord(
                     rule_id=rule["id"],
-                    target="600519",
+                    target="HPG",
                     observed_value=1810.0,
                     threshold=1800.0,
                     reason="breakout",
@@ -1031,8 +969,8 @@ class AlertApiTestCase(unittest.TestCase):
             session.add(
                 AlertCooldownRecord(
                     rule_id=1,
-                    rule_key="single_symbol:600519:price_cross:{}",
-                    target="600519",
+                    rule_key="single_symbol:HPG:price_cross:{}",
+                    target="HPG",
                     severity="warning",
                     state="active",
                 )
@@ -1046,8 +984,8 @@ class AlertApiTestCase(unittest.TestCase):
         repo = AlertRepository(self.db)
         first = repo.upsert_cooldown(
             rule_id=1,
-            rule_key="single_symbol:600519:price_cross:{}",
-            target="600519",
+            rule_key="single_symbol:HPG:price_cross:{}",
+            target="HPG",
             severity="warning",
             last_triggered_at=datetime(2026, 5, 18, 10, 0, 0),
             cooldown_until=datetime(2026, 5, 18, 11, 0, 0),
@@ -1055,8 +993,8 @@ class AlertApiTestCase(unittest.TestCase):
         )
         second = repo.upsert_cooldown(
             rule_id=1,
-            rule_key="single_symbol:600519:price_cross:{}",
-            target="600519",
+            rule_key="single_symbol:HPG:price_cross:{}",
+            target="HPG",
             severity="warning",
             last_triggered_at=datetime(2026, 5, 18, 10, 30, 0),
             cooldown_until=datetime(2026, 5, 18, 11, 30, 0),

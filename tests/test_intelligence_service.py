@@ -144,7 +144,7 @@ class IntelligenceServiceTestCase(unittest.TestCase):
     def test_create_fetch_and_deduplicate_rss_source(self) -> None:
         source = self.service.create_source({
             "name": "market-feed", "url": "https://feeds.example.com/rss.xml",
-            "source_type": "rss", "scope_type": "market", "market": "cn",
+            "source_type": "rss", "scope_type": "market", "market": "vn",
         })
         with patch("src.services.intelligence_service.requests.get", return_value=self._mock_response()):
             first = self.service.fetch_source(source["id"])
@@ -152,7 +152,7 @@ class IntelligenceServiceTestCase(unittest.TestCase):
         self.assertEqual(first["fetched_count"], 2)
         self.assertEqual(first["saved_count"], 2)
         self.assertEqual(second["saved_count"], 0)
-        items = self.service.list_items(scope_type="market", market="cn")
+        items = self.service.list_items(scope_type="market", market="vn")
         self.assertEqual(items["total"], 2)
         self.assertEqual(items["items"][0]["scope_type"], "market")
         self.assertTrue(items["items"][0]["url"].startswith("https://news.example.com/"))
@@ -170,20 +170,20 @@ class IntelligenceServiceTestCase(unittest.TestCase):
                 "published_at": now,
                 "fetched_at": now,
                 "scope_type": "symbol",
-                "scope_value": "AaPl",
-                "market": "us",
+                "scope_value": "HpG",
+                "market": "vn",
             }
         ])
 
         items = self.service.list_items(
             scope_type="symbol",
-            scope_value="AAPL",
-            market="us",
+            scope_value="HPG",
+            market="vn",
         )
 
         self.assertEqual(saved, 1)
         self.assertEqual(items["total"], 1)
-        self.assertEqual(items["items"][0]["scope_value"], "AaPl")
+        self.assertEqual(items["items"][0]["scope_value"], "HpG")
 
     def test_fetch_http_error_does_not_expose_source_query_secret(self) -> None:
         secret_url = "https://feeds.example.com/rss.xml?token=super-secret"
@@ -211,7 +211,7 @@ class IntelligenceServiceTestCase(unittest.TestCase):
             "url": secret_url,
             "source_type": "newsnow",
             "scope_type": "market",
-            "market": "cn",
+            "market": "vn",
         })
 
         with patch("src.services.intelligence_service.requests.get", return_value=self._mock_http_error_response(secret_url)):
@@ -270,7 +270,7 @@ class IntelligenceServiceTestCase(unittest.TestCase):
                 "name": f"feed-{index}",
                 "url": "https://feeds.example.com/rss.xml",
                 "scope_type": "market",
-                "market": "cn",
+                "market": "vn",
             })
 
         with patch("src.services.intelligence_service.requests.get", side_effect=lambda *_args, **_kwargs: self._mock_response()):
@@ -323,14 +323,6 @@ class IntelligenceServiceTestCase(unittest.TestCase):
         self.assertEqual(result["saved_count"], 1)
         self.assertEqual(result["sample_items"][0]["url"], "https://news.example.com/good")
 
-    def test_source_templates_can_create_disabled_source(self) -> None:
-        templates = self.service.list_source_templates(market="hk")
-        self.assertGreaterEqual(templates["total"], 1)
-        created = self.service.create_source_from_template("hkex-news", {"enabled": False, "name": "hkex-template-copy"})
-        self.assertEqual(created["name"], "hkex-template-copy")
-        self.assertEqual(created["market"], "hk")
-        self.assertFalse(created["enabled"])
-
     def test_vn_is_an_allowed_market(self) -> None:
         """Không có ``vn`` thì nguồn tin cấp thị trường cho Việt Nam không tạo được.
 
@@ -365,7 +357,7 @@ class IntelligenceServiceTestCase(unittest.TestCase):
             "url": "https://newsnow.example.com/api/s?id=cls-hot",
             "source_type": "newsnow",
             "scope_type": "market",
-            "market": "cn",
+            "market": "vn",
         })
 
         with patch("src.services.intelligence_service.requests.get", return_value=self._mock_json_response()):
@@ -373,7 +365,7 @@ class IntelligenceServiceTestCase(unittest.TestCase):
 
         self.assertEqual(result["fetched_count"], 2)
         self.assertEqual(result["saved_count"], 2)
-        items = self.service.list_items(market="cn")
+        items = self.service.list_items(market="vn")
         self.assertEqual(items["total"], 2)
         self.assertEqual(items["items"][0]["source_type"], "newsnow")
         self.assertEqual(result["sample_items"][0]["source"], "newsnow-cls")
@@ -386,8 +378,10 @@ class IntelligenceServiceTestCase(unittest.TestCase):
         self.assertGreaterEqual(first["created_count"], 5)
         self.assertEqual(second["created_count"], 0)
         self.assertEqual(first["total"], second["total"])
-        sources = self.service.list_sources(source_type="newsnow", market="cn")
-        self.assertGreaterEqual(sources["total"], 3)
+        # Nguồn mặc định chỉ còn RSS Việt Nam + một nguồn global.
+        # Default sources are Vietnam RSS feeds plus one global feed.
+        sources = self.service.list_sources(source_type="rss", market="vn")
+        self.assertGreaterEqual(sources["total"], 6)
         self.assertTrue(all(not item["source"]["enabled"] for item in first["items"]))
 
     def test_create_default_sources_are_disabled_by_default(self) -> None:
@@ -432,7 +426,7 @@ class IntelligenceServiceTestCase(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertFalse(result["skipped"])
-        self.assertGreaterEqual(result["bootstrap"]["created_count"], 8)
+        self.assertGreaterEqual(result["bootstrap"]["created_count"], 7)
         self.assertGreater(result["saved_count"], 0)
         sources = self.service.list_sources(enabled=True)
         self.assertEqual(sources["total"], result["fetch"]["source_count"])
@@ -441,7 +435,7 @@ class IntelligenceServiceTestCase(unittest.TestCase):
     def test_refresh_auto_sources_enables_existing_default_sources(self) -> None:
         self.service.config.news_intel_auto_fetch_enabled = True
         created = self.service.create_default_sources()
-        self.assertGreaterEqual(created["created_count"], 8)
+        self.assertGreaterEqual(created["created_count"], 7)
 
         def fake_get(url, **_kwargs):
             if "newsnow" in url:
@@ -495,7 +489,7 @@ class IntelligenceServiceTestCase(unittest.TestCase):
                     "fetched_at": now,
                     "scope_type": "market",
                     "scope_value": None,
-                    "market": "cn",
+                    "market": "vn",
                 }
             ])
             return {"ok": True, "source_count": 1, "results": [], "saved_count": saved}
@@ -504,7 +498,7 @@ class IntelligenceServiceTestCase(unittest.TestCase):
             if started_event is not None:
                 started_event.set()
             result = self.service.refresh_auto_sources()
-            total = self.service.list_items(scope_type="market", market="cn")["total"]
+            total = self.service.list_items(scope_type="market", market="vn")["total"]
             return result, total
 
         with (
@@ -544,14 +538,14 @@ class IntelligenceServiceTestCase(unittest.TestCase):
             "name": "market-feed",
             "url": "https://feeds.example.com/shared.xml",
             "scope_type": "market",
-            "market": "cn",
+            "market": "vn",
         })
         symbol = self.service.create_source({
             "name": "symbol-feed",
             "url": "https://feeds.example.com/shared.xml",
             "scope_type": "symbol",
             "scope_value": "600519",
-            "market": "cn",
+            "market": "vn",
         })
         response = self._mock_response(source_url="https://feeds.example.com/shared.xml")
         with patch("src.services.intelligence_service.requests.get", return_value=response):
@@ -617,7 +611,7 @@ class IntelligenceServiceTestCase(unittest.TestCase):
     def test_retention_removes_old_items(self) -> None:
         repo = IntelligenceRepository()
         old_time = datetime.now() - timedelta(days=60)
-        repo.upsert_items([{"source_name": "legacy", "source_type": "rss", "title": "old", "summary": "old item", "url": "https://news.example.com/old", "source": "legacy", "published_at": old_time, "fetched_at": old_time, "scope_type": "market", "scope_value": None, "market": "cn"}])
+        repo.upsert_items([{"source_name": "legacy", "source_type": "rss", "title": "old", "summary": "old item", "url": "https://news.example.com/old", "source": "legacy", "published_at": old_time, "fetched_at": old_time, "scope_type": "market", "scope_value": None, "market": "vn"}])
         self.assertEqual(repo.apply_retention(30), 1)
         with DatabaseManager.get_instance().get_session() as session:
             self.assertEqual(session.query(IntelligenceItem).count(), 0)

@@ -28,7 +28,7 @@ def _entry(tool="get_realtime_quote", arguments=None, step=1, success=True, **ex
     entry = {
         "step": step,
         "tool": tool,
-        "arguments": arguments if arguments is not None else {"stock_code": "600519"},
+        "arguments": arguments if arguments is not None else {"stock_code": "HPG"},
         "success": success,
         "duration": 0.5,
         "result_length": 100,
@@ -40,9 +40,9 @@ def _entry(tool="get_realtime_quote", arguments=None, step=1, success=True, **ex
 
 def _golden(**overrides):
     values = dict(
-        id="600519_technical",
+        id="HPG_technical",
         task_description="分析贵州茅台近期技术面走势",
-        stock_code="600519",
+        stock_code="HPG",
         expected_tools=["get_realtime_quote", "get_daily_history", "analyze_trend"],
         allowed_max_steps=8,
         allow_optional_tools=True,
@@ -79,13 +79,13 @@ class TestArgsKey:
         assert _args_key(a) == _args_key(b)
 
     def test_key_differs_for_different_arguments(self):
-        assert _args_key({"stock_code": "600519"}) != _args_key({"stock_code": "000001"})
+        assert _args_key({"stock_code": "HPG"}) != _args_key({"stock_code": "VCB"})
 
     def test_none_arguments_use_empty_object(self):
         assert _args_key(None) == json.dumps({})
 
     def test_non_dict_arguments_serialized(self):
-        assert _args_key(["600519"]) == '["600519"]'
+        assert _args_key(["HPG"]) == '["HPG"]'
 
 
 # ---------------------------------------------------------------------------
@@ -114,8 +114,8 @@ class TestComputeMetricsHitRate:
 
     def test_duplicate_tool_calls_still_full_hit(self):
         log = [
-            _entry(tool="get_realtime_quote", arguments={"stock_code": "600519"}, step=1),
-            _entry(tool="get_realtime_quote", arguments={"stock_code": "000001"}, step=2),
+            _entry(tool="get_realtime_quote", arguments={"stock_code": "HPG"}, step=1),
+            _entry(tool="get_realtime_quote", arguments={"stock_code": "VCB"}, step=2),
         ]
         m = compute_trajectory_metrics(log, _golden(expected_tools=["get_realtime_quote"]))
         assert m.expected_hit_rate == 1.0
@@ -186,7 +186,7 @@ class TestDirectConstructionContract:
         # silently collapse into a one-tool golden — the malformed element
         # is reported, only valid names take part in scoring.  Whitespace-
         # only elements follow the validator's predicate (t.strip()).
-        log = [_entry(tool="get_realtime_quote", arguments={"stock_code": "600519"})]
+        log = [_entry(tool="get_realtime_quote", arguments={"stock_code": "HPG"})]
         for malformed in (["get_realtime_quote", ""], ["get_realtime_quote", 1]):
             m = compute_trajectory_metrics(log, _golden(expected_tools=malformed))
             assert m.expected_hit_rate == 1.0
@@ -195,7 +195,7 @@ class TestDirectConstructionContract:
     def test_whitespace_only_expected_tool_does_not_pollute_scoring(self):
         # Review counter-example: '   ' must not enter the hit-rate
         # denominator nor show up as a missing tool — it is malformed.
-        log = [_entry(tool="get_realtime_quote", arguments={"stock_code": "600519"})]
+        log = [_entry(tool="get_realtime_quote", arguments={"stock_code": "HPG"})]
         m = compute_trajectory_metrics(log, _golden(expected_tools=["get_realtime_quote", "   "]))
         assert m.expected_total == 1
         assert m.expected_hit_rate == 1.0
@@ -206,7 +206,7 @@ class TestDirectConstructionContract:
         # Review counter-example: allowed_max_steps=0 / -3 must report the
         # validator's wording instead of silently disabling the budget
         # assertion, no matter how many steps the trajectory takes.
-        log = [_entry(tool="get_realtime_quote", arguments={"stock_code": "600519"}, step=s) for s in range(1, 100)]
+        log = [_entry(tool="get_realtime_quote", arguments={"stock_code": "HPG"}, step=s) for s in range(1, 100)]
         for limit in (0, -3):
             m = compute_trajectory_metrics(log, _golden(allowed_max_steps=limit))
             assert "allowed_max_steps must be >= 1" in m.violations
@@ -216,7 +216,7 @@ class TestDirectConstructionContract:
         # The owner-requested parity: for each malformed golden shape the
         # validator rejects, the direct-score path must surface the same
         # issue wording in its violations.
-        log = [_entry(tool="get_realtime_quote", arguments={"stock_code": "600519"})]
+        log = [_entry(tool="get_realtime_quote", arguments={"stock_code": "HPG"})]
         cases = [
             (dict(expected_tools=["get_realtime_quote", "   "]), "expected_tools must contain only non-empty strings"),
             (dict(expected_tools=["get_realtime_quote", ""]), "expected_tools must contain only non-empty strings"),
@@ -242,7 +242,7 @@ class TestDirectConstructionContract:
         # automatically).  A thoroughly malformed sample must yield every
         # validator issue in compute violations, with no duplicates from the
         # inline scoring checks.
-        log = [_entry(tool="get_realtime_quote", arguments={"stock_code": "600519"})]
+        log = [_entry(tool="get_realtime_quote", arguments={"stock_code": "HPG"})]
         golden = GoldenSample(
             id=[],
             task_description=None,
@@ -275,8 +275,8 @@ class TestRetryAndCaching:
 
     def test_same_tool_different_args_not_redundant(self):
         log = [
-            _entry(arguments={"stock_code": "600519"}, step=1),
-            _entry(arguments={"stock_code": "000001"}, step=2),
+            _entry(arguments={"stock_code": "HPG"}, step=1),
+            _entry(arguments={"stock_code": "VCB"}, step=2),
         ]
         m = compute_trajectory_metrics(log, _golden())
         assert m.redundant_calls == 0
@@ -452,7 +452,7 @@ class TestGoldenSamplesFile:
     def test_samples_load_clean_with_registry_names(self):
         samples = load_golden_samples(known_tool_names=_repo_tool_names())
         assert len(samples) == 2
-        assert [s.id for s in samples] == ["600519_technical", "000001_core_data_strict"]
+        assert [s.id for s in samples] == ["HPG_technical", "VCB_core_data_strict"]
 
     def test_each_sample_passes_structural_validation(self):
         for sample in load_golden_samples():
@@ -493,7 +493,7 @@ class TestGoldenSamplesFile:
         sample = GoldenSample(
             id="x",
             task_description="t",
-            stock_code="600519",
+            stock_code="HPG",
             expected_tools="get_realtime_quote",
         )
         issues = validate_golden_sample(sample)
@@ -503,7 +503,7 @@ class TestGoldenSamplesFile:
         sample = GoldenSample(
             id="x",
             task_description="t",
-            stock_code="600519",
+            stock_code="HPG",
             expected_tools=["get_realtime_quote"],
             allow_optional_tools="false",
         )
@@ -516,7 +516,7 @@ class TestGoldenSamplesFile:
         bad = GoldenSample(
             id=5,
             task_description=None,
-            stock_code="600519",
+            stock_code="HPG",
             expected_tools=["get_realtime_quote"],
             allowed_max_steps="5",
             allow_optional_tools=1,
@@ -531,7 +531,7 @@ class TestGoldenSamplesFile:
         sample = GoldenSample(
             id="x",
             task_description="t",
-            stock_code="600519",
+            stock_code="HPG",
             expected_tools=1,
         )
         issues = validate_golden_sample(sample, {"get_realtime_quote"})
@@ -543,7 +543,7 @@ class TestGoldenSamplesFile:
         sample = GoldenSample(
             id="x",
             task_description="t",
-            stock_code="600519",
+            stock_code="HPG",
             expected_tools=["b", "a"],
         )
         known = (name for name in ["a", "b"])
@@ -553,7 +553,7 @@ class TestGoldenSamplesFile:
         sample = GoldenSample(
             id="x",
             task_description="t",
-            stock_code="600519",
+            stock_code="HPG",
             expected_tools=["get_realtime_quote", "get_realtime_quote"],
         )
         issues = validate_golden_sample(sample)
@@ -592,7 +592,7 @@ class TestLoadGoldenSamplesErrors:
         sample = {
             "id": "dup",
             "task_description": "t",
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "expected_tools": ["get_realtime_quote"],
         }
         path = self._write_sample(tmp_path, [sample, sample])
@@ -603,7 +603,7 @@ class TestLoadGoldenSamplesErrors:
         sample = {
             "id": "x",
             "task_description": "t",
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "expected_tools": ["not_a_real_tool"],
         }
         path = self._write_sample(tmp_path, [sample])
@@ -614,7 +614,7 @@ class TestLoadGoldenSamplesErrors:
         sample = {
             "id": "x",
             "task_description": "t",
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "expected_tools": ["not_a_real_tool"],
         }
         path = self._write_sample(tmp_path, [sample])
@@ -624,7 +624,7 @@ class TestLoadGoldenSamplesErrors:
         sample = {
             "id": "x",
             "task_description": "t",
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "expected_tools": ["get_realtime_quote"],
             "notes": "forward-looking metadata",
         }
@@ -635,7 +635,7 @@ class TestLoadGoldenSamplesErrors:
         sample = {
             "id": "x",
             "task_description": "t",
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "expected_tools": ["get_realtime_quote"],
             "allowed_max_steps": 0,
         }
@@ -658,7 +658,7 @@ class TestLoadGoldenSamplesErrors:
         sample = {
             "id": "x",
             "task_description": "t",
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "expected_tools": "get_realtime_quote",
         }
         path = self._write_sample(tmp_path, [sample])
@@ -671,7 +671,7 @@ class TestLoadGoldenSamplesErrors:
         sample = {
             "id": "x",
             "task_description": "t",
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "expected_tools": 1,
         }
         path = self._write_sample(tmp_path, [sample])
@@ -685,7 +685,7 @@ class TestLoadGoldenSamplesErrors:
         sample = {
             "id": ["x"],
             "task_description": "t",
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "expected_tools": ["get_realtime_quote"],
         }
         path = self._write_sample(tmp_path, [sample])
@@ -696,7 +696,7 @@ class TestLoadGoldenSamplesErrors:
         sample = {
             "id": "x",
             "task_description": "t",
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "expected_tools": ["get_realtime_quote"],
             "allow_optional_tools": "false",
         }
@@ -708,7 +708,7 @@ class TestLoadGoldenSamplesErrors:
         sample = {
             "id": "x",
             "task_description": "t",
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "expected_tools": ["get_realtime_quote", "get_realtime_quote"],
         }
         path = self._write_sample(tmp_path, [sample])

@@ -308,7 +308,7 @@ def _build_category_timeout_map(config) -> dict:
     Only explicit overrides (value > 0) are carried; 0.0 means "no category
     limit, fall back to the global tool_call_timeout_seconds budget".
 
-    ``market`` tools (get_market_indices / get_sector_rankings) are
+    ``market`` tools (get_market_indices) are
     network-backed data calls, so they share the ``data`` ceiling.
     """
     data_timeout = _coerce_config_timeout(config, "agent_data_tool_timeout_s")

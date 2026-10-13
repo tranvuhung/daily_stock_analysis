@@ -26,14 +26,14 @@ class AskCommandSkillSelectionTestCase(unittest.TestCase):
         skills = [
             Skill(
                 name="box_oscillation",
-                display_name="箱体震荡",
+                display_name="Dao động hộp",
                 description="box",
                 instructions="box",
                 default_priority=30,
             ),
             Skill(
                 name="wave_theory",
-                display_name="波浪理论",
+                display_name="Lý thuyết sóng",
                 description="wave",
                 instructions="wave",
                 default_active=True,
@@ -42,32 +42,32 @@ class AskCommandSkillSelectionTestCase(unittest.TestCase):
         ]
 
         with patch.object(AskCommand, "_load_skills", return_value=skills):
-            self.assertEqual(command._parse_skill(["600519"]), "wave_theory")
+            self.assertEqual(command._parse_skill(["HPG"]), "wave_theory")
 
     def test_parse_skill_matches_alias_before_default(self) -> None:
         command = AskCommand()
         skills = [
             Skill(
                 name="bull_trend",
-                display_name="默认多头趋势",
+                display_name="Xu hướng tăng mặc định",
                 description="trend",
                 instructions="trend",
-                aliases=["趋势", "趋势分析"],
+                aliases=["xu hướng", "phân tích xu hướng"],
                 default_active=True,
                 default_priority=10,
             ),
             Skill(
                 name="chan_theory",
-                display_name="缠论",
+                display_name="Lý thuyết Chan",
                 description="chan",
                 instructions="chan",
-                aliases=["缠论", "缠论分析"],
+                aliases=["lý thuyết chan", "phân tích chan"],
                 default_priority=40,
             ),
         ]
 
         with patch.object(AskCommand, "_load_skills", return_value=skills):
-            self.assertEqual(command._parse_skill(["600519", "请", "用缠论分析"]), "chan_theory")
+            self.assertEqual(command._parse_skill(["HPG", "hãy", "dùng lý thuyết chan"]), "chan_theory")
 
 
 class TestAskCommandMultiStock(unittest.TestCase):
@@ -76,23 +76,23 @@ class TestAskCommandMultiStock(unittest.TestCase):
     @staticmethod
     def _message() -> BotMessage:
         return BotMessage(
-            platform="feishu",
+            platform="telegram",
             message_id="msg-1",
             user_id="user-1",
             user_name="tester",
             chat_id="chat-1",
             chat_type=ChatType.PRIVATE,
-            content="/ask 600519,000858",
+            content="/ask HPG,FPT",
         )
 
     @staticmethod
     def _dashboard(code: str) -> dict:
         return {
-            "stock_name": f"股票{code}",
+            "stock_name": f"Cổ phiếu {code}",
             "decision_type": "buy",
             "sentiment_score": 72,
-            "trend_prediction": "看多",
-            "operation_advice": "买入",
+            "trend_prediction": "Tăng",
+            "operation_advice": "Mua",
             "analysis_summary": f"{code} summary",
             "risk_warning": f"{code} risk",
             "dashboard": {
@@ -120,61 +120,70 @@ class TestAskCommandMultiStock(unittest.TestCase):
                 )
 
         with patch("src.agent.factory.build_agent_executor", return_value=FakeExecutor()):
-            with patch.object(command, "_build_portfolio_section", return_value="## 组合视角\n组合摘要"):
+            with patch.object(command, "_build_portfolio_section", return_value="## Góc nhìn danh mục\nTóm tắt danh mục"):
                 with patch("src.agent.conversation.conversation_manager"):
-                    response = command._analyze_multi(config, message, ["600519", "000858"], None, "")
+                    response = command._analyze_multi(config, message, ["HPG", "FPT"], None, "")
 
         self.assertTrue(response.markdown)
-        self.assertIn("## 组合视角", response.text)
-        self.assertIn("| 600519 | buy | 72% |", response.text)
-        self.assertIn("### 000858", response.text)
+        self.assertIn("## Góc nhìn danh mục", response.text)
+        self.assertIn("| HPG | buy | 72% |", response.text)
+        self.assertIn("### FPT", response.text)
 
     def test_merge_code_args_keeps_skill_token_outside_stock_list(self):
         command = AskCommand()
 
-        raw_code_str, remaining_args = command._merge_code_args(["AAPL", "trend"])
+        raw_code_str, remaining_args = command._merge_code_args(["FPT", "trend"])
 
-        self.assertEqual(raw_code_str, "AAPL")
+        self.assertEqual(raw_code_str, "FPT")
         self.assertEqual(remaining_args, ["trend"])
-        self.assertEqual(command._parse_stock_codes(raw_code_str), ["AAPL"])
+        self.assertEqual(command._parse_stock_codes(raw_code_str), ["FPT"])
 
     def test_merge_code_args_keeps_comma_split_multi_stock_support(self):
         command = AskCommand()
 
-        raw_code_str, remaining_args = command._merge_code_args(["600519,", "000858", "波浪理论"])
+        raw_code_str, remaining_args = command._merge_code_args(["hpg,", "FPT", "wave_theory"])
 
-        self.assertEqual(raw_code_str, "600519,000858")
-        self.assertEqual(remaining_args, ["波浪理论"])
+        self.assertEqual(raw_code_str, "hpg,FPT")
+        self.assertEqual(remaining_args, ["wave_theory"])
+        self.assertEqual(command._parse_stock_codes(raw_code_str), ["HPG", "FPT"])
+
+    def test_validate_args_rejects_non_vn_codes(self):
+        command = AskCommand()
+        for raw in ("600519", "AAPL", "hk00700"):
+            with self.subTest(raw=raw):
+                self.assertIn("Mã không hợp lệ", command.validate_args([raw]))
+        self.assertIsNone(command.validate_args(["HPG,FPT,VCB"]))
+        self.assertIn("tối đa 5", command.validate_args(["HPG,FPT,VCB,MWG,SSI,VNM"]))
 
     def test_build_portfolio_section_reads_assessment(self):
         command = AskCommand()
         results = {
-            "600519": {
+            "HPG": {
                 "signal": "buy",
                 "confidence": 0.8,
-                "summary": "茅台 summary",
-                "stock_name": "贵州茅台",
-                "risk_flags": [{"category": "portfolio_input", "description": "估值偏高", "severity": "medium"}],
+                "summary": "HPG summary",
+                "stock_name": "Hòa Phát",
+                "risk_flags": [{"category": "portfolio_input", "description": "Định giá cao", "severity": "medium"}],
             },
-            "000858": {
+            "FPT": {
                 "signal": "hold",
                 "confidence": 0.6,
-                "summary": "五粮液 summary",
-                "stock_name": "五粮液",
+                "summary": "FPT summary",
+                "stock_name": "FPT Corp",
                 "risk_flags": [],
             },
         }
 
         def fake_run(self, ctx, progress_callback=None):
             ctx.data["portfolio_assessment"] = {
-                "summary": "组合偏消费集中，建议控制仓位。",
+                "summary": "Danh mục tập trung ngành thép, nên kiểm soát tỷ trọng.",
                 "portfolio_risk_score": 7,
-                "sector_warnings": ["白酒板块集中度过高"],
-                "correlation_warnings": ["600519 与 000858 相关性偏高"],
-                "rebalance_suggestions": ["降低单一行业暴露"],
+                "sector_warnings": ["Tập trung ngành quá cao"],
+                "correlation_warnings": ["HPG và FPT tương quan cao"],
+                "rebalance_suggestions": ["Giảm phơi nhiễm một ngành"],
                 "positions": [
-                    {"code": "600519", "suggested_weight": 0.4, "signal": "buy"},
-                    {"code": "000858", "suggested_weight": 0.2, "signal": "hold"},
+                    {"code": "HPG", "suggested_weight": 0.4, "signal": "buy"},
+                    {"code": "FPT", "suggested_weight": 0.2, "signal": "hold"},
                 ],
             }
             return SimpleNamespace(success=True)
@@ -182,27 +191,27 @@ class TestAskCommandMultiStock(unittest.TestCase):
         with patch("src.agent.factory.get_tool_registry", return_value=MagicMock()):
             with patch("src.agent.llm_adapter.LLMToolAdapter", return_value=MagicMock()):
                 with patch("src.agent.agents.portfolio_agent.PortfolioAgent.run", new=fake_run):
-                    text = command._build_portfolio_section(SimpleNamespace(), ["600519", "000858"], results)
+                    text = command._build_portfolio_section(SimpleNamespace(), ["HPG", "FPT"], results)
 
-        self.assertIn("## 组合视角", text)
-        self.assertIn("组合偏消费集中", text)
-        self.assertIn("建议仓位", text)
+        self.assertIn("## Góc nhìn danh mục", text)
+        self.assertIn("Danh mục tập trung ngành thép", text)
+        self.assertIn("Tỷ trọng đề xuất", text)
 
     def test_build_portfolio_section_returns_quickly_on_timeout(self):
         command = AskCommand()
         results = {
-            "600519": {
+            "HPG": {
                 "signal": "buy",
                 "confidence": 0.8,
-                "summary": "茅台 summary",
-                "stock_name": "贵州茅台",
+                "summary": "HPG summary",
+                "stock_name": "Hòa Phát",
                 "risk_flags": [],
             },
-            "000858": {
+            "FPT": {
                 "signal": "hold",
                 "confidence": 0.6,
-                "summary": "五粮液 summary",
-                "stock_name": "五粮液",
+                "summary": "FPT summary",
+                "stock_name": "FPT Corp",
                 "risk_flags": [],
             },
         }
@@ -218,7 +227,7 @@ class TestAskCommandMultiStock(unittest.TestCase):
                 with patch("src.agent.agents.portfolio_agent.PortfolioAgent.run", new=slow_run):
                     text = command._build_portfolio_section(
                         SimpleNamespace(),
-                        ["600519", "000858"],
+                        ["HPG", "FPT"],
                         results,
                         timeout_s=0.01,
                     )
@@ -237,7 +246,7 @@ class TestAskCommandMultiStock(unittest.TestCase):
                 code = context["stock_code"]
                 return SimpleNamespace(
                     success=False,
-                    content=f"{code} 自由文本分析",
+                    content=f"{code} phân tích dạng văn bản",
                     dashboard=None,
                     error="Failed to parse dashboard JSON from agent response",
                 )
@@ -245,10 +254,10 @@ class TestAskCommandMultiStock(unittest.TestCase):
         with patch("src.agent.factory.build_agent_executor", return_value=FakeExecutor()):
             with patch.object(command, "_build_portfolio_section", return_value=""):
                 with patch("src.agent.conversation.conversation_manager"):
-                    response = command._analyze_multi(config, message, ["600519", "000858"], None, "")
+                    response = command._analyze_multi(config, message, ["HPG", "FPT"], None, "")
 
-        self.assertIn("600519 自由文本分析", response.text)
-        self.assertNotIn("⚠️ 分析失败: Failed to parse dashboard JSON", response.text)
+        self.assertIn("HPG phân tích dạng văn bản", response.text)
+        self.assertNotIn("⚠️ Phân tích thất bại: Failed to parse dashboard JSON", response.text)
 
     def test_analyze_multi_persists_formatted_history_instead_of_raw_json(self):
         command = AskCommand()
@@ -267,7 +276,7 @@ class TestAskCommandMultiStock(unittest.TestCase):
         with patch("src.agent.factory.build_agent_executor", return_value=FakeExecutor()):
             with patch.object(command, "_build_portfolio_section", return_value=""):
                 with patch("src.agent.conversation.conversation_manager") as mock_cm:
-                    command._analyze_multi(config, message, ["600519", "000858"], None, "")
+                    command._analyze_multi(config, message, ["HPG", "FPT"], None, "")
 
         assistant_messages = [
             call.args[2]
@@ -275,7 +284,7 @@ class TestAskCommandMultiStock(unittest.TestCase):
             if len(call.args) >= 3 and call.args[1] == "assistant"
         ]
         self.assertEqual(len(assistant_messages), 2)
-        self.assertTrue(all("**结论**: buy" in text for text in assistant_messages))
+        self.assertTrue(all("**Kết luận**: buy" in text for text in assistant_messages))
         self.assertTrue(all('{"raw":"json"}' not in text for text in assistant_messages))
 
     def test_analyze_multi_prewarms_db_before_parallel_history_writes(self):
@@ -298,14 +307,14 @@ class TestAskCommandMultiStock(unittest.TestCase):
                 with patch.object(command, "_build_portfolio_section", return_value=""):
                     with patch("src.agent.conversation.conversation_manager") as mock_cm:
                         mock_cm.add_message.side_effect = lambda *args, **kwargs: call_order.append("history")
-                        command._analyze_multi(config, message, ["600519", "000858"], None, "")
+                        command._analyze_multi(config, message, ["HPG", "FPT"], None, "")
 
         mock_get_db.assert_called_once_with()
         self.assertTrue(call_order)
         self.assertEqual(call_order[0], "db")
 
     def test_format_stock_result_renders_numeric_sniper_points(self):
-        dashboard = self._dashboard("600519")
+        dashboard = self._dashboard("HPG")
         dashboard["dashboard"]["battle_plan"]["sniper_points"] = {
             "ideal_buy": 10.0,
             "secondary_buy": 9.8,
@@ -313,9 +322,9 @@ class TestAskCommandMultiStock(unittest.TestCase):
             "take_profit": 11.6,
         }
 
-        text = AskCommand._format_stock_result("600519", dashboard, "raw content")
+        text = AskCommand._format_stock_result("HPG", dashboard, "raw content")
 
-        self.assertIn("**关键点位**", text)
+        self.assertIn("**Mức giá quan trọng**", text)
         self.assertIn("ideal_buy=10.0", text)
         self.assertIn("secondary_buy=9.8", text)
         self.assertIn("stop_loss=9.5", text)
@@ -335,11 +344,11 @@ class TestAskCommandMultiStock(unittest.TestCase):
                 return SimpleNamespace(success=True, content="analysis ok")
 
         with patch("src.agent.factory.build_agent_executor", return_value=FakeExecutor()):
-            with patch.object(command, "_resolve_skill_name", return_value="缠论"):
-                response = command._analyze_single(config, message, "600519", "chan_theory", "")
+            with patch.object(command, "_resolve_skill_name", return_value="Lý thuyết Chan"):
+                response = command._analyze_single(config, message, "HPG", "chan_theory", "")
 
         self.assertIn("analysis ok", response.text)
-        self.assertEqual(captured["context"]["stock_code"], "600519")
+        self.assertEqual(captured["context"]["stock_code"], "HPG")
         self.assertEqual(captured["context"]["skills"], ["chan_theory"])
         self.assertEqual(captured["context"]["strategies"], ["chan_theory"])
 

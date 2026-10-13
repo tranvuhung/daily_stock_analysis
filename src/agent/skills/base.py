@@ -33,8 +33,8 @@ class Skill:
     loaded from YAML files written in natural language.
 
     Attributes:
-        name: Unique strategy identifier (e.g., "dragon_head").
-        display_name: Human-readable name shown in UI/bot/reports (built-in skills use Chinese names).
+        name: Unique strategy identifier (e.g., "bull_trend").
+        display_name: Human-readable name shown in UI/bot/reports.
         display_name_en: Optional English name used inside LLM prompts (falls back to display_name).
         description: Brief description of when to apply this strategy.
         instructions: Detailed natural language instructions injected into the system prompt.
@@ -340,7 +340,7 @@ class SkillManager:
         # Or register programmatically
         manager.register(some_skill)
         # Activate and generate prompt
-        manager.activate(["dragon_head", "shrink_pullback"])
+        manager.activate(["bull_trend", "shrink_pullback"])
         instructions = manager.get_skill_instructions()
     """
 

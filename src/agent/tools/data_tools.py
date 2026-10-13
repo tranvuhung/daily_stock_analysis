@@ -5,7 +5,6 @@ Data tools — wraps DataFetcherManager methods as agent-callable tools.
 Tools:
 - get_realtime_quote: real-time stock quote
 - get_daily_history: historical OHLCV data
-- get_chip_distribution: chip distribution analysis
 - get_analysis_context: historical analysis context from DB
 """
 
@@ -116,15 +115,8 @@ def _normalize_history_days(days: Any) -> Tuple[int, Dict[str, Any]]:
 def _history_code_candidates(stock_code: str) -> Tuple[List[str], str]:
     """Return cache lookup candidates plus canonical write code."""
     from data_provider.base import canonical_stock_code, normalize_stock_code
-    from src.services.stock_list_parser import ParseStatus, parse_analysis_target
 
     raw_code = str(stock_code or "").strip()
-    target = parse_analysis_target(raw_code)
-    if target.asset_type == ParseStatus.INDEX:
-        # Explicit index identities keep their canonical bucket (``sh000016``
-        # / ``csi930955``) so index bars never land in the colliding stock
-        # bucket (Story 1.5).
-        return [target.canonical_id], target.canonical_id
     normalized_code = canonical_stock_code(normalize_stock_code(raw_code))
     candidates: List[str] = []
     for candidate in (canonical_stock_code(raw_code), normalized_code):
@@ -148,9 +140,6 @@ def _compact_fundamental_context(fundamental_context: dict) -> dict:
         "growth",
         "earnings",
         "institution",
-        "capital_flow",
-        "dragon_tiger",
-        "boards",
     )
     compact = {
         "market": fundamental_context.get("market"),
@@ -308,7 +297,7 @@ get_realtime_quote_tool = ToolDefinition(
         ToolParameter(
             name="stock_code",
             type="string",
-            description="Stock code, e.g., '600519' (A-share), 'AAPL' (US), 'hk00700' (HK)",
+            description="Stock code, e.g., 'HPG', 'FPT', 'VNINDEX'",
         ),
     ],
     handler=_handle_get_realtime_quote,
@@ -396,7 +385,7 @@ get_daily_history_tool = ToolDefinition(
         ToolParameter(
             name="stock_code",
             type="string",
-            description="Stock code, e.g., '600519' (A-share), 'AAPL' (US)",
+            description="Stock code, e.g., 'HPG', 'FPT', 'VNINDEX'",
         ),
         ToolParameter(
             name="days",
@@ -409,51 +398,6 @@ get_daily_history_tool = ToolDefinition(
     handler=_handle_get_daily_history,
     category="data",
     policy=_MARKET_DATA_CACHE_POLICY,
-)
-
-
-# ============================================================
-# get_chip_distribution
-# ============================================================
-
-def _handle_get_chip_distribution(stock_code: str) -> dict:
-    """Get chip distribution data."""
-    manager = _get_fetcher_manager()
-    chip = manager.get_chip_distribution(stock_code)
-
-    if chip is None:
-        return {"error": f"No chip distribution data available for {stock_code}"}
-
-    return {
-        "code": chip.code,
-        "date": chip.date,
-        "source": chip.source,
-        "profit_ratio": chip.profit_ratio,
-        "avg_cost": chip.avg_cost,
-        "cost_90_low": chip.cost_90_low,
-        "cost_90_high": chip.cost_90_high,
-        "concentration_90": chip.concentration_90,
-        "cost_70_low": chip.cost_70_low,
-        "cost_70_high": chip.cost_70_high,
-        "concentration_70": chip.concentration_70,
-    }
-
-
-get_chip_distribution_tool = ToolDefinition(
-    name="get_chip_distribution",
-    description="Get chip distribution analysis for a stock. Returns profit ratio, "
-                "average cost, chip concentration at 90% and 70% levels. "
-                "Useful for judging support/resistance and holding structure.",
-    parameters=[
-        ToolParameter(
-            name="stock_code",
-            type="string",
-            description="A-share stock code, e.g., '600519'",
-        ),
-    ],
-    handler=_handle_get_chip_distribution,
-    category="data",
-    policy=_MARKET_DATA_STOCK_POLICY,
 )
 
 
@@ -493,7 +437,7 @@ get_analysis_context_tool = ToolDefinition(
         ToolParameter(
             name="stock_code",
             type="string",
-            description="Stock code, e.g., '600519'",
+            description="Stock code, e.g., 'HPG'",
         ),
     ],
     handler=_handle_get_analysis_context,
@@ -517,8 +461,6 @@ def _handle_get_stock_info(stock_code: str) -> dict:
 
     compact_context = _compact_fundamental_context(fundamental_context)
     valuation = compact_context.get("valuation", {}).get("data", {})
-    sector_rankings = compact_context.get("boards", {}).get("data", {})
-    belong_boards = manager.get_belong_boards(stock_code)
 
     stock_name = stock_code.upper()
     try:
@@ -534,24 +476,18 @@ def _handle_get_stock_info(stock_code: str) -> dict:
         "total_mv": valuation.get("total_mv"),
         "circ_mv": valuation.get("circ_mv"),
         "fundamental_context": compact_context,
-        "belong_boards": belong_boards,
-        # Compatibility alias for existing callers; prefer belong_boards.
-        # Planned for future deprecation in a major version.
-        "boards": belong_boards,
-        "sector_rankings": sector_rankings,
     }
 
 
 get_stock_info_tool = ToolDefinition(
     name="get_stock_info",
-    description="Get stock fundamental information: valuation, growth, earnings, institution flow, "
-                "stock sector membership (belong_boards; boards is compatibility alias) and "
-                "sector rankings. Returns a compact fundamental_context to reduce token usage.",
+    description="Get stock fundamental information: valuation (PE/PB/market cap) and the "
+                "available fundamental blocks. Returns a compact fundamental_context to reduce token usage.",
     parameters=[
         ToolParameter(
             name="stock_code",
             type="string",
-            description="Stock code: A-share '600519', US 'AAPL', HK '00700'",
+            description="Vietnam stock code, e.g., 'HPG', 'FPT'",
         ),
     ],
     handler=_handle_get_stock_info,
@@ -675,76 +611,7 @@ get_portfolio_snapshot_tool = ToolDefinition(
 ALL_DATA_TOOLS = [
     get_realtime_quote_tool,
     get_daily_history_tool,
-    get_chip_distribution_tool,
     get_analysis_context_tool,
     get_stock_info_tool,
     get_portfolio_snapshot_tool,
 ]
-
-
-# ============================================================
-# get_capital_flow
-# ============================================================
-
-def _handle_get_capital_flow(stock_code: str) -> dict:
-    """Get main-force capital flow data for a stock."""
-    manager = _get_fetcher_manager()
-    try:
-        ctx = manager.get_capital_flow_context(stock_code)
-    except Exception as exc:
-        logger.warning("get_capital_flow failed for %s: %s", stock_code, exc)
-        return {
-            "stock_code": stock_code,
-            "status": "error",
-            "error": f"capital flow fetch failed: {exc}",
-        }
-
-    status = ctx.get("status", "not_supported")
-    if status == "not_supported":
-        return {
-            "stock_code": stock_code,
-            "status": "not_supported",
-            "note": "Capital flow data is only available for A-share stocks (not ETFs/indices).",
-        }
-
-    data = ctx.get("data", {})
-    stock_flow = data.get("stock_flow") or {}
-    sector_rankings = data.get("sector_rankings") or {}
-    errors = ctx.get("errors") or []
-
-    return {
-        "stock_code": stock_code,
-        "status": status,
-        "main_net_inflow": stock_flow.get("main_net_inflow"),
-        "inflow_5d": stock_flow.get("inflow_5d"),
-        "inflow_10d": stock_flow.get("inflow_10d"),
-        "sector_rankings": {
-            "top_inflow_sectors": sector_rankings.get("top", [])[:3],
-            "top_outflow_sectors": sector_rankings.get("bottom", [])[:3],
-        },
-        "errors": errors,
-    }
-
-
-get_capital_flow_tool = ToolDefinition(
-    name="get_capital_flow",
-    description=(
-        "Get main-force (主力) capital flow data for an A-share stock. "
-        "Returns today's net inflow, 5-day and 10-day cumulative inflows, "
-        "and top sector-level capital flow rankings. "
-        "Only supported for A-share individual stocks (not ETFs, indices, HK, or US stocks)."
-    ),
-    parameters=[
-        ToolParameter(
-            name="stock_code",
-            type="string",
-            description="A-share stock code, e.g., '600519'",
-        ),
-    ],
-    handler=_handle_get_capital_flow,
-    category="data",
-    policy=_MARKET_DATA_STOCK_POLICY,
-)
-
-
-ALL_DATA_TOOLS.append(get_capital_flow_tool)

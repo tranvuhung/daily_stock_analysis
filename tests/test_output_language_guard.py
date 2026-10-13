@@ -43,7 +43,7 @@ def test_deterministic_pass_removes_all_han_and_keeps_markdown() -> None:
 def test_non_vietnamese_or_clean_text_is_untouched() -> None:
     adapter = _Adapter("unused")
 
-    assert enforce_vietnamese_output(_SAMPLE, "zh", adapter) == _SAMPLE
+    assert enforce_vietnamese_output(_SAMPLE, "en", adapter) == _SAMPLE
     assert enforce_vietnamese_output("Không có chữ Hán", "vi", adapter) == "Không có chữ Hán"
     assert adapter.calls == []
 

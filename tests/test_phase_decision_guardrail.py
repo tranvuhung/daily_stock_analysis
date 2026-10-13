@@ -9,22 +9,22 @@ from src.phase_decision_guardrail import apply_phase_decision_guardrails
 
 def _result(**kwargs) -> AnalysisResult:
     defaults = {
-        "code": "600519",
-        "name": "贵州茅台",
-        "trend_prediction": "看多",
+        "code": "FPT",
+        "name": "FPT Corp",
+        "trend_prediction": "Tăng",
         "sentiment_score": 76,
-        "operation_advice": "立即买入",
+        "operation_advice": "Buy now",
         "decision_type": "buy",
-        "confidence_level": "高",
-        "analysis_summary": "盘中偏强",
+        "confidence_level": "Cao",
+        "analysis_summary": "Trong phiên khá mạnh",
         "dashboard": {
-            "core_conclusion": {"one_sentence": "立即买入"},
+            "core_conclusion": {"one_sentence": "Buy now"},
             "phase_decision": {
-                "action_window": "盘中跟踪",
-                "immediate_action": "立即买入",
-                "watch_conditions": ["放量突破"],
-                "next_check_time": "14:30",
-                "confidence_reason": "趋势偏强",
+                "action_window": "Theo dõi trong phiên",
+                "immediate_action": "Buy now",
+                "watch_conditions": ["Bứt phá kèm khối lượng"],
+                "next_check_time": "14:00",
+                "confidence_reason": "Xu hướng khá mạnh",
                 "data_limitations": [],
             },
         },
@@ -36,8 +36,8 @@ def _result(**kwargs) -> AnalysisResult:
 def _phase(phase: str = "intraday") -> dict:
     return {
         "phase": phase,
-        "market": "cn",
-        "market_local_time": "2026-06-02T10:30:00+08:00",
+        "market": "vn",
+        "market_local_time": "2026-06-02T10:30:00+07:00",
         "is_trading_day": True,
         "is_market_open_now": phase == "intraday",
         "is_partial_bar": phase in {"intraday", "lunch_break", "closing_auction"},
@@ -47,11 +47,11 @@ def _phase(phase: str = "intraday") -> dict:
 
 def _overview(status: str = "stale") -> dict:
     return {
-        "subject": {"code": "600519", "stock_name": "贵州茅台", "market": "cn"},
+        "subject": {"code": "FPT", "stock_name": "FPT Corp", "market": "vn"},
         "blocks": [
             {
                 "key": "quote",
-                "label": "行情",
+                "label": "Giá",
                 "status": status,
                 "source": "tencent",
                 "warnings": [],
@@ -59,7 +59,7 @@ def _overview(status: str = "stale") -> dict:
             },
             {
                 "key": "daily_bars",
-                "label": "日线",
+                "label": "Nến ngày",
                 "status": "available",
                 "source": "akshare",
                 "warnings": [],
@@ -67,7 +67,7 @@ def _overview(status: str = "stale") -> dict:
             },
             {
                 "key": "technical",
-                "label": "技术",
+                "label": "Kỹ thuật",
                 "status": "available",
                 "source": "local",
                 "warnings": [],
@@ -89,30 +89,30 @@ def test_degraded_core_data_caps_high_confidence_buy() -> None:
         result,
         market_phase_summary=_phase("intraday"),
         analysis_context_pack_overview=_overview("stale"),
-        report_language="zh",
+        report_language="vi",
     )
 
     assert "confidence_capped_core_data_degraded" in adjustments
-    assert result.confidence_level == "中"
+    assert result.confidence_level == "Trung bình"
     pd = result.dashboard["phase_decision"]
     assert pd["phase_context"]["phase"] == "intraday"
     assert "quote: stale" in pd["data_limitations"]
-    assert "核心行情" in pd["confidence_reason"]
+    assert "Core quote" in pd["confidence_reason"]
 
 
 def test_degraded_core_data_caps_high_confidence_hold_advice() -> None:
     result = _result(
-        operation_advice="暂不加仓，观望",
+        operation_advice="Do not add now, watch",
         decision_type="hold",
-        confidence_level="高",
+        confidence_level="High",
         dashboard={
-            "core_conclusion": {"one_sentence": "暂不加仓，观望"},
+            "core_conclusion": {"one_sentence": "Do not add now, watch"},
             "phase_decision": {
-                "action_window": "盘中跟踪",
-                "immediate_action": "暂不加仓，观望",
-                "watch_conditions": ["放量突破"],
-                "next_check_time": "14:30",
-                "confidence_reason": "趋势未确认",
+                "action_window": "Theo dõi trong phiên",
+                "immediate_action": "Do not add now, watch",
+                "watch_conditions": ["Bứt phá kèm khối lượng"],
+                "next_check_time": "14:00",
+                "confidence_reason": "Xu hướng chưa xác nhận",
                 "data_limitations": [],
             },
         },
@@ -122,12 +122,12 @@ def test_degraded_core_data_caps_high_confidence_hold_advice() -> None:
         result,
         market_phase_summary=_phase("intraday"),
         analysis_context_pack_overview=_overview("stale"),
-        report_language="zh",
+        report_language="vi",
     )
 
     assert "confidence_capped_core_data_degraded" in adjustments
-    assert result.confidence_level == "中"
-    assert "核心行情" in result.dashboard["phase_decision"]["confidence_reason"]
+    assert result.confidence_level == "Trung bình"
+    assert "Core quote" in result.dashboard["phase_decision"]["confidence_reason"]
     assert "quote: stale" in result.dashboard["phase_decision"]["data_limitations"]
 
 
@@ -138,12 +138,12 @@ def test_premarket_high_confidence_immediate_action_is_conservative() -> None:
         result,
         market_phase_summary=_phase("premarket"),
         analysis_context_pack_overview=_overview("available"),
-        report_language="zh",
+        report_language="vi",
     )
 
     assert "confidence_capped_non_intraday_action" in adjustments
-    assert result.confidence_level == "低"
-    assert result.dashboard["phase_decision"]["immediate_action"] == "等待盘中确认，禁止追高。"
+    assert result.confidence_level == "Thấp"
+    assert result.dashboard["phase_decision"]["immediate_action"] == "Wait for intraday confirmation; do not chase."
 
 
 def test_premarket_medium_confidence_immediate_action_rewrites_action_only() -> None:
@@ -183,17 +183,17 @@ def test_premarket_medium_confidence_immediate_action_rewrites_action_only() -> 
 
 def test_unknown_low_confidence_immediate_action_rewrites_action_only() -> None:
     result = _result(
-        operation_advice="观察为主",
+        operation_advice="Chủ yếu quan sát",
         decision_type="hold",
-        confidence_level="低",
+        confidence_level="Thấp",
         dashboard={
-            "core_conclusion": {"one_sentence": "观察为主"},
+            "core_conclusion": {"one_sentence": "Chủ yếu quan sát"},
             "phase_decision": {
-                "action_window": "未知阶段观察",
-                "immediate_action": "立即买入",
-                "watch_conditions": ["确认开市状态"],
-                "next_check_time": "阶段确认后",
-                "confidence_reason": "阶段未知",
+                "action_window": "Quan sát khi chưa rõ giai đoạn",
+                "immediate_action": "buy now",
+                "watch_conditions": ["Xác nhận trạng thái mở cửa"],
+                "next_check_time": "Sau khi xác nhận giai đoạn",
+                "confidence_reason": "Chưa rõ giai đoạn",
                 "data_limitations": [],
             },
         },
@@ -203,13 +203,13 @@ def test_unknown_low_confidence_immediate_action_rewrites_action_only() -> None:
         result,
         market_phase_summary=_phase("unknown"),
         analysis_context_pack_overview=_overview("available"),
-        report_language="zh",
+        report_language="vi",
     )
 
     assert "non_intraday_action_adjusted" in adjustments
     assert "confidence_capped_non_intraday_action" not in adjustments
-    assert result.confidence_level == "低"
-    assert result.dashboard["phase_decision"]["immediate_action"] == "等待盘中确认，禁止追高。"
+    assert result.confidence_level == "Thấp"
+    assert result.dashboard["phase_decision"]["immediate_action"] == "Wait for intraday confirmation; do not chase."
 
 
 def test_premarket_degraded_immediate_action_uses_strongest_cap() -> None:
@@ -219,35 +219,35 @@ def test_premarket_degraded_immediate_action_uses_strongest_cap() -> None:
         result,
         market_phase_summary=_phase("premarket"),
         analysis_context_pack_overview=_overview("stale"),
-        report_language="zh",
+        report_language="vi",
     )
 
     assert "confidence_capped_core_data_degraded" in adjustments
     assert "confidence_capped_non_intraday_action" in adjustments
-    assert result.confidence_level == "低"
-    assert result.dashboard["phase_decision"]["immediate_action"] == "等待盘中确认，禁止追高。"
+    assert result.confidence_level == "Thấp"
+    assert result.dashboard["phase_decision"]["immediate_action"] == "Wait for intraday confirmation; do not chase."
 
 
-def test_intraday_postmarket_recap_wording_is_adjusted_in_zh_and_en() -> None:
-    zh_result = _result(
-        operation_advice="今日收盘后复盘显示可买入",
-        analysis_summary="明日重点关注突破",
+def test_intraday_postmarket_recap_wording_is_adjusted_in_vi_and_en() -> None:
+    vi_result = _result(
+        operation_advice="Điểm lại sau phiên cho thấy có thể mua",
+        analysis_summary="Tâm điểm ngày mai là bứt phá",
         dashboard={
-            "core_conclusion": {"one_sentence": "今日收盘后复盘显示偏强"},
-            "phase_decision": {"immediate_action": "明日重点关注突破", "watch_conditions": []},
+            "core_conclusion": {"one_sentence": "Sau khi đóng cửa hôm nay, xu hướng mạnh"},
+            "phase_decision": {"immediate_action": "Tâm điểm ngày mai là bứt phá", "watch_conditions": []},
         },
     )
 
-    zh_adjustments = apply_phase_decision_guardrails(
-        zh_result,
+    vi_adjustments = apply_phase_decision_guardrails(
+        vi_result,
         market_phase_summary=_phase("intraday"),
         analysis_context_pack_overview=_overview("available"),
-        report_language="zh",
+        report_language="vi",
     )
 
-    assert "postmarket_recap_wording_adjusted" in zh_adjustments
-    assert "今日收盘后" not in zh_result.dashboard["core_conclusion"]["one_sentence"]
-    assert "明日重点" not in zh_result.analysis_summary
+    assert "postmarket_recap_wording_adjusted" in vi_adjustments
+    assert "sau khi đóng cửa hôm nay" not in vi_result.dashboard["core_conclusion"]["one_sentence"].lower()
+    assert "tâm điểm ngày mai" not in vi_result.analysis_summary.lower()
 
     en_result = _result(
         operation_advice="Buy after today's close",
@@ -274,10 +274,10 @@ def test_intraday_postmarket_recap_wording_is_adjusted_in_zh_and_en() -> None:
 
 def test_postmarket_recap_and_missing_inputs_are_fail_open() -> None:
     postmarket = _result(
-        operation_advice="今日收盘后复盘显示可持有",
+        operation_advice="Sau khi đóng cửa hôm nay có thể nắm giữ",
         dashboard={
-            "core_conclusion": {"one_sentence": "今日收盘后复盘显示可持有"},
-            "phase_decision": {"watch_conditions": ["不破支撑"]},
+            "core_conclusion": {"one_sentence": "Sau khi đóng cửa hôm nay có thể nắm giữ"},
+            "phase_decision": {"watch_conditions": ["Giữ được hỗ trợ"]},
         },
     )
 
@@ -285,19 +285,19 @@ def test_postmarket_recap_and_missing_inputs_are_fail_open() -> None:
         postmarket,
         market_phase_summary=_phase("postmarket"),
         analysis_context_pack_overview=None,
-        report_language="zh",
+        report_language="vi",
     )
 
     assert adjustments == []
-    assert "今日收盘后" in postmarket.dashboard["core_conclusion"]["one_sentence"]
-    assert postmarket.dashboard["phase_decision"]["watch_conditions"] == ["不破支撑"]
+    assert "Sau khi đóng cửa hôm nay" in postmarket.dashboard["core_conclusion"]["one_sentence"]
+    assert postmarket.dashboard["phase_decision"]["watch_conditions"] == ["Giữ được hỗ trợ"]
 
     missing = _result(dashboard={})
     adjustments = apply_phase_decision_guardrails(
         missing,
         market_phase_summary=None,
         analysis_context_pack_overview=None,
-        report_language="zh",
+        report_language="vi",
     )
 
     assert adjustments == []
@@ -307,17 +307,17 @@ def test_postmarket_recap_and_missing_inputs_are_fail_open() -> None:
 
 def test_guardrail_creates_dashboard_for_agent_compatible_result_object() -> None:
     result = SimpleNamespace(
-        confidence_level="高",
+        confidence_level="Cao",
         decision_type="hold",
-        operation_advice="持有",
-        analysis_summary="测试摘要",
+        operation_advice="Nắm giữ",
+        analysis_summary="Tóm tắt thử nghiệm",
     )
 
     adjustments = apply_phase_decision_guardrails(
         result,
         market_phase_summary=_phase("intraday"),
         analysis_context_pack_overview=_overview("available"),
-        report_language="zh",
+        report_language="vi",
     )
 
     assert adjustments == []

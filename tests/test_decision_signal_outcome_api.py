@@ -42,7 +42,7 @@ def client_and_db(tmp_path):
     env_path.write_text(
         "\n".join(
             [
-                "STOCK_LIST=600519",
+                "STOCK_LIST=HPG",
                 "GEMINI_API_KEY=test",
                 "ADMIN_AUTH_ENABLED=false",
                 f"DATABASE_PATH={db_path}",
@@ -77,9 +77,9 @@ def client_and_db(tmp_path):
 
 def _payload(**overrides):
     payload = {
-        "stock_code": "600519",
-        "stock_name": "贵州茅台",
-        "market": "cn",
+        "stock_code": "HPG",
+        "stock_name": "Hòa Phát",
+        "market": "vn",
         "source_type": "analysis",
         "source_agent": "api-test",
         "source_report_id": 4301,
@@ -93,7 +93,7 @@ def _payload(**overrides):
         "horizon": "3d",
         "entry_low": 100,
         "stop_loss": 95,
-        "reason": "突破平台",
+        "reason": "Bứt phá nền giá",
         "data_quality_summary": {"level": "good"},
         "metadata": {
             "market_phase_summary": {"session_date": "2024-01-02"},
@@ -105,7 +105,7 @@ def _payload(**overrides):
     return payload
 
 
-def _seed_bars(db: DatabaseManager, *, code: str = "600519") -> None:
+def _seed_bars(db: DatabaseManager, *, code: str = "HPG") -> None:
     with db.session_scope() as session:
         session.add(StockDaily(code=code, date=date(2024, 1, 2), open=100, high=101, low=99, close=100))
         session.add(StockDaily(code=code, date=date(2024, 1, 3), open=103, high=104, low=102, close=103))
@@ -203,7 +203,7 @@ def test_outcome_run_list_stats_signal_outcomes_and_feedback(client_and_db) -> N
         json={
             "feedback_value": "useful",
             "reason_code": "matched_plan",
-            "note": "后验表现符合预期",
+            "note": "Hiệu quả hậu kiểm đúng kỳ vọng",
             "source": "web",
         },
     )
@@ -256,8 +256,8 @@ def test_outcome_run_retries_transient_unable_by_default(client_and_db) -> None:
     assert created_resp.status_code == 200, created_resp.text
     signal_id = created_resp.json()["item"]["id"]
     with db.session_scope() as session:
-        session.add(StockDaily(code="600519", date=date(2024, 1, 2), open=100, high=101, low=99, close=100))
-        session.add(StockDaily(code="600519", date=date(2024, 1, 3), open=103, high=104, low=102, close=103))
+        session.add(StockDaily(code="HPG", date=date(2024, 1, 2), open=100, high=101, low=99, close=100))
+        session.add(StockDaily(code="HPG", date=date(2024, 1, 3), open=103, high=104, low=102, close=103))
 
     first_run = client.post(
         "/api/v1/decision-signals/outcomes/run",
@@ -267,8 +267,8 @@ def test_outcome_run_retries_transient_unable_by_default(client_and_db) -> None:
     assert first_run.json()["items"][0]["unable_reason"] == "insufficient_forward_bars"
 
     with db.session_scope() as session:
-        session.add(StockDaily(code="600519", date=date(2024, 1, 4), open=104, high=105, low=103, close=104))
-        session.add(StockDaily(code="600519", date=date(2024, 1, 5), open=105, high=106, low=104, close=105))
+        session.add(StockDaily(code="HPG", date=date(2024, 1, 4), open=104, high=105, low=103, close=104))
+        session.add(StockDaily(code="HPG", date=date(2024, 1, 5), open=105, high=106, low=104, close=105))
     second_run = client.post(
         "/api/v1/decision-signals/outcomes/run",
         json={"signal_id": signal_id},
@@ -283,26 +283,26 @@ def test_outcome_run_retries_transient_unable_by_default(client_and_db) -> None:
     assert second_data["items"][0]["stock_return_pct"] == 5.0
 
 
-def test_outcome_run_uses_hk_alias_stock_code_filter(client_and_db) -> None:
+def test_outcome_run_uses_vn_suffix_stock_code_filter(client_and_db) -> None:
     client, db = client_and_db
     created_resp = client.post(
         "/api/v1/decision-signals",
         json=_payload(
-            stock_code="00700",
-            stock_name="Tencent",
-            market="hk",
+            stock_code="FPT.VN",
+            stock_name="FPT",
+            market="vn",
             horizon="1d",
-            trace_id="trace-outcome-api-hk",
+            trace_id="trace-outcome-api-vn-suffix",
         ),
     )
     assert created_resp.status_code == 200, created_resp.text
     signal_id = created_resp.json()["item"]["id"]
-    assert created_resp.json()["item"]["stock_code"] == "HK00700"
-    _seed_bars(db, code="HK00700")
+    assert created_resp.json()["item"]["stock_code"] == "FPT"
+    _seed_bars(db, code="FPT")
 
     run_resp = client.post(
         "/api/v1/decision-signals/outcomes/run",
-        json={"stock_code": "00700", "horizons": ["1d"]},
+        json={"stock_code": "fpt.vn", "horizons": ["1d"]},
     )
     assert run_resp.status_code == 200, run_resp.text
     run_data = run_resp.json()
@@ -312,10 +312,11 @@ def test_outcome_run_uses_hk_alias_stock_code_filter(client_and_db) -> None:
 
     force_resp = client.post(
         "/api/v1/decision-signals/outcomes/run",
-        json={"stock_code": "00700", "horizons": ["1d"], "force": True},
+        json={"stock_code": "FPT", "horizons": ["1d"], "force": True},
     )
     assert force_resp.status_code == 200, force_resp.text
     force_data = force_resp.json()
     assert force_data["evaluated"] == 1
     assert force_data["updated"] == 1
     assert force_data["items"][0]["signal_id"] == signal_id
+

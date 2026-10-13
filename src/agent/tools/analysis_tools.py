@@ -98,7 +98,7 @@ analyze_trend_tool = ToolDefinition(
         ToolParameter(
             name="stock_code",
             type="string",
-            description="Stock code to analyze, e.g., '600519'",
+            description="Stock code to analyze, e.g., 'HPG'",
         ),
     ],
     handler=_handle_analyze_trend,
@@ -177,7 +177,7 @@ calculate_ma_tool = ToolDefinition(
         ToolParameter(
             name="stock_code",
             type="string",
-            description="Stock code, e.g., '600519'",
+            description="Stock code, e.g., 'HPG'",
         ),
         ToolParameter(
             name="periods",
@@ -302,7 +302,7 @@ get_volume_analysis_tool = ToolDefinition(
         ToolParameter(
             name="stock_code",
             type="string",
-            description="Stock code, e.g., '600519'",
+            description="Stock code, e.g., 'HPG'",
         ),
         ToolParameter(
             name="days",
@@ -509,7 +509,7 @@ analyze_pattern_tool = ToolDefinition(
         ToolParameter(
             name="stock_code",
             type="string",
-            description="Stock code, e.g., '600519'",
+            description="Stock code, e.g., 'HPG'",
         ),
         ToolParameter(
             name="days",

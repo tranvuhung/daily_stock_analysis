@@ -62,11 +62,15 @@ class PipelineProgressLanguageTestCase(unittest.TestCase):
             )
             self.assertFalse(CJK.search(text), f"{stage}: {text}")
 
-    def test_chinese_run_still_gets_chinese(self):
-        """Chống hồi quy cho người dùng ``zh`` của upstream."""
+    def test_legacy_chinese_language_falls_back_to_vietnamese(self):
+        """``zh`` đã bị gỡ: cấu hình cũ phải rơi về tiếng Việt, không còn chữ Hán.
 
-        text = get_pipeline_progress_text("fetch_market", "zh", name="600519")
-        self.assertTrue(CJK.search(text))
+        Legacy ``zh`` config is normalized to Vietnamese output.
+        """
+
+        text = get_pipeline_progress_text("fetch_market", "zh", name="HPG")
+        self.assertFalse(CJK.search(text), text)
+        self.assertEqual(text, get_pipeline_progress_text("fetch_market", "vi", name="HPG"))
 
     def test_every_stage_defines_every_language(self):
         # Thiếu một ngôn ngữ sẽ ném KeyError ngay giữa luồng phân tích thật.
@@ -149,7 +153,8 @@ class AnalysisErrorLanguageTestCase(unittest.TestCase):
             en = get_analysis_error_text(key, "en", code="HPG")
             self.assertFalse(CJK.search(vi), f"{key}: {vi}")
             self.assertFalse(CJK.search(en), f"{key}: {en}")
-            self.assertTrue(CJK.search(get_analysis_error_text(key, "zh", code="HPG")))
+            # ``zh`` cũ rơi về tiếng Việt. / Legacy ``zh`` falls back to Vietnamese.
+            self.assertEqual(get_analysis_error_text(key, "zh", code="HPG"), vi)
 
     def test_unknown_key_does_not_raise(self):
         self.assertEqual(get_analysis_error_text("nope", "vi"), "nope")

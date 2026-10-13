@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""市场白名单（SUPPORTED_MARKETS）注册表行为。
+"""Hành vi registry thị trường (chỉ Việt Nam) và biến ``SUPPORTED_MARKETS`` cũ.
 
-这些用例都显式设置 ``SUPPORTED_MARKETS``，不依赖 conftest 里给整个测试进程
-设置的 ``all``。
+Market registry behavior (Vietnam only). ``SUPPORTED_MARKETS`` is still read for
+backward compatibility, but any non-``vn`` value is ignored.
 """
 
 import os
@@ -16,7 +16,7 @@ from src.utils import market_review_region as mrr
 
 @contextmanager
 def supported_markets(value):
-    """临时设置 allowlist，并保证前后都清掉注册表缓存。"""
+    """Đặt tạm SUPPORTED_MARKETS và xoá cache registry trước/sau. / Temporarily set the env var."""
 
     env = {} if value is None else {"SUPPORTED_MARKETS": value}
     with patch.dict(os.environ, env, clear=(value is None)):
@@ -32,18 +32,14 @@ class ParseSupportedMarketsTestCase(unittest.TestCase):
         with supported_markets(None):
             self.assertEqual(markets.enabled_markets(), ("vn",))
 
-    def test_all_expands_to_every_known_market(self):
-        with supported_markets("all"):
-            self.assertEqual(markets.enabled_markets(), markets.ALL_MARKET_CODES)
+    def test_registry_contains_only_vietnam(self):
+        self.assertEqual(markets.ALL_MARKET_CODES, ("vn",))
 
-    def test_comma_list_is_case_and_whitespace_insensitive(self):
-        with supported_markets(" CN , Us "):
-            self.assertEqual(markets.enabled_markets(), ("us", "cn"))
-
-    def test_result_is_ordered_by_detect_order_not_input_order(self):
-        # vn 必须排在 us 之前：越南裸代码与美股 ticker 正则重叠，判定顺序决定归属
-        with supported_markets("us,vn"):
-            self.assertEqual(markets.enabled_markets(), ("vn", "us"))
+    def test_legacy_non_vn_values_are_ignored(self):
+        # Giá trị cũ (all/cn/us) chỉ cảnh báo rồi bị bỏ qua. / Legacy values are ignored.
+        for value in ("all", " CN , Us ", "us,vn"):
+            with self.subTest(value=value), supported_markets(value):
+                self.assertEqual(markets.enabled_markets(), ("vn",))
 
     def test_unknown_tokens_are_ignored_but_valid_ones_kept(self):
         with supported_markets("vn,atlantis"):
@@ -68,8 +64,7 @@ class ParseSupportedMarketsTestCase(unittest.TestCase):
 
 class RegistryMetadataTestCase(unittest.TestCase):
     def test_vietnam_has_no_exchange_calendar(self):
-        # exchange-calendars 未收录 HOSE/HNX/UPCOM；交易日判断走 fail-open 分支。
-        # 如果将来该库加入了越南日历，这里应当同步填上 MIC 并更新本用例。
+        # exchange-calendars không có lịch HOSE/HNX/UPCOM; ngày giao dịch đi nhánh fail-open.
         self.assertIsNone(markets.ALL_MARKETS["vn"].xcals_code)
         self.assertEqual(markets.ALL_MARKETS["vn"].timezone, "Asia/Ho_Chi_Minh")
         self.assertEqual(markets.ALL_MARKETS["vn"].currency, "VND")
@@ -78,16 +73,13 @@ class RegistryMetadataTestCase(unittest.TestCase):
         for spec in markets.ALL_MARKETS.values():
             if spec.supports_market_review:
                 self.assertLess(
-                    spec.review_order, 99, f"{spec.code} 缺少 review_order"
+                    spec.review_order, 99, f"{spec.code} thiếu review_order"
                 )
 
     def test_enabled_market_exchanges_skips_markets_without_calendar(self):
         with supported_markets("vn,cn"):
-            self.assertEqual(markets.enabled_market_exchanges(), {"cn": "XSHG"})
-            self.assertEqual(
-                markets.enabled_market_timezones(),
-                {"vn": "Asia/Ho_Chi_Minh", "cn": "Asia/Shanghai"},
-            )
+            self.assertEqual(markets.enabled_market_exchanges(), {})
+            self.assertEqual(markets.enabled_market_timezones(), {"vn": "Asia/Ho_Chi_Minh"})
 
     def test_market_label_falls_back_to_upper_code(self):
         self.assertEqual(markets.market_label("vn"), "Việt Nam")
@@ -96,45 +88,32 @@ class RegistryMetadataTestCase(unittest.TestCase):
 
 
 class MarketReviewRegionTestCase(unittest.TestCase):
-    def test_review_regions_keep_legacy_order(self):
+    def test_review_regions_are_vietnam_only(self):
+        self.assertEqual(mrr.MARKET_REVIEW_REGION_ORDER, ("vn",))
+        self.assertEqual(mrr.MARKET_REVIEW_REGION_ALL, "vn")
         with supported_markets("all"):
-            self.assertEqual(
-                mrr.enabled_market_review_regions(), ("cn", "hk", "us", "jp", "kr", "vn")
-            )
-            self.assertEqual(mrr.MARKET_REVIEW_REGION_ALL, "cn,hk,us,jp,kr,vn")
+            self.assertEqual(mrr.enabled_market_review_regions(), ("vn",))
 
     def test_vietnam_only_reviews_vietnam(self):
-        # Chỉ bật Việt Nam: điểm lại thị trường chạy cho vn, mặc định cũng là vn;
-        # vẫn không được lùi về cn vì nguồn dữ liệu A-share đã tắt.
         with supported_markets("vn"):
             self.assertEqual(mrr.enabled_market_review_regions(), ("vn",))
             self.assertTrue(mrr.market_review_supported())
             self.assertEqual(mrr.normalize_market_review_region_lenient(None), "vn")
-            self.assertEqual(mrr.normalize_market_review_region_lenient("both"), "vn")
-            self.assertIsNone(mrr.normalize_market_review_region_lenient("cn"))
             self.assertEqual(mrr.normalize_market_review_region_strict("VN"), "vn")
-            with self.assertRaises(ValueError):
-                mrr.normalize_market_review_region_strict("cn")
 
-    def test_market_without_review_profile_has_no_review_region(self):
-        # Đài Loan chưa có profile/prompt điểm lại: không được lùi về cn.
-        with supported_markets("tw"):
-            self.assertEqual(mrr.enabled_market_review_regions(), ())
-            self.assertFalse(mrr.market_review_supported())
-            self.assertIsNone(mrr.normalize_market_review_region_lenient(None))
-            with self.assertRaises(ValueError):
-                mrr.normalize_market_review_region_strict("cn")
+    def test_legacy_region_values_fold_into_vn(self):
+        # Client/cấu hình cũ gửi cn/both/... vẫn được quy về vn.
+        # Legacy region tokens normalize to vn for backward compatibility.
+        for value in ("both", "cn", "cn,us", "hk"):
+            with self.subTest(value=value):
+                self.assertEqual(mrr.normalize_market_review_region_lenient(value), "vn")
+                self.assertEqual(mrr.normalize_market_review_region_strict(value), "vn")
 
-    def test_disabled_market_is_rejected_by_strict_parser(self):
-        with supported_markets("vn,cn"):
-            self.assertEqual(mrr.normalize_market_review_region_strict("cn"), "cn")
-            with self.assertRaises(ValueError):
-                mrr.normalize_market_review_region_strict("us")
-
-    def test_both_expands_only_to_enabled_regions(self):
-        with supported_markets("cn,us"):
-            self.assertEqual(mrr.normalize_market_review_region_lenient("both"), "cn,us")
-            self.assertEqual(mrr.normalize_market_review_region_strict("both"), "cn,us")
+    def test_unknown_region_rejected(self):
+        self.assertIsNone(mrr.normalize_market_review_region_lenient("atlantis"))
+        for value in ("atlantis", "", "vn,,"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                mrr.normalize_market_review_region_strict(value)
 
 
 if __name__ == "__main__":

@@ -116,7 +116,7 @@ def test_cancelled_codex_turn_is_not_persisted_as_analysis_failure() -> None:
     backend = _failure_backend(
         runtime_owns_loop=True,
         error_code="cancelled",
-        error_message="本次 Codex Agent 问股已取消。",
+        error_message="Lượt Hỏi đáp với Codex Agent đã bị huỷ.",
     )
     prepared = PreparedAgentChat(
         system_prompt="system",
@@ -133,7 +133,7 @@ def test_cancelled_codex_turn_is_not_persisted_as_analysis_failure() -> None:
     assert add_message.call_args_list[-1].args == (
         "session",
         "assistant",
-        "[已停止] 本次分析已由用户停止。",
+        "[Đã dừng] Lượt phân tích này đã được người dùng dừng.",
     )
 
 
@@ -158,7 +158,7 @@ def test_timed_out_codex_turn_uses_codex_terminal_note() -> None:
     assert add_message.call_args_list[-1].args == (
         "session",
         "assistant",
-        "[已超时] 本次分析已在时间限制内结束。",
+        "[Quá thời gian] Lượt phân tích này đã kết thúc do vượt giới hạn thời gian.",
     )
 
 
@@ -183,7 +183,7 @@ def test_timed_out_litellm_turn_keeps_existing_analysis_failure_note() -> None:
     assert add_message.call_args_list[-1].args == (
         "session",
         "assistant",
-        "[分析失败] Agent execution timed out after 45 seconds",
+        "[Phân tích thất bại] Agent execution timed out after 45 seconds",
     )
 
 
@@ -208,7 +208,7 @@ def test_failed_litellm_turn_keeps_existing_analysis_failure_note() -> None:
     assert add_message.call_args_list[-1].args == (
         "session",
         "assistant",
-        "[分析失败] provider failed",
+        "[Phân tích thất bại] provider failed",
     )
 
 
@@ -285,7 +285,9 @@ def test_build_chat_failure_note_languages() -> None:
     assert build_chat_failure_note("cancelled", None, "vi") == "[Đã dừng] Lượt phân tích này đã được người dùng dừng."
     assert build_chat_failure_note("timeout", None, "en") == "[Timed out] This analysis ended at the time limit."
     assert build_chat_failure_note("failed", None, "vi") == "[Phân tích thất bại] Lỗi không xác định"
-    assert build_chat_failure_note("failed", "boom", None) == "[分析失败] boom"
+    assert build_chat_failure_note("failed", "boom", None) == "[Phân tích thất bại] boom"
+    # Ngôn ngữ cũ zh được quy về tiếng Việt. / Legacy zh falls back to Vietnamese.
+    assert build_chat_failure_note("failed", "boom", "zh") == "[Phân tích thất bại] boom"
 
 
 def test_vietnamese_chat_language_section_requires_vietnamese_reply() -> None:

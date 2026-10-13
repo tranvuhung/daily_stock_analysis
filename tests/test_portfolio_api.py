@@ -48,7 +48,7 @@ class PortfolioApiTestCase(unittest.TestCase):
         self.env_path.write_text(
             "\n".join(
                 [
-                    "STOCK_LIST=600519",
+                    "STOCK_LIST=HPG",
                     "GEMINI_API_KEY=test",
                     "ADMIN_AUTH_ENABLED=false",
                     f"DATABASE_PATH={self.db_path}",
@@ -94,10 +94,10 @@ class PortfolioApiTestCase(unittest.TestCase):
         self,
         *,
         name: str = "Main",
-        symbol: str = "600519",
+        symbol: str = "HPG",
         quantity: float = 10.0,
-        market: str = "cn",
-        currency: str = "CNY",
+        market: str = "vn",
+        currency: str = "VND",
     ) -> int:
         create_resp = self.client.post(
             "/api/v1/portfolio/accounts",
@@ -127,7 +127,7 @@ class PortfolioApiTestCase(unittest.TestCase):
     def test_account_event_snapshot_flow(self) -> None:
         create_resp = self.client.post(
             "/api/v1/portfolio/accounts",
-            json={"name": "Main", "broker": "Demo", "market": "cn", "base_currency": "CNY"},
+            json={"name": "Main", "broker": "Demo", "market": "vn", "base_currency": "VND"},
         )
         self.assertEqual(create_resp.status_code, 200)
         account_id = create_resp.json()["id"]
@@ -143,7 +143,7 @@ class PortfolioApiTestCase(unittest.TestCase):
                 "event_date": "2026-01-01",
                 "direction": "in",
                 "amount": 10000,
-                "currency": "CNY",
+                "currency": "VND",
             },
         )
         self.assertEqual(cash_resp.status_code, 200)
@@ -152,19 +152,19 @@ class PortfolioApiTestCase(unittest.TestCase):
             "/api/v1/portfolio/trades",
             json={
                 "account_id": account_id,
-                "symbol": "600519",
+                "symbol": "HPG",
                 "trade_date": "2026-01-02",
                 "side": "buy",
                 "quantity": 100,
                 "price": 100,
                 "fee": 0,
                 "tax": 0,
-                "market": "cn",
-                "currency": "CNY",
+                "market": "vn",
+                "currency": "VND",
             },
         )
         self.assertEqual(trade_resp.status_code, 200)
-        self._save_close("600519", date(2026, 1, 3), 110.0)
+        self._save_close("HPG", date(2026, 1, 3), 110.0)
 
         snapshot_resp = self.client.get(
             "/api/v1/portfolio/snapshot",
@@ -183,7 +183,7 @@ class PortfolioApiTestCase(unittest.TestCase):
         today = date.today()
         create_resp = self.client.post(
             "/api/v1/portfolio/accounts",
-            json={"name": "Fast", "broker": "Demo", "market": "cn", "base_currency": "CNY"},
+            json={"name": "Fast", "broker": "Demo", "market": "vn", "base_currency": "VND"},
         )
         self.assertEqual(create_resp.status_code, 200)
         account_id = create_resp.json()["id"]
@@ -192,19 +192,19 @@ class PortfolioApiTestCase(unittest.TestCase):
             "/api/v1/portfolio/trades",
             json={
                 "account_id": account_id,
-                "symbol": "600519",
+                "symbol": "HPG",
                 "trade_date": today.isoformat(),
                 "side": "buy",
                 "quantity": 10,
                 "price": 100,
                 "fee": 0,
                 "tax": 0,
-                "market": "cn",
-                "currency": "CNY",
+                "market": "vn",
+                "currency": "VND",
             },
         )
         self.assertEqual(trade_resp.status_code, 200, trade_resp.text)
-        self._save_close("600519", today, 118.0)
+        self._save_close("HPG", today, 118.0)
 
         with patch(
             "src.services.portfolio_service.PortfolioService._fetch_realtime_position_price",
@@ -224,54 +224,10 @@ class PortfolioApiTestCase(unittest.TestCase):
         self.assertEqual(position["price_source"], "history_close")
         self.assertAlmostEqual(position["last_price"], 118.0, places=6)
 
-    def test_snapshot_exposes_partial_quality_fields_for_mixed_position_markets(self) -> None:
-        create_resp = self.client.post(
-            "/api/v1/portfolio/accounts",
-            json={"name": "Mixed", "broker": "Demo", "market": "cn", "base_currency": "CNY"},
-        )
-        self.assertEqual(create_resp.status_code, 200)
-        account_id = create_resp.json()["id"]
-
-        trade_resp = self.client.post(
-            "/api/v1/portfolio/trades",
-            json={
-                "account_id": account_id,
-                "symbol": "7203.T",
-                "trade_date": "2026-01-02",
-                "side": "buy",
-                "quantity": 10,
-                "price": 1000,
-                "fee": 0,
-                "tax": 0,
-                "market": "jp",
-                "currency": "JPY",
-            },
-        )
-        self.assertEqual(trade_resp.status_code, 200, trade_resp.text)
-        self._save_close("7203.T", date(2026, 1, 3), 1200.0)
-
-        snapshot_resp = self.client.get(
-            "/api/v1/portfolio/snapshot",
-            params={"as_of": "2026-01-03"},
-        )
-        self.assertEqual(snapshot_resp.status_code, 200)
-        payload = snapshot_resp.json()
-        self.assertEqual(payload["data_quality"], "partial")
-        self.assertIn("fx_and_cost_basis_partial", payload["limitations"])
-        account_snapshot = payload["accounts"][0]
-        position = account_snapshot["positions"][0]
-
-        self.assertEqual(account_snapshot["market"], "cn")
-        self.assertEqual(account_snapshot["data_quality"], "partial")
-        self.assertIn("fx_and_cost_basis_partial", account_snapshot["limitations"])
-        self.assertEqual(position["market"], "jp")
-        self.assertEqual(position["data_quality"], "partial")
-        self.assertIn("realtime_quote_best_effort", position["limitations"])
-
     def test_delete_account_deactivates_without_hard_deleting(self) -> None:
         create_resp = self.client.post(
             "/api/v1/portfolio/accounts",
-            json={"name": "Mistyped", "broker": "Demo", "market": "cn", "base_currency": "CNY"},
+            json={"name": "Mistyped", "broker": "Demo", "market": "vn", "base_currency": "VND"},
         )
         self.assertEqual(create_resp.status_code, 200)
         account_id = create_resp.json()["id"]
@@ -304,7 +260,7 @@ class PortfolioApiTestCase(unittest.TestCase):
     def test_event_lists_hide_archived_account_rows_by_default(self) -> None:
         create_resp = self.client.post(
             "/api/v1/portfolio/accounts",
-            json={"name": "Archived", "broker": "Demo", "market": "cn", "base_currency": "CNY"},
+            json={"name": "Archived", "broker": "Demo", "market": "vn", "base_currency": "VND"},
         )
         self.assertEqual(create_resp.status_code, 200)
         account_id = create_resp.json()["id"]
@@ -316,33 +272,33 @@ class PortfolioApiTestCase(unittest.TestCase):
                 "event_date": "2026-01-01",
                 "direction": "in",
                 "amount": 10000,
-                "currency": "CNY",
+                "currency": "VND",
             },
         )
         trade_resp = self.client.post(
             "/api/v1/portfolio/trades",
             json={
                 "account_id": account_id,
-                "symbol": "600519",
+                "symbol": "HPG",
                 "trade_date": "2026-01-02",
                 "side": "buy",
                 "quantity": 10,
                 "price": 100,
                 "fee": 0,
                 "tax": 0,
-                "market": "cn",
-                "currency": "CNY",
+                "market": "vn",
+                "currency": "VND",
             },
         )
         corp_resp = self.client.post(
             "/api/v1/portfolio/corporate-actions",
             json={
                 "account_id": account_id,
-                "symbol": "600519",
+                "symbol": "HPG",
                 "effective_date": "2026-01-03",
                 "action_type": "cash_dividend",
-                "market": "cn",
-                "currency": "CNY",
+                "market": "vn",
+                "currency": "VND",
                 "cash_dividend_per_share": 1.0,
             },
         )
@@ -367,7 +323,7 @@ class PortfolioApiTestCase(unittest.TestCase):
     def test_default_risk_hides_archived_account_snapshot_drawdown(self) -> None:
         create_resp = self.client.post(
             "/api/v1/portfolio/accounts",
-            json={"name": "Archived Risk", "broker": "Demo", "market": "cn", "base_currency": "CNY"},
+            json={"name": "Archived Risk", "broker": "Demo", "market": "vn", "base_currency": "VND"},
         )
         self.assertEqual(create_resp.status_code, 200)
         account_id = create_resp.json()["id"]
@@ -379,28 +335,28 @@ class PortfolioApiTestCase(unittest.TestCase):
                 "event_date": "2026-01-01",
                 "direction": "in",
                 "amount": 20000,
-                "currency": "CNY",
+                "currency": "VND",
             },
         )
         trade_resp = self.client.post(
             "/api/v1/portfolio/trades",
             json={
                 "account_id": account_id,
-                "symbol": "600519",
+                "symbol": "HPG",
                 "trade_date": "2026-01-01",
                 "side": "buy",
                 "quantity": 100,
                 "price": 100,
                 "fee": 0,
                 "tax": 0,
-                "market": "cn",
-                "currency": "CNY",
+                "market": "vn",
+                "currency": "VND",
             },
         )
         self.assertEqual(cash_resp.status_code, 200)
         self.assertEqual(trade_resp.status_code, 200)
-        self._save_close("600519", date(2026, 1, 1), 100.0)
-        self._save_close("600519", date(2026, 1, 2), 70.0)
+        self._save_close("HPG", date(2026, 1, 1), 100.0)
+        self._save_close("HPG", date(2026, 1, 2), 70.0)
 
         before_archive = self.client.get(
             "/api/v1/portfolio/risk",
@@ -432,7 +388,7 @@ class PortfolioApiTestCase(unittest.TestCase):
         accepted_task = SimpleNamespace(
             task_id="task-portfolio-1",
             trace_id="trace-portfolio-1",
-            stock_code="600519",
+            stock_code="HPG",
             analysis_phase="intraday",
         )
         queue = MagicMock()
@@ -443,7 +399,7 @@ class PortfolioApiTestCase(unittest.TestCase):
             return_value=(None, None),
         ), patch("api.v1.endpoints.portfolio.get_task_queue", return_value=queue):
             resp = self.client.post(
-                "/api/v1/portfolio/positions/600519/analysis",
+                "/api/v1/portfolio/positions/HPG/analysis",
                 json={"account_id": account_id, "analysis_phase": "intraday", "force": True},
             )
 
@@ -454,7 +410,7 @@ class PortfolioApiTestCase(unittest.TestCase):
         self.assertNotIn("portfolio_context", str(payload))
 
         args, kwargs = queue.submit_tasks_batch.call_args
-        self.assertEqual(args[0], ["600519"])
+        self.assertEqual(args[0], ["HPG"])
         self.assertEqual(kwargs["selection_source"], "manual")
         self.assertEqual(kwargs["query_source"], "portfolio")
         self.assertEqual(kwargs["analysis_phase"], "intraday")
@@ -464,11 +420,11 @@ class PortfolioApiTestCase(unittest.TestCase):
         self.assertEqual(kwargs["portfolio_context"]["cost_method"], "fifo")
 
     def test_position_analysis_matches_exchange_suffix_position_symbol(self) -> None:
-        account_id = self._create_position(symbol="600519.SH", quantity=10)
+        account_id = self._create_position(symbol="HPG.VN", quantity=10)
         accepted_task = SimpleNamespace(
-            task_id="task-portfolio-sh",
-            trace_id="trace-portfolio-sh",
-            stock_code="SH600519",
+            task_id="task-portfolio-vn",
+            trace_id="trace-portfolio-vn",
+            stock_code="HPG",
             analysis_phase="auto",
         )
         queue = MagicMock()
@@ -479,49 +435,17 @@ class PortfolioApiTestCase(unittest.TestCase):
             return_value=(None, None),
         ), patch("api.v1.endpoints.portfolio.get_task_queue", return_value=queue):
             resp = self.client.post(
-                "/api/v1/portfolio/positions/600519.SH/analysis",
+                "/api/v1/portfolio/positions/HPG.VN/analysis",
                 json={"account_id": account_id},
             )
 
         self.assertEqual(resp.status_code, 202, resp.text)
         args, kwargs = queue.submit_tasks_batch.call_args
-        self.assertEqual(args[0], ["SH600519"])
-        self.assertEqual(kwargs["portfolio_context"]["symbol"], "SH600519")
-
-    def test_position_analysis_matches_hk_suffix_position_symbol(self) -> None:
-        account_id = self._create_position(
-            symbol="1810.HK",
-            quantity=10,
-            market="hk",
-            currency="HKD",
-        )
-        accepted_task = SimpleNamespace(
-            task_id="task-portfolio-hk",
-            trace_id="trace-portfolio-hk",
-            stock_code="HK01810",
-            analysis_phase="auto",
-        )
-        queue = MagicMock()
-        queue.submit_tasks_batch.return_value = ([accepted_task], [])
-
-        with patch(
-            "src.services.portfolio_service.PortfolioService._fetch_realtime_position_price",
-            return_value=(None, None),
-        ), patch("api.v1.endpoints.portfolio.get_task_queue", return_value=queue):
-            resp = self.client.post(
-                "/api/v1/portfolio/positions/1810.HK/analysis",
-                json={"account_id": account_id},
-            )
-
-        self.assertEqual(resp.status_code, 202, resp.text)
-        args, kwargs = queue.submit_tasks_batch.call_args
-        self.assertEqual(args[0], ["HK01810"])
-        self.assertEqual(kwargs["portfolio_context"]["symbol"], "HK01810")
-        self.assertEqual(kwargs["portfolio_context"]["market"], "hk")
-        self.assertEqual(kwargs["portfolio_context"]["currency"], "HKD")
+        self.assertEqual(args[0], ["HPG"])
+        self.assertEqual(kwargs["portfolio_context"]["symbol"], "HPG")
 
     def test_position_analysis_returns_404_for_missing_holding(self) -> None:
-        resp = self.client.post("/api/v1/portfolio/positions/600519/analysis", json={})
+        resp = self.client.post("/api/v1/portfolio/positions/HPG/analysis", json={})
 
         self.assertEqual(resp.status_code, 404)
         self.assertEqual(resp.json()["error"], "not_found")
@@ -530,14 +454,14 @@ class PortfolioApiTestCase(unittest.TestCase):
         self._create_position(name="Main", quantity=10)
         self._create_position(name="Second", quantity=20)
 
-        resp = self.client.post("/api/v1/portfolio/positions/600519/analysis", json={})
+        resp = self.client.post("/api/v1/portfolio/positions/HPG/analysis", json={})
 
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.json()["error"], "ambiguous_position_account")
 
     def test_position_analysis_duplicate_task_returns_409(self) -> None:
         account_id = self._create_position(quantity=10)
-        duplicate = SimpleNamespace(stock_code="600519.SH", existing_task_id="existing-task-1")
+        duplicate = SimpleNamespace(stock_code="HPG.VN", existing_task_id="existing-task-1")
         queue = MagicMock()
         queue.submit_tasks_batch.return_value = ([], [duplicate])
 
@@ -546,7 +470,7 @@ class PortfolioApiTestCase(unittest.TestCase):
             return_value=(None, None),
         ), patch("api.v1.endpoints.portfolio.get_task_queue", return_value=queue):
             resp = self.client.post(
-                "/api/v1/portfolio/positions/600519/analysis",
+                "/api/v1/portfolio/positions/HPG/analysis",
                 json={"account_id": account_id, "force": True},
             )
 
@@ -565,22 +489,22 @@ class PortfolioApiTestCase(unittest.TestCase):
     def test_duplicate_trade_uid_returns_409(self) -> None:
         create_resp = self.client.post(
             "/api/v1/portfolio/accounts",
-            json={"name": "Main", "broker": "Demo", "market": "cn", "base_currency": "CNY"},
+            json={"name": "Main", "broker": "Demo", "market": "vn", "base_currency": "VND"},
         )
         self.assertEqual(create_resp.status_code, 200)
         account_id = create_resp.json()["id"]
 
         payload = {
             "account_id": account_id,
-            "symbol": "600519",
+            "symbol": "HPG",
             "trade_date": "2026-01-02",
             "side": "buy",
             "quantity": 10,
             "price": 100,
             "fee": 0,
             "tax": 0,
-            "market": "cn",
-            "currency": "CNY",
+            "market": "vn",
+            "currency": "VND",
             "trade_uid": "dup-uid-1",
         }
         first = self.client.post("/api/v1/portfolio/trades", json=payload)
@@ -594,7 +518,7 @@ class PortfolioApiTestCase(unittest.TestCase):
     def test_oversell_trade_returns_409_with_business_error(self) -> None:
         create_resp = self.client.post(
             "/api/v1/portfolio/accounts",
-            json={"name": "Main", "broker": "Demo", "market": "cn", "base_currency": "CNY"},
+            json={"name": "Main", "broker": "Demo", "market": "vn", "base_currency": "VND"},
         )
         self.assertEqual(create_resp.status_code, 200)
         account_id = create_resp.json()["id"]
@@ -603,15 +527,15 @@ class PortfolioApiTestCase(unittest.TestCase):
             "/api/v1/portfolio/trades",
             json={
                 "account_id": account_id,
-                "symbol": "600519",
+                "symbol": "HPG",
                 "trade_date": "2026-01-02",
                 "side": "buy",
                 "quantity": 10,
                 "price": 100,
                 "fee": 0,
                 "tax": 0,
-                "market": "cn",
-                "currency": "CNY",
+                "market": "vn",
+                "currency": "VND",
             },
         )
         self.assertEqual(buy_resp.status_code, 200)
@@ -620,15 +544,15 @@ class PortfolioApiTestCase(unittest.TestCase):
             "/api/v1/portfolio/trades",
             json={
                 "account_id": account_id,
-                "symbol": "600519",
+                "symbol": "HPG",
                 "trade_date": "2026-01-03",
                 "side": "sell",
                 "quantity": 20,
                 "price": 90,
                 "fee": 0,
                 "tax": 0,
-                "market": "cn",
-                "currency": "CNY",
+                "market": "vn",
+                "currency": "VND",
             },
         )
         self.assertEqual(sell_resp.status_code, 409)
@@ -639,7 +563,7 @@ class PortfolioApiTestCase(unittest.TestCase):
     def test_duplicate_full_close_sell_still_returns_conflict(self) -> None:
         create_resp = self.client.post(
             "/api/v1/portfolio/accounts",
-            json={"name": "Main", "broker": "Demo", "market": "cn", "base_currency": "CNY"},
+            json={"name": "Main", "broker": "Demo", "market": "vn", "base_currency": "VND"},
         )
         self.assertEqual(create_resp.status_code, 200)
         account_id = create_resp.json()["id"]
@@ -648,30 +572,30 @@ class PortfolioApiTestCase(unittest.TestCase):
             "/api/v1/portfolio/trades",
             json={
                 "account_id": account_id,
-                "symbol": "600519",
+                "symbol": "HPG",
                 "trade_date": "2026-01-01",
                 "side": "buy",
                 "quantity": 10,
                 "price": 100,
                 "fee": 0,
                 "tax": 0,
-                "market": "cn",
-                "currency": "CNY",
+                "market": "vn",
+                "currency": "VND",
             },
         )
         self.assertEqual(buy_resp.status_code, 200)
 
         payload = {
             "account_id": account_id,
-            "symbol": "600519",
+            "symbol": "HPG",
             "trade_date": "2026-01-02",
             "side": "sell",
             "quantity": 10,
             "price": 90,
             "fee": 0,
             "tax": 0,
-            "market": "cn",
-            "currency": "CNY",
+            "market": "vn",
+            "currency": "VND",
             "trade_uid": "dup-full-close-sell-1",
         }
         first_sell = self.client.post("/api/v1/portfolio/trades", json=payload)
@@ -686,7 +610,7 @@ class PortfolioApiTestCase(unittest.TestCase):
     def test_event_list_endpoints_and_filters(self) -> None:
         create_resp = self.client.post(
             "/api/v1/portfolio/accounts",
-            json={"name": "Main", "broker": "Demo", "market": "cn", "base_currency": "CNY"},
+            json={"name": "Main", "broker": "Demo", "market": "vn", "base_currency": "VND"},
         )
         self.assertEqual(create_resp.status_code, 200)
         account_id = create_resp.json()["id"]
@@ -698,21 +622,21 @@ class PortfolioApiTestCase(unittest.TestCase):
                 "event_date": "2026-01-01",
                 "direction": "in",
                 "amount": 10000,
-                "currency": "CNY",
+                "currency": "VND",
             },
         )
         self.assertEqual(cash_resp.status_code, 200)
 
         trade_payload = {
             "account_id": account_id,
-            "symbol": "600519",
+            "symbol": "HPG",
             "side": "buy",
             "quantity": 10,
             "price": 100,
             "fee": 1,
             "tax": 0,
-            "market": "cn",
-            "currency": "CNY",
+            "market": "vn",
+            "currency": "VND",
         }
         self.assertEqual(
             self.client.post("/api/v1/portfolio/trades", json={**trade_payload, "trade_date": "2026-01-02"}).status_code,
@@ -727,11 +651,11 @@ class PortfolioApiTestCase(unittest.TestCase):
                 "/api/v1/portfolio/corporate-actions",
                 json={
                     "account_id": account_id,
-                    "symbol": "600519",
+                    "symbol": "HPG",
                     "effective_date": "2026-01-04",
                     "action_type": "cash_dividend",
-                    "market": "cn",
-                    "currency": "CNY",
+                    "market": "vn",
+                    "currency": "VND",
                     "cash_dividend_per_share": 0.5,
                 },
             ).status_code,
@@ -769,7 +693,7 @@ class PortfolioApiTestCase(unittest.TestCase):
     def test_delete_event_endpoints_remove_records_and_allow_snapshot_recovery(self) -> None:
         create_resp = self.client.post(
             "/api/v1/portfolio/accounts",
-            json={"name": "Main", "broker": "Demo", "market": "cn", "base_currency": "CNY"},
+            json={"name": "Main", "broker": "Demo", "market": "vn", "base_currency": "VND"},
         )
         self.assertEqual(create_resp.status_code, 200)
         account_id = create_resp.json()["id"]
@@ -781,33 +705,33 @@ class PortfolioApiTestCase(unittest.TestCase):
                 "event_date": "2026-01-01",
                 "direction": "in",
                 "amount": 10000,
-                "currency": "CNY",
+                "currency": "VND",
             },
         )
         trade_resp = self.client.post(
             "/api/v1/portfolio/trades",
             json={
                 "account_id": account_id,
-                "symbol": "600519",
+                "symbol": "HPG",
                 "trade_date": "2026-01-02",
                 "side": "buy",
                 "quantity": 10,
                 "price": 100,
                 "fee": 0,
                 "tax": 0,
-                "market": "cn",
-                "currency": "CNY",
+                "market": "vn",
+                "currency": "VND",
             },
         )
         corp_resp = self.client.post(
             "/api/v1/portfolio/corporate-actions",
             json={
                 "account_id": account_id,
-                "symbol": "600519",
+                "symbol": "HPG",
                 "effective_date": "2026-01-03",
                 "action_type": "cash_dividend",
-                "market": "cn",
-                "currency": "CNY",
+                "market": "vn",
+                "currency": "VND",
                 "cash_dividend_per_share": 1.0,
             },
         )
@@ -815,7 +739,7 @@ class PortfolioApiTestCase(unittest.TestCase):
         self.assertEqual(trade_resp.status_code, 200)
         self.assertEqual(corp_resp.status_code, 200)
 
-        self._save_close("600519", date(2026, 1, 3), 100.0)
+        self._save_close("HPG", date(2026, 1, 3), 100.0)
         snapshot_before = self.client.get(
             "/api/v1/portfolio/snapshot",
             params={"account_id": account_id, "as_of": "2026-01-03"},
@@ -854,15 +778,15 @@ class PortfolioApiTestCase(unittest.TestCase):
                 "/api/v1/portfolio/trades",
                 json={
                     "account_id": 1,
-                    "symbol": "600519",
+                    "symbol": "HPG",
                     "trade_date": "2026-01-02",
                     "side": "buy",
                     "quantity": 10,
                     "price": 100,
                     "fee": 0,
                     "tax": 0,
-                    "market": "cn",
-                    "currency": "CNY",
+                    "market": "vn",
+                    "currency": "VND",
                 },
             )
 
@@ -893,7 +817,7 @@ class PortfolioApiTestCase(unittest.TestCase):
                     "event_date": "2026-01-02",
                     "direction": "in",
                     "amount": 1000,
-                    "currency": "CNY",
+                    "currency": "VND",
                 },
             )
 
@@ -921,11 +845,11 @@ class PortfolioApiTestCase(unittest.TestCase):
                 "/api/v1/portfolio/corporate-actions",
                 json={
                     "account_id": 1,
-                    "symbol": "600519",
+                    "symbol": "HPG",
                     "effective_date": "2026-01-02",
                     "action_type": "split_adjustment",
-                    "market": "cn",
-                    "currency": "CNY",
+                    "market": "vn",
+                    "currency": "VND",
                     "split_ratio": 2.0,
                 },
             )
@@ -950,9 +874,7 @@ class PortfolioApiTestCase(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         payload = resp.json()
         brokers = {item["broker"] for item in payload["brokers"]}
-        self.assertIn("huatai", brokers)
-        self.assertIn("citic", brokers)
-        self.assertIn("cmb", brokers)
+        self.assertEqual(brokers, {"generic"})
 
     def test_event_list_invalid_page_size_returns_422(self) -> None:
         resp = self.client.get("/api/v1/portfolio/trades", params={"page_size": 101})

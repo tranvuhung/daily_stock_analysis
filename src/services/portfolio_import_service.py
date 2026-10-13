@@ -33,44 +33,21 @@ class CsvParserSpec:
     column_hints: Dict[str, Tuple[str, ...]]
 
 
+# Parser CSV mặc định: định dạng chung với tiêu đề cột tiếng Việt / tiếng Anh, phù hợp
+# file xuất lệnh khớp của các công ty chứng khoán Việt Nam.
+# Default generic CSV parser with Vietnamese / English column headers.
 DEFAULT_PARSER_SPECS: Tuple[CsvParserSpec, ...] = (
     CsvParserSpec(
-        broker="huatai",
-        aliases=(),
-        display_name="华泰",
+        broker="generic",
+        aliases=("vn", "default"),
+        display_name="CSV chung (VN)",
         column_hints={
-            "trade_date": ("成交日期", "成交时间", "发生日期", "日期"),
-            "symbol": ("证券代码", "股票代码", "代码"),
-            "side": ("买卖标志", "买卖方向", "操作"),
-            "quantity": ("成交数量", "数量", "成交股数"),
-            "price": ("成交均价", "成交价格", "价格", "成交价", "均价"),
-            "trade_uid": ("成交编号", "成交序号", "流水号"),
-        },
-    ),
-    CsvParserSpec(
-        broker="citic",
-        aliases=("zhongxin",),
-        display_name="中信",
-        column_hints={
-            "trade_date": ("发生日期", "成交日期", "日期"),
-            "symbol": ("证券代码", "股票代码", "代码"),
-            "side": ("买卖方向", "买卖标志", "业务名称"),
-            "quantity": ("成交数量", "数量", "成交股数"),
-            "price": ("成交价格", "成交均价", "价格", "成交价"),
-            "trade_uid": ("合同编号", "成交编号", "委托编号"),
-        },
-    ),
-    CsvParserSpec(
-        broker="cmb",
-        aliases=("zhaoshang", "cmbchina"),
-        display_name="招商",
-        column_hints={
-            "trade_date": ("日期", "成交日期", "发生日期"),
-            "symbol": ("证券代码", "股票代码", "代码"),
-            "side": ("交易方向", "买卖方向", "买卖标志"),
-            "quantity": ("成交股数", "成交数量", "数量"),
-            "price": ("成交价", "成交价格", "成交均价", "均价"),
-            "trade_uid": ("流水号", "成交编号", "成交序号"),
+            "trade_date": ("Ngày giao dịch", "Ngày khớp", "Ngày", "trade_date", "date"),
+            "symbol": ("Mã CK", "Mã chứng khoán", "Mã", "symbol", "code", "ticker"),
+            "side": ("Loại lệnh", "Mua/Bán", "Chiều", "side", "action"),
+            "quantity": ("Khối lượng khớp", "KL khớp", "Khối lượng", "quantity", "qty"),
+            "price": ("Giá khớp", "Giá", "price"),
+            "trade_uid": ("Số hiệu lệnh", "Mã lệnh", "Số lệnh", "trade_uid", "order_id"),
         },
     ),
 )
@@ -302,10 +279,6 @@ class PortfolioImportService:
         trade_date_raw = self._pick(
             row,
             *(broker_hints.get("trade_date") or ()),
-            "成交日期",
-            "发生日期",
-            "日期",
-            "成交时间",
         )
         trade_date_obj = self._parse_date(trade_date_raw)
         if trade_date_obj is None:
@@ -314,9 +287,6 @@ class PortfolioImportService:
         symbol_raw = self._pick(
             row,
             *(broker_hints.get("symbol") or ()),
-            "证券代码",
-            "股票代码",
-            "代码",
         )
         symbol = canonical_stock_code(str(symbol_raw or "").strip())
         if not symbol:
@@ -325,33 +295,28 @@ class PortfolioImportService:
         side_raw = self._pick(
             row,
             *(broker_hints.get("side") or ()),
-            "买卖标志",
-            "买卖方向",
-            "交易方向",
-            "业务名称",
-            "操作",
         )
         side = self._normalize_side(side_raw)
         if side is None:
             return None
 
         quantity = self._parse_float(
-            self._pick(row, *(broker_hints.get("quantity") or ()), "成交数量", "数量", "成交股数")
+            self._pick(row, *(broker_hints.get("quantity") or ()))
         )
         price = self._parse_float(
-            self._pick(row, *(broker_hints.get("price") or ()), "成交均价", "成交价格", "价格", "成交价", "均价")
+            self._pick(row, *(broker_hints.get("price") or ()))
         )
         if quantity is None or quantity <= 0 or price is None or price <= 0:
             return None
 
         fee = 0.0
-        for col in ("手续费", "佣金", "交易费", "规费", "过户费"):
+        for col in ("Phí giao dịch", "Phí", "fee", "commission"):
             value = self._parse_float(self._pick(row, col))
             if value is not None:
                 fee += value
 
         tax = 0.0
-        for col in ("印花税", "税费", "其他税费"):
+        for col in ("Thuế", "Thuế TNCN", "tax"):
             value = self._parse_float(self._pick(row, col))
             if value is not None:
                 tax += value
@@ -359,13 +324,8 @@ class PortfolioImportService:
         trade_uid = self._pick(
             row,
             *(broker_hints.get("trade_uid") or ()),
-            "成交编号",
-            "成交序号",
-            "合同编号",
-            "委托编号",
-            "流水号",
         )
-        currency = self._pick(row, "币种", "货币")
+        currency = self._pick(row, "Tiền tệ", "currency")
 
         return {
             "trade_date": trade_date_obj,
@@ -418,15 +378,17 @@ class PortfolioImportService:
         if not text:
             return None
         compact = text.replace(" ", "")
-        buy_exact = {"buy", "b", "买", "买入", "证券买入", "普通买入"}
-        sell_exact = {"sell", "s", "卖", "卖出", "证券卖出", "普通卖出"}
+        # Quy ước file lệnh VN: "M" = Mua, "B" = Bán (không dùng "b" = buy kiểu tiếng Anh).
+        # Vietnamese convention: "M" = buy (Mua), "B" = sell (Bán).
+        buy_exact = {"buy", "m", "mua", "lệnhmua"}
+        sell_exact = {"sell", "s", "b", "bán", "ban", "lệnhbán"}
         if compact in buy_exact:
             return "buy"
         if compact in sell_exact:
             return "sell"
-        if "买入" in compact or compact.startswith("买"):
+        if compact.startswith("mua"):
             return "buy"
-        if "卖出" in compact or compact.startswith("卖"):
+        if compact.startswith("bán") or compact.startswith("ban"):
             return "sell"
         return None
 

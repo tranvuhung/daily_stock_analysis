@@ -92,23 +92,19 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        "default_value": "600519,300750,002594",
+        "default_value": "HPG,FPT,VCB",
         "options": [],
         "validation": {"min_items": 1},
         "display_order": 10,
         "help_key": "settings.base.STOCK_LIST",
         "examples": [
-            "STOCK_LIST=600519,300750,002594",
-            "STOCK_LIST=600519,hk00700,AAPL",
+            "STOCK_LIST=HPG,FPT,VCB",
+            "STOCK_LIST=VNM,MWG,TCB",
         ],
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
-            },
-            {
-                "label": "Tushare stock list guide",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/TUSHARE_STOCK_LIST_GUIDE.md",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -322,7 +318,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
             },
             {
                 "label": "Full guide: AI model configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#ai-模型配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#ai-model-configuration",
             },
             {
                 "label": "LiteLLM Providers (official)",
@@ -364,7 +360,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
             },
             {
                 "label": "Full guide: AI model configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#ai-模型配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#ai-model-configuration",
             },
         ],
         "warning_codes": ["inherits_primary_when_empty"],
@@ -394,7 +390,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
             },
             {
                 "label": "Full guide: AI model configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#ai-模型配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#ai-model-configuration",
             },
             {
                 "label": "LiteLLM Providers (official)",
@@ -430,7 +426,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM configuration guide: YAML mode",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#方式三litellm-原生-yaml-配置适合专家或复杂路由",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "LiteLLM proxy config (official)",
@@ -462,7 +458,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM configuration guide: channel mode",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#方式二渠道channels模式配置适合进阶多模型",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "LLM provider configuration quick reference",
@@ -496,7 +492,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: AI model configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#ai-模型配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#ai-model-configuration",
             },
         ],
         "warning_codes": [],
@@ -750,44 +746,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "validation": {"multi_value": True, "delimiter": ","},
         "display_order": 7,
     },
-    "TUSHARE_TOKEN": {
-        "title": "Tushare Token",
-        "description": "Token for Tushare Pro API.",
-        "category": "data_source",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 10,
-        "help_key": "settings.data_source.TUSHARE_TOKEN",
-        "examples": [
-            "TUSHARE_TOKEN=your_tushare_token",
-        ],
-        "docs": [
-            {
-                "label": "Tushare stock list guide",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/TUSHARE_STOCK_LIST_GUIDE.md",
-            },
-            {
-                "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
-            },
-        ],
-        "warning_codes": ["secret_value"],
-    },
     "SUPPORTED_MARKETS": {
         "title": "Enabled Markets",
         "description": (
-            "Comma-separated allowlist of markets the deployment serves. "
-            "Disabled markets are never instantiated as data sources and never "
-            "issue requests. Use 'all' to enable every market. Defaults to 'vn'. "
-            "Note: when both 'vn' and 'us' are enabled, bare 3-letter codes "
-            "(HPG/FPT/VNM) are ambiguous and resolve to US; write Vietnamese "
-            "symbols as HPG.VN or vnHPG in that case."
+            "Markets the deployment serves. Only the Vietnam market ('vn') is "
+            "supported; any other value is ignored with a warning."
         ),
         "category": "data_source",
         "data_type": "string",
@@ -796,13 +759,13 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "is_required": False,
         "is_editable": True,
         "default_value": "vn",
-        "options": ["vn", "cn", "hk", "us", "jp", "kr", "tw", "all"],
+        "options": ["vn"],
         "validation": {
-            "allowed_values": ["vn", "cn", "hk", "us", "jp", "kr", "tw", "all"],
+            "allowed_values": ["vn"],
             "multi_value": True,
             "delimiter": ",",
         },
-        "examples": ["SUPPORTED_MARKETS=vn", "SUPPORTED_MARKETS=vn,cn", "SUPPORTED_MARKETS=all"],
+        "examples": ["SUPPORTED_MARKETS=vn"],
         "display_order": 1,
         "help_key": "settings.data_source.SUPPORTED_MARKETS",
         "docs": [
@@ -828,7 +791,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "is_required": False,
         "is_editable": True,
         # default_value in the registry is always a string (the type contract of the public schema);
-        # boolean fields use "true"/"false", consistent with TICKFLOW_BATCH_DAILY_ENABLED.
+        # boolean fields use "true"/"false".
         "default_value": "false",
         "options": [],
         "validation": {},
@@ -1040,236 +1003,28 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
-    "TICKFLOW_API_KEY": {
-        "title": "TickFlow API Key",
-        "description": "API key for optional TickFlow A-share daily K-lines, realtime quotes, stock list/name lookup, and market review enhancement. Permission failures fail open to existing providers.",
-        "category": "data_source",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 15,
-    },
-    "TICKFLOW_PRIORITY": {
-        "title": "TickFlow Daily K-line Priority",
-        "description": "Priority for TickFlow in the generic A-share daily K-line route. Registered indices use the fixed Tencent -> AkShare -> TickFlow -> YFinance chain and ignore this setting; realtime quote order is controlled separately by REALTIME_SOURCE_PRIORITY.",
-        "category": "data_source",
-        "data_type": "integer",
-        "ui_control": "number",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": "2",
-        "options": [],
-        "validation": {"min": 0, "max": 99},
-        "display_order": 16,
-    },
-    "TICKFLOW_KLINE_ADJUST": {
-        "title": "TickFlow K-line Adjust",
-        "description": "Adjustment mode for TickFlow daily K-lines. Default none preserves the existing unadjusted technical-indicator baseline.",
-        "category": "data_source",
-        "data_type": "string",
-        "ui_control": "select",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": "none",
-        "options": ["none", "forward", "backward", "forward_additive", "backward_additive"],
-        "validation": {},
-        "display_order": 17,
-    },
-    "TICKFLOW_BATCH_DAILY_ENABLED": {
-        "title": "TickFlow Batch Daily Enabled",
-        "description": "Enable TickFlow batch daily K-line prefetch when the current plan allows it. Permission failures fail open and fall back to per-stock providers.",
-        "category": "data_source",
-        "data_type": "boolean",
-        "ui_control": "switch",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": "true",
-        "options": [],
-        "validation": {},
-        "display_order": 18,
-    },
-    "TICKFLOW_BATCH_SIZE": {
-        "title": "TickFlow Batch Size",
-        "description": "Maximum symbols per TickFlow batch request for daily K-lines and realtime quotes.",
-        "category": "data_source",
-        "data_type": "integer",
-        "ui_control": "number",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": "100",
-        "options": [],
-        "validation": {"min": 1, "max": 500},
-        "display_order": 19,
-    },
-    "FUTU_OPEND_HOST": {
-        "title": "Futu OpenD Host",
-        "description": "IPv4 address or IPv4-resolvable hostname of the Futu OpenD service. Leave empty to disable Futu.",
-        "category": "data_source",
-        "data_type": "string",
-        "ui_control": "text",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 20,
-        "help_key": "settings.data_source.FUTU_OPEND_HOST",
-        "examples": ["FUTU_OPEND_HOST=127.0.0.1"],
-        "docs": [
-            {
-                "label": "Data source configuration guide",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#数据源配置",
-            },
-        ],
-        "warning_codes": [],
-    },
-    "FUTU_OPEND_PORT": {
-        "title": "Futu OpenD Port",
-        "description": "TCP port of the Futu OpenD service.",
-        "category": "data_source",
-        "data_type": "integer",
-        "ui_control": "number",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": "11111",
-        "options": [],
-        "validation": {"min": 1, "max": 65535},
-        "display_order": 21,
-        "help_key": "settings.data_source.FUTU_OPEND_PORT",
-        "examples": ["FUTU_OPEND_PORT=11111"],
-        "docs": [
-            {
-                "label": "Data source configuration guide",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#数据源配置",
-            },
-        ],
-        "warning_codes": [],
-    },
-    "FUTU_HK_REALTIME_SOURCE_PRIORITY": {
-        "title": "Futu HK realtime data source priority",
-        "description": "HK realtime quote priority; allowed values are futu, longbridge, akshare and yfinance. futu is skipped automatically when OpenD is not configured.",
-        "category": "data_source",
-        "data_type": "string",
-        "ui_control": "text",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": "futu,longbridge,akshare,yfinance",
-        "options": [],
-        "validation": {},
-        "display_order": 22,
-        "help_key": "settings.data_source.FUTU_HK_REALTIME_SOURCE_PRIORITY",
-        "examples": ["FUTU_HK_REALTIME_SOURCE_PRIORITY=futu,longbridge,akshare,yfinance"],
-        "docs": [
-            {
-                "label": "Data source configuration guide",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#数据源配置",
-            },
-        ],
-        "warning_codes": ["provider_priority_order"],
-    },
-    "STOCK_INDEX_REMOTE_UPDATE_ENABLED": {
-        "title": "Remote Stock Index Updates",
-        "description": (
-            "Automatically refresh the local stock autocomplete index from the built-in "
-            "GitHub main source. Disabled by default in this repository: the built-in "
-            "source is the upstream A-share project and contains no Vietnamese symbols, "
-            "so enabling it overwrites the bundled Vietnam index and silently breaks "
-            "Web UI autocomplete. Point STOCK_INDEX_REMOTE_URL at a branch that ships "
-            "the Vietnam index before turning this on."
-        ),
-        "category": "data_source",
-        "data_type": "boolean",
-        "ui_control": "switch",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": "false",
-        "options": [],
-        "validation": {},
-        "display_order": 16,
-        "help_key": "settings.data_source.stock_index_remote",
-        "examples": [
-            "STOCK_INDEX_REMOTE_UPDATE_ENABLED=true",
-            "STOCK_INDEX_REMOTE_UPDATE_ENABLED=false",
-        ],
-        "docs": [
-            {
-                "label": "Tushare stock list guide",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/TUSHARE_STOCK_LIST_GUIDE.md",
-            },
-        ],
-        "warning_codes": [],
-    },
-    "SCREENING_ENABLED": {
-        "title": "Built-in Stock Screening",
-        "description": "Enable DSA's built-in stock screening tab. The implementation is based on AlphaSift and maintained as part of DSA. Disabled by default.",
-        "category": "base",
-        "data_type": "boolean",
-        "ui_control": "switch",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": "false",
-        "options": [],
-        "validation": {},
-        "display_order": 17,
-        "help_key": "settings.base.SCREENING_ENABLED",
-        "examples": [
-            "SCREENING_ENABLED=false",
-            "SCREENING_ENABLED=true",
-        ],
-        "docs": [
-            {
-                "label": "LiteLLM Providers (official)",
-                "href": "https://docs.litellm.ai/docs/providers",
-            },
-            {
-                "label": "LiteLLM OpenAI-compatible (official)",
-                "href": "https://docs.litellm.ai/docs/providers/openai_compatible",
-            },
-            {
-                "label": "OpenAI requests and authentication (official)",
-                "href": "https://platform.openai.com/docs/api-reference/authentication",
-            },
-            {
-                "label": "Screening notes",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/screening-engine.md",
-            },
-        ],
-    },
     "REALTIME_SOURCE_PRIORITY": {
         "title": "Realtime Source Priority",
-        "description": "Comma-separated priority for realtime quote providers.",
+        "description": "Comma-separated priority for Vietnam realtime quote providers (supported tokens: ssi, vci).",
         "category": "data_source",
         "data_type": "string",
         "ui_control": "text",
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        "default_value": "tencent,akshare_sina,efinance,akshare_em",
+        "default_value": "ssi,vci",
         "options": [],
         "validation": {},
         "display_order": 20,
         "help_key": "settings.data_source.REALTIME_SOURCE_PRIORITY",
         "examples": [
-            "REALTIME_SOURCE_PRIORITY=tencent,akshare_sina,efinance,akshare_em",
+            "REALTIME_SOURCE_PRIORITY=ssi,vci",
+            "REALTIME_SOURCE_PRIORITY=vci,ssi",
         ],
         "docs": [
             {
                 "label": "Full guide: data source configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#数据源配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#data-source-configuration",
             },
         ],
         "warning_codes": ["provider_priority_order"],
@@ -1295,7 +1050,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: data source configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#数据源配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#data-source-configuration",
             },
         ],
         "warning_codes": [],
@@ -1320,7 +1075,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: search service configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#搜索服务配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#search-service-configuration",
             },
         ],
         "warning_codes": ["secret_value", "comma_separated_keys"],
@@ -1346,7 +1101,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: search service configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#搜索服务配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#search-service-configuration",
             },
         ],
         "warning_codes": ["secret_value", "comma_separated_keys"],
@@ -1379,34 +1134,6 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "validation": {"multi_value": True, "delimiter": ","},
         "display_order": 50,
     },
-    "BOCHA_API_KEYS": {
-        "title": "Bocha API Keys",
-        "description": "Comma-separated Bocha Search API keys.",
-        "category": "data_source",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {"multi_value": True, "delimiter": ","},
-        "display_order": 51,
-    },
-    "MINIMAX_API_KEYS": {
-        "title": "MiniMax API Key",
-        "description": "MiniMax API key (search priority: Bocha > Tavily > Brave > SerpAPI > MiniMax > SearXNG).",
-        "category": "data_source",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {"multi_value": True, "delimiter": ","},
-        "display_order": 53,
-    },
     "SEARXNG_BASE_URLS": {
         "title": "SearXNG Base URLs",
         "description": "Comma-separated SearXNG instance URLs (self-hosted, no quota). Enable format: json in settings.yml.",
@@ -1433,7 +1160,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: search service configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#搜索服务配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#search-service-configuration",
             },
         ],
         "warning_codes": ["requires_json_format"],
@@ -1473,36 +1200,10 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: data source configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#数据源配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#data-source-configuration",
             },
         ],
         "warning_codes": [],
-    },
-    "ENABLE_CHIP_DISTRIBUTION": {
-        "title": "Enable Chip Distribution",
-        "description": "Enable chip distribution analysis. May be unstable; recommended to disable on cloud deployments.",
-        "category": "data_source",
-        "data_type": "boolean",
-        "ui_control": "switch",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": "true",
-        "options": [],
-        "validation": {},
-        "display_order": 23,
-        "help_key": "settings.data_source.ENABLE_CHIP_DISTRIBUTION",
-        "examples": [
-            "ENABLE_CHIP_DISTRIBUTION=true",
-            "ENABLE_CHIP_DISTRIBUTION=false",
-        ],
-        "docs": [
-            {
-                "label": "Full guide: data source configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#数据源配置",
-            },
-        ],
-        "warning_codes": ["cloud_deployments_may_disable"],
     },
     "NEWS_MAX_AGE_DAYS": {
         "title": "News Max Age (Days)",
@@ -1525,7 +1226,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -1551,7 +1252,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -1603,48 +1304,6 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "options": [],
         "validation": {"min": 0.0, "max": 50.0},
         "display_order": 62,
-    },
-    "PYTDX_HOST": {
-        "title": "Pytdx Host",
-        "description": "Tongdaxin data server IP. Used with PYTDX_PORT. Overrides built-in defaults.",
-        "category": "data_source",
-        "data_type": "string",
-        "ui_control": "text",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 55,
-    },
-    "PYTDX_PORT": {
-        "title": "Pytdx Port",
-        "description": "Tongdaxin data server port (e.g. 7709). Used with PYTDX_HOST.",
-        "category": "data_source",
-        "data_type": "string",
-        "ui_control": "text",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 56,
-    },
-    "PYTDX_SERVERS": {
-        "title": "Pytdx Servers",
-        "description": "Comma-separated ip:port (e.g. 192.168.1.1:7709,10.0.0.1:7709). Overrides PYTDX_HOST+PYTDX_PORT.",
-        "category": "data_source",
-        "data_type": "string",
-        "ui_control": "text",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 57,
     },
     "GEMINI_API_KEY": {
         "title": "Gemini API Key",
@@ -1935,157 +1594,9 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "validation": {"min": 256, "max": 8192},
         "display_order": 38,
     },
-    "WECHAT_WEBHOOK_URL": {
-        "title": "WeChat Webhook URL",
-        "description": "Webhook URL for enterprise WeChat bot.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 10,
-        "help_key": "settings.notification.webhooks",
-        "examples": [
-            "WECHAT_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxx",
-        ],
-        "docs": [
-            {
-                "label": "Full guide: notification channel configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#通知渠道详细配置",
-            },
-        ],
-        "warning_codes": ["webhook_secret_value"],
-    },
-    "DINGTALK_APP_KEY": {
-        "title": "DingTalk App Key",
-        "description": "DingTalk app key.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 20,
-    },
-    "DINGTALK_APP_SECRET": {
-        "title": "DingTalk App Secret",
-        "description": "DingTalk app secret.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 30,
-    },
-    "DINGTALK_STREAM_ENABLED": {
-        "title": "DingTalk Stream Mode",
-        "description": "Enable DingTalk application bot stream/long-connection mode. This is separate from DingTalk group webhook delivery.",
-        "category": "notification",
-        "data_type": "boolean",
-        "ui_control": "switch",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": "false",
-        "options": [],
-        "validation": {},
-        "display_order": 35,
-        "help_key": "settings.notification.DINGTALK_STREAM_ENABLED",
-        "examples": [
-            "DINGTALK_STREAM_ENABLED=false",
-            "DINGTALK_STREAM_ENABLED=true",
-            "DINGTALK_APP_KEY=your_dingtalk_app_key",
-            "DINGTALK_APP_SECRET=your_dingtalk_app_secret",
-        ],
-        "docs": [
-            {
-                "label": "Full guide: notification channel configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#通知渠道详细配置",
-            },
-        ],
-        "warning_codes": ["not_webhook_delivery", "restart_required"],
-    },
-    "DINGTALK_WEBHOOK_URL": {
-        "title": "DingTalk Bot Webhook",
-        "description": "DingTalk group robot webhook URL. This is separate from App/Stream mode.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {
-            "item_type": "url",
-            "allowed_schemes": ["http", "https"],
-        },
-        "display_order": 18,
-        "help_key": "settings.notification.DINGTALK_WEBHOOK_URL",
-        "examples": [
-            "DINGTALK_WEBHOOK_URL=https://oapi.dingtalk.com/robot/send?access_token=your_token",
-        ],
-        "docs": [
-            {
-                "label": "Full guide: notification channel configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#通知渠道详细配置",
-            },
-        ],
-        "warning_codes": ["webhook_secret_value"],
-    },
-    "DINGTALK_SECRET": {
-        "title": "DingTalk Signing Secret",
-        "description": "Signing secret for a DingTalk group robot. Leave empty when signing is disabled.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 19,
-        "help_key": "settings.notification.DINGTALK_SECRET",
-        "examples": [
-            "DINGTALK_SECRET=your_dingtalk_signing_secret",
-        ],
-        "docs": [
-            {
-                "label": "Full guide: notification channel configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#通知渠道详细配置",
-            },
-        ],
-        "warning_codes": ["secret_value"],
-    },
-    "PUSHPLUS_TOKEN": {
-        "title": "PushPlus Token",
-        "description": "Token for PushPlus notifications.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 40,
-    },
     "CUSTOM_WEBHOOK_URLS": {
         "title": "Custom Webhook URLs",
-        "description": "Comma-separated webhook URLs for custom notifications (DingTalk, Bark, Discord, Slack, etc.).",
+        "description": "Comma-separated webhook URLs for custom notifications (Bark, Discord, Slack, self-hosted services, etc.).",
         "category": "notification",
         "data_type": "array",
         "ui_control": "textarea",
@@ -2097,7 +1608,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "help_key": "settings.notification.CUSTOM_WEBHOOK_URLS",
         "examples": [
             "CUSTOM_WEBHOOK_URLS=https://api.day.app/YOUR_BARK_KEY",
-            "CUSTOM_WEBHOOK_URLS=https://oapi.dingtalk.com/robot/send?access_token=xxx",
+            "CUSTOM_WEBHOOK_URLS=https://hooks.slack.com/services/xxx/yyy/zzz",
             "CUSTOM_WEBHOOK_BODY_TEMPLATE={\"msg_type\":\"text\",\"content\":$content_json}",
         ],
         "validation": {"multi_value": True, "delimiter": ","},
@@ -2105,7 +1616,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: custom webhooks",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#自定义-webhook",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#custom-webhook",
             },
         ],
         "warning_codes": ["json_template_must_render_object"],
@@ -2164,7 +1675,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: custom webhooks",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#自定义-webhook",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#custom-webhook",
             },
         ],
         "warning_codes": ["disabling_ssl_verify_is_risky"],
@@ -2190,7 +1701,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -2216,210 +1727,10 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
-    },
-    # ------------------------------------------------------------------
-    # Notification – Feishu
-    # ------------------------------------------------------------------
-    "FEISHU_WEBHOOK_URL": {
-        "title": "Feishu Webhook URL",
-        "description": "Feishu custom bot webhook URL for group notifications. This is the webhook push channel; FEISHU_APP_ID / FEISHU_APP_SECRET do not enable webhook delivery by themselves.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {
-            "item_type": "url",
-            "allowed_schemes": ["http", "https"],
-        },
-        "display_order": 12,
-        "help_key": "settings.notification.FEISHU_WEBHOOK_URL",
-        "examples": [
-            "FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/your_hook_token",
-            "FEISHU_WEBHOOK_SECRET=your_feishu_webhook_secret",
-            "FEISHU_WEBHOOK_KEYWORD=股票日报",
-        ],
-        "docs": [
-            {
-                "label": "Full guide: Feishu notification configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#飞书",
-            },
-            {
-                "label": "Feishu bot configuration topic",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/bot/feishu-bot-config.md",
-            },
-        ],
-        "warning_codes": ["feishu_webhook_not_app_secret"],
-    },
-    "FEISHU_WEBHOOK_SECRET": {
-        "title": "Feishu Webhook Secret",
-        "description": "Optional signing secret from Feishu custom bot security settings. Only used for webhook push mode.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 13,
-    },
-    "FEISHU_WEBHOOK_KEYWORD": {
-        "title": "Feishu Webhook Keyword",
-        "description": "Optional keyword required by Feishu custom bot security settings. The sender prepends it to every webhook message.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "text",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 14,
-    },
-    "FEISHU_APP_ID": {
-        "title": "Feishu App ID",
-        "description": "Feishu app bot App ID for app/stream bot mode or cloud documents. It does not enable group webhook push by itself.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "text",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 15,
-    },
-    "FEISHU_APP_SECRET": {
-        "title": "Feishu App Secret",
-        "description": "Feishu app bot App Secret for app/stream bot mode or cloud documents. It does not enable group webhook push by itself.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 16,
-    },
-    "FEISHU_STREAM_ENABLED": {
-        "title": "Feishu Stream Mode",
-        "description": "Enable Feishu application bot stream mode. This is separate from Feishu group webhook delivery.",
-        "category": "notification",
-        "data_type": "boolean",
-        "ui_control": "switch",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": "false",
-        "options": [],
-        "validation": {},
-        "display_order": 17,
-        "help_key": "settings.notification.FEISHU_STREAM_ENABLED",
-        "examples": [
-            "FEISHU_STREAM_ENABLED=false",
-            "FEISHU_STREAM_ENABLED=true",
-            "FEISHU_APP_ID=cli_xxxxx",
-            "FEISHU_APP_SECRET=your_feishu_app_secret",
-        ],
-        "docs": [
-            {
-                "label": "Full guide: Feishu notification configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#飞书",
-            },
-            {
-                "label": "Feishu bot configuration topic",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/bot/feishu-bot-config.md",
-            },
-        ],
-        "warning_codes": ["not_webhook_delivery", "restart_required"],
-    },
-    "FEISHU_CHAT_ID": {
-        "title": "Feishu Chat ID",
-        "description": "Target chat_id (group mode, oc_xxx) or open_id (P2P mode, ou_xxx) for Feishu App Bot notification delivery. Requires FEISHU_APP_ID + FEISHU_APP_SECRET.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "text",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 18,
-        "help_key": "settings.notification.FEISHU_CHAT_ID",
-        "examples": [
-            "FEISHU_CHAT_ID=oc_xxxxxxxxxxxxx",
-            "FEISHU_CHAT_ID=ou_xxxxxxxxxxxxx",
-        ],
-        "docs": [
-            {
-                "label": "Full guide: Feishu notification configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#飞书",
-            },
-        ],
-    },
-    "FEISHU_RECEIVE_ID_TYPE": {
-        "title": "Feishu Receive ID Type",
-        "description": "Type of FEISHU_CHAT_ID: 'chat_id' for group chat, 'open_id' for P2P private message.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "select",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": "chat_id",
-        "options": [{"label": "chat_id (group chat)", "value": "chat_id"}, {"label": "open_id (direct message)", "value": "open_id"}],
-        "validation": {"enum": ["chat_id", "open_id"]},
-        "display_order": 19,
-        "help_key": "settings.notification.FEISHU_RECEIVE_ID_TYPE",
-        "examples": [
-            "FEISHU_RECEIVE_ID_TYPE=chat_id",
-            "FEISHU_RECEIVE_ID_TYPE=open_id",
-        ],
-        "docs": [
-            {
-                "label": "Full guide: Feishu notification configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#飞书",
-            },
-        ],
-    },
-    "FEISHU_DOMAIN": {
-        "title": "Feishu Domain",
-        "description": "Feishu API domain: 'feishu' (feishu.cn for mainland China) or 'lark' (larksuite.com for international).",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "select",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": "feishu",
-        "options": [{"label": "feishu (mainland China)", "value": "feishu"}, {"label": "lark (international)", "value": "lark"}],
-        "validation": {"enum": ["feishu", "lark"]},
-        "display_order": 20,
-        "help_key": "settings.notification.FEISHU_DOMAIN",
-        "examples": [
-            "FEISHU_DOMAIN=feishu",
-            "FEISHU_DOMAIN=lark",
-        ],
-        "docs": [
-            {
-                "label": "Full guide: Feishu notification configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#飞书",
-            },
-        ],
     },
     # ------------------------------------------------------------------
     # Notification – Telegram
@@ -2445,7 +1756,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Telegram",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#telegram",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#telegram",
             },
         ],
         "warning_codes": ["secret_value"],
@@ -2471,7 +1782,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Telegram",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#telegram",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#telegram",
             },
         ],
         "warning_codes": [],
@@ -2515,7 +1826,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: email",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#邮件",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#email",
             },
         ],
         "warning_codes": [],
@@ -2540,7 +1851,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: email",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#邮件",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#email",
             },
         ],
         "warning_codes": ["secret_value", "smtp_authorization_code"],
@@ -2561,13 +1872,13 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "help_key": "settings.notification.email",
         "examples": [
             "EMAIL_RECEIVERS=user1@example.com,user2@example.com",
-            "STOCK_GROUP_1=600519,300750",
+            "STOCK_GROUP_1=HPG,FPT",
             "EMAIL_GROUP_1=user1@example.com",
         ],
         "docs": [
             {
                 "label": "Full guide: email",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#邮件",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#email",
             },
         ],
         "warning_codes": ["comma_separated_values"],
@@ -2595,7 +1906,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Discord",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#discord",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#discord",
             },
         ],
         "warning_codes": ["webhook_secret_value"],
@@ -2621,7 +1932,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Discord",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#discord",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#discord",
             },
         ],
         "warning_codes": ["secret_value"],
@@ -2678,7 +1989,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: notification channel configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#通知渠道详细配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#notification-channel-configuration",
             },
         ],
         "warning_codes": ["secret_value"],
@@ -2804,68 +2115,9 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "validation": {},
         "display_order": 47,
     },
-    "PUSHPLUS_TOPIC": {
-        "title": "PushPlus Topic",
-        "description": "PushPlus group topic code for one-to-many push.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "text",
-        "is_sensitive": False,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 41,
-    },
     # ------------------------------------------------------------------
-    # Notification – ServerChan / misc
+    # Notification – misc
     # ------------------------------------------------------------------
-    "SERVERCHAN3_SENDKEY": {
-        "title": "ServerChan3 SendKey",
-        "description": "ServerChan3 SendKey for push notifications.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 46,
-    },
-    "ASTRBOT_URL": {
-        "title": "AstrBot URL",
-        "description": "AstrBot webhook endpoint URL.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {
-            "item_type": "url",
-            "allowed_schemes": ["http", "https"],
-        },
-        "display_order": 47,
-    },
-    "ASTRBOT_TOKEN": {
-        "title": "AstrBot Token",
-        "description": "Optional AstrBot bearer token.",
-        "category": "notification",
-        "data_type": "string",
-        "ui_control": "password",
-        "is_sensitive": True,
-        "is_required": False,
-        "is_editable": True,
-        "default_value": None,
-        "options": [],
-        "validation": {},
-        "display_order": 48,
-    },
     "SINGLE_STOCK_NOTIFY": {
         "title": "Single Stock Notify",
         "description": "Push immediately after each single stock analysis instead of batching all results together.",
@@ -2887,7 +2139,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -2914,14 +2166,14 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
     },
     "REPORT_LANGUAGE": {
         "title": "Report Language",
-        "description": "Output language for reports, Agent Chat fallback replies, and notification templates. Reports are produced in Vietnamese only; historical records stored as zh/en/ko still render in their original language.",
+        "description": "Output language for reports, Agent Chat fallback replies, and notification templates. Reports are produced in Vietnamese only; legacy values are normalized to vi.",
         "category": "notification",
         "data_type": "string",
         "ui_control": "select",
@@ -2941,7 +2193,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -2967,7 +2219,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -2993,7 +2245,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -3019,7 +2271,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -3045,7 +2297,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -3071,7 +2323,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -3097,7 +2349,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -3117,7 +2369,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "display_order": 62,
         "help_key": "settings.notification.channel_routing",
         "examples": [
-            "NOTIFICATION_REPORT_CHANNELS=email,feishu",
+            "NOTIFICATION_REPORT_CHANNELS=email,telegram",
             "NOTIFICATION_REPORT_CHANNELS=",
         ],
         "docs": [
@@ -3143,7 +2395,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "display_order": 63,
         "help_key": "settings.notification.channel_routing",
         "examples": [
-            "NOTIFICATION_ALERT_CHANNELS=feishu,telegram",
+            "NOTIFICATION_ALERT_CHANNELS=telegram,slack",
             "NOTIFICATION_ALERT_CHANNELS=",
         ],
         "docs": [
@@ -3360,7 +2612,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: other configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#other-configuration",
             },
         ],
         "warning_codes": ["local_timezone"],
@@ -3387,7 +2639,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#other-configuration",
             },
         ],
         "warning_codes": ["local_timezone"],
@@ -3412,7 +2664,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#other-configuration",
             },
         ],
         "warning_codes": [],
@@ -3441,7 +2693,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#other-configuration",
             },
         ],
         "warning_codes": [],
@@ -3467,7 +2719,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": ["network_scope"],
@@ -3493,7 +2745,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": ["restart_required"],
@@ -3519,7 +2771,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": ["restart_required", "path_must_be_writable"],
@@ -3545,7 +2797,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: WebUI and API",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#webui-与-api-服务",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#fastapi-api-service",
             },
             {
                 "label": "Accessing WebUI on a cloud server",
@@ -3575,7 +2827,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: WebUI and API",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#webui-与-api-服务",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#fastapi-api-service",
             },
             {
                 "label": "Accessing WebUI on a cloud server",
@@ -3609,7 +2861,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
             },
             {
                 "label": "Full guide: WebUI and API",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#webui-与-api-服务",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#fastapi-api-service",
             },
         ],
         "warning_codes": ["public_bind_requires_auth", "restart_required"],
@@ -3639,7 +2891,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
             },
             {
                 "label": "Full guide: WebUI and API",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#webui-与-api-服务",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#fastapi-api-service",
             },
         ],
         "warning_codes": ["port_mapping_required", "restart_required"],
@@ -3665,7 +2917,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: other configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#other-configuration",
             },
         ],
         "warning_codes": ["restart_required"],
@@ -3692,7 +2944,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: other configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#other-configuration",
             },
         ],
         "warning_codes": ["restart_required"],
@@ -3718,7 +2970,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: other configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#other-configuration",
             },
             {
                 "label": "Accessing WebUI on a cloud server",
@@ -3748,7 +3000,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: other configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#other-configuration",
             },
             {
                 "label": "Accessing WebUI on a cloud server",
@@ -3778,7 +3030,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: other configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#other-configuration",
             },
         ],
         "warning_codes": ["restart_required"],
@@ -3804,7 +3056,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: other configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#other-configuration",
             },
         ],
         "warning_codes": ["force_run_override"],
@@ -3825,12 +3077,12 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "help_key": "settings.system.market_review",
         "examples": [
             "MARKET_REVIEW_ENABLED=true",
-            "MARKET_REVIEW_REGION=cn",
+            "MARKET_REVIEW_REGION=vn",
         ],
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -3856,35 +3108,32 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
     },
     "MARKET_REVIEW_REGION": {
         "title": "Market Review Region",
-        "description": "Market region for review: cn (A-shares), hk (Hong Kong), us (US stocks), jp (Japan), kr (Korea), vn (Vietnam), or both (all enabled markets). Only markets enabled by SUPPORTED_MARKETS take effect.",
+        "description": "Market region for the market review. Only vn (Vietnam) is supported.",
         "category": "system",
         "data_type": "string",
         "ui_control": "text",
         "is_sensitive": False,
         "is_required": False,
         "is_editable": True,
-        "default_value": "cn",
-        "options": ["cn", "hk", "us", "jp", "kr", "vn", "both"],
-        "validation": {"allowed_values": ["cn", "hk", "us", "jp", "kr", "vn", "both"], "delimiter": ","},
+        "default_value": "vn",
+        "options": ["vn"],
+        "validation": {"allowed_values": ["vn"], "delimiter": ","},
         "display_order": 48,
         "help_key": "settings.system.market_review",
         "examples": [
-            "MARKET_REVIEW_REGION=cn",
-            "MARKET_REVIEW_REGION=jp",
             "MARKET_REVIEW_REGION=vn",
-            "MARKET_REVIEW_REGION=both",
         ],
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -3913,7 +3162,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -3939,7 +3188,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -3965,7 +3214,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -3992,11 +3241,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "AnalysisContextPack P6 documentation, migration and rollback",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/analysis-context-pack.md#p6-文档迁移与回滚",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/analysis-context-pack.md",
             },
             {
                 "label": "Full guide: other configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#other-configuration",
             },
         ],
         "warning_codes": [],
@@ -4022,7 +3271,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4048,7 +3297,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: backtest configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#回测功能",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#backtesting",
             },
         ],
         "warning_codes": [],
@@ -4075,7 +3324,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: backtest configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#回测功能",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#backtesting",
             },
         ],
         "warning_codes": [],
@@ -4101,7 +3350,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: backtest configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#回测功能",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#backtesting",
             },
         ],
         "warning_codes": [],
@@ -4126,7 +3375,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: backtest configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#回测功能",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#backtesting",
             },
         ],
         "warning_codes": [],
@@ -4152,7 +3401,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: backtest configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#回测功能",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#backtesting",
             },
         ],
         "warning_codes": [],
@@ -4178,7 +3427,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4264,7 +3513,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4291,7 +3540,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4317,7 +3566,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4343,7 +3592,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4372,7 +3621,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4403,7 +3652,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4429,7 +3678,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4455,7 +3704,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4481,7 +3730,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4507,7 +3756,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4533,7 +3782,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4559,7 +3808,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4585,7 +3834,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4614,7 +3863,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Full guide: Agent configuration",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4640,11 +3889,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM configuration guide: visible ask-stock context compression",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#问股可见对话上下文压缩",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4675,11 +3924,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM configuration guide: visible ask-stock context compression",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#问股可见对话上下文压缩",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4705,11 +3954,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM configuration guide: visible ask-stock context compression",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#问股可见对话上下文压缩",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4735,11 +3984,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM configuration guide: visible ask-stock context compression",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#问股可见对话上下文压缩",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "Full guide: complete environment variable list",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
             },
         ],
         "warning_codes": [],
@@ -4816,7 +4065,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "display_order": 71,
         "help_key": "settings.agent.EVENT_ALERT_RULES_JSON",
         "examples": [
-            'AGENT_EVENT_ALERT_RULES_JSON=[{"alert_type":"price_cross","stock_code":"600519","direction":"above","price":1800}]',
+            'AGENT_EVENT_ALERT_RULES_JSON=[{"alert_type":"price_cross","stock_code":"HPG","direction":"above","price":30000}]',
             'AGENT_EVENT_ALERT_RULES_JSON=[{"alert_type":"volume_spike","stock_code":"300750","multiplier":2.5}]',
         ],
         "docs": [
@@ -4832,28 +4081,28 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
 _DOC_FULL_GUIDE_ENV = [
     {
         "label": "Full guide: complete environment variable list",
-        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#complete-environment-variables-list",
     },
 ]
 
 _DOC_FULL_GUIDE_SEARCH = [
     {
         "label": "Full guide: search service configuration",
-        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#搜索服务配置",
+        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#search-service-configuration",
     },
 ]
 
 _DOC_FULL_GUIDE_DATA_SOURCE = [
     {
         "label": "Full guide: data source configuration",
-        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#数据源配置",
+        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#data-source-configuration",
     },
 ]
 
 _DOC_FULL_GUIDE_NOTIFICATION = [
     {
         "label": "Full guide: notification channel configuration",
-        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#通知渠道详细配置",
+        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#notification-channel-configuration",
     },
 ]
 
@@ -4871,7 +4120,7 @@ _DOC_LLM_CONFIG = [
 _DOC_CUSTOM_WEBHOOK = [
     {
         "label": "Full guide: custom webhooks",
-        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#自定义-webhook",
+        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide_EN.md#custom-webhook",
     },
 ]
 
@@ -5019,34 +4268,6 @@ _FIELD_HELP_METADATA: Dict[str, Dict[str, Any]] = {
         "docs": _DOC_LLM_CONFIG,
         "warning_codes": ["legacy_provider_setting"],
     },
-    "TICKFLOW_API_KEY": {
-        "help_key": "settings.data_source.TICKFLOW_API_KEY",
-        "examples": [
-            "TICKFLOW_API_KEY=your_tickflow_key",
-        ],
-        "docs": _DOC_FULL_GUIDE_DATA_SOURCE,
-        "warning_codes": ["secret_value"],
-    },
-    "TICKFLOW_PRIORITY": {
-        "help_key": "settings.data_source.TICKFLOW_PRIORITY",
-        "examples": ["TICKFLOW_PRIORITY=2"],
-        "docs": _DOC_FULL_GUIDE_DATA_SOURCE,
-    },
-    "TICKFLOW_KLINE_ADJUST": {
-        "help_key": "settings.data_source.TICKFLOW_KLINE_ADJUST",
-        "examples": ["TICKFLOW_KLINE_ADJUST=none"],
-        "docs": _DOC_FULL_GUIDE_DATA_SOURCE,
-    },
-    "TICKFLOW_BATCH_DAILY_ENABLED": {
-        "help_key": "settings.data_source.TICKFLOW_BATCH_DAILY_ENABLED",
-        "examples": ["TICKFLOW_BATCH_DAILY_ENABLED=true"],
-        "docs": _DOC_FULL_GUIDE_DATA_SOURCE,
-    },
-    "TICKFLOW_BATCH_SIZE": {
-        "help_key": "settings.data_source.TICKFLOW_BATCH_SIZE",
-        "examples": ["TICKFLOW_BATCH_SIZE=100"],
-        "docs": _DOC_FULL_GUIDE_DATA_SOURCE,
-    },
     "SERPAPI_API_KEYS": {
         "help_key": "settings.data_source.search_api_keys",
         "examples": [
@@ -5059,22 +4280,6 @@ _FIELD_HELP_METADATA: Dict[str, Dict[str, Any]] = {
         "help_key": "settings.data_source.search_api_keys",
         "examples": [
             "BRAVE_API_KEYS=brave_key_1,brave_key_2",
-        ],
-        "docs": _DOC_FULL_GUIDE_SEARCH,
-        "warning_codes": ["secret_value", "comma_separated_keys"],
-    },
-    "BOCHA_API_KEYS": {
-        "help_key": "settings.data_source.search_api_keys",
-        "examples": [
-            "BOCHA_API_KEYS=bocha_key_1,bocha_key_2",
-        ],
-        "docs": _DOC_FULL_GUIDE_SEARCH,
-        "warning_codes": ["secret_value", "comma_separated_keys"],
-    },
-    "MINIMAX_API_KEYS": {
-        "help_key": "settings.data_source.search_api_keys",
-        "examples": [
-            "MINIMAX_API_KEYS=minimax_key_1,minimax_key_2",
         ],
         "docs": _DOC_FULL_GUIDE_SEARCH,
         "warning_codes": ["secret_value", "comma_separated_keys"],
@@ -5097,58 +4302,6 @@ _FIELD_HELP_METADATA: Dict[str, Dict[str, Any]] = {
         "docs": _DOC_FULL_GUIDE_DATA_SOURCE,
         "warning_codes": [],
     },
-    "PYTDX_HOST": {
-        "help_key": "settings.data_source.pytdx",
-        "examples": [
-            "PYTDX_HOST=119.147.212.81",
-            "PYTDX_PORT=7709",
-        ],
-        "docs": _DOC_FULL_GUIDE_DATA_SOURCE,
-        "warning_codes": [],
-    },
-    "PYTDX_PORT": {
-        "help_key": "settings.data_source.pytdx",
-        "examples": [
-            "PYTDX_PORT=7709",
-            "PYTDX_HOST=119.147.212.81",
-        ],
-        "docs": _DOC_FULL_GUIDE_DATA_SOURCE,
-        "warning_codes": [],
-    },
-    "PYTDX_SERVERS": {
-        "help_key": "settings.data_source.pytdx",
-        "examples": [
-            "PYTDX_SERVERS=119.147.212.81:7709,119.147.212.81:7711",
-        ],
-        "docs": _DOC_FULL_GUIDE_DATA_SOURCE,
-        "warning_codes": ["overrides_pytdx_host_port"],
-    },
-    "DINGTALK_APP_KEY": {
-        "help_key": "settings.notification.chat_bots",
-        "examples": [
-            "DINGTALK_APP_KEY=your_dingtalk_app_key",
-            "DINGTALK_APP_SECRET=your_dingtalk_app_secret",
-        ],
-        "docs": _DOC_FULL_GUIDE_NOTIFICATION,
-        "warning_codes": ["secret_value"],
-    },
-    "DINGTALK_APP_SECRET": {
-        "help_key": "settings.notification.chat_bots",
-        "examples": [
-            "DINGTALK_APP_SECRET=your_dingtalk_app_secret",
-        ],
-        "docs": _DOC_FULL_GUIDE_NOTIFICATION,
-        "warning_codes": ["secret_value"],
-    },
-    "PUSHPLUS_TOKEN": {
-        "help_key": "settings.notification.chat_bots",
-        "examples": [
-            "PUSHPLUS_TOKEN=your_pushplus_token",
-            "PUSHPLUS_TOPIC=your_pushplus_topic",
-        ],
-        "docs": _DOC_FULL_GUIDE_NOTIFICATION,
-        "warning_codes": ["secret_value"],
-    },
     "CUSTOM_WEBHOOK_BEARER_TOKEN": {
         "help_key": "settings.notification.CUSTOM_WEBHOOK_URLS",
         "examples": [
@@ -5165,45 +4318,6 @@ _FIELD_HELP_METADATA: Dict[str, Dict[str, Any]] = {
         ],
         "docs": _DOC_CUSTOM_WEBHOOK,
         "warning_codes": ["json_template_must_render_object"],
-    },
-    "FEISHU_WEBHOOK_SECRET": {
-        "help_key": "settings.notification.FEISHU_WEBHOOK_URL",
-        "examples": [
-            "FEISHU_WEBHOOK_SECRET=your_feishu_webhook_secret",
-        ],
-        "docs": [
-            *_DOC_FULL_GUIDE_NOTIFICATION,
-            {
-                "label": "Feishu bot configuration topic",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/bot/feishu-bot-config.md",
-            },
-        ],
-        "warning_codes": ["secret_value"],
-    },
-    "FEISHU_WEBHOOK_KEYWORD": {
-        "help_key": "settings.notification.FEISHU_WEBHOOK_URL",
-        "examples": [
-            "FEISHU_WEBHOOK_KEYWORD=股票日报",
-        ],
-        "docs": _DOC_FULL_GUIDE_NOTIFICATION,
-        "warning_codes": [],
-    },
-    "FEISHU_APP_ID": {
-        "help_key": "settings.notification.FEISHU_WEBHOOK_URL",
-        "examples": [
-            "FEISHU_APP_ID=cli_xxxxx",
-            "FEISHU_APP_SECRET=your_feishu_app_secret",
-        ],
-        "docs": _DOC_FULL_GUIDE_NOTIFICATION,
-        "warning_codes": ["not_webhook_delivery"],
-    },
-    "FEISHU_APP_SECRET": {
-        "help_key": "settings.notification.FEISHU_WEBHOOK_URL",
-        "examples": [
-            "FEISHU_APP_SECRET=your_feishu_app_secret",
-        ],
-        "docs": _DOC_FULL_GUIDE_NOTIFICATION,
-        "warning_codes": ["secret_value", "not_webhook_delivery"],
     },
     "TELEGRAM_MESSAGE_THREAD_ID": {
         "help_key": "settings.notification.telegram",
@@ -5292,39 +4406,6 @@ _FIELD_HELP_METADATA: Dict[str, Dict[str, Any]] = {
         "help_key": "settings.notification.chat_bots",
         "examples": [
             "GOTIFY_TOKEN=your_gotify_token",
-        ],
-        "docs": _DOC_FULL_GUIDE_NOTIFICATION,
-        "warning_codes": ["secret_value"],
-    },
-    "PUSHPLUS_TOPIC": {
-        "help_key": "settings.notification.chat_bots",
-        "examples": [
-            "PUSHPLUS_TOPIC=your_pushplus_topic",
-        ],
-        "docs": _DOC_FULL_GUIDE_NOTIFICATION,
-        "warning_codes": [],
-    },
-    "SERVERCHAN3_SENDKEY": {
-        "help_key": "settings.notification.chat_bots",
-        "examples": [
-            "SERVERCHAN3_SENDKEY=your_serverchan3_sendkey",
-        ],
-        "docs": _DOC_FULL_GUIDE_NOTIFICATION,
-        "warning_codes": ["secret_value"],
-    },
-    "ASTRBOT_URL": {
-        "help_key": "settings.notification.chat_bots",
-        "examples": [
-            "ASTRBOT_URL=https://astrbot.example.com/webhook",
-            "ASTRBOT_TOKEN=your_astrbot_token",
-        ],
-        "docs": _DOC_FULL_GUIDE_NOTIFICATION,
-        "warning_codes": ["webhook_secret_value"],
-    },
-    "ASTRBOT_TOKEN": {
-        "help_key": "settings.notification.chat_bots",
-        "examples": [
-            "ASTRBOT_TOKEN=your_astrbot_token",
         ],
         "docs": _DOC_FULL_GUIDE_NOTIFICATION,
         "warning_codes": ["secret_value"],
@@ -5428,40 +4509,27 @@ def _infer_category(key: str) -> str:
         return "ai_model"
     if key.endswith("_PRIORITY") or key.startswith(
         (
-            "TUSHARE",
-            "TICKFLOW",
-            "AKSHARE",
-            "EFINANCE",
-            "PYTDX",
-            "BAOSTOCK",
             "YFINANCE",
+            "VNSTOCK",
             "TAVILY",
             "SERPAPI",
             "BRAVE",
-            "BOCHA",
             "ANSPIRE",
             "SEARXNG",
             "NEWS_",
             "BIAS_",
         )
-    ) or key in ("ENABLE_REALTIME_QUOTE", "ENABLE_CHIP_DISTRIBUTION"):
+    ) or key in ("ENABLE_REALTIME_QUOTE",):
         return "data_source"
     if key.startswith((
-        "WECHAT",
-        "FEISHU",
         "TELEGRAM",
         "EMAIL",
         "PUSHOVER",
         "NTFY",
         "GOTIFY",
-        "PUSHPLUS",
-        "SERVERCHAN",
-        "DINGTALK",
         "DISCORD",
         "SLACK",
         "CUSTOM_WEBHOOK",
-        "WECOM",
-        "ASTRBOT",
     )) or "WEBHOOK" in key:
         return "notification"
     if key.startswith(("LOG_", "SCHEDULE_", "WEBUI_", "HTTP_", "HTTPS_", "MAX_", "DEBUG", "MARKET_REVIEW_", "TRADING_DAY_", "ANALYSIS_DELAY")):

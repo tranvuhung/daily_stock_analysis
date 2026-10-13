@@ -363,7 +363,7 @@ class TestSearXNGSearchProvider(unittest.TestCase):
         resp = provider.search("query", max_results=5)
 
         self.assertFalse(resp.success)
-        self.assertIn("公共 SearXNG 实例", resp.error_message or "")
+        self.assertIn("instance SearXNG công khai", resp.error_message or "")
         self.assertEqual(mock_get.call_count, 1)
 
     @patch("src.search_service.time.time")

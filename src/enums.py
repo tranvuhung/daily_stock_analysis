@@ -44,7 +44,7 @@ class ReportType(str, Enum):
     def display_name(self) -> str:
         """Get the display name"""
         return {
-            ReportType.SIMPLE: "精简报告",
-            ReportType.FULL: "完整报告",
-            ReportType.BRIEF: "简洁报告",
-        }.get(self, "精简报告")
+            ReportType.SIMPLE: "Báo cáo rút gọn",
+            ReportType.FULL: "Báo cáo đầy đủ",
+            ReportType.BRIEF: "Báo cáo tóm tắt",
+        }.get(self, "Báo cáo rút gọn")

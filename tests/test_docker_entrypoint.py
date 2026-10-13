@@ -24,14 +24,20 @@ def test_dockerfile_uses_entrypoint_to_drop_privileges() -> None:
     assert "USER dsa" not in dockerfile
 
 
-def test_dockerfile_bundles_builtin_screening_engine() -> None:
+def test_dockerfile_installs_requirements_without_removed_sdks() -> None:
     dockerfile = (REPO_ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
     requirements = (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8")
 
-    assert "screening.git" not in requirements.lower()
     assert "pip install -r requirements.txt" in dockerfile
     assert "--mount=type=cache,target=/root/.cache/pip" in dockerfile
-    assert "import src.services.screening.pipeline" in dockerfile
+    # Chỉ còn thị trường Việt Nam: không smoke futu/screening, không vá thư mục efinance
+    # Vietnam-only: no futu/screening smoke import and no efinance data-dir fix-up
+    assert "import futu" not in dockerfile
+    assert "src.services.screening" not in dockerfile
+    assert "efinance" not in dockerfile
+    assert "ENV TZ=Asia/Ho_Chi_Minh" in dockerfile
+    for removed in ("efinance", "akshare", "tushare", "pytdx", "baostock", "longbridge", "tickflow", "futu-api"):
+        assert removed not in requirements.lower()
 
 
 def test_docker_entrypoint_repairs_ownership_and_user_permissions() -> None:
@@ -41,7 +47,7 @@ def test_docker_entrypoint_repairs_ownership_and_user_permissions() -> None:
     assert "has_unwritable_mount_path" in entrypoint
     assert "can_write_dir_as_app_user" in entrypoint
     assert "DATABASE_FILE" in entrypoint
-    assert "/home/dsa/.longbridge" in entrypoint
+    assert ".longbridge" not in entrypoint
     assert 'HOME="/home/dsa"' in entrypoint
     assert re.search(r"export\s+HOME\s+exec\s+gosu", entrypoint, re.DOTALL)
     assert re.search(r"\bchown\s+-R\b", entrypoint)
@@ -57,7 +63,8 @@ def test_docker_compose_injects_env_without_single_file_env_mount() -> None:
     assert "../.env" in common["env_file"]
     assert "../.env:/app/.env" not in common["volumes"]
     assert not any(str(volume).startswith("../.env:") for volume in common["volumes"])
-    assert "../longbridge_tokens:/home/dsa/.longbridge" in common["volumes"]
+    assert not any("longbridge" in str(volume) for volume in common["volumes"])
+    assert "TZ=Asia/Ho_Chi_Minh" in common["environment"]
 
 
 def test_docker_compose_default_memory_recommendation_is_not_512m() -> None:
@@ -73,9 +80,7 @@ def test_docker_compose_default_memory_recommendation_is_not_512m() -> None:
 
 def test_docker_memory_guides_describe_resource_profiles() -> None:
     doc_paths = (
-        "docs/DEPLOY.md",
         "docs/DEPLOY_EN.md",
-        "docs/full-guide.md",
         "docs/full-guide_EN.md",
         "docs/docker/zeabur-deployment.md",
     )
@@ -95,7 +100,7 @@ def test_docker_guides_do_not_recommend_single_file_env_bind_mount() -> None:
         r"\.\./\.env:/app/\.env",
     ]
 
-    for doc_path in ("docs/full-guide.md", "docs/full-guide_EN.md"):
+    for doc_path in ("docs/full-guide_EN.md",):
         doc = (REPO_ROOT / doc_path).read_text(encoding="utf-8")
 
         assert "--env-file .env" in doc
@@ -108,7 +113,7 @@ def test_documented_compose_exec_commands_run_as_dsa() -> None:
     safe_exec_prefix = "docker-compose -f ./docker/docker-compose.yml exec -u dsa"
     unsafe_exec_prefix = "docker-compose -f ./docker/docker-compose.yml exec"
 
-    for doc_path in ("docs/DEPLOY.md", "docs/DEPLOY_EN.md"):
+    for doc_path in ("docs/DEPLOY_EN.md",):
         doc = (REPO_ROOT / doc_path).read_text(encoding="utf-8")
 
         assert f"{safe_exec_prefix} stock-analyzer bash" in doc

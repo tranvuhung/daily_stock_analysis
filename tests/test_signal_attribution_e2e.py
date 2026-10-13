@@ -42,7 +42,7 @@ class TestSignalAttributionE2E:
     def _make_result(self, dashboard):
         """创建 AnalysisResult"""
         return AnalysisResult(
-            code="600519",
+            code="HPG",
             name="测试股票",
             sentiment_score=50,
             trend_prediction="震荡",
@@ -90,7 +90,7 @@ class TestSignalAttributionE2E:
         })
 
         # 调用 _parse_response()
-        result = analyzer._parse_response(response_text, "600519", "测试")
+        result = analyzer._parse_response(response_text, "HPG", "测试")
 
         # 验证归一化已执行
         dash = result.dashboard
@@ -138,7 +138,7 @@ class TestSignalAttributionE2E:
         report = notification.generate_dashboard_report([result], [dashboard])
 
         # 验证包含信号归因段落
-        assert "信号归因" in report or "Signal Attribution" in report, "通知应包含信号归因段落"
+        assert "Phân rã tín hiệu" in report or "Signal Attribution" in report, "通知应包含信号归因段落"
         assert "35%" in report, "通知应显示 technical_indicators=35%"
         assert "25%" in report, "通知应显示 news_sentiment=25%"
         assert "20%" in report, "通知应显示 fundamentals=20%"
@@ -163,7 +163,7 @@ class TestSignalAttributionE2E:
         }
         result = self._make_result(self._make_dashboard_with_signal_attr(signal_attr))
 
-        out = render("markdown", [result], summary_only=False, extra_context={"report_language": "zh"})
+        out = render("markdown", [result], summary_only=False, extra_context={"report_language": "vi"})
 
         assert out is not None
         assert "35%" in out
@@ -219,7 +219,7 @@ class TestSignalAttributionE2E:
             created_at = None
 
         history_report = HistoryService.__new__(HistoryService)._generate_single_stock_markdown(result, MockRecord())
-        template_report = render("markdown", [result], summary_only=False, extra_context={"report_language": "zh"})
+        template_report = render("markdown", [result], summary_only=False, extra_context={"report_language": "vi"})
 
         for output in [dashboard_report, single_report, history_report, template_report]:
             assert output is not None
@@ -250,11 +250,11 @@ class TestSignalAttributionE2E:
             created_at = None
 
         history_report = HistoryService.__new__(HistoryService)._generate_single_stock_markdown(result, MockRecord())
-        template_report = render("markdown", [result], summary_only=False, extra_context={"report_language": "zh"})
+        template_report = render("markdown", [result], summary_only=False, extra_context={"report_language": "vi"})
 
         for output in [dashboard_report, single_report, history_report, template_report]:
             assert output is not None
-            assert "信号归因" not in output
+            assert "Phân rã tín hiệu" not in output
             assert "Signal Attribution" not in output
 
     def test_non_finite_signal_attribution_is_hidden_across_real_paths(self):
@@ -288,7 +288,7 @@ class TestSignalAttributionE2E:
         })
 
         analyzer = GeminiAnalyzer.__new__(GeminiAnalyzer)
-        result = analyzer._parse_response(response_text, "600519", "测试")
+        result = analyzer._parse_response(response_text, "HPG", "测试")
         dashboard = result.dashboard
         signal_attr = dashboard["signal_attribution"]
 
@@ -314,11 +314,11 @@ class TestSignalAttributionE2E:
             created_at = None
 
         history_report = HistoryService.__new__(HistoryService)._generate_single_stock_markdown(result, MockRecord())
-        template_report = render("markdown", [result], summary_only=False, extra_context={"report_language": "zh"})
+        template_report = render("markdown", [result], summary_only=False, extra_context={"report_language": "vi"})
 
         for output in [dashboard_report, single_report, history_report, template_report]:
             assert output is not None
-            assert "信号归因" not in output
+            assert "Phân rã tín hiệu" not in output
             assert "Signal Attribution" not in output
             assert "NaN" not in output
             assert "Infinity" not in output
@@ -354,7 +354,7 @@ class TestSignalAttributionE2E:
         markdown = history_service._generate_single_stock_markdown(result, MockRecord())
 
         # 验证包含信号归因段落
-        assert "信号归因" in markdown or "Signal Attribution" in markdown, "Markdown 应包含信号归因段落"
+        assert "Phân rã tín hiệu" in markdown or "Signal Attribution" in markdown, "Markdown 应包含信号归因段落"
         assert "35%" in markdown, "Markdown 应显示 technical_indicators=35%"
         assert "MACD金叉" in markdown, "Markdown 应显示 strongest_bullish_signal"
 

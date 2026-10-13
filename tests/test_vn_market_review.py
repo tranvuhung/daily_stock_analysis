@@ -346,22 +346,11 @@ class MarketStatsRoutingTestCase(unittest.TestCase):
         vn = _FakeVnFetcher()
         manager = DataFetcherManager(fetchers=[cn, vn])
 
-        with patch.object(manager, "_get_tickflow_fetcher", return_value=None):
-            stats = manager.get_market_stats(purpose="test", region="vn")
+        stats = manager.get_market_stats(purpose="test", region="vn")
 
         self.assertEqual(stats["up_count"], 200)
         self.assertEqual(cn.calls, 0)
         self.assertEqual(vn.calls, 0)
-
-    def test_default_region_keeps_cn_behaviour(self):
-        cn = _FakeCnFetcher()
-        manager = DataFetcherManager(fetchers=[cn])
-
-        with patch.object(manager, "_get_tickflow_fetcher", return_value=None):
-            stats = manager.get_market_stats(purpose="test")
-
-        self.assertEqual(stats["up_count"], 999)
-        self.assertEqual(cn.calls, 1)
 
     def test_vn_region_without_provider_returns_empty(self):
         manager = DataFetcherManager(fetchers=[_FakeCnFetcher()])
@@ -494,28 +483,23 @@ class VnTriggerEndpointTestCase(unittest.TestCase):
         self.assertEqual(response.region, "vn")
         self.assertEqual(task_queue.submit_background_task.call_args.kwargs["region"], "vn")
 
-    def test_no_review_capable_market_is_rejected_before_submit(self):
-        from fastapi import HTTPException
-
+    def test_legacy_supported_markets_value_still_reviews_vn(self):
+        # SUPPORTED_MARKETS cũ (tw) bị bỏ qua nên vẫn điểm lại vn.
+        # Legacy SUPPORTED_MARKETS values are ignored, so vn is still reviewed.
         with supported_markets("tw"):
-            with self.assertRaises(HTTPException) as ctx:
-                self._trigger("")
+            response, task_queue = self._trigger("cn")
 
-        self.assertEqual(ctx.exception.status_code, 400)
-        self.assertEqual(ctx.exception.detail["error"], "market_review_unsupported")
+        self.assertEqual(response.region, "vn")
+        self.assertEqual(task_queue.submit_background_task.call_args.kwargs["region"], "vn")
 
 
 class VnTradingCalendarTestCase(unittest.TestCase):
     def test_vn_is_closed_on_weekends(self):
-        if not trading_calendar._XCALS_AVAILABLE:
-            self.skipTest("exchange-calendars unavailable")
         self.assertTrue(trading_calendar.is_market_open("vn", date(2026, 9, 25)))  # thứ 6
         self.assertFalse(trading_calendar.is_market_open("vn", date(2026, 9, 26)))  # thứ 7
         self.assertFalse(trading_calendar.is_market_open("vn", date(2026, 9, 27)))  # CN
 
     def test_unknown_market_stays_fail_open(self):
-        if not trading_calendar._XCALS_AVAILABLE:
-            self.skipTest("exchange-calendars unavailable")
         self.assertTrue(trading_calendar.is_market_open("atlantis", date(2026, 9, 26)))
 
 

@@ -71,35 +71,17 @@ class VnSymbolConversionTestCase(unittest.TestCase):
 
     def test_explicit_vn_forms_win_even_when_us_enabled(self):
         # Dạng tường minh không phụ thuộc trạng thái cờ thị trường.
-        with supported_markets("vn,us,cn,hk"):
+        with supported_markets("vn,us"):
             self.assertEqual(self.fetcher._convert_stock_code("HPG.VN"), "HPG.VN")
             self.assertEqual(self.fetcher._convert_stock_code("vnHPG"), "HPG.VN")
 
-    def test_bare_three_letter_code_defers_to_us_when_us_enabled(self):
-        # Quy tắc va chạm sẵn có của ``_is_vn_market``: mã trần chỉ là VN khi ``us`` tắt.
-        with supported_markets("vn,us"):
-            self.assertEqual(self.fetcher._convert_stock_code("HPG"), "HPG")
+    def test_non_vn_codes_are_refused(self):
+        # Yahoo chỉ còn là nguồn dự phòng cho VN. / Yahoo only serves VN daily fallback.
+        from data_provider.base import DataFetchError
 
-    def test_other_markets_are_not_affected(self):
-        with supported_markets("vn,us,cn,hk,jp"):
-            self.assertEqual(self.fetcher._convert_stock_code("AAPL"), "AAPL")
-            self.assertEqual(self.fetcher._convert_stock_code("600519"), "600519.SS")
-            self.assertEqual(self.fetcher._convert_stock_code("000001"), "000001.SZ")
-            self.assertEqual(self.fetcher._convert_stock_code("hk00700"), "0700.HK")
-            self.assertEqual(self.fetcher._convert_stock_code("7203.T"), "7203.T")
-
-    def test_vn_branch_is_inert_when_vn_market_is_disabled(self):
-        """Không bật thị trường VN thì nhánh này không được chiếm mã nào.
-
-        ``UPCOM`` nằm trong ``VN_INDEX_SYMBOLS`` nhưng cũng là hình dạng hợp lệ của
-        một ticker Mỹ (5 ký tự chữ hoa). Nhánh VN phải im lặng hoàn toàn để giữ
-        nguyên hành vi cũ của các triển khai không dùng thị trường Việt Nam.
-        """
-
-        with supported_markets("cn,us,hk"):
-            self.assertEqual(self.fetcher._convert_stock_code("UPCOM"), "UPCOM")
-            self.assertEqual(self.fetcher._convert_stock_code("AAPL"), "AAPL")
-            self.assertEqual(self.fetcher._convert_stock_code("600519"), "600519.SS")
+        for raw in ("AAPL", "600519", "hk00700"):
+            with self.subTest(raw=raw), self.assertRaises(DataFetchError):
+                self.fetcher._convert_stock_code(raw)
 
     def test_vn_index_codes_are_refused_without_any_request(self):
         """Chỉ số VN phải hỏng sạch, không được phát request.
@@ -164,10 +146,6 @@ class VnPersistenceGateTestCase(unittest.TestCase):
     def test_yfinance_vn_is_not_persistable(self):
         self.assertFalse(is_daily_source_persistable("YfinanceFetcher", "vn"))
 
-    def test_yfinance_keeps_persisting_other_markets(self):
-        for market in ("us", "hk", "jp", "kr", "tw", "cn"):
-            self.assertTrue(is_daily_source_persistable("YfinanceFetcher", market), market)
-
     def test_vn_primary_sources_are_persistable(self):
         for source in ("VciFetcher", "SsiFetcher", "VnstockFetcher"):
             self.assertTrue(is_daily_source_persistable(source, "vn"), source)
@@ -180,11 +158,6 @@ class VnPersistenceGateTestCase(unittest.TestCase):
             self.assertFalse(should_persist_daily_data("YfinanceFetcher", "HPG"))
             self.assertFalse(should_persist_daily_data("YfinanceFetcher", "HPG.VN"))
             self.assertTrue(should_persist_daily_data("VciFetcher", "HPG"))
-
-        with supported_markets("vn,us"):
-            # Mã Mỹ vẫn được ghi bình thường.
-            self.assertTrue(should_persist_daily_data("YfinanceFetcher", "AAPL"))
-            self.assertFalse(should_persist_daily_data("YfinanceFetcher", "HPG.VN"))
 
 
 if __name__ == "__main__":

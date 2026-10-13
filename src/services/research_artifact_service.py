@@ -143,18 +143,6 @@ def _build_evidence(details: Any, context_overview: Any) -> List[Dict[str, Any]]
             "quality_level": "usable",
         })
 
-    market_structure = _value(details, "market_structure")
-    if market_structure:
-        status = _as_text(_value(market_structure, "status"))
-        evidence.append({
-            "id": "market:structure",
-            "source_type": "market_structure",
-            "title": "Market structure",
-            "freshness": _freshness_from_status(status),
-            "quality_level": _quality_from_status(status),
-            "metadata": {"status": status},
-        })
-
     return evidence
 
 

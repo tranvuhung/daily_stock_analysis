@@ -29,7 +29,9 @@ class DesktopPackagingAssetsTestCase(unittest.TestCase):
         self.assertIn("$env:DSA_PACKAGED_IMPORT_PROBE = $module", windows_script)
         self.assertIn('importlib.import_module(_packaged_import_probe)', main)
 
-    def test_scripts_collect_and_verify_akshare_calendar_data(self) -> None:
+    def test_scripts_no_longer_bundle_akshare_data(self) -> None:
+        # akshare (nguồn A-share) đã bị loại khỏi repo nên không còn đóng gói dữ liệu của nó.
+        # akshare was removed with the A-share sources, so its data is no longer bundled.
         macos_script = (self.repo_root / "scripts" / "build-backend-macos.sh").read_text(
             encoding="utf-8"
         )
@@ -37,10 +39,8 @@ class DesktopPackagingAssetsTestCase(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn("--collect-data akshare", macos_script)
-        self.assertIn("'--collect-data', 'akshare'", windows_script)
-        self.assertIn("_internal/akshare/file_fold/calendar.json", macos_script)
-        self.assertIn("_internal\\akshare\\file_fold\\calendar.json", windows_script)
+        self.assertNotIn("akshare", macos_script)
+        self.assertNotIn("akshare", windows_script)
 
 
 if __name__ == "__main__":

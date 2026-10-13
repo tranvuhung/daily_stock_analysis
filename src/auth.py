@@ -237,9 +237,9 @@ def _get_session_secret() -> Optional[bytes]:
 def _validate_password(pwd: str) -> Optional[str]:
     """Return error message if invalid, None if valid."""
     if not pwd or not pwd.strip():
-        return "密码不能为空"
+        return "Mật khẩu không được để trống"
     if len(pwd) < MIN_PASSWORD_LEN:
-        return f"密码至少 {MIN_PASSWORD_LEN} 位"
+        return f"Mật khẩu phải có ít nhất {MIN_PASSWORD_LEN} ký tự"
     return None
 
 
@@ -276,7 +276,7 @@ def set_initial_password(password: str) -> Optional[str]:
         return None
     except OSError as e:
         logger.error("Failed to write credential file: %s", e)
-        return "密码保存失败"
+        return "Lưu mật khẩu thất bại"
 
 
 def verify_password(password: str) -> bool:
@@ -291,14 +291,14 @@ def change_password(current: str, new: str) -> Optional[str]:
     Change password. Verifies current, writes new hash. Returns error message or None on success.
     """
     if not is_auth_enabled():
-        return "认证功能未启用"
+        return "Chức năng xác thực chưa được bật"
     if not is_password_set():
-        return "尚未设置密码"
+        return "Chưa đặt mật khẩu"
 
     if not current or not current.strip():
-        return "请输入当前密码"
+        return "Vui lòng nhập mật khẩu hiện tại"
     if not _verify_password_hash(current, _password_hash_salt, _password_hash_stored):
-        return "当前密码错误"
+        return "Mật khẩu hiện tại không đúng"
 
     err = _validate_password(new)
     if err:
@@ -326,7 +326,7 @@ def change_password(current: str, new: str) -> Optional[str]:
         return None
     except OSError as e:
         logger.error("Failed to write credential file: %s", e)
-        return "密码保存失败"
+        return "Lưu mật khẩu thất bại"
 
 
 def create_session() -> str:
@@ -427,7 +427,7 @@ def overwrite_password(new_password: str) -> Optional[str]:
     Returns error message or None on success.
     """
     if not is_auth_enabled():
-        return "认证功能未启用"
+        return "Chức năng xác thực chưa được bật"
     err = _validate_password(new_password)
     if err:
         return err
@@ -456,7 +456,7 @@ def overwrite_password(new_password: str) -> Optional[str]:
         return None
     except OSError as e:
         logger.error("Failed to write credential file: %s", e)
-        return "密码保存失败"
+        return "Lưu mật khẩu thất bại"
 
 
 def reset_password_cli() -> int:

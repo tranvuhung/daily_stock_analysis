@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Prompt rendering for Issue #1389 AnalysisContextPack runtime summaries."""
+"""Prompt rendering for Issue #1389 AnalysisContextPack runtime summaries.
+
+The summary is LLM-facing, so it is always rendered in English; the report's
+output language (vi/en) is enforced by the separate output-language directive.
+"""
 
 from __future__ import annotations
 
@@ -7,33 +11,12 @@ from collections.abc import Mapping
 from typing import Any, Dict, Iterable, List, Optional
 
 
-BLOCK_LABELS_ZH = {
-    "quote": "行情",
-    "daily_bars": "日线",
-    "technical": "技术",
-    "chip": "筹码",
-    "fundamentals": "基本面",
-    "news": "新闻",
-}
-
 BLOCK_LABELS_EN = {
     "quote": "quote",
     "daily_bars": "daily bars",
     "technical": "technical",
-    "chip": "chip",
     "fundamentals": "fundamentals",
     "news": "news",
-}
-
-STATUS_LABELS_ZH = {
-    "available": "可用",
-    "missing": "缺失",
-    "not_supported": "不支持",
-    "fallback": "降级",
-    "stale": "过期",
-    "estimated": "估算",
-    "partial": "部分可用",
-    "fetch_failed": "抓取失败",
 }
 
 STATUS_LABELS_EN = {
@@ -45,13 +28,6 @@ STATUS_LABELS_EN = {
     "estimated": "estimated",
     "partial": "partial",
     "fetch_failed": "fetch failed",
-}
-
-QUALITY_LEVEL_LABELS_ZH = {
-    "good": "良好",
-    "usable": "可用",
-    "limited": "受限",
-    "poor": "较差",
 }
 
 QUALITY_LEVEL_LABELS_EN = {
@@ -100,22 +76,22 @@ SENSITIVE_MARKERS = (
 )
 
 
-def normalize_analysis_context_pack_language(report_language: str = "zh") -> str:
-    # Korean reuses the English structural context labels; the model is
-    # constrained to Korean output via the analysis output-language directive.
-    return "en" if str(report_language or "").lower() in {"en", "ko", "vi"} else "zh"
+def normalize_analysis_context_pack_language(report_language: str = "vi") -> str:
+    """Return the structural label language of the context pack summary.
+
+    Nhãn cấu trúc luôn là tiếng Anh cho mọi ngôn ngữ báo cáo (vi/en, kể cả giá trị cũ);
+    model bị ràng buộc ngôn ngữ đầu ra qua chỉ thị ngôn ngữ riêng.
+    Structural labels are always English; output language is enforced elsewhere.
+    """
+    return "en"
 
 
-def get_analysis_context_pack_block_labels(report_language: str = "zh") -> Dict[str, str]:
-    return (
-        BLOCK_LABELS_EN
-        if normalize_analysis_context_pack_language(report_language) in ("en", "vi")
-        else BLOCK_LABELS_ZH
-    )
+def get_analysis_context_pack_block_labels(report_language: str = "vi") -> Dict[str, str]:
+    return BLOCK_LABELS_EN
 
 
 def iter_analysis_context_pack_block_keys(blocks: Mapping[str, Any]) -> List[str]:
-    ordered_keys = [key for key in BLOCK_LABELS_ZH if key in blocks]
+    ordered_keys = [key for key in BLOCK_LABELS_EN if key in blocks]
     ordered_keys.extend(key for key in blocks if key not in ordered_keys)
     return ordered_keys
 
@@ -123,7 +99,7 @@ def iter_analysis_context_pack_block_keys(blocks: Mapping[str, Any]) -> List[str
 def format_analysis_context_pack_prompt_section(
     pack: Any,
     *,
-    report_language: str = "zh",
+    report_language: str = "vi",
 ) -> str:
     """Return a low-sensitivity prompt summary for an AnalysisContextPack.
 
@@ -140,8 +116,7 @@ def format_analysis_context_pack_prompt_section(
     if not isinstance(subject, Mapping) or not isinstance(blocks, Mapping):
         return ""
 
-    lang = normalize_analysis_context_pack_language(report_language)
-    return _format_en(payload) if lang in ("en", "vi") else _format_zh(payload)
+    return _format_en(payload)
 
 
 def analysis_context_pack_to_dict(pack: Any) -> Dict[str, Any]:
@@ -162,23 +137,6 @@ def analysis_context_pack_to_dict(pack: Any) -> Dict[str, Any]:
 
 
 _pack_to_dict = analysis_context_pack_to_dict
-
-
-def _format_zh(payload: Dict[str, Any]) -> str:
-    lines = ["", "## 分析上下文包摘要"]
-    lines.extend(_subject_lines(payload, lang="zh"))
-    block_lines = _block_lines(payload, lang="zh")
-    if block_lines:
-        lines.append("- 数据块状态：")
-        lines.extend(f"  - {line}" for line in block_lines)
-    metadata_lines = _metadata_lines(payload, lang="zh")
-    if metadata_lines:
-        lines.extend(metadata_lines)
-    warnings = _list_strings(_nested(payload, "data_quality", "warnings"))
-    if warnings:
-        lines.append(f"- 数据质量提醒：{_join_text(warnings, lang='zh')}")
-    lines.extend(_data_limitation_lines(payload, lang="zh"))
-    return "\n".join(lines) + "\n"
 
 
 def _format_en(payload: Dict[str, Any]) -> str:
@@ -205,31 +163,17 @@ def _subject_lines(payload: Dict[str, Any], *, lang: str) -> List[str]:
     market = _safe_text(subject.get("market"))
     version = _safe_text(payload.get("pack_version"))
 
-    if lang in ("en", "vi"):
-        label = code or "unknown"
-        if name:
-            label += f" ({name})"
-        line = f"- Subject: {label}"
-        details = []
-        if market:
-            details.append(f"market={market}")
-        if version:
-            details.append(f"pack_version={version}")
-        if details:
-            line += f"; {', '.join(details)}"
-        return [line]
-
-    label = code or "未知标的"
+    label = code or "unknown"
     if name:
-        label += f"（{name}）"
-    line = f"- 标的：{label}"
+        label += f" ({name})"
+    line = f"- Subject: {label}"
     details = []
     if market:
-        details.append(f"市场={market}")
+        details.append(f"market={market}")
     if version:
         details.append(f"pack_version={version}")
     if details:
-        line += f"；{'，'.join(details)}"
+        line += f"; {', '.join(details)}"
     return [line]
 
 
@@ -259,15 +203,13 @@ def _block_lines(payload: Dict[str, Any], *, lang: str) -> List[str]:
 
         warnings = _list_strings(block.get("warnings"))
         if warnings:
-            warning_label = "warnings" if lang in ("en", "vi") else "告警"
-            parts.append(f"{warning_label}={_join_text(warnings, lang=lang)}")
+            parts.append(f"warnings={_join_text(warnings, lang=lang)}")
 
         reasons = _item_missing_reasons(block.get("items"))
         if reasons:
-            reason_label = "missing_reason" if lang in ("en", "vi") else "missing_reason"
-            parts.append(f"{reason_label}={_join_text(reasons, lang=lang)}")
+            parts.append(f"missing_reason={_join_text(reasons, lang=lang)}")
 
-        lines.append("；".join(parts) if lang == "zh" else "; ".join(parts))
+        lines.append("; ".join(parts))
     return lines
 
 
@@ -278,15 +220,11 @@ def _metadata_lines(payload: Dict[str, Any], *, lang: str) -> List[str]:
     news_count = metadata.get("news_result_count")
     if news_count is None:
         return []
-    return [
-        f"- News result count: {news_count}"
-        if lang in ("en", "vi")
-        else f"- 新闻结果数：{news_count}"
-    ]
+    return [f"- News result count: {news_count}"]
 
 
 def _data_limitation_lines(payload: Dict[str, Any], *, lang: str) -> List[str]:
-    lines = ["", "## Data Limitations" if lang in ("en", "vi") else "## 数据限制"]
+    lines = ["", "## Data Limitations"]
     data_quality = payload.get("data_quality")
     if not isinstance(data_quality, Mapping):
         data_quality = {}
@@ -295,14 +233,9 @@ def _data_limitation_lines(payload: Dict[str, Any], *, lang: str) -> List[str]:
     level = _safe_text(data_quality.get("level"))
     if score is not None:
         level_text = _quality_level_label(level, lang=lang)
-        if lang in ("en", "vi"):
-            line = f"- Data quality score: {score}/100"
-            if level_text:
-                line += f" ({level_text})"
-        else:
-            line = f"- 数据质量评分：{score}/100"
-            if level_text:
-                line += f"（{level_text}）"
+        line = f"- Data quality score: {score}/100"
+        if level_text:
+            line += f" ({level_text})"
         lines.append(line)
 
     limitations = _localized_limitations(
@@ -310,49 +243,32 @@ def _data_limitation_lines(payload: Dict[str, Any], *, lang: str) -> List[str]:
         lang=lang,
     )
     if limitations:
-        label = "Known limitations" if lang in ("en", "vi") else "已知限制"
-        separator = ": " if lang in ("en", "vi") else "："
-        lines.append(f"- {label}{separator}{_join_text(limitations, lang=lang)}")
+        lines.append(f"- Known limitations: {_join_text(limitations, lang=lang)}")
 
     lines.extend(_phase_data_quality_constraint_lines(payload, lang=lang))
 
     if _has_core_degraded_block(payload):
-        if lang in ("en", "vi"):
-            lines.append(
-                "- Confidence rule: when quote, daily bars, or technical data is "
-                "stale, fallback, missing, fetch_failed, partial, or estimated, "
-                "the final JSON confidence_level must not be High."
-            )
-        else:
-            lines.append(
-                "- 置信度规则：当 quote、daily_bars 或 technical 为 stale、fallback、missing、"
-                "fetch_failed、partial 或 estimated 时，最终 JSON 的 confidence_level 不得为高。"
-            )
+        lines.append(
+            "- Confidence rule: when quote, daily bars, or technical data is "
+            "stale, fallback, missing, fetch_failed, partial, or estimated, "
+            "the final JSON confidence_level must not be High."
+        )
 
-    if lang in ("en", "vi"):
-        lines.append(
-            "- Analysis rule: missing auxiliary blocks only limit their matching "
-            "analysis sections; do not treat missing data itself as bullish or bearish."
-        )
-        lines.append(
-            "- Safety rule: use only status, source, warnings, and missing_reason "
-            "from this summary; do not reproduce raw payloads, news body text, "
-            "raw trend values, secrets, tokens, or webhooks."
-        )
-    else:
-        lines.append(
-            "- 分析规则：辅助数据块缺失只限制对应分析段落，不要把缺失本身解释为利好或利空。"
-        )
-        lines.append(
-            "- 安全规则：只使用本摘要中的 status、source、warnings 和 missing_reason；"
-            "不要复述 raw payload、新闻正文、趋势原始值、secret、token 或 webhook。"
-        )
+    lines.append(
+        "- Analysis rule: missing auxiliary blocks only limit their matching "
+        "analysis sections; do not treat missing data itself as bullish or bearish."
+    )
+    lines.append(
+        "- Safety rule: use only status, source, warnings, and missing_reason "
+        "from this summary; do not reproduce raw payloads, news body text, "
+        "raw trend values, secrets, tokens, or webhooks."
+    )
     return lines
 
 
 def _localized_limitations(limitations: List[str], *, lang: str) -> List[str]:
     labels = get_analysis_context_pack_block_labels(lang)
-    status_labels = STATUS_LABELS_EN if lang in ("en", "vi") else STATUS_LABELS_ZH
+    status_labels = STATUS_LABELS_EN
     result: List[str] = []
     for item in limitations:
         key, separator, status = item.partition(":")
@@ -365,9 +281,7 @@ def _localized_limitations(limitations: List[str], *, lang: str) -> List[str]:
         status_label = status_labels.get(normalized_status, _safe_text(normalized_status))
         if not label or not status_label:
             continue
-        result.append(
-            f"{label}: {status_label}" if lang in ("en", "vi") else f"{label}：{status_label}"
-        )
+        result.append(f"{label}: {status_label}")
     return result[:5]
 
 
@@ -393,39 +307,22 @@ def _phase_data_quality_constraint_lines(payload: Dict[str, Any], *, lang: str) 
     if not phase or phase == "postmarket":
         return []
 
-    if lang in ("en", "vi"):
-        if phase in INTRADAY_MARKET_PHASES:
-            return [
-                "- Phase/data rule: intraday judgment is limited by quote, daily-bar, "
-                "or technical data quality; state those limitations before making "
-                "near-term trading conclusions."
-            ]
-        if phase == "premarket":
-            return [
-                "- Phase/data rule: the opening plan is limited by data freshness "
-                "or fallback status; do not describe degraded quote data as "
-                "today's completed price action."
-            ]
-        if phase in CONSERVATIVE_MARKET_PHASES:
-            return [
-                "- Phase/data rule: use only available data conservatively and do "
-                "not fill in nonexistent intraday facts."
-            ]
-        return []
-
     if phase in INTRADAY_MARKET_PHASES:
         return [
-            "- 阶段数据规则：盘中判断受实时行情、日线或技术数据质量限制；"
-            "给出短线结论前必须说明这些限制。"
+            "- Phase/data rule: intraday judgment is limited by quote, daily-bar, "
+            "or technical data quality; state those limitations before making "
+            "near-term trading conclusions."
         ]
     if phase == "premarket":
         return [
-            "- 阶段数据规则：开盘计划受数据新鲜度或降级状态限制；"
-            "不得把降级行情描述成今日走势已经发生。"
+            "- Phase/data rule: the opening plan is limited by data freshness "
+            "or fallback status; do not describe degraded quote data as "
+            "today's completed price action."
         ]
     if phase in CONSERVATIVE_MARKET_PHASES:
         return [
-            "- 阶段数据规则：只能保守使用当前可用数据，不得补全不存在的盘中事实。"
+            "- Phase/data rule: use only available data conservatively and do "
+            "not fill in nonexistent intraday facts."
         ]
     return []
 
@@ -439,8 +336,7 @@ def _phase_value(payload: Dict[str, Any]) -> str:
 
 
 def _quality_level_label(level: str, *, lang: str) -> str:
-    labels = QUALITY_LEVEL_LABELS_EN if lang in ("en", "vi") else QUALITY_LEVEL_LABELS_ZH
-    return labels.get(level, "")
+    return QUALITY_LEVEL_LABELS_EN.get(level, "")
 
 
 def _safe_score(value: Any) -> Optional[int]:
@@ -517,5 +413,4 @@ def _safe_text(value: Any) -> str:
 
 
 def _join_text(values: Iterable[str], *, lang: str) -> str:
-    separator = ", " if lang in ("en", "vi") else "、"
-    return separator.join(values)
+    return ", ".join(values)

@@ -34,25 +34,24 @@ class _LiteLLMPlaceholder:
 # Keep a patchable module attribute while still avoiding a hard import at module load.
 litellm = sys.modules.get("litellm") or _LiteLLMPlaceholder()
 
-EXTRACT_PROMPT = """请分析这张股票市场截图或图片，提取其中所有可见的股票代码及名称。
+EXTRACT_PROMPT = """Analyze this Vietnamese stock market screenshot or image and extract every visible stock code and its name.
 
-重要：若图中同时显示股票名称和代码（如自选股列表、ETF 列表），必须同时提取两者，每个元素必须包含 code 和 name 字段。
+Important: if the image shows both stock names and codes (for example a watchlist or an ETF list), you must extract both; every element must contain the code and name fields.
 
-输出格式：仅返回有效的 JSON 数组，不要 markdown、不要解释。
-每个元素为对象：{"code":"股票代码","name":"股票名称","confidence":"high|medium|low"}
-- code: 必填，股票代码（A股6位、港股5位、美股1-5字母、ETF 如 159887/512880）
-- name: 若图中有名称则必填（如 贵州茅台、银行ETF、证券ETF），与代码一一对应；仅当图中确实无名称时可省略
-- confidence: 必填，识别置信度，high=确定、medium=较确定、low=不确定
+Output format: return ONLY a valid JSON array, with no markdown and no explanation.
+Each element is an object: {"code":"stock code","name":"stock name","confidence":"high|medium|low"}
+- code: required. A Vietnam-listed code on HOSE / HNX / UPCoM: a 3-character stock ticker (e.g. HPG, FPT, VCB), an 8-character fund certificate (e.g. FUEVN100, E1VFVN30), or an index (VNINDEX, VN30, HNXINDEX, UPCOMINDEX)
+- name: required when the image shows a name (e.g. Hòa Phát, FPT Corp, Vietcombank), matched one-to-one with the code; omit only when the image truly has no name
+- confidence: required. Recognition confidence: high=certain, medium=fairly certain, low=uncertain
 
-示例（图中同时有名称和代码时）：
-- 个股：600519 贵州茅台、300750 宁德时代
-- 港股：00700 腾讯控股、09988 阿里巴巴
-- 美股：AAPL 苹果、TSLA 特斯拉
-- ETF：159887 银行ETF、512880 证券ETF、512000 券商ETF、512480 半导体ETF、515030 新能源车ETF
+Examples (when the image shows both names and codes):
+- Stocks: HPG Hòa Phát, FPT FPT Corp, VCB Vietcombank, VNM Vinamilk
+- Fund certificates: FUEVN100 Quỹ ETF VINACAPITAL VN100, E1VFVN30 Quỹ ETF DCVFMVN30
+- Indices: VNINDEX VN-Index, VN30 VN30-Index
 
-输出示例：[{"code":"600519","name":"贵州茅台","confidence":"high"},{"code":"159887","name":"银行ETF","confidence":"high"}]
+Output example: [{"code":"HPG","name":"Hòa Phát","confidence":"high"},{"code":"FUEVN100","name":"Quỹ ETF VINACAPITAL VN100","confidence":"high"}]
 
-禁止只返回代码数组如 ["159887","512880"]，必须使用对象格式。若未找到任何股票代码，返回：[]"""
+Never return a bare array of codes such as ["HPG","FPT"]; always use the object format. If no stock code is found, return: []"""
 
 # Valid confidence values; invalid ones normalized to medium
 _VALID_CONFIDENCE = frozenset({"high", "medium", "low"})
@@ -76,37 +75,27 @@ _IMAGE_SIGNATURES = {
 def _verify_image_magic_bytes(image_bytes: bytes, mime_type: str) -> None:
     """Verify actual file content matches declared MIME type (rejects forged Content-Type)."""
     if len(image_bytes) < 12:
-        raise ValueError("图片文件过小或损坏")
+        raise ValueError("Tệp ảnh quá nhỏ hoặc bị hỏng")
     if mime_type not in _IMAGE_SIGNATURES:
-        raise ValueError(f"无法验证类型: {mime_type}")
+        raise ValueError(f"Không thể xác minh loại tệp: {mime_type}")
     if mime_type == "image/webp":
         if image_bytes[:4] != b"RIFF" or image_bytes[8:12] != b"WEBP":
-            raise ValueError("文件内容与声明的类型 image/webp 不匹配，可能被篡改")
+            raise ValueError("Nội dung tệp không khớp với loại image/webp đã khai báo, có thể đã bị sửa đổi")
         return
     for sig in _IMAGE_SIGNATURES[mime_type]:
         if image_bytes.startswith(sig):
             return
-    raise ValueError(f"文件内容与声明的类型 {mime_type} 不匹配，可能被篡改")
+    raise ValueError(f"Nội dung tệp không khớp với loại {mime_type} đã khai báo, có thể đã bị sửa đổi")
 
 
 def _normalize_code(raw: str) -> Optional[str]:
-    """Normalize and validate a single stock code. A-shares & HK: 5-6 digits; US: 1-5 letters."""
-    s = raw.strip().upper()
-    if not s:
-        return None
-    # A-shares & HK: 5-6 digit codes (600519, 00700, 09988)
-    if s.isdigit() and len(s) in (5, 6):
-        return s
-    # US stocks: 1-5 letters, optionally with . (e.g. BRK.B)
-    if re.match(r"^[A-Z]{1,5}(\.[A-Z])?$", s):
-        return s
-    # Try to strip the SH/SZ suffix
-    for suffix in (".SH", ".SZ", ".SS"):
-        if s.endswith(suffix):
-            base = s[: -len(suffix)].strip()
-            if base.isdigit() and len(base) in (5, 6):
-                return base
-    return None
+    """Quy chuẩn và kiểm tra một mã Việt Nam (cổ phiếu 3 ký tự, chứng chỉ quỹ, chỉ số).
+
+    Normalize and validate a single Vietnam stock / fund / index code.
+    """
+    from src.services.stock_code_utils import normalize_code
+
+    return normalize_code(raw)
 
 
 def _parse_codes_from_text(text: str) -> List[str]:
@@ -137,8 +126,10 @@ def _parse_codes_from_text(text: str) -> List[str]:
     except json.JSONDecodeError:
         pass
 
-    # Fallback: look for 5-6 digit codes and US tickers
-    for m in re.finditer(r"\b([0-9]{5,6}|[A-Z]{1,5}(\.[A-Z])?)\b", text, re.IGNORECASE):
+    # Dự phòng: tìm mã VN viết hoa (HPG, HPG.VN, FUEVN100, VN30). Không dùng IGNORECASE
+    # để từ thường 3 chữ cái (vd "and") không bị nhận nhầm thành mã.
+    # Fallback: uppercase VN code shapes only; case-sensitive so lowercase words are not codes.
+    for m in re.finditer(r"\b([A-Z0-9]{3,10}(?:\.VN)?)\b", text):
         c = _normalize_code(m.group(1))
         if c and c not in seen and c not in _FAKE_CODES:
             seen.add(c)
@@ -204,7 +195,7 @@ def _parse_items_from_text(text: str) -> List[Tuple[str, Optional[str], str]]:
     # Fallback: legacy format (codes only)
     codes = _parse_codes_from_text(text)
     if not codes:
-        logger.info("[ImageExtractor] 无法解析为结构化 items，且 legacy code 提取为空")
+        logger.info("[ImageExtractor] Không phân tích được thành items có cấu trúc, và trích xuất mã kiểu legacy cũng rỗng")
     return [(c, None, "medium") for c in codes]
 
 
@@ -273,9 +264,9 @@ def _call_litellm_vision(image_b64: str, mime_type: str, api_key: Optional[str] 
     cfg = get_config()
     model = _resolve_vision_model()
     if not model:
-        raise ValueError("未配置 Vision API。请设置 LITELLM_MODEL 或相关 API Key。")
+        raise ValueError("Chưa cấu hình Vision API. Hãy đặt LITELLM_MODEL hoặc API Key tương ứng.")
     if route_has_hermes(getattr(cfg, "llm_model_list", []) or [], model):
-        raise ValueError("Hermes Vision 未验证：VISION_MODEL 不能选择包含 Hermes deployment 的 route。")
+        raise ValueError("Hermes Vision chưa được kiểm chứng: VISION_MODEL không được chọn route có chứa deployment Hermes.")
 
     deployments = _matching_vision_deployments(model, cfg)
     keys = _get_api_keys_for_model(model, cfg)
@@ -364,10 +355,10 @@ def extract_stock_codes_from_image(
     """
     mime_type = (mime_type or "image/jpeg").strip().lower().split(";")[0].strip()
     if mime_type not in ALLOWED_MIME:
-        raise ValueError(f"不支持的图片类型: {mime_type}。允许: {list(ALLOWED_MIME)}")
+        raise ValueError(f"Không hỗ trợ loại ảnh: {mime_type}. Cho phép: {list(ALLOWED_MIME)}")
 
     if not image_bytes:
-        raise ValueError("图片内容为空")
+        raise ValueError("Nội dung ảnh rỗng")
 
     if len(image_bytes) > MAX_SIZE_BYTES:
         raise ValueError(f"Image too large (max {MAX_SIZE_BYTES // (1024 * 1024)}MB)")
@@ -386,7 +377,7 @@ def extract_stock_codes_from_image(
             logger.debug("[ImageExtractor] raw LLM response:\n%s", raw)
             items = _parse_items_from_text(raw)
             logger.info(
-                f"[ImageExtractor] {model} 提取 {len(items)} 个: "
+                f"[ImageExtractor] {model} trích xuất {len(items)} mục: "
                 f"{[(i[0], i[1]) for i in items[:5]]}{'...' if len(items) > 5 else ''}"
             )
             return items, raw
@@ -394,9 +385,9 @@ def extract_stock_codes_from_image(
             last_error = e
             if attempt < 2:
                 delay = 2 ** attempt
-                logger.warning(f"[ImageExtractor] 尝试 {attempt + 1}/3 失败，{delay}s 后重试: {e}")
+                logger.warning(f"[ImageExtractor] Lần thử {attempt + 1}/3 thất bại, thử lại sau {delay}s: {e}")
                 time.sleep(delay)
 
     raise ValueError(
-        f"Vision API 调用失败，请检查 API Key 与网络: {last_error}"
+        f"Gọi Vision API thất bại, hãy kiểm tra API Key và kết nối mạng: {last_error}"
     ) from last_error

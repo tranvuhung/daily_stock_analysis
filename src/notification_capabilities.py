@@ -73,34 +73,6 @@ class RendererPreset:
 
 
 CHANNEL_PROFILES: Dict[str, ChannelProfile] = {
-    "wechat": ChannelProfile(
-        channel="wechat",
-        markdown="wechat_markdown",
-        default_mode="full_report",
-        max_text_bytes=4096,
-        supports_image=True,
-        supports_link=True,
-        notes="Enterprise WeChat receives the full report by default and relies on safe chunking.",
-    ),
-    "feishu": ChannelProfile(
-        channel="feishu",
-        markdown="lark_md",
-        default_mode="full_report",
-        max_text_bytes=20000,
-        supports_card=True,
-        supports_file=True,
-        supports_link=True,
-        notes="Feishu uses lark_md/card payloads and needs table fallbacks.",
-    ),
-    "dingtalk": ChannelProfile(
-        channel="dingtalk",
-        markdown="markdown",
-        default_mode="full_report",
-        max_text_bytes=20000,
-        supports_image=False,
-        supports_link=True,
-        notes="DingTalk uses standard markdown payloads with a title.",
-    ),
     "telegram": ChannelProfile(
         channel="telegram",
         markdown="markdown_v2",
@@ -138,18 +110,6 @@ CHANNEL_PROFILES: Dict[str, ChannelProfile] = {
         default_mode="full_report",
         supports_link=True,
     ),
-    "pushplus": ChannelProfile(
-        channel="pushplus",
-        markdown="markdown",
-        default_mode="full_report",
-        supports_link=True,
-    ),
-    "serverchan3": ChannelProfile(
-        channel="serverchan3",
-        markdown="markdown",
-        default_mode="full_report",
-        supports_link=True,
-    ),
     "custom": ChannelProfile(
         channel="custom",
         markdown="channel_specific",
@@ -175,12 +135,6 @@ CHANNEL_PROFILES: Dict[str, ChannelProfile] = {
         supports_link=True,
         notes="Slack sections should avoid splitting markdown blocks.",
     ),
-    "astrbot": ChannelProfile(
-        channel="astrbot",
-        markdown="plain_text",
-        default_mode="plain_fallback",
-        supports_link=True,
-    ),
     "unknown": ChannelProfile(
         channel="unknown",
         markdown="plain_text",
@@ -191,22 +145,6 @@ CHANNEL_PROFILES: Dict[str, ChannelProfile] = {
 
 
 CHANNEL_RENDERER_PRESETS: Dict[str, RendererPreset] = {
-    "wechat": RendererPreset(
-        channel="wechat",
-        text_renderer="wecom_markdown",
-        markdown="wechat_markdown",
-        rich_renderer="wecom_card",
-        image_renderer="png_poster",
-        notes="Preset only; current runtime keeps the legacy WeCom dashboard text.",
-    ),
-    "feishu": RendererPreset(
-        channel="feishu",
-        text_renderer="feishu_lark_md",
-        markdown="lark_md",
-        rich_renderer="feishu_interactive_card",
-        image_renderer="png_poster",
-        notes="Preset only; native card rendering is not enabled by default.",
-    ),
     "telegram": RendererPreset(
         channel="telegram",
         text_renderer="telegram_markdown_v2",
@@ -214,14 +152,6 @@ CHANNEL_RENDERER_PRESETS: Dict[str, RendererPreset] = {
         rich_renderer="telegram_html",
         image_renderer="png_poster",
         notes="Preset only; future renderer must handle Telegram escaping and UTF-16 length limits.",
-    ),
-    "dingtalk": RendererPreset(
-        channel="dingtalk",
-        text_renderer="dingtalk_markdown",
-        markdown="dingtalk_markdown",
-        rich_renderer="dingtalk_action_card",
-        image_renderer="png_poster",
-        notes="Preset only; DingTalk is not an active NotificationChannel in this runtime yet.",
     ),
     "slack": RendererPreset(
         channel="slack",

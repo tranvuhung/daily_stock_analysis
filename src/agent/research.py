@@ -51,7 +51,6 @@ class ResearchAgent:
         "get_stock_info",
         "get_realtime_quote",
         "get_daily_history",
-        "get_sector_rankings",
         "get_market_indices",
     ]
 

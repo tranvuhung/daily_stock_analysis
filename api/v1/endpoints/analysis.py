@@ -21,7 +21,6 @@ import copy
 import json
 import logging
 import re
-import unicodedata
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -94,8 +93,6 @@ from src.utils.data_processing import (
     normalize_model_used,
     parse_json_field,
     extract_fundamental_detail_fields,
-    extract_board_detail_fields,
-    extract_market_structure_detail_field,
     extract_realtime_detail_fields,
 )
 from src.utils.market_review_region import normalize_market_review_region_lenient
@@ -104,7 +101,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_SUPPORTED_FREE_TEXT_RE = re.compile(r"^[A-Za-z0-9.*\-+\u3400-\u9fff\s]+$")
+# Cho ph\u00e9p t\u00ean c\u1ed5 phi\u1ebfu ti\u1ebfng Vi\u1ec7t c\u00f3 d\u1ea5u (v\u00ed d\u1ee5 "H\u00f2a Ph\u00e1t", "H\u1ea3i Ph\u00f2ng"): Latin-1
+# Supplement, Latin Extended-A/B (\u0110/\u0111, \u01a0/\u01a1, \u01af/\u01b0) v\u00e0 Latin Extended Additional (\u1ea1, \u1ebf, \u1ed9\u2026).
+# Allow accented Vietnamese stock names in free-text input.
+_SUPPORTED_FREE_TEXT_RE = re.compile(
+    r"^[A-Za-z0-9.*\-+\u00c0-\u024f\u1e00-\u1eff\u3400-\u9fff\s]+$"
+)
 
 
 def _get_task_trace_id(task: Any) -> Optional[str]:
@@ -260,57 +262,22 @@ def _resolve_analysis_input(raw_value: str):
     """
     Resolve one analysis request input into ``(code, analysis_target)``.
 
-    Code-like tokens go through :func:`parse_analysis_target` (the single
-    asset-type authority): registered indices keep their structured
-    ``AnalysisTarget`` (canonical id + index semantics), unsupported targets
-    (e.g. unregistered ``930956.CSI``) are surfaced with their reason so the
-    caller can reject them explicitly, and stock tokens keep the legacy
-    resolution path. Non-code names (e.g. ``贵州茅台``) keep
-    :func:`resolve_name_to_code` and never enter index classification.
+    Mã Việt Nam đi qua :func:`parse_analysis_target`; mã không hỗ trợ trả về kèm
+    target ``unsupported`` để nơi gọi từ chối rõ ràng. Tên cổ phiếu (ví dụ ``Hòa Phát``)
+    tra qua :func:`resolve_name_to_code`.
+
+    Vietnam codes go through :func:`parse_analysis_target`; names go through
+    :func:`resolve_name_to_code`.
     """
     text = (raw_value or "").strip()
     if not text:
         return None
 
-    # CSI explicit forms (``csi930955`` / ``930955.CSI`` / ``CSI930955``) are
-    # explicit code forms but ``is_code_like`` does not recognise the ``.CSI``
-    # suffix; route them through parse_analysis_target so registered CSI
-    # converges to its canonical index identity and unregistered CSI surfaces
-    # as an explicit unsupported error (never a name-resolution fallback).
-    normalized_csi = unicodedata.normalize("NFKC", text).strip().casefold()
-    if re.fullmatch(r"(?:csi\d{6}|\d{6}\.csi)", normalized_csi):
-        target = parse_analysis_target(text)
-        if target.asset_type == ParseStatus.INDEX:
-            return (target.canonical_id, target)
-        return (text, target)
-
-    # SH/SZ prefixed six-digit forms (``sh000016`` / ``SH000016``) are explicit
-    # index/stock code shapes, but ``is_code_like`` rejects them when the bare
-    # digits do not match the exchange's *stock* digit rules (``000016`` is an
-    # SH index yet classifies as an SZ stock digit shape). Route them through
-    # parse_analysis_target so registered SH/SZ indices keep their structured
-    # target; unknown prefixed forms degrade to the stock path as usual.
-    normalized_sh_sz = re.fullmatch(r"(sh|sz)(\d{6})", normalized_csi)
-    if normalized_sh_sz is not None:
-        target = parse_analysis_target(text)
-        if target.asset_type == ParseStatus.INDEX:
-            return (target.canonical_id, target)
-        return (resolve_index_stock_code_for_analysis(text), None)
-
     if is_code_like(text):
         target = parse_analysis_target(text)
-        if target.asset_type == ParseStatus.INDEX:
-            return (target.canonical_id, target)
         if target.asset_type == ParseStatus.UNSUPPORTED:
             return (text, target)
-        # Stock target: keep the existing canonical resolution path and do not
-        # carry a stock target downstream (stock semantics must not change).
         return (resolve_index_stock_code_for_analysis(text), None)
-
-    if text.isdigit() and len(text) == 4:
-        resolved_index_code = resolve_index_stock_code_for_analysis(text)
-        if resolved_index_code != canonical_stock_code(text):
-            return (resolved_index_code, None)
 
     if _is_obviously_invalid_analysis_input(text):
         raise _invalid_analysis_input_error()
@@ -407,13 +374,9 @@ def trigger_analysis(
         if target is not None and target.asset_type == ParseStatus.UNSUPPORTED:
             rejected_entries.append((code, target))
             continue
-        # Dedup key branches on asset_type: INDEX uses canonical_id (indices are not folded with same-code stocks,
-        # CSI aliases converge); STOCK keeps the existing normalize_stock_code semantics
-        # ('600519' and '600519.SH' are merged).
-        if target is not None and target.asset_type == ParseStatus.INDEX:
-            norm = target.canonical_id
-        else:
-            norm = normalize_stock_code(code)
+        # Khoá khử trùng: mã đã chuẩn hoá ('HPG' và 'HPG.VN' gộp làm một).
+        # Dedup key: the normalized code ('HPG' and 'HPG.VN' merge).
+        norm = normalize_stock_code(code)
         if norm not in seen:
             seen.add(norm)
             unique_codes.append(code)
@@ -1310,29 +1273,14 @@ def get_analysis_status(task_id: str) -> TaskStatus:
                 context_snapshot=context_snapshot,
                 fallback_fundamental_payload=fallback_fundamental,
             )
-            extracted_boards = extract_board_detail_fields(
-                context_snapshot=context_snapshot,
-                fallback_fundamental_payload=fallback_fundamental,
-            )
-            market_structure = extract_market_structure_detail_field(
-                context_snapshot,
-                raw_result,
-            )
             news_disclosure = empty_news_disclosure_from_stored(
                 raw_result,
                 context_snapshot,
                 report_language,
             )
-            has_board_details = (
-                bool(extracted_boards.get("belong_boards"))
-                or extracted_boards.get("sector_rankings") is not None
-                or extracted_boards.get("concept_rankings") is not None
-            )
             details = None
             if (
                 any(extracted_fundamental.values())
-                or has_board_details
-                or market_structure is not None
                 or context_snapshot is not None
                 or analysis_context_pack_overview is not None
                 or news_disclosure is not None
@@ -1345,10 +1293,6 @@ def get_analysis_status(task_id: str) -> TaskStatus:
                     analysis_context_pack_overview=analysis_context_pack_overview,
                     financial_report=extracted_fundamental.get("financial_report"),
                     dividend_metrics=extracted_fundamental.get("dividend_metrics"),
-                    belong_boards=extracted_boards.get("belong_boards"),
-                    sector_rankings=extracted_boards.get("sector_rankings"),
-                    concept_rankings=extracted_boards.get("concept_rankings"),
-                    market_structure=market_structure,
                 )
 
             raw_dict = raw_result if isinstance(raw_result, dict) else {}
@@ -1503,7 +1447,7 @@ def _build_analysis_report(
     report_language = normalize_report_language(
         meta_data.get("report_language")
         or (context_snapshot or {}).get("report_language")
-        or getattr(Config.get_instance(), "report_language", "zh")
+        or getattr(Config.get_instance(), "report_language", "vi")
     )
     display_stock_code = _display_stock_code_from_index(meta_data.get("stock_code", stock_code))
     localized_stock_name = get_localized_stock_name(
@@ -1550,7 +1494,6 @@ def _build_analysis_report(
                 or "operation_advice" in candidate
                 or "trend_prediction" in candidate
                 or "sentiment_score" in candidate
-                or "market_structure_context" in candidate
                 or "model_used" in candidate
                 or "dashboard" in candidate
                 or "action" in candidate
@@ -1608,20 +1551,6 @@ def _build_analysis_report(
         context_snapshot=context_snapshot,
         fallback_fundamental_payload=fallback_fundamental_payload,
     )
-    extracted_boards = extract_board_detail_fields(
-        context_snapshot=context_snapshot,
-        fallback_fundamental_payload=fallback_fundamental_payload,
-    )
-    market_structure = None
-    for raw_candidate in (fallback_raw_result_payload, raw_result_data, details_data):
-        if raw_candidate is None:
-            continue
-        market_structure = extract_market_structure_detail_field(
-            context_snapshot,
-            raw_candidate,
-        )
-        if market_structure is not None:
-            break
     analysis_context_pack_overview = extract_analysis_context_pack_overview(context_snapshot)
     api_context_snapshot = sanitize_context_snapshot_for_api(context_snapshot)
     news_disclosure = empty_news_disclosure_from_stored(
@@ -1632,16 +1561,9 @@ def _build_analysis_report(
     if news_disclosure is None and isinstance(details_data, dict):
         news_disclosure = details_data.get("empty_news_disclosure")
     details = None
-    has_board_details = (
-        bool(extracted_boards.get("belong_boards"))
-        or extracted_boards.get("sector_rankings") is not None
-        or extracted_boards.get("concept_rankings") is not None
-    )
     if (
         details_data
         or any(extracted_fundamental.values())
-        or has_board_details
-        or market_structure is not None
         or context_snapshot is not None
         or analysis_context_pack_overview is not None
         or news_disclosure is not None
@@ -1654,10 +1576,6 @@ def _build_analysis_report(
             analysis_context_pack_overview=analysis_context_pack_overview,
             financial_report=extracted_fundamental.get("financial_report"),
             dividend_metrics=extracted_fundamental.get("dividend_metrics"),
-            belong_boards=extracted_boards.get("belong_boards"),
-            sector_rankings=extracted_boards.get("sector_rankings"),
-            concept_rankings=extracted_boards.get("concept_rankings"),
-            market_structure=market_structure,
         )
 
     return AnalysisReport(

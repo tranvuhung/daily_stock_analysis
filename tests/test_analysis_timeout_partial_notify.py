@@ -73,7 +73,7 @@ class TimeoutPartialHelpersTests(unittest.TestCase):
             ],
             pending_codes=["300750"],
         )
-        self.assertIn("部分完成", report)
+        self.assertIn("hoàn thành một phần", report)
         self.assertIn("600519", report)
         self.assertIn("300750", report)
         self.assertIn("120", report)

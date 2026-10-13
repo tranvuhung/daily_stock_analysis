@@ -8,11 +8,10 @@ import logging
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from data_provider.base import canonical_stock_code, normalize_stock_code
-from src.config import get_config
 from src.repositories.portfolio_repo import (
     DuplicateTradeDedupHashError,
     DuplicateTradeUidError,
@@ -24,32 +23,15 @@ logger = logging.getLogger(__name__)
 
 PortfolioBusyError = RepoPortfolioBusyError
 
-try:
-    import yfinance as yf
-except Exception:  # pragma: no cover - optional dependency path
-    yf = None
-
 EPS = 1e-8
-VALID_MARKETS = {"cn", "hk", "us", "jp", "kr", "tw"}
-PARTIAL_VALUATION_MARKETS = {"jp", "kr", "tw"}
+# Hệ thống chỉ hỗ trợ thị trường Việt Nam, tiền tệ VND. / Vietnam market only (VND).
+VALID_MARKETS = {"vn"}
+DEFAULT_PORTFOLIO_CURRENCY = "VND"
 VALID_COST_METHODS = {"fifo", "avg"}
 VALID_SIDES = {"buy", "sell"}
 VALID_CASH_DIRECTIONS = {"in", "out"}
 VALID_CORPORATE_ACTIONS = {"cash_dividend", "split_adjustment"}
-PORTFOLIO_FX_REFRESH_DISABLED_REASON = "portfolio_fx_update_disabled"
 PORTFOLIO_REALTIME_QUOTE_MAX_WORKERS = 4
-
-
-def _portfolio_limitations_for_market(market: str) -> List[str]:
-    """Return explicit snapshot limitations for markets with partial valuation semantics."""
-
-    if market not in PARTIAL_VALUATION_MARKETS:
-        return []
-    return [
-        "realtime_quote_best_effort",
-        "fx_and_cost_basis_partial",
-        "sector_and_risk_metrics_limited",
-    ]
 
 
 def _merge_portfolio_limitations(*groups: Iterable[str]) -> List[str]:
@@ -486,7 +468,7 @@ class PortfolioService:
             account_rows = self.repo.list_accounts(include_inactive=False)
 
         accounts_payload: List[Dict[str, Any]] = []
-        aggregate_currency = "CNY"
+        aggregate_currency = DEFAULT_PORTFOLIO_CURRENCY
         aggregate = {
             "total_cash": 0.0,
             "total_market_value": 0.0,
@@ -611,43 +593,6 @@ class PortfolioService:
             "limitations": aggregate["limitations"],
             "accounts": accounts_payload,
         }
-
-    def refresh_fx_rates(
-        self,
-        *,
-        account_id: Optional[int] = None,
-        as_of: Optional[date] = None,
-    ) -> Dict[str, Any]:
-        """Refresh account FX pairs online with stale fallback when fetch fails."""
-        as_of_date = as_of or date.today()
-        config = get_config()
-        refresh_enabled = bool(getattr(config, "portfolio_fx_update_enabled", True))
-        if account_id is not None:
-            account_rows = [self._require_active_account(account_id)]
-        else:
-            account_rows = self.repo.list_accounts(include_inactive=False)
-
-        summary = {
-            "as_of": as_of_date.isoformat(),
-            "account_count": len(account_rows),
-            "refresh_enabled": refresh_enabled,
-            "disabled_reason": None if refresh_enabled else PORTFOLIO_FX_REFRESH_DISABLED_REASON,
-            "pair_count": 0,
-            "updated_count": 0,
-            "stale_count": 0,
-            "error_count": 0,
-        }
-        for account in account_rows:
-            item = self._refresh_account_fx_rates(
-                account=account,
-                as_of_date=as_of_date,
-                refresh_enabled=refresh_enabled,
-            )
-            summary["pair_count"] += item["pair_count"]
-            summary["updated_count"] += item["updated_count"]
-            summary["stale_count"] += item["stale_count"]
-            summary["error_count"] += item["error_count"]
-        return summary
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -962,10 +907,7 @@ class PortfolioService:
             for position in position_rows
             for limitation in position.get("limitations", [])
         ]
-        limitations = _merge_portfolio_limitations(
-            _portfolio_limitations_for_market(account.market),
-            position_limitations,
-        )
+        limitations = _merge_portfolio_limitations(position_limitations)
 
         account_payload = {
             "account_id": account.id,
@@ -1083,7 +1025,7 @@ class PortfolioService:
                 include_realtime=include_realtime,
             )
             last_price = price_info.price
-            limitations = _portfolio_limitations_for_market(market)
+            limitations: List[str] = []
 
             if price_info.is_available:
                 local_market_value = qty * float(last_price)
@@ -1314,6 +1256,14 @@ class PortfolioService:
         _add(original)
         _add(normalized)
 
+        # Mã Việt Nam: khớp cả bản ghi cũ lưu dạng hậu tố ``.VN`` (``HPG`` <-> ``HPG.VN``).
+        # Vietnam codes: also match legacy rows stored with the ``.VN`` suffix.
+        from src.services.stock_code_utils import is_code_like
+
+        if is_code_like(normalized):
+            _add(f"{normalized}.VN")
+            return values
+
         if normalized.startswith("HK"):
             hk_digits = normalized[2:]
             if hk_digits.isdigit() and len(hk_digits) == 5:
@@ -1445,23 +1395,9 @@ class PortfolioService:
         if from_norm == to_norm:
             return float(amount), False, "identity"
 
-        direct = self.repo.get_latest_fx_rate(
-            from_currency=from_norm,
-            to_currency=to_norm,
-            as_of=as_of_date,
-        )
-        if direct is not None and direct.rate > 0:
-            return float(amount) * float(direct.rate), bool(direct.is_stale), "direct_rate"
-
-        inverse = self.repo.get_latest_fx_rate(
-            from_currency=to_norm,
-            to_currency=from_norm,
-            as_of=as_of_date,
-        )
-        if inverse is not None and inverse.rate > 0:
-            return float(amount) / float(inverse.rate), bool(inverse.is_stale), "inverse_rate"
-
-        # P0 fallback: keep pipeline available even when FX cache is missing.
+        # Không còn bảng tỷ giá (portfolio chỉ dùng VND): dữ liệu cũ khác tiền tệ quy đổi
+        # 1:1 và đánh dấu stale. / No FX table (VND-only); legacy cross-currency rows
+        # fall back to 1:1 and are flagged stale.
         return float(amount), True, "fallback_1_to_1"
 
     def convert_amount(
@@ -1479,137 +1415,6 @@ class PortfolioService:
             to_currency=to_currency,
             as_of_date=as_of_date,
         )
-
-    def _list_account_refresh_fx_currencies(
-        self,
-        *,
-        account: Any,
-        as_of_date: date,
-        strict: bool = True,
-    ) -> List[str]:
-        """Return distinct non-base currencies participating in refresh for one account."""
-        base_currency = self._normalize_currency(account.base_currency)
-        currencies: Set[str] = set()
-        rows = list(self.repo.list_trades(account.id, as_of=as_of_date))
-        rows.extend(self.repo.list_cash_ledger(account.id, as_of=as_of_date))
-        for row in rows:
-            try:
-                currency = self._normalize_currency(row.currency)
-            except ValueError:
-                if strict:
-                    raise
-                logger.warning(
-                    "Skip invalid FX refresh currency for account %s on %s: %r",
-                    account.id,
-                    as_of_date.isoformat(),
-                    getattr(row, "currency", None),
-                )
-                continue
-            if currency != base_currency:
-                currencies.add(currency)
-        return sorted(currencies)
-
-    def _refresh_account_fx_rates(
-        self,
-        *,
-        account: Any,
-        as_of_date: date,
-        refresh_enabled: bool,
-    ) -> Dict[str, int]:
-        """Refresh FX pairs for one account and keep stale fallback on failures."""
-        refresh_currencies = self._list_account_refresh_fx_currencies(
-            account=account,
-            as_of_date=as_of_date,
-            strict=refresh_enabled,
-        )
-        if not refresh_enabled:
-            return {
-                "pair_count": len(refresh_currencies),
-                "updated_count": 0,
-                "stale_count": 0,
-                "error_count": 0,
-            }
-
-        base_currency = self._normalize_currency(account.base_currency)
-        summary = {
-            "pair_count": len(refresh_currencies),
-            "updated_count": 0,
-            "stale_count": 0,
-            "error_count": 0,
-        }
-        for from_currency in refresh_currencies:
-            try:
-                rate = self._fetch_fx_rate_from_yfinance(
-                    from_currency=from_currency,
-                    to_currency=base_currency,
-                    as_of_date=as_of_date,
-                )
-                if rate is not None and rate > 0:
-                    self.repo.save_fx_rate(
-                        from_currency=from_currency,
-                        to_currency=base_currency,
-                        rate_date=as_of_date,
-                        rate=rate,
-                        source="yfinance",
-                        is_stale=False,
-                    )
-                    summary["updated_count"] += 1
-                    continue
-            except Exception as exc:
-                logger.warning(
-                    "FX online fetch failed for %s/%s on %s: %s",
-                    from_currency,
-                    base_currency,
-                    as_of_date.isoformat(),
-                    exc,
-                )
-
-            fallback = self.repo.get_latest_fx_rate(
-                from_currency=from_currency,
-                to_currency=base_currency,
-                as_of=as_of_date,
-            )
-            if fallback is not None and float(fallback.rate or 0.0) > 0:
-                self.repo.save_fx_rate(
-                    from_currency=from_currency,
-                    to_currency=base_currency,
-                    rate_date=as_of_date,
-                    rate=float(fallback.rate),
-                    source=(fallback.source or "cache_fallback"),
-                    is_stale=True,
-                )
-                summary["stale_count"] += 1
-            else:
-                summary["error_count"] += 1
-        return summary
-
-    @staticmethod
-    def _fetch_fx_rate_from_yfinance(
-        *,
-        from_currency: str,
-        to_currency: str,
-        as_of_date: date,
-    ) -> Optional[float]:
-        """Fetch latest available FX close rate around as_of date."""
-        if yf is None:
-            return None
-        symbol = f"{from_currency}{to_currency}=X"
-        ticker = yf.Ticker(symbol)
-        history = ticker.history(
-            start=(as_of_date - timedelta(days=7)).isoformat(),
-            end=(as_of_date + timedelta(days=1)).isoformat(),
-            interval="1d",
-            auto_adjust=False,
-        )
-        if history is None or history.empty or "Close" not in history:
-            return None
-        close = history["Close"].dropna()
-        if close.empty:
-            return None
-        value = float(close.iloc[-1])
-        if value <= 0:
-            return None
-        return value
 
     def _require_active_account(self, account_id: int) -> Any:
         account = self.repo.get_account(account_id, include_inactive=False)
@@ -1723,7 +1528,7 @@ class PortfolioService:
     def _normalize_market(value: str) -> str:
         market = (value or "").strip().lower()
         if market not in VALID_MARKETS:
-            raise ValueError("market must be one of: cn, hk, us, jp, kr, tw")
+            raise ValueError("market must be: vn")
         return market
 
     @staticmethod
@@ -1742,8 +1547,4 @@ class PortfolioService:
 
     @staticmethod
     def _default_currency_for_market(market: str) -> str:
-        if market == "hk":
-            return "HKD"
-        if market == "us":
-            return "USD"
-        return "CNY"
+        return DEFAULT_PORTFOLIO_CURRENCY

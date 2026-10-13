@@ -37,7 +37,6 @@ SCHEDULE_ARGS_OVERRIDE_KEYS = {
     "single_notify",
     "no_context_snapshot",
     "workers",
-    "portfolio",
 }
 
 
@@ -301,7 +300,6 @@ class RuntimeSchedulerService:
             "serve": False,
             "serve_only": True,
             "stocks": None,
-            "portfolio": None,
             "workers": None,
         }
         defaults.update(self._schedule_args_overrides)

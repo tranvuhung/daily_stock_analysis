@@ -37,12 +37,12 @@ class AnalyzeRequest(BaseModel):
     stock_code: Optional[str] = Field(
         None, 
         description="Single stock code", 
-        json_schema_extra={"example": "600519"},
+        json_schema_extra={"example": "HPG"},
     )
     stock_codes: Optional[List[str]] = Field(
         None, 
         description="Multiple stock codes (alternative to stock_code)",
-        json_schema_extra={"example": ["600519", "000858"]},
+        json_schema_extra={"example": ["HPG", "FPT"]},
     )
     report_type: str = Field(
         "detailed",
@@ -64,12 +64,12 @@ class AnalyzeRequest(BaseModel):
     stock_name: Optional[str] = Field(
         None,
         description="Stock name selected by the user (provided by autocomplete)",
-        json_schema_extra={"example": "贵州茅台"},
+        json_schema_extra={"example": "Hoa Phat Group"},
     )
     original_query: Optional[str] = Field(
         None,
-        description="Raw user input (for example Moutai, gzmt, 600519)",
-        json_schema_extra={"example": "茅台"},
+        description="Raw user input (for example Hoa Phat, hpg, HPG)",
+        json_schema_extra={"example": "hoa phat"},
     )
     selection_source: Optional[str] = Field(
         None,
@@ -79,7 +79,7 @@ class AnalyzeRequest(BaseModel):
     )
     notify: bool = Field(
         True,
-        description="Whether to send push notifications (Telegram, Enterprise WeChat, etc.)"
+        description="Whether to send push notifications (Telegram, Discord, Slack, Email, etc.)"
     )
     report_language: Optional[Literal["vi"]] = Field(
         None,
@@ -95,13 +95,13 @@ class AnalyzeRequest(BaseModel):
 
     model_config = ConfigDict(json_schema_extra={
         "example": {
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "report_type": "detailed",
             "force_refresh": False,
             "async_mode": False,
             "analysis_phase": "auto",
-            "stock_name": "贵州茅台",
-            "original_query": "茅台",
+            "stock_name": "Hoa Phat Group",
+            "original_query": "hoa phat",
             "selection_source": "autocomplete",
             "notify": True,
             "report_language": "vi",
@@ -127,18 +127,17 @@ class MarketReviewRequest(BaseModel):
         min_length=1,
         max_length=64,
         description=(
-            "Market coverage for this market review. Valid tokens are cn, hk, us, jp, kr, vn and both, "
-            "limited to the markets enabled by SUPPORTED_MARKETS. "
-            "both must be used alone; the other tokens can be combined with commas. Input is "
-            "case-insensitive, surrounding whitespace is trimmed, and values are deduplicated and sorted "
-            "as cn,hk,us,jp,kr,vn. An empty value, an empty token, an unknown or disabled token, both "
-            "mixed with other tokens, or more than 64 characters returns 4xx for the whole request "
-            "without partial execution. When omitted, the runtime global MARKET_REVIEW_REGION is used, "
-            "falling back to the first enabled review market."
+            "Market coverage for this market review. The only supported market is vn (Vietnam: "
+            "HOSE/HNX/UPCoM). Legacy tokens (cn, hk, us, jp, kr, both, or comma-separated "
+            "combinations) are still accepted for backward compatibility and are normalized to vn. "
+            "Input is case-insensitive and surrounding whitespace is trimmed. An empty value, an "
+            "empty token, an unknown token, or more than 64 characters returns 4xx for the whole "
+            "request. When omitted, the runtime global MARKET_REVIEW_REGION is used, falling back "
+            "to vn."
         ),
         json_schema_extra={
-            "example": "cn,us",
-            "examples": ["cn", "jp,kr", "both"],
+            "example": "vn",
+            "examples": ["vn"],
         },
     )
 
@@ -160,7 +159,7 @@ class MarketReviewAccepted(BaseModel):
     region: str = Field(
         ...,
         description="Canonical market scope actually executed by this task",
-        examples=["us", "jp,kr"],
+        examples=["vn"],
     )
     trace_id: Optional[str] = Field(
         None,
@@ -186,8 +185,8 @@ class AnalysisResultResponse(BaseModel):
     model_config = ConfigDict(json_schema_extra={
         "example": {
             "query_id": "abc123def456",
-            "stock_code": "600519",
-            "stock_name": "贵州茅台",
+            "stock_code": "HPG",
+            "stock_name": "Hoa Phat Group",
             "report": {
                 "summary": {
                     "sentiment_score": 75,
@@ -243,9 +242,9 @@ class BatchTaskAcceptedItem(BaseModel):
     model_config = ConfigDict(json_schema_extra={
         "example": {
             "task_id": "task_abc123",
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "status": "pending",
-            "message": "Analysis task queued: 600519",
+            "message": "Analysis task queued: HPG",
             "analysis_phase": "auto"
         }
     })
@@ -260,9 +259,9 @@ class BatchDuplicateTaskItem(BaseModel):
 
     model_config = ConfigDict(json_schema_extra={
         "example": {
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "existing_task_id": "task_existing_123",
-            "message": "Stock 600519 is already being analyzed (task_id: task_existing_123)"
+            "message": "Stock HPG is already being analyzed (task_id: task_existing_123)"
         }
     })
 
@@ -297,17 +296,17 @@ class BatchTaskAcceptedResponse(BaseModel):
             "accepted": [
                 {
                     "task_id": "task_abc123",
-                    "stock_code": "600519",
+                    "stock_code": "HPG",
                     "status": "pending",
-                    "message": "Analysis task queued: 600519",
+                    "message": "Analysis task queued: HPG",
                     "analysis_phase": "auto"
                 }
             ],
             "duplicates": [
                 {
-                    "stock_code": "000858",
+                    "stock_code": "FPT",
                     "existing_task_id": "task_existing_456",
-                    "message": "Stock 000858 is already being analyzed (task_id: task_existing_456)"
+                    "message": "Stock FPT is already being analyzed (task_id: task_existing_456)"
                 }
             ],
             "message": "Submitted 1 task, skipped 1 duplicate"
@@ -371,8 +370,8 @@ class TaskStatus(BaseModel):
             "result": None,
             "market_review_report": None,
             "error": None,
-            "stock_name": "贵州茅台",
-            "original_query": "茅台",
+            "stock_name": "Hoa Phat Group",
+            "original_query": "hoa phat",
             "selection_source": "autocomplete",
             "analysis_phase": "auto",
             "skills": ["bull_trend"]
@@ -419,8 +418,8 @@ class TaskInfo(BaseModel):
     model_config = ConfigDict(json_schema_extra={
         "example": {
             "task_id": "abc123def456",
-            "stock_code": "600519",
-            "stock_name": "贵州茅台",
+            "stock_code": "HPG",
+            "stock_name": "Hoa Phat Group",
             "status": "processing",
             "progress": 50,
             "message": "Analyzing...",
@@ -429,7 +428,7 @@ class TaskInfo(BaseModel):
             "started_at": "2026-02-05T10:30:01",
             "completed_at": None,
             "error": None,
-            "original_query": "茅台",
+            "original_query": "hoa phat",
             "selection_source": "autocomplete",
             "analysis_phase": "auto",
             "skills": ["bull_trend"]
@@ -466,8 +465,8 @@ class DuplicateTaskErrorResponse(BaseModel):
     model_config = ConfigDict(json_schema_extra={
         "example": {
             "error": "duplicate_task",
-            "message": "Stock 600519 is already being analyzed",
-            "stock_code": "600519",
+            "message": "Stock HPG is already being analyzed",
+            "stock_code": "HPG",
             "existing_task_id": "abc123def456"
         }
     })

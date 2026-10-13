@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Decision action taxonomy helpers for Issue #1390 P0.
+"""Decision action taxonomy helpers for Issue #1390 P0 (vi/en inputs and labels).
 
 This module is deliberately separate from ``src.agent.protocols``:
 ``DecisionAction`` is the new eight-state display taxonomy, while
@@ -30,14 +30,14 @@ _ACTION_VALUES = set(get_args(DecisionAction))
 _NON_STOCK_REPORT_TYPES = {"market_review"}
 
 _ACTION_LABELS: Dict[str, Dict[str, str]] = {
-    "buy": {"vi": "Mua", "zh": "买入", "en": "Buy", "ko": "매수"},
-    "add": {"vi": "Mua thêm", "zh": "加仓", "en": "Add", "ko": "추가 매수"},
-    "hold": {"vi": "Nắm giữ", "zh": "持有", "en": "Hold", "ko": "보유"},
-    "reduce": {"vi": "Giảm tỷ trọng", "zh": "减仓", "en": "Reduce", "ko": "비중축소"},
-    "sell": {"vi": "Bán", "zh": "卖出", "en": "Sell", "ko": "매도"},
-    "watch": {"vi": "Quan sát", "zh": "观望", "en": "Watch", "ko": "관망"},
-    "avoid": {"vi": "Tránh", "zh": "回避", "en": "Avoid", "ko": "회피"},
-    "alert": {"vi": "Cảnh báo", "zh": "预警", "en": "Alert", "ko": "경고"},
+    "buy": {"vi": "Mua",  "en": "Buy", },
+    "add": {"vi": "Mua thêm",  "en": "Add", },
+    "hold": {"vi": "Nắm giữ",  "en": "Hold", },
+    "reduce": {"vi": "Giảm tỷ trọng",  "en": "Reduce", },
+    "sell": {"vi": "Bán",  "en": "Sell", },
+    "watch": {"vi": "Quan sát",  "en": "Watch", },
+    "avoid": {"vi": "Tránh",  "en": "Avoid", },
+    "alert": {"vi": "Cảnh báo",  "en": "Alert", },
 }
 
 _EXPLICIT_ALIASES: Dict[str, DecisionAction] = {
@@ -66,101 +66,61 @@ _EXPLICIT_ALIASES: Dict[str, DecisionAction] = {
 
 _ACTION_PHRASES: Dict[DecisionAction, tuple[str, ...]] = {
     "avoid": (
-        "不建议买入",
         "không nên mua",
         "tránh mua",
         "không mua",
-        "避免买入",
         "do not buy",
         "don't buy",
         "dont buy",
-        "回避",
-        "规避",
         "avoid",
     ),
     "alert": (
-        "风险预警",
         "cảnh báo rủi ro",
-        "触发告警",
         "risk alert",
-        "警惕",
         "alert",
     ),
     "buy": (
-        "强烈买入",
         "mua vào",
         "giải ngân",
         "strong_buy",
         "strong buy",
-        "买入",
-        "布局",
-        "建仓",
         "buy",
     ),
     "add": (
-        "加仓",
         "tăng tỷ trọng",
         "gia tăng tỷ trọng",
-        "增持",
         "accumulate",
         "add",
     ),
     "hold": (
-        "持有观察",
         "tiếp tục nắm giữ",
-        "洗盘观察",
-        "持有",
+        "nắm giữ",
         "hold",
     ),
     "watch": (
-        "观望",
         "tiếp tục quan sát",
+        "quan sát",
         "chờ tín hiệu",
-        "等待",
         "wait",
         "watch",
     ),
     "reduce": (
-        "减仓",
         "hạ tỷ trọng",
         "chốt bớt",
         "trim",
         "reduce",
     ),
     "sell": (
-        "强烈卖出",
         "bán ra",
         "thoát hàng",
         "strong_sell",
         "strong sell",
-        "卖出",
-        "清仓",
         "sell",
     ),
 }
 
 _NEGATED_ACTION_PHRASES: Dict[DecisionAction, tuple[str, ...]] = {
     "avoid": (
-        "暂不买入",
-        "不要买入",
-        "不宜买入",
-        "先不买入",
-        "不建议建仓",
-        "暂不建仓",
-        "不要建仓",
-        "不宜建仓",
-        "先不建仓",
-        "无需建仓",
-        "无须建仓",
-        "不建议布局",
-        "暂不布局",
-        "不要布局",
-        "不宜布局",
-        "先不布局",
-        "无需布局",
-        "无须布局",
-        "无需买入",
-        "无须买入",
         "not buy",
         "do not buy",
         "don't buy",
@@ -173,36 +133,14 @@ _NEGATED_ACTION_PHRASES: Dict[DecisionAction, tuple[str, ...]] = {
         "cant buy",
     ),
     "hold": (
-        "不建议加仓",
-        "无需加仓",
-        "不要加仓",
-        "不宜加仓",
-        "暂不加仓",
-        "无须加仓",
-        "不建议增持",
-        "无需增持",
-        "不要增持",
-        "不宜增持",
-        "暂不增持",
-        "无须增持",
-        "不建议卖出",
-        "无需卖出",
-        "不要卖出",
-        "不宜卖出",
-        "暂不卖出",
-        "无须卖出",
-        "不建议减仓",
-        "无需减仓",
-        "不要减仓",
-        "不宜减仓",
-        "暂不减仓",
-        "无须减仓",
-        "不建议清仓",
-        "无需清仓",
-        "不要清仓",
-        "不宜清仓",
-        "暂不清仓",
-        "无须清仓",
+        # Tiếng Việt: phủ định bán/giảm tỷ trọng => tiếp tục nắm giữ.
+        # Vietnamese: negated sell/reduce means keep holding.
+        "không nên bán",
+        "chưa nên bán",
+        "không cần bán",
+        "không nên giảm tỷ trọng",
+        "chưa nên giảm tỷ trọng",
+        "không cần giảm tỷ trọng",
         "not add",
         "do not add",
         "don't add",
@@ -403,7 +341,7 @@ def build_action_fields(
     operation_advice: Any = None,
     explicit_action: Any = None,
     report_type: Any = None,
-    report_language: Optional[str] = "zh",
+    report_language: Optional[str] = "vi",
     sentiment_score: Any = None,
     guardrail_reason: Any = None,
     align_with_score: bool = False,
@@ -451,7 +389,7 @@ def display_action_fields(
     explicit_action: Any = None,
     action_label: Any = None,
     report_type: Any = None,
-    report_language: Optional[str] = "zh",
+    report_language: Optional[str] = "vi",
     sentiment_score: Any = None,
     guardrail_reason: Any = None,
 ) -> DecisionActionFields:
@@ -482,7 +420,7 @@ def _display_result_kwargs(
         "explicit_action": getattr(result, "action", None),
         "action_label": getattr(result, "action_label", None),
         "report_type": report_type or getattr(result, "report_type", None),
-        "report_language": report_language or getattr(result, "report_language", "zh"),
+        "report_language": report_language or getattr(result, "report_language", "vi"),
         "sentiment_score": getattr(result, "sentiment_score", None),
         "guardrail_reason": _result_guardrail_reason(result),
     }
@@ -514,7 +452,7 @@ def display_operation_advice_for_result(
     )
     if fields["action_label"]:
         return fields["action_label"]
-    language = report_language or getattr(result, "report_language", "zh")
+    language = report_language or getattr(result, "report_language", "vi")
     return localize_operation_advice(getattr(result, "operation_advice", None), language)
 
 

@@ -48,9 +48,22 @@ class TestSerpAPISearchProvider(unittest.TestCase):
         _FakeGoogleSearch.response_payload = payload
         return patch.dict(sys.modules, {"serpapi": _fake_serpapi_module()})
 
+    def test_provider_uses_vietnam_google_locale(self) -> None:
+        # SerpAPI phải nhắm Google Việt Nam (tiếng Việt, khu vực VN).
+        # SerpAPI must target Google Vietnam (Vietnamese UI, VN region).
+        provider = SerpAPISearchProvider(["dummy_key"])
+        with self._patch_serpapi({"organic_results": []}):
+            resp = provider.search("Hòa Phát báo cáo tài chính", max_results=3)
+
+        self.assertTrue(resp.success)
+        params = _FakeGoogleSearch.init_params[-1]
+        self.assertEqual(params["google_domain"], "google.com.vn")
+        self.assertEqual(params["hl"], "vi")
+        self.assertEqual(params["gl"], "vn")
+
     def test_provider_skips_body_fetch_when_snippet_is_sufficient(self) -> None:
         provider = SerpAPISearchProvider(["dummy_key"])
-        long_snippet = "这是一段已经足够长的摘要。 " * 12
+        long_snippet = "Đây là một đoạn tóm tắt đã đủ dài. " * 12
 
         with self._patch_serpapi(
             {
@@ -65,7 +78,7 @@ class TestSerpAPISearchProvider(unittest.TestCase):
                 ]
             }
         ), patch("src.search_service.fetch_url_content") as mock_fetch:
-            resp = provider.search("阿里巴巴 财报", max_results=3)
+            resp = provider.search("Hòa Phát báo cáo tài chính", max_results=3)
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 1)
@@ -101,7 +114,7 @@ class TestSerpAPISearchProvider(unittest.TestCase):
                 ]
             }
         ), patch("src.search_service.fetch_url_content") as mock_fetch:
-            resp = provider.search("阿里巴巴 财报", max_results=3)
+            resp = provider.search("Hòa Phát báo cáo tài chính", max_results=3)
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 1)
@@ -137,7 +150,7 @@ class TestSerpAPISearchProvider(unittest.TestCase):
                 ]
             }
         ), patch("src.search_service.fetch_url_content") as mock_fetch:
-            resp = provider.search("阿里巴巴 财报", max_results=3)
+            resp = provider.search("Hòa Phát báo cáo tài chính", max_results=3)
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 1)
@@ -174,7 +187,7 @@ class TestSerpAPISearchProvider(unittest.TestCase):
                 ]
             }
         ), patch("src.search_service.fetch_url_content") as mock_fetch:
-            resp = provider.search("阿里巴巴 财报", max_results=3)
+            resp = provider.search("Hòa Phát báo cáo tài chính", max_results=3)
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 1)
@@ -192,7 +205,7 @@ class TestSerpAPISearchProvider(unittest.TestCase):
                     {
                         "title": "Malformed detected extensions result",
                         "link": "https://example.com/malformed-detected-extensions",
-                        "snippet": "摘要过短",
+                        "snippet": "Tóm tắt quá ngắn",
                         "source": "Example",
                         "rich_snippet": {
                             "top": {
@@ -204,9 +217,9 @@ class TestSerpAPISearchProvider(unittest.TestCase):
             }
         ), patch(
             "src.search_service.fetch_url_content",
-            return_value="网页正文补充信息 " * 40,
+            return_value="Thông tin bổ sung từ nội dung trang " * 40,
         ) as mock_fetch:
-            resp = provider.search("阿里巴巴 财报", max_results=3)
+            resp = provider.search("Hòa Phát báo cáo tài chính", max_results=3)
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 1)
@@ -215,11 +228,11 @@ class TestSerpAPISearchProvider(unittest.TestCase):
             timeout=SerpAPISearchProvider._ORGANIC_CONTENT_FETCH_TIMEOUT,
         )
         self.assertNotIn("True", resp.results[0].snippet)
-        self.assertIn("【网页详情】", resp.results[0].snippet)
+        self.assertIn("【Chi tiết trang】", resp.results[0].snippet)
 
     def test_provider_ignores_malformed_rich_snippet_sections(self) -> None:
         provider = SerpAPISearchProvider(["dummy_key"])
-        long_enough_snippet = "已有摘要，足够避免补抓。 " * 16
+        long_enough_snippet = "Đã có tóm tắt, đủ để không cần tải thêm. " * 16
 
         with self._patch_serpapi(
             {
@@ -237,7 +250,7 @@ class TestSerpAPISearchProvider(unittest.TestCase):
                 ]
             }
         ), patch("src.search_service.fetch_url_content") as mock_fetch:
-            resp = provider.search("阿里巴巴 财报", max_results=3)
+            resp = provider.search("Hòa Phát báo cáo tài chính", max_results=3)
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 1)
@@ -269,7 +282,7 @@ class TestSerpAPISearchProvider(unittest.TestCase):
                 ]
             }
         ), patch("src.search_service.fetch_url_content") as mock_fetch:
-            resp = provider.search("阿里巴巴 财报", max_results=3)
+            resp = provider.search("Hòa Phát báo cáo tài chính", max_results=3)
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 1)
@@ -297,7 +310,7 @@ class TestSerpAPISearchProvider(unittest.TestCase):
 
     def test_merge_organic_snippet_uses_normalized_length_for_ellipsis(self) -> None:
         merged = SerpAPISearchProvider._merge_organic_snippet_with_content(
-            "原始摘要",
+            "Tóm tắt gốc",
             "A" + ("\n" * (SerpAPISearchProvider._ORGANIC_FETCHED_PREVIEW_LENGTH + 20)),
         )
 
@@ -312,28 +325,28 @@ class TestSerpAPISearchProvider(unittest.TestCase):
                     {
                         "title": "Need extra context",
                         "link": "https://example.com/need-extra-context",
-                        "snippet": "摘要过短",
+                        "snippet": "Tóm tắt quá ngắn",
                         "source": "Example",
                     },
                     {
                         "title": "Second short result",
                         "link": "https://example.com/second-short",
-                        "snippet": "也很短",
+                        "snippet": "Cũng rất ngắn",
                         "source": "Example",
                     },
                     {
                         "title": "Third short result",
                         "link": "https://example.com/third-short",
-                        "snippet": "还是很短",
+                        "snippet": "Vẫn rất ngắn",
                         "source": "Example",
                     },
                 ]
             }
         ), patch(
             "src.search_service.fetch_url_content",
-            return_value="网页正文补充信息 " * 40,
+            return_value="Thông tin bổ sung từ nội dung trang " * 40,
         ) as mock_fetch:
-            resp = provider.search("阿里巴巴 财报", max_results=3)
+            resp = provider.search("Hòa Phát báo cáo tài chính", max_results=3)
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 3)
@@ -341,9 +354,9 @@ class TestSerpAPISearchProvider(unittest.TestCase):
             "https://example.com/need-extra-context",
             timeout=SerpAPISearchProvider._ORGANIC_CONTENT_FETCH_TIMEOUT,
         )
-        self.assertIn("【网页详情】", resp.results[0].snippet)
-        self.assertEqual(resp.results[1].snippet, "也很短")
-        self.assertEqual(resp.results[2].snippet, "还是很短")
+        self.assertIn("【Chi tiết trang】", resp.results[0].snippet)
+        self.assertEqual(resp.results[1].snippet, "Cũng rất ngắn")
+        self.assertEqual(resp.results[2].snippet, "Vẫn rất ngắn")
 
     def test_provider_skips_asset_link_and_fetches_next_eligible_result(self) -> None:
         provider = SerpAPISearchProvider(["dummy_key"])
@@ -354,28 +367,28 @@ class TestSerpAPISearchProvider(unittest.TestCase):
                     {
                         "title": "PDF attachment",
                         "link": "https://example.com/report.PDF?download=1",
-                        "snippet": "附件摘要很短",
+                        "snippet": "Tóm tắt tệp đính kèm rất ngắn",
                         "source": "Example",
                     },
                     {
                         "title": "HTML article",
                         "link": "https://example.com/article",
-                        "snippet": "正文摘要也短",
+                        "snippet": "Tóm tắt nội dung cũng ngắn",
                         "source": "Example",
                     },
                     {
                         "title": "Third short result",
                         "link": "https://example.com/third-short",
-                        "snippet": "还是很短",
+                        "snippet": "Vẫn rất ngắn",
                         "source": "Example",
                     },
                 ]
             }
         ), patch(
             "src.search_service.fetch_url_content",
-            return_value="网页正文补充信息 " * 40,
+            return_value="Thông tin bổ sung từ nội dung trang " * 40,
         ) as mock_fetch:
-            resp = provider.search("阿里巴巴 财报", max_results=3)
+            resp = provider.search("Hòa Phát báo cáo tài chính", max_results=3)
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 3)
@@ -383,9 +396,9 @@ class TestSerpAPISearchProvider(unittest.TestCase):
             "https://example.com/article",
             timeout=SerpAPISearchProvider._ORGANIC_CONTENT_FETCH_TIMEOUT,
         )
-        self.assertEqual(resp.results[0].snippet, "附件摘要很短")
-        self.assertIn("【网页详情】", resp.results[1].snippet)
-        self.assertEqual(resp.results[2].snippet, "还是很短")
+        self.assertEqual(resp.results[0].snippet, "Tóm tắt tệp đính kèm rất ngắn")
+        self.assertIn("【Chi tiết trang】", resp.results[1].snippet)
+        self.assertEqual(resp.results[2].snippet, "Vẫn rất ngắn")
 
     def test_provider_skips_query_encoded_attachment_and_fetches_next_result(self) -> None:
         provider = SerpAPISearchProvider(["dummy_key"])
@@ -396,28 +409,28 @@ class TestSerpAPISearchProvider(unittest.TestCase):
                     {
                         "title": "Attachment behind download endpoint",
                         "link": "https://example.com/download?file=report.pdf",
-                        "snippet": "附件摘要很短",
+                        "snippet": "Tóm tắt tệp đính kèm rất ngắn",
                         "source": "Example",
                     },
                     {
                         "title": "HTML article",
                         "link": "https://example.com/article",
-                        "snippet": "正文摘要也短",
+                        "snippet": "Tóm tắt nội dung cũng ngắn",
                         "source": "Example",
                     },
                     {
                         "title": "Third short result",
                         "link": "https://example.com/third-short",
-                        "snippet": "还是很短",
+                        "snippet": "Vẫn rất ngắn",
                         "source": "Example",
                     },
                 ]
             }
         ), patch(
             "src.search_service.fetch_url_content",
-            return_value="网页正文补充信息 " * 40,
+            return_value="Thông tin bổ sung từ nội dung trang " * 40,
         ) as mock_fetch:
-            resp = provider.search("阿里巴巴 财报", max_results=3)
+            resp = provider.search("Hòa Phát báo cáo tài chính", max_results=3)
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 3)
@@ -425,9 +438,9 @@ class TestSerpAPISearchProvider(unittest.TestCase):
             "https://example.com/article",
             timeout=SerpAPISearchProvider._ORGANIC_CONTENT_FETCH_TIMEOUT,
         )
-        self.assertEqual(resp.results[0].snippet, "附件摘要很短")
-        self.assertIn("【网页详情】", resp.results[1].snippet)
-        self.assertEqual(resp.results[2].snippet, "还是很短")
+        self.assertEqual(resp.results[0].snippet, "Tóm tắt tệp đính kèm rất ngắn")
+        self.assertIn("【Chi tiết trang】", resp.results[1].snippet)
+        self.assertEqual(resp.results[2].snippet, "Vẫn rất ngắn")
 
     def test_provider_keeps_html_fetch_for_asset_like_query_param(self) -> None:
         provider = SerpAPISearchProvider(["dummy_key"])
@@ -438,22 +451,22 @@ class TestSerpAPISearchProvider(unittest.TestCase):
                     {
                         "title": "HTML article with media param",
                         "link": "https://example.com/article?thumbnail=cover.jpg",
-                        "snippet": "摘要过短",
+                        "snippet": "Tóm tắt quá ngắn",
                         "source": "Example",
                     },
                     {
                         "title": "Second short result",
                         "link": "https://example.com/second-short",
-                        "snippet": "也很短",
+                        "snippet": "Cũng rất ngắn",
                         "source": "Example",
                     },
                 ]
             }
         ), patch(
             "src.search_service.fetch_url_content",
-            return_value="网页正文补充信息 " * 40,
+            return_value="Thông tin bổ sung từ nội dung trang " * 40,
         ) as mock_fetch:
-            resp = provider.search("阿里巴巴 财报", max_results=2)
+            resp = provider.search("Hòa Phát báo cáo tài chính", max_results=2)
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 2)
@@ -461,8 +474,8 @@ class TestSerpAPISearchProvider(unittest.TestCase):
             "https://example.com/article?thumbnail=cover.jpg",
             timeout=SerpAPISearchProvider._ORGANIC_CONTENT_FETCH_TIMEOUT,
         )
-        self.assertIn("【网页详情】", resp.results[0].snippet)
-        self.assertEqual(resp.results[1].snippet, "也很短")
+        self.assertIn("【Chi tiết trang】", resp.results[0].snippet)
+        self.assertEqual(resp.results[1].snippet, "Cũng rất ngắn")
 
     def test_provider_skips_non_string_link_and_keeps_fetch_budget(self) -> None:
         provider = SerpAPISearchProvider(["dummy_key"])
@@ -473,22 +486,22 @@ class TestSerpAPISearchProvider(unittest.TestCase):
                     {
                         "title": "Malformed link result",
                         "link": {"href": "https://example.com/broken"},
-                        "snippet": "摘要过短",
+                        "snippet": "Tóm tắt quá ngắn",
                         "source": "Example",
                     },
                     {
                         "title": "HTML article",
                         "link": "https://example.com/article",
-                        "snippet": "正文摘要也短",
+                        "snippet": "Tóm tắt nội dung cũng ngắn",
                         "source": "Example",
                     },
                 ]
             }
         ), patch(
             "src.search_service.fetch_url_content",
-            return_value="网页正文补充信息 " * 40,
+            return_value="Thông tin bổ sung từ nội dung trang " * 40,
         ) as mock_fetch:
-            resp = provider.search("阿里巴巴 财报", max_results=2)
+            resp = provider.search("Hòa Phát báo cáo tài chính", max_results=2)
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 2)
@@ -496,8 +509,8 @@ class TestSerpAPISearchProvider(unittest.TestCase):
             "https://example.com/article",
             timeout=SerpAPISearchProvider._ORGANIC_CONTENT_FETCH_TIMEOUT,
         )
-        self.assertEqual(resp.results[0].snippet, "摘要过短")
-        self.assertIn("【网页详情】", resp.results[1].snippet)
+        self.assertEqual(resp.results[0].snippet, "Tóm tắt quá ngắn")
+        self.assertIn("【Chi tiết trang】", resp.results[1].snippet)
 
     def test_provider_fetch_failure_stays_fail_open_and_stops_after_budget(self) -> None:
         provider = SerpAPISearchProvider(["dummy_key"])
@@ -508,13 +521,13 @@ class TestSerpAPISearchProvider(unittest.TestCase):
                     {
                         "title": "Slow result",
                         "link": "https://example.com/slow",
-                        "snippet": "摘要过短",
+                        "snippet": "Tóm tắt quá ngắn",
                         "source": "Example",
                     },
                     {
                         "title": "Another short result",
                         "link": "https://example.com/another-short",
-                        "snippet": "仍然很短",
+                        "snippet": "Vẫn còn ngắn",
                         "source": "Example",
                     },
                 ]
@@ -523,7 +536,7 @@ class TestSerpAPISearchProvider(unittest.TestCase):
             "src.search_service.fetch_url_content",
             side_effect=TimeoutError("slow site"),
         ) as mock_fetch:
-            resp = provider.search("阿里巴巴 财报", max_results=2)
+            resp = provider.search("Hòa Phát báo cáo tài chính", max_results=2)
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 2)
@@ -531,8 +544,8 @@ class TestSerpAPISearchProvider(unittest.TestCase):
             "https://example.com/slow",
             timeout=SerpAPISearchProvider._ORGANIC_CONTENT_FETCH_TIMEOUT,
         )
-        self.assertEqual(resp.results[0].snippet, "摘要过短")
-        self.assertEqual(resp.results[1].snippet, "仍然很短")
+        self.assertEqual(resp.results[0].snippet, "Tóm tắt quá ngắn")
+        self.assertEqual(resp.results[1].snippet, "Vẫn còn ngắn")
 
 
 if __name__ == "__main__":

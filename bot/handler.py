@@ -61,7 +61,7 @@ def handle_webhook(
     This is the unified entry point for all platform webhooks.
 
     Args:
-        platform_name: platform name (feishu, dingtalk, wecom, telegram)
+        platform_name: platform name (e.g. telegram, discord)
         headers: HTTP request headers
         body: raw request body bytes
         query_params: URL query parameters (used for verification on some platforms)
@@ -203,21 +203,6 @@ async def handle_webhook_async(
         return webhook_response
 
     return WebhookResponse.success()
-
-
-def handle_feishu_webhook(headers: Dict[str, str], body: bytes) -> WebhookResponse:
-    """Handle Feishu webhook"""
-    return handle_webhook('feishu', headers, body)
-
-
-def handle_dingtalk_webhook(headers: Dict[str, str], body: bytes) -> WebhookResponse:
-    """Handle DingTalk webhook"""
-    return handle_webhook('dingtalk', headers, body)
-
-
-def handle_wecom_webhook(headers: Dict[str, str], body: bytes) -> WebhookResponse:
-    """Handle WeCom webhook"""
-    return handle_webhook('wecom', headers, body)
 
 
 def handle_telegram_webhook(headers: Dict[str, str], body: bytes) -> WebhookResponse:

@@ -14,11 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 
 from src.config import Config
-from src.formatters import (
-    chunk_content_by_max_bytes,
-    slice_at_max_bytes,
-    strip_hidden_markdown_metadata,
-)
+from src.formatters import strip_hidden_markdown_metadata
 
 
 logger = logging.getLogger(__name__)
@@ -46,7 +42,6 @@ class CustomWebhookSender:
         Default payload format: {"text": "message content", "content": "message content"}
         
         Suitable for:
-        - DingTalk bots
         - Discord Webhook
         - Slack Incoming Webhook
         - Self-hosted notification services
@@ -67,29 +62,9 @@ class CustomWebhookSender:
         for i, url in enumerate(self._custom_webhook_urls):
             try:
                 # Generic JSON format, compatible with most Webhooks
-                # DingTalk format: {"msgtype": "text", "text": {"content": "xxx"}}
                 # Slack format: {"text": "xxx"}
                 # Discord format: {"content": "xxx"}
                 
-                # DingTalk bots cap the body size (about 20000 bytes); longer content must be sent in batches
-                if self._is_dingtalk_webhook(url):
-                    templated_payload = self._build_custom_webhook_template_payload(content)
-                    if templated_payload is not None:
-                        if self._post_custom_webhook(url, templated_payload, timeout=30):
-                            logger.info(f"自定义 Webhook {i+1}（钉钉模板）推送成功")
-                            success_count += 1
-                        elif self._send_dingtalk_chunked(url, content, max_bytes=20000):
-                            logger.info(f"自定义 Webhook {i+1}（钉钉模板失败，回退分批）推送成功")
-                            success_count += 1
-                        else:
-                            logger.error(f"自定义 Webhook {i+1}（钉钉模板）推送失败")
-                    elif self._send_dingtalk_chunked(url, content, max_bytes=20000):
-                        logger.info(f"自定义 Webhook {i+1}（钉钉）推送成功")
-                        success_count += 1
-                    else:
-                        logger.error(f"自定义 Webhook {i+1}（钉钉）推送失败")
-                    continue
-
                 # Other Webhooks: send once
                 payload = self._build_custom_webhook_payload(url, content)
                 if self._post_custom_webhook(url, payload, timeout=30):
@@ -283,16 +258,6 @@ class CustomWebhookSender:
 
         url_lower = url.lower()
         
-        # DingTalk bot
-        if 'dingtalk' in url_lower or 'oapi.dingtalk.com' in url_lower:
-            return {
-                "msgtype": "markdown",
-                "markdown": {
-                    "title": "股票分析报告",
-                    "text": sanitized_content
-                }
-            }
-        
         # Discord Webhook
         if 'discord.com/api/webhooks' in url_lower or 'discordapp.com/api/webhooks' in url_lower:
             # Discord limit is 2000 characters
@@ -358,51 +323,6 @@ class CustomWebhookSender:
             return None
         return payload
     
-    def _send_dingtalk_chunked(self, url: str, content: str, max_bytes: int = 20000) -> bool:
-        import time as _time
-        content = strip_hidden_markdown_metadata(content).strip()
-
-        # Reserve room for payload overhead so the body never exceeds the limit
-        budget = max(1000, max_bytes - 1500)
-        chunks = chunk_content_by_max_bytes(content, budget)
-        if not chunks:
-            return False
-
-        total = len(chunks)
-        ok = 0
-
-        for idx, chunk in enumerate(chunks):
-            marker = f"\n\n📄 *({idx+1}/{total})*" if total > 1 else ""
-            payload = {
-                "msgtype": "markdown",
-                "markdown": {
-                    "title": "股票分析报告",
-                    "text": chunk + marker,
-                },
-            }
-
-            # If still over the limit (extreme cases), hard-truncate once more by bytes
-            body_bytes = len(json.dumps(payload, ensure_ascii=False).encode('utf-8'))
-            if body_bytes > max_bytes:
-                hard_budget = max(200, budget - (body_bytes - max_bytes) - 200)
-                payload["markdown"]["text"], _ = slice_at_max_bytes(payload["markdown"]["text"], hard_budget)
-
-            if self._post_custom_webhook(url, payload, timeout=30):
-                ok += 1
-            else:
-                logger.error(f"钉钉分批发送失败: 第 {idx+1}/{total} 批")
-
-            if idx < total - 1:
-                _time.sleep(1)
-
-        return ok == total
-
-    
-    @staticmethod
-    def _is_dingtalk_webhook(url: str) -> bool:
-        url_lower = (url or "").lower()
-        return 'dingtalk' in url_lower or 'oapi.dingtalk.com' in url_lower
-
     @staticmethod
     def _is_discord_webhook(url: str) -> bool:
         url_lower = (url or "").lower()

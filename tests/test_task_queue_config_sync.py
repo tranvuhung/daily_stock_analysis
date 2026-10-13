@@ -97,7 +97,10 @@ class TaskQueueConfigSyncTestCase(unittest.TestCase):
         self.assertEqual(queue.max_workers, 2)
 
     def test_dedupe_stock_code_key_normalizes_market_suffix(self) -> None:
-        self.assertEqual(_dedupe_stock_code_key(" 600519.sh "), "600519")
+        # Các cách viết HPG / HPG.VN / vnHPG dùng chung một khoá chống trùng.
+        # VN spellings share one dedupe key.
+        self.assertEqual(_dedupe_stock_code_key(" hpg.vn "), "HPG")
+        self.assertEqual(_dedupe_stock_code_key("vnHPG"), "HPG")
 
     def test_get_task_queue_defers_sync_when_busy(self) -> None:
         queue = AnalysisTaskQueue(max_workers=3)

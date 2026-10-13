@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping
 from typing import Any, Optional
 
@@ -284,7 +283,7 @@ def _first_present(*values: Any) -> Any:
 def _first_text(*values: Any) -> Optional[str]:
     for value in values:
         if isinstance(value, list):
-            joined = "；".join(str(item).strip() for item in value if str(item or "").strip())
+            joined = "; ".join(str(item).strip() for item in value if str(item or "").strip())
             if joined:
                 return joined
         text = str(value or "").strip()
@@ -303,27 +302,18 @@ def _nested_get(value: Mapping[str, Any], path: tuple[str, ...]) -> Any:
 
 
 def _infer_market(code: str) -> Optional[str]:
-    text = str(code or "").strip().upper()
+    """Suy ra thị trường từ mã lưu trong lịch sử; hệ thống chỉ còn ``vn``.
+
+    Mã không phải Việt Nam (dữ liệu cũ của thị trường đã loại bỏ) trả ``None`` để
+    nơi gọi từ chối rõ ràng thay vì sinh tín hiệu với thị trường không hợp lệ.
+    Infer the market from a stored code; only Vietnam (``vn``) is supported.
+    """
+    from src.services.stock_code_utils import is_code_like
+
+    text = str(code or "").strip()
     if not text:
         return None
-    if text.startswith("HK") or text.endswith(".HK"):
-        return "hk"
-    if (
-        text.endswith((".SH", ".SZ", ".BJ"))
-        or (len(text) == 8 and text[:2] in {"SH", "SZ", "BJ"} and text[2:].isdigit())
-    ):
-        return "cn"
-    if text.endswith((".T", ".JP")):
-        return "jp"
-    if text.endswith((".KS", ".KQ")):
-        return "kr"
-    if text.endswith((".TW", ".TWO")):
-        return "tw"
-    if text.isdigit() and len(text) == 6:
-        return "cn"
-    if re.fullmatch(r"[A-Z]{1,5}(?:\.[A-Z]{1,2})?", text):
-        return "us"
-    return None
+    return "vn" if is_code_like(text) else None
 
 
 def _score_from_value(value: Any) -> Optional[int]:
@@ -380,19 +370,19 @@ def _extract_guardrail_reason(
                 ]
             )
         hints = (
-            "等待",
-            "待",
-            "需要确认",
-            "缺少确认",
-            "未确认",
-            "回踩",
-            "支撑",
-            "压力",
-            "风险",
-            "资金",
-            "突破",
-            "不追",
-            "不宜",
+            "chờ",
+            "đợi",
+            "cần xác nhận",
+            "thiếu xác nhận",
+            "chưa xác nhận",
+            "điều chỉnh về",
+            "hỗ trợ",
+            "kháng cự",
+            "rủi ro",
+            "dòng tiền",
+            "bứt phá",
+            "không đuổi",
+            "không nên",
         )
         for candidate in candidates:
             text = str(candidate or "").strip()
@@ -407,12 +397,12 @@ def _extract_guardrail_reason(
 def _confidence_from_level(value: Any) -> Optional[float]:
     key = str(value or "").strip().lower()
     mapping = {
-        "高": 0.8,
+        "cao": 0.8,
         "high": 0.8,
-        "中": 0.6,
+        "trung bình": 0.6,
         "medium": 0.6,
         "mid": 0.6,
-        "低": 0.4,
+        "thấp": 0.4,
         "low": 0.4,
     }
     return mapping.get(key)

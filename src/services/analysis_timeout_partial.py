@@ -222,28 +222,28 @@ def build_partial_timeout_report(
 ) -> str:
     """Build Markdown body for the partial-success timeout notification."""
     lines = [
-        "## 定时分析超时（部分完成）",
+        "## Phân tích định kỳ quá thời gian (hoàn thành một phần)",
         "",
-        f"- 硬超时：`{timeout_seconds}` 秒",
-        f"- 已完成：`{len(completed)}` 只",
-        f"- 未完成：`{len(list(pending_codes))}` 只",
+        f"- Giới hạn thời gian cứng: `{timeout_seconds}` giây",
+        f"- Đã hoàn thành: `{len(completed)}` mã",
+        f"- Chưa hoàn thành: `{len(list(pending_codes))}` mã",
         "",
     ]
     if completed:
-        lines.append("### 已落库结果")
+        lines.append("### Kết quả đã lưu")
         for item in completed:
             name = item.name or "-"
             advice = item.operation_advice or "-"
             score = item.sentiment_score if item.sentiment_score is not None else "-"
-            lines.append(f"- `{item.code}` {name}｜建议：{advice}｜评分：{score}")
+            lines.append(f"- `{item.code}` {name} | Khuyến nghị: {advice} | Điểm: {score}")
         lines.append("")
     if pending_codes:
-        lines.append("### 未完成")
+        lines.append("### Chưa hoàn thành")
         lines.append(", ".join(f"`{code}`" for code in pending_codes))
         lines.append("")
     lines.append(
-        "_本轮因 runtime scheduler 硬超时被终止；已完成个股结果已写入分析历史，"
-        "未完成部分可稍后手动重跑。_"
+        "_Lượt này bị dừng do runtime scheduler vượt giới hạn thời gian cứng; kết quả các mã đã xong đã được ghi vào lịch sử phân tích, "
+        "phần chưa xong có thể chạy lại thủ công sau._"
     )
     return "\n".join(lines)
 

@@ -57,7 +57,7 @@ def normalize_strategy_signal(signal: Any, default: str = "hold") -> tuple[str, 
     """Normalize strategy signal labels while preserving invalid input state.
 
     Single normalization entrypoint for the entire multi-strategy pipeline. See
-    docs/multi-strategy-contract.md §"Canonical Signal 与 Valid 判定" (Canonical Signal and Valid check).
+    docs/multi-strategy-contract.md §"Canonical Signal and Valid check".
 
     Returns (canonical, invalid, original):
     - canonical: canonical lowercase label; falls back to `default` when invalid
@@ -164,7 +164,7 @@ class AgentContext:
     # --- collected data (populated by data-fetching stages) ---
     data: Dict[str, Any] = field(default_factory=dict)
     # Typical keys: "realtime_quote", "daily_history", "trend_result",
-    #               "chip_distribution", "news_context"
+    #               "news_context"
 
     # --- opinions from individual agents ---
     opinions: List["AgentOpinion"] = field(default_factory=list)

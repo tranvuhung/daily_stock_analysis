@@ -113,9 +113,16 @@ def test_heavy_ci_jobs_are_path_filtered_and_backend_tests_are_sharded() -> None
         "THIRD_PARTY_NOTICES.md",
         "docs/architecture/**",
         "docs/alerts.md",
-        "docs/full-guide.md",
+        "docs/full-guide_EN.md",
         "tests/fixtures/**",
     }
+    # Tài liệu tiếng Trung đã xoá không còn nằm trong bộ lọc
+    # Deleted Chinese-only docs must not linger in the contract filter
+    contract_assets = set(_expand_brace_pattern(parsed_filters["backend_contract_assets"][0]))
+    assert "docs/full-guide.md" not in contract_assets
+    assert "docs/DEPLOY.md" not in contract_assets
+    assert "futu_packaging" not in parsed_filters
+    assert "futu_packaging" not in changes_job["outputs"]
 
     backend_tests_job = ci["jobs"]["backend-tests"]
     backend_gate_job = ci["jobs"]["backend-gate"]
@@ -181,7 +188,7 @@ def test_backend_filter_covers_mixed_changes_and_shared_web_assets() -> None:
         Loader=yaml.BaseLoader,
     )["frontend_code"]
 
-    def outputs(changed_paths: list[str]) -> tuple[bool, bool, bool, bool]:
+    def outputs(changed_paths: list[str]) -> tuple[bool, bool, bool]:
         backend = (
             _filter_output(changed_paths, backend_filters)
             or _filter_output(changed_paths, filters["backend_contract_assets"])
@@ -191,34 +198,31 @@ def test_backend_filter_covers_mixed_changes_and_shared_web_assets() -> None:
             backend,
             _filter_output(changed_paths, filters["docker"]),
             _filter_output(changed_paths, frontend_filters),
-            _filter_output(changed_paths, filters["futu_packaging"]),
         )
 
     assert backend_filter_step["with"]["predicate-quantifier"] == "every"
-    assert outputs(["docs/CHANGELOG.md"]) == (True, False, False, False)
+    assert outputs(["docs/CHANGELOG.md"]) == (True, False, False)
     assert outputs(["docs/architecture/api_spec.json"])[0] is True
     assert outputs(["docs/alerts.md"])[0] is True
     assert outputs(["tests/fixtures/notification_reports/aggregate_report.md"])[0] is True
     assert outputs(["THIRD_PARTY_NOTICES.md"])[0] is True
-    assert outputs(["docs/CONTRIBUTING.md"]) == (False, False, False, False)
-    assert outputs(["README.md"]) == (False, False, False, False)
-    assert outputs(["LICENSE"]) == (False, False, False, False)
-    assert outputs(["apps/dsa-web/README.md"]) == (False, False, False, False)
-    assert outputs(["apps/dsa-desktop/README.md"]) == (False, False, False, False)
-    assert outputs(["src/config.py"]) == (True, True, False, False)
-    assert outputs(["requirements.txt"]) == (True, True, False, True)
-    assert outputs(["apps/dsa-web/src/App.tsx"]) == (False, True, True, False)
+    assert outputs(["docs/CONTRIBUTING.md"]) == (False, False, False)
+    assert outputs(["README.md"]) == (False, False, False)
+    assert outputs(["LICENSE"]) == (False, False, False)
+    assert outputs(["apps/dsa-web/README.md"]) == (False, False, False)
+    assert outputs(["apps/dsa-desktop/README.md"]) == (False, False, False)
+    assert outputs(["src/config.py"]) == (True, True, False)
+    assert outputs(["requirements.txt"]) == (True, True, False)
+    assert outputs(["apps/dsa-web/src/App.tsx"]) == (False, True, True)
     assert outputs(["apps/dsa-web/src/App.tsx", "docs/CHANGELOG.md"]) == (
         True,
         True,
         True,
-        False,
     )
     assert outputs(["apps/dsa-web/src/App.tsx", "src/config.py"]) == (
         True,
         True,
         True,
-        False,
     )
     assert outputs(["apps/dsa-web/public/stocks.index.json"])[0] is True
     assert outputs(["apps/dsa-web/public/runtime/new-asset.json"])[0] is True

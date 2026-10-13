@@ -22,24 +22,24 @@ class TestAnalyzeRequest:
     def test_analyze_request_with_new_fields(self):
         """Test that AnalyzeRequest accepts new fields"""
         request = AnalyzeRequest(
-            stock_code="600519",
+            stock_code="HPG",
             async_mode=True,
-            stock_name="贵州茅台",
-            original_query="茅台",
+            stock_name="Hòa Phát",
+            original_query="Hòa Phát",
             selection_source="autocomplete",
         )
-        assert request.stock_code == "600519"
-        assert request.stock_name == "贵州茅台"
-        assert request.original_query == "茅台"
+        assert request.stock_code == "HPG"
+        assert request.stock_name == "Hòa Phát"
+        assert request.original_query == "Hòa Phát"
         assert request.selection_source == "autocomplete"
 
     def test_analyze_request_backward_compatible(self):
         """Test backward compatibility: works fine without new fields"""
         request = AnalyzeRequest(
-            stock_code="600519",
+            stock_code="HPG",
             async_mode=True,
         )
-        assert request.stock_code == "600519"
+        assert request.stock_code == "HPG"
         assert request.stock_name is None
         assert request.original_query is None
         assert request.selection_source is None
@@ -47,13 +47,13 @@ class TestAnalyzeRequest:
     def test_analyze_request_accepts_strategy_skills_alias(self):
         """Test analysis requests accept both skills and legacy strategies."""
         request = AnalyzeRequest(
-            stock_code="600519",
+            stock_code="HPG",
             skills=["growth_quality"],
         )
         assert request.skills == ["growth_quality"]
 
         legacy_request = AnalyzeRequest(
-            stock_code="600519",
+            stock_code="HPG",
             strategies=["event_driven"],
         )
         assert legacy_request.skills == ["event_driven"]
@@ -63,7 +63,7 @@ class TestAnalyzeRequest:
         # Valid selection_source values
         for source in ["manual", "autocomplete", "import", "image"]:
             request = AnalyzeRequest(
-                stock_code="600519",
+                stock_code="HPG",
                 selection_source=source,
             )
             assert request.selection_source == source
@@ -71,15 +71,15 @@ class TestAnalyzeRequest:
     def test_analyze_request_with_multiple_stocks(self):
         """Test support for new fields in batch analysis"""
         request = AnalyzeRequest(
-            stock_codes=["600519", "000001"],
+            stock_codes=["HPG", "VCB"],
             async_mode=True,
-            stock_name="批量股票",
-            original_query="600519,000001",
+            stock_name="Danh mục lô",
+            original_query="HPG,VCB",
             selection_source="import",
         )
-        assert request.stock_codes == ["600519", "000001"]
-        assert request.stock_name == "批量股票"
-        assert request.original_query == "600519,000001"
+        assert request.stock_codes == ["HPG", "VCB"]
+        assert request.stock_name == "Danh mục lô"
+        assert request.original_query == "HPG,VCB"
         assert request.selection_source == "import"
 
 
@@ -90,22 +90,22 @@ class TestTaskInfo:
         """Test that TaskInfo contains new fields"""
         task = TaskInfo(
             task_id="test123",
-            stock_code="600519",
-            stock_name="贵州茅台",
-            original_query="茅台",
+            stock_code="HPG",
+            stock_name="Hòa Phát",
+            original_query="Hòa Phát",
             selection_source="autocomplete",
         )
         d = task.to_dict()
         assert "original_query" in d
         assert "selection_source" in d
-        assert d["original_query"] == "茅台"
+        assert d["original_query"] == "Hòa Phát"
         assert d["selection_source"] == "autocomplete"
 
     def test_task_info_backward_compatible(self):
         """Test TaskInfo backward compatibility: works fine without new fields"""
         task = TaskInfo(
             task_id="test123",
-            stock_code="600519",
+            stock_code="HPG",
         )
         d = task.to_dict()
         assert d["original_query"] is None
@@ -115,13 +115,13 @@ class TestTaskInfo:
         """Test that TaskInfo.copy() includes new fields"""
         task = TaskInfo(
             task_id="test123",
-            stock_code="600519",
-            stock_name="贵州茅台",
-            original_query="茅台",
+            stock_code="HPG",
+            stock_name="Hòa Phát",
+            original_query="Hòa Phát",
             selection_source="autocomplete",
         )
         copied = task.copy()
-        assert copied.original_query == "茅台"
+        assert copied.original_query == "Hòa Phát"
         assert copied.selection_source == "autocomplete"
 
 
@@ -150,21 +150,21 @@ class TestTaskQueue:
         """Test task queue accepts new fields"""
         queue = self._build_queue()
         tasks, _duplicates = queue.submit_tasks_batch(
-            stock_codes=["600519"],
-            stock_name="贵州茅台",
-            original_query="茅台",
+            stock_codes=["HPG"],
+            stock_name="Hòa Phát",
+            original_query="Hòa Phát",
             selection_source="autocomplete",
         )
         assert len(tasks) == 1
-        assert tasks[0].stock_name == "贵州茅台"
-        assert tasks[0].original_query == "茅台"
+        assert tasks[0].stock_name == "Hòa Phát"
+        assert tasks[0].original_query == "Hòa Phát"
         assert tasks[0].selection_source == "autocomplete"
 
     def test_task_queue_backward_compatible(self):
         """Test task queue backward compatibility: works fine without new fields"""
         queue = self._build_queue()
         tasks, _duplicates = queue.submit_tasks_batch(
-            stock_codes=["600519"],
+            stock_codes=["HPG"],
         )
         assert len(tasks) == 1
         assert tasks[0].original_query is None
@@ -174,27 +174,27 @@ class TestTaskQueue:
         """Test support for new fields during batch submission"""
         queue = self._build_queue()
         tasks, _duplicates = queue.submit_tasks_batch(
-            stock_codes=["600519", "000001"],
-            stock_name="批量股票",
-            original_query="600519,000001",
+            stock_codes=["HPG", "VCB"],
+            stock_name="Danh mục lô",
+            original_query="HPG,VCB",
             selection_source="import",
         )
         assert len(tasks) == 2
         for task in tasks:
-            assert task.stock_name == "批量股票"
-            assert task.original_query == "600519,000001"
+            assert task.stock_name == "Danh mục lô"
+            assert task.original_query == "HPG,VCB"
             assert task.selection_source == "import"
 
     def test_task_queue_duplicate_detection_with_new_fields(self):
         """Test that new fields do not affect duplicate submission detection logic"""
         queue = self._build_queue()
-        stock_code = "600519"
+        stock_code = "HPG"
 
         # First submission
         tasks1, dups1 = queue.submit_tasks_batch(
             stock_codes=[stock_code],
-            stock_name="贵州茅台",
-            original_query="茅台",
+            stock_name="Hòa Phát",
+            original_query="Hòa Phát",
             selection_source="autocomplete",
         )
         assert len(tasks1) == 1
@@ -203,30 +203,13 @@ class TestTaskQueue:
         # Second submission (should be rejected)
         tasks2, dups2 = queue.submit_tasks_batch(
             stock_codes=[stock_code],
-            stock_name="贵州茅台",
-            original_query="茅台",
+            stock_name="Hòa Phát",
+            original_query="Hòa Phát",
             selection_source="manual",  # Rejection still applies even if selection_source differs
         )
         assert len(tasks2) == 0
         assert len(dups2) == 1
         assert isinstance(dups2[0], DuplicateTaskError)
-
-    def test_task_queue_csi_equivalent_forms_dedupe_to_one_task(self):
-        """Real task-layer regression: submitting both the parser canonical
-        ``csi930955`` and its explicit alias ``930955.CSI`` in one batch must
-        yield exactly ONE accepted task (canonicalised to ``csi930955``) and
-        ONE duplicate — not two distinct tasks. This guards the task dedupe key
-        against splitting a registered CSI identity into distinct keys."""
-        queue = self._build_queue()
-        accepted, duplicates = queue.submit_tasks_batch(
-            stock_codes=["csi930955", "930955.CSI"],
-        )
-        assert len(accepted) == 1
-        assert accepted[0].stock_code == "csi930955"
-        assert len(duplicates) == 1
-        assert isinstance(duplicates[0], DuplicateTaskError)
-        assert duplicates[0].stock_code == "csi930955"
-
 
 class TestIntegration:
     """Integration Tests"""
@@ -247,10 +230,10 @@ class TestIntegration:
         """Test end-to-end flow: autocomplete -> analysis request -> task creation"""
         # Simulate request after autocomplete
         request = AnalyzeRequest(
-            stock_code="600519.SH",
+            stock_code="HPG.VN",
             async_mode=True,
-            stock_name="贵州茅台",
-            original_query="茅台",
+            stock_name="Hòa Phát",
+            original_query="Hòa Phát",
             selection_source="autocomplete",
             report_type="detailed",
         )
@@ -268,9 +251,9 @@ class TestIntegration:
 
         assert len(tasks) == 1
         task = tasks[0]
-        assert task.stock_code == "600519.SH"
-        assert task.stock_name == "贵州茅台"
-        assert task.original_query == "茅台"
+        assert task.stock_code == "HPG.VN"
+        assert task.stock_name == "Hòa Phát"
+        assert task.original_query == "Hòa Phát"
         assert task.selection_source == "autocomplete"
         assert task.report_type == "detailed"
 
@@ -278,7 +261,7 @@ class TestIntegration:
         """Test end-to-end flow: manual input -> analysis request -> task creation"""
         # Simulate manual input request
         request = AnalyzeRequest(
-            stock_code="600519",
+            stock_code="HPG",
             async_mode=True,
             selection_source="manual",
         )
@@ -294,5 +277,5 @@ class TestIntegration:
 
         assert len(tasks) == 1
         task = tasks[0]
-        assert task.stock_code == "600519"
+        assert task.stock_code == "HPG"
         assert task.selection_source == "manual"

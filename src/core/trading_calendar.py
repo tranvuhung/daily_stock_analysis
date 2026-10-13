@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-Trading calendar module (Issue #373 / Issue #1386 P0)
+Lịch giao dịch (Issue #373 / Issue #1386 P0) — thị trường Việt Nam
 ===================================
 
-Responsibilities:
-1. Determine per market (A-share/HK/US/JP/KR/TW) whether today is a trading day
-2. Take "today" in the market's timezone to avoid wrong dates from a UTC server
-3. Support per-stock filtering: only analyze stocks whose market is open today
-4. Provide a regular-session market phase inference baseline without changing existing analysis entry behavior
+Trách nhiệm:
+1. Xác định hôm nay có phải ngày giao dịch của thị trường Việt Nam không
+2. Lấy "hôm nay" theo múi giờ của thị trường để tránh sai ngày khi server chạy UTC
+3. Lọc theo từng mã: chỉ phân tích mã có thị trường mở cửa hôm nay
+4. Suy luận phiên giao dịch (premarket/intraday/...) theo giờ cố định
 
-Dependency: exchange-calendars (optional; trading-day checks fail open and phase inference returns unknown when unavailable)
+Thư viện exchange-calendars không có lịch cho HOSE/HNX/UPCoM, nên module dùng giờ
+giao dịch cố định: chỉ loại thứ 7/CN; ngày lễ (Tết…) chưa có nguồn lịch nên vẫn coi là
+ngày giao dịch (fail-open).
+
+Vietnam trading calendar using fixed session hours (weekends closed, holidays fail-open).
 """
 
 import logging
@@ -20,60 +24,33 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 from zoneinfo import ZoneInfo
 
-import pandas as pd
-
 from src.core.markets import ALL_MARKETS, enabled_markets
-from src.services.market_symbol_utils import get_suffix_market
 
 logger = logging.getLogger(__name__)
 
-# Exchange-calendars availability
-_XCALS_AVAILABLE = False
-try:
-    import exchange_calendars as xcals
-    _XCALS_AVAILABLE = True
-except ImportError:
-    logger.warning(
-        "exchange-calendars not installed; trading day check disabled. "
-        "Run: pip install exchange-calendars"
-    )
-
-# Market -> exchange code (exchange-calendars), derived from the market registry.
-# Only markets actually covered by exchange-calendars; Vietnam (HOSE/HNX/UPCOM) is not among the library's
-# 102 calendars, so it does not appear here and trading-day checks use this module's existing fail-open branch.
-MARKET_EXCHANGE = {
+# Thị trường -> mã sàn exchange-calendars. Việt Nam không có lịch trong thư viện nên rỗng;
+# giữ hằng số để tương thích với nơi gọi cũ.
+# Market -> exchange-calendars code (empty: Vietnam is not covered).
+MARKET_EXCHANGE: Dict[str, str] = {
     spec.code: spec.xcals_code
-    for spec in sorted(ALL_MARKETS.values(), key=lambda item: item.detect_order)
+    for spec in ALL_MARKETS.values()
     if spec.xcals_code
 }
 
-# Market -> IANA timezone for "today" (includes markets without a trading calendar, such as Vietnam)
-MARKET_TIMEZONE = {
+# Thị trường -> múi giờ IANA dùng để xác định "hôm nay"
+MARKET_TIMEZONE: Dict[str, str] = {
     spec.code: spec.timezone
-    for spec in sorted(ALL_MARKETS.values(), key=lambda item: item.detect_order)
+    for spec in ALL_MARKETS.values()
 }
 
-# P0 market phase baseline (Issue #1386). This is an intentionally small
-# regular-session inference layer; it does not change existing fail-open
-# trading-day filtering or effective-date behavior.
-# tw: TWSE/TPEx run a 13:25-13:30 closing call auction (5 min). JP/KR use
-# regular-session closing auction windows before the 15:30 close (JP 5 min,
-# KR 10 min). Without an entry here .get(market, 0) yields a zero-width
-# window, so the last regular-session minutes stay INTRADAY until POSTMARKET.
+# Phiên khớp lệnh định kỳ đóng cửa (ATC) của HOSE chạy 14:30-14:45.
+# Vietnam closing auction (ATC) window in minutes.
 _CLOSING_AUCTION_WINDOW_MINUTES = {
-    # Vietnam HOSE closing auction (ATC) runs 14:30-14:45.
     "vn": 15,
-    "cn": 3,
-    "hk": 10,
-    "us": 5,
-    "jp": 5,
-    "kr": 10,
-    "tw": 5,
 }
-# Thị trường không có trong exchange-calendars nhưng giờ giao dịch cố định (giờ địa phương):
-# (mở cửa, (nghỉ trưa bắt đầu, kết thúc), đóng cửa). VN: ATO 9:00, nghỉ 11:30–13:00, ATC kết thúc 14:45.
-# Chỉ loại thứ 7/CN; ngày lễ chưa có nguồn lịch nên vẫn coi là ngày giao dịch.
-# Fixed regular-session hours for markets without an xcals calendar (weekends only, no holidays).
+# Giờ giao dịch cố định (giờ địa phương): (mở cửa, (nghỉ trưa bắt đầu, kết thúc), đóng cửa).
+# VN: ATO 9:00, nghỉ 11:30–13:00, ATC kết thúc 14:45. Chỉ loại thứ 7/CN.
+# Fixed regular-session hours (weekends only, no holidays).
 _STATIC_SESSION_HOURS = {
     "vn": ((9, 0), ((11, 30), (13, 0)), (14, 45)),
 }
@@ -136,72 +113,32 @@ class MarketPhaseContext:
 
 def get_market_for_stock(code: str) -> Optional[str]:
     """
-    Infer market region for a stock code.
+    Suy ra thị trường của một mã.
 
     Returns:
-        'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'tw' | None (None = unrecognized, fail-open: treat as open)
+        ``'vn'`` khi là mã Việt Nam; ``None`` khi không nhận diện được (nơi gọi
+        fail-open: coi như thị trường đang mở).
     """
     if not code or not isinstance(code, str):
         return None
-    code = (code or "").strip().upper()
 
-    from data_provider import is_us_stock_code, is_us_index_code, is_hk_stock_code
     from data_provider.base import _is_vn_market
-    from src.core.markets import is_market_enabled
 
-    # Vietnam must be checked before US: bare Vietnamese codes (HPG/FPT) also match the US ticker regex,
-    # and checking US first would treat them as "closed today" when US is disabled, skipping the whole run.
-    #
-    # This deliberately does **not** call ``_market_tag``: it has an "everything else is A-share" fallback,
-    # while this function's contract is to return ``None`` when unrecognized (callers fail open on it). Borrowing
-    # ``_market_tag`` would classify placeholder codes like ``UNKNOWN`` as ``cn``.
-    if is_market_enabled("vn") and _is_vn_market(code):
+    if _is_vn_market(code.strip()):
         return "vn"
-
-    if is_us_stock_code(code) or is_us_index_code(code):
-        return "us"
-    if is_hk_stock_code(code):
-        return "hk"
-    suffix_market = get_suffix_market(code)
-    if suffix_market:
-        return suffix_market
-    # A-share: 6-digit numeric
-    if code.isdigit() and len(code) == 6:
-        return "cn"
     return None
 
 
 def is_market_open(market: str, check_date: date) -> bool:
     """
-    Check if the given market is open on the given date.
+    Thị trường có mở cửa vào ``check_date`` không.
 
-    Fail-open: returns True if exchange-calendars unavailable or date out of range.
-
-    Args:
-        market: 'cn' | 'hk' | 'us'
-        check_date: Date to check
-
-    Returns:
-        True if trading day (or fail-open), False otherwise
+    Việt Nam: loại thứ 7/CN; ngày lễ chưa có nguồn lịch nên fail-open (coi là mở).
+    Thị trường không rõ: fail-open, trả True.
     """
-    if not _XCALS_AVAILABLE:
-        return True
-    ex = MARKET_EXCHANGE.get(market)
-    if not ex:
-        # Thị trường đã đăng ký nhưng exchange-calendars không có lịch (hiện là
-        # vn): ít nhất loại thứ 7/CN, để lịch chạy tự động không điểm lại thị
-        # trường vào cuối tuần. Ngày lễ (Tết...) vẫn fail-open vì không có nguồn lịch.
-        # Known market without an xcals calendar: close on weekends only.
-        if market in ALL_MARKETS:
-            return check_date.weekday() < 5
-        return True
-    try:
-        cal = xcals.get_calendar(ex)
-        session = datetime(check_date.year, check_date.month, check_date.day)
-        return cal.is_session(session)
-    except Exception as e:
-        logger.warning("trading_calendar.is_market_open fail-open: %s", e)
-        return True
+    if market in ALL_MARKETS:
+        return check_date.weekday() < 5
+    return True
 
 
 # Phiên khớp lệnh của Việt Nam (giờ VN): ATO 9:00–9:15, liên tục 9:15–11:30 và 13:00–14:30,
@@ -257,48 +194,12 @@ def get_effective_trading_date(
     market: Optional[str], current_time: Optional[datetime] = None
 ) -> date:
     """
-    Resolve the latest reusable daily-bar date for checkpoint/resume logic.
+    Ngày nến ngày có thể tái sử dụng cho checkpoint/resume.
 
-    Rules:
-    - Non-trading day / holiday: previous trading session
-    - Trading day before market close: previous completed trading session
-    - Trading day after market close: current trading session
-    - Calendar lookup failure: fail-open to market-local natural date
+    Việt Nam không có lịch exchange-calendars nên luôn trả ngày tự nhiên theo giờ địa
+    phương của thị trường (fail-open, giữ đúng hành vi trước đây).
     """
-    market_now = get_market_now(market, current_time=current_time)
-    fallback_date = market_now.date()
-
-    if not _XCALS_AVAILABLE:
-        return fallback_date
-
-    ex = MARKET_EXCHANGE.get(market or "")
-    tz_name = MARKET_TIMEZONE.get(market or "")
-    if not ex or not tz_name:
-        return fallback_date
-
-    try:
-        cal = xcals.get_calendar(ex)
-        local_date = market_now.date()
-
-        if not cal.is_session(local_date):
-            return cal.date_to_session(local_date, direction="previous").date()
-
-        session = cal.date_to_session(local_date, direction="previous")
-        session_close = cal.session_close(session)
-        if hasattr(session_close, "tz_convert"):
-            close_local = session_close.tz_convert(tz_name).to_pydatetime()
-        elif session_close.tzinfo is not None:
-            close_local = session_close.astimezone(ZoneInfo(tz_name))
-        else:
-            close_local = session_close.replace(tzinfo=ZoneInfo(tz_name))
-
-        if market_now >= close_local:
-            return session.date()
-
-        return cal.previous_session(session).date()
-    except Exception as e:
-        logger.warning("trading_calendar.get_effective_trading_date fail-open: %s", e)
-        return fallback_date
+    return get_market_now(market, current_time=current_time).date()
 
 
 def resolve_historical_daily_bar_date(
@@ -308,146 +209,36 @@ def resolve_historical_daily_bar_date(
 ) -> Optional[date]:
     """Resolve the completed daily bar that a historical phase could consume.
 
-    A persisted ``effective_daily_bar_date`` remains the primary authority.
-    This fallback is only for older snapshots that still contain a trustworthy
-    phase. It fails closed for missing, unknown, or calendar-inconsistent phases.
+    Thị trường giờ cố định (Việt Nam) dùng lịch thứ 2–6 (chưa xét ngày lễ):
+    - premarket / intraday / lunch_break / closing_auction trong ngày giao dịch ->
+      phiên giao dịch liền trước;
+    - postmarket -> chính ngày đó nếu là ngày giao dịch;
+    - non_trading -> phiên giao dịch liền trước nếu ngày đó không giao dịch.
+    Phase thiếu / không rõ / mâu thuẫn với lịch thì fail-closed (``None``); giá trị
+    ``effective_daily_bar_date`` đã lưu vẫn là nguồn chính.
+
+    Fixed-hours markets (Vietnam) use a weekday calendar (holidays not modelled);
+    missing, unknown or calendar-inconsistent phases fail closed.
     """
-    if market not in MARKET_EXCHANGE or not _XCALS_AVAILABLE:
+    if market not in _STATIC_SESSION_HOURS:
         return None
 
     normalized_phase = str(phase or "").strip().lower()
-    if normalized_phase not in {
-        "premarket",
-        "intraday",
-        "lunch_break",
-        "closing_auction",
-        "postmarket",
-        "non_trading",
-    }:
-        return None
+    is_session = target_date.weekday() < 5
 
-    try:
-        cal = xcals.get_calendar(MARKET_EXCHANGE[market])
-        is_session = bool(cal.is_session(target_date))
+    def _previous_session(day: date) -> date:
+        candidate = day - timedelta(days=1)
+        while candidate.weekday() >= 5:
+            candidate -= timedelta(days=1)
+        return candidate
 
-        if normalized_phase in {
-            "premarket",
-            "intraday",
-            "lunch_break",
-            "closing_auction",
-        }:
-            if not is_session:
-                return None
-            session = cal.date_to_session(target_date, direction="previous")
-            return cal.previous_session(session).date()
-
-        if normalized_phase == "postmarket":
-            return target_date if is_session else None
-
-        if is_session:
-            return None
-        return cal.date_to_session(target_date, direction="previous").date()
-    except Exception as e:
-        logger.warning(
-            "trading_calendar.resolve_historical_daily_bar_date fail-closed: %s",
-            e,
-        )
-        return None
-
-
-def _as_market_datetime(value: Any, tz_name: str) -> Optional[datetime]:
-    """
-    Convert exchange-calendar timestamps into market-local datetimes.
-
-    Returns None for missing or pandas NaT-like values. Naive datetimes are
-    interpreted as already expressed in the target market timezone, matching
-    get_market_now()'s current_time contract.
-    """
-    if value is None:
-        return None
-    if pd.isna(value):
-        return None
-
-    try:
-        if isinstance(value, pd.Timestamp):
-            if value.tzinfo is None:
-                dt = value.to_pydatetime()
-            else:
-                dt = value.tz_convert(tz_name).to_pydatetime()
-        elif isinstance(value, datetime):
-            dt = value
-        elif hasattr(value, "to_pydatetime"):
-            dt = value.to_pydatetime()
-        else:
-            return None
-    except (AttributeError, TypeError, ValueError):
-        return None
-
-    tz = ZoneInfo(tz_name)
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=tz)
-    return dt.astimezone(tz)
-
-
-def infer_market_phase(
-    market: Optional[str], current_time: Optional[datetime] = None
-) -> MarketPhase:
-    """
-    Infer the regular-session market phase for a market.
-
-    This P0 helper is intentionally fail-closed: unknown markets, unavailable
-    exchange calendars, and calendar errors return ``MarketPhase.UNKNOWN``.
-    That differs from ``is_market_open()`` and ``get_effective_trading_date()``,
-    which keep their existing fail-open behavior for backwards compatibility.
-
-    ``premarket`` and ``postmarket`` mean before/after the regular trading
-    session only; they do not imply that extended-hours quote data is available.
-    ``closing_auction`` uses a small per-market near-close heuristic window and
-    does not model full exchange auction microstructure.
-    """
-    if market in _STATIC_SESSION_HOURS and market not in MARKET_EXCHANGE:
-        return _infer_static_market_phase(market, get_market_now(market, current_time=current_time))
-    if market not in MARKET_EXCHANGE or market not in MARKET_TIMEZONE:
-        return MarketPhase.UNKNOWN
-    if not _XCALS_AVAILABLE:
-        return MarketPhase.UNKNOWN
-
-    ex = MARKET_EXCHANGE[market]
-    tz_name = MARKET_TIMEZONE[market]
-    market_now = get_market_now(market, current_time=current_time)
-    local_date = market_now.date()
-
-    try:
-        cal = xcals.get_calendar(ex)
-        if not cal.is_session(local_date):
-            return MarketPhase.NON_TRADING
-
-        session = cal.date_to_session(local_date, direction="previous")
-        session_open = _as_market_datetime(cal.session_open(session), tz_name)
-        session_close = _as_market_datetime(cal.session_close(session), tz_name)
-        if session_open is None or session_close is None:
-            return MarketPhase.UNKNOWN
-
-        if market_now < session_open:
-            return MarketPhase.PREMARKET
-        if market_now >= session_close:
-            return MarketPhase.POSTMARKET
-
-        # Calendars without session_has_break may still expose break timestamps.
-        has_break = True
-        if hasattr(cal, "session_has_break"):
-            has_break = bool(cal.session_has_break(session))
-
-        break_start = None
-        break_end = None
-        if has_break:
-            break_start = _as_market_datetime(cal.session_break_start(session), tz_name)
-            break_end = _as_market_datetime(cal.session_break_end(session), tz_name)
-
-        return _classify_open_session(market, market_now, session_close, break_start, break_end)
-    except Exception as e:
-        logger.warning("trading_calendar.infer_market_phase fail-closed: %s", e)
-        return MarketPhase.UNKNOWN
+    if normalized_phase in {"premarket", "intraday", "lunch_break", "closing_auction"}:
+        return _previous_session(target_date) if is_session else None
+    if normalized_phase == "postmarket":
+        return target_date if is_session else None
+    if normalized_phase == "non_trading":
+        return None if is_session else _previous_session(target_date)
+    return None
 
 
 def _classify_open_session(
@@ -490,7 +281,18 @@ def _static_session_times(
     return _at(open_h, open_m), _at(bs_h, bs_m), _at(be_h, be_m), _at(close_h, close_m)
 
 
-def _infer_static_market_phase(market: str, market_now: datetime) -> MarketPhase:
+def infer_market_phase(
+    market: Optional[str], current_time: Optional[datetime] = None
+) -> MarketPhase:
+    """
+    Suy luận phiên giao dịch theo giờ cố định của thị trường.
+
+    Thị trường không rõ trả ``MarketPhase.UNKNOWN`` (fail-closed). ``premarket`` /
+    ``postmarket`` chỉ là trước/sau phiên chính, không ngụ ý có dữ liệu ngoài giờ.
+    """
+    if market not in _STATIC_SESSION_HOURS:
+        return MarketPhase.UNKNOWN
+    market_now = get_market_now(market, current_time=current_time)
     times = _static_session_times(market, market_now)
     if times is None:
         return MarketPhase.NON_TRADING
@@ -526,56 +328,26 @@ def _phase_booleans(
     return is_trading_day, is_market_open_now, is_partial_bar
 
 
-def _session_open_close_for_today(
-    market: str,
-    market_now: datetime,
-) -> Tuple[Optional[datetime], Optional[datetime]]:
-    ex = MARKET_EXCHANGE.get(market)
-    tz_name = MARKET_TIMEZONE.get(market)
-    if not ex and market in _STATIC_SESSION_HOURS:
-        times = _static_session_times(market, market_now)
-        return (times[0], times[3]) if times else (None, None)
-    if not ex or not tz_name or not _XCALS_AVAILABLE:
-        return None, None
-
-    cal = xcals.get_calendar(ex)
-    local_date = market_now.date()
-    if not cal.is_session(local_date):
-        return None, None
-
-    session = cal.date_to_session(local_date, direction="previous")
-    return (
-        _as_market_datetime(cal.session_open(session), tz_name),
-        _as_market_datetime(cal.session_close(session), tz_name),
-    )
-
-
 def _phase_minutes(
     market: Optional[str],
     market_now: datetime,
     phase: MarketPhase,
-) -> Tuple[Optional[int], Optional[int], bool]:
-    static_market = market in _STATIC_SESSION_HOURS and market not in MARKET_EXCHANGE
-    if (
-        (market not in MARKET_EXCHANGE and not static_market)
-        or phase in {MarketPhase.UNKNOWN, MarketPhase.NON_TRADING, MarketPhase.POSTMARKET}
-    ):
-        return None, None, False
-    if not _XCALS_AVAILABLE and not static_market:
-        return None, None, False
+) -> Tuple[Optional[int], Optional[int]]:
+    if market not in _STATIC_SESSION_HOURS or phase in {
+        MarketPhase.UNKNOWN,
+        MarketPhase.NON_TRADING,
+        MarketPhase.POSTMARKET,
+    }:
+        return None, None
 
-    try:
-        session_open, session_close = _session_open_close_for_today(market, market_now)
-    except Exception as e:
-        logger.warning("trading_calendar.market_phase_context calendar_error: %s", e)
-        return None, None, True
-
-    if session_open is None or session_close is None:
-        return None, None, False
+    times = _static_session_times(market, market_now)
+    if times is None:
+        return None, None
+    session_open, _, _, session_close = times
 
     if phase == MarketPhase.PREMARKET and market_now < session_open:
         seconds = (session_open - market_now).total_seconds()
-        return max(0, int(seconds // 60)), None, False
+        return max(0, int(seconds // 60)), None
 
     if phase in {
         MarketPhase.INTRADAY,
@@ -583,9 +355,9 @@ def _phase_minutes(
         MarketPhase.CLOSING_AUCTION,
     } and market_now < session_close:
         seconds = (session_close - market_now).total_seconds()
-        return None, max(0, int(seconds // 60)), False
+        return None, max(0, int(seconds // 60))
 
-    return None, None, False
+    return None, None
 
 
 def _normalize_analysis_phase(
@@ -620,7 +392,7 @@ def build_market_phase_context(
     """
     Build a JSON-safe runtime market-phase context for analysis plumbing.
 
-    ``analysis_phase="auto"`` keeps calendar inference. Explicit supported
+    ``analysis_phase="auto"`` keeps fixed-hours inference. Explicit supported
     phases override only the phase and derived flags/minute fields; they do
     not rewrite market-local time or the effective daily-bar date. The legacy
     ``analysis_intent`` argument remains a compatibility alias when
@@ -630,22 +402,15 @@ def build_market_phase_context(
     market_now = get_market_now(market, current_time=current_time)
     warnings: List[str] = []
 
-    static_market = market in _STATIC_SESSION_HOURS and market not in MARKET_EXCHANGE
-    if static_market:
-        # Giờ cố định, không cần exchange-calendars. Fixed hours; no xcals needed.
-        phase = infer_market_phase(market, current_time=current_time) if requested_phase == "auto" else MarketPhase(requested_phase)
-    elif market not in MARKET_EXCHANGE or market not in MARKET_TIMEZONE:
+    if market in _STATIC_SESSION_HOURS:
+        phase = (
+            infer_market_phase(market, current_time=current_time)
+            if requested_phase == "auto"
+            else MarketPhase(requested_phase)
+        )
+    else:
         phase = MarketPhase.UNKNOWN
         _add_warning_code(warnings, "unknown_market")
-    else:
-        if not _XCALS_AVAILABLE:
-            _add_warning_code(warnings, "calendar_unavailable")
-        if requested_phase == "auto":
-            phase = infer_market_phase(market, current_time=current_time)
-            if phase == MarketPhase.UNKNOWN and _XCALS_AVAILABLE:
-                _add_warning_code(warnings, "calendar_error")
-        else:
-            phase = MarketPhase(requested_phase)
 
     if requested_phase != "auto" and phase == MarketPhase.UNKNOWN:
         phase = MarketPhase(requested_phase)
@@ -655,13 +420,7 @@ def build_market_phase_context(
         current_time=current_time,
     )
     is_trading_day, is_market_open_now, is_partial_bar = _phase_booleans(phase)
-    minutes_to_open, minutes_to_close, minutes_calendar_error = _phase_minutes(
-        market,
-        market_now,
-        phase,
-    )
-    if minutes_calendar_error:
-        _add_warning_code(warnings, "calendar_error")
+    minutes_to_open, minutes_to_close = _phase_minutes(market, market_now, phase)
 
     return MarketPhaseContext(
         market=market,
@@ -682,26 +441,17 @@ def build_market_phase_context(
 
 def get_open_markets_today() -> Set[str]:
     """
-    Get markets that are open today (by each market's local timezone).
-
-    Only markets enabled in ``SUPPORTED_MARKETS`` are considered: a disabled market must not affect "whether analysis
-    needs to run today"; otherwise a market that was turned off could still make the whole run look open.
+    Các thị trường mở cửa hôm nay (theo múi giờ địa phương của từng thị trường).
 
     Returns:
         Set of market keys that are trading today
     """
-    candidates = {
-        mkt: tz_name
-        for mkt, tz_name in MARKET_TIMEZONE.items()
-        if mkt in enabled_markets()
-    }
-    if not _XCALS_AVAILABLE:
-        return set(candidates)
     result: Set[str] = set()
-    for mkt, tz_name in candidates.items():
+    for mkt, tz_name in MARKET_TIMEZONE.items():
+        if mkt not in enabled_markets():
+            continue
         try:
-            tz = ZoneInfo(tz_name)
-            today = datetime.now(tz).date()
+            today = datetime.now(ZoneInfo(tz_name)).date()
             if is_market_open(mkt, today):
                 result.add(mkt)
         except Exception as e:
@@ -714,57 +464,19 @@ def compute_effective_region(
     config_region: str, open_markets: Set[str]
 ) -> Optional[str]:
     """
-    Compute effective market review region given config and open markets.
+    Vùng điểm lại thị trường có hiệu lực hôm nay.
 
     Args:
-        config_region: From MARKET_REVIEW_REGION ('cn' | 'hk' | 'us' | 'jp' | 'kr' | 'vn' | 'both' or comma subset)
-        open_markets: Markets open today
+        config_region: giá trị ``MARKET_REVIEW_REGION`` (chỉ ``vn`` còn ý nghĩa)
+        open_markets: các thị trường mở cửa hôm nay
 
     Returns:
-        None: caller uses config default (check disabled)
-        '': all relevant markets closed, skip market review
-        'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'vn' | 'both': effective subset for today
+        ``'vn'`` khi thị trường mở cửa; ``''`` khi đóng cửa (bỏ qua điểm lại thị trường)
     """
-    # Keep consistent with how ``MARKET_REVIEW_REGION`` is resolved: only markets that are currently enabled and
-    # support market review count. This used to hardcode its own market list, maintained separately from
-    # ``market_review_region.py``, which easily drifted.
     from src.utils.market_review_region import enabled_market_review_regions
 
     markets = enabled_market_review_regions()
     if not markets:
-        # No market can be reviewed (e.g. only Taiwan enabled): skip the review instead of falling back to cn.
         return ""
-
-    default_region = markets[0]
-    normalized = (config_region or default_region).strip().lower()
-    if not normalized:
-        normalized = default_region
-
-    requested = {
-        item.strip() for item in normalized.split(",") if item.strip()
-    }
-    if not requested:
-        requested = {default_region}
-
-    if "both" in requested:
-        requested = set(markets)
-    else:
-        # Ignore invalid tokens and only keep known markets.
-        requested = {item for item in requested if item in markets}
-
-    if not requested:
-        # No valid market token left after filtering; follow parser fallback behavior.
-        requested = {default_region}
-
-    # single explicit region: keep single-region return semantics (empty when closed)
-    if len(requested) == 1:
-        region = next(iter(requested))
-        return region if region in open_markets else ""
-
-    # multi-region subset: keep only markets open today, in canonical order
-    open_selected = [m for m in markets if m in requested and m in open_markets]
-    if not open_selected:
-        return ""
-    if len(open_selected) == 1:
-        return open_selected[0]
-    return ",".join(open_selected)
+    region = markets[0]
+    return region if region in open_markets else ""

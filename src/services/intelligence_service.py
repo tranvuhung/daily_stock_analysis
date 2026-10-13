@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List, Optional
-from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
+from urllib.parse import urljoin, urlparse
 from xml.etree import ElementTree as ET
 
 import requests
@@ -28,7 +28,7 @@ from src.services.run_diagnostics import sanitize_diagnostic_text
 logger = logging.getLogger(__name__)
 _ALLOWED_SOURCE_TYPES = {"rss", "atom", "newsnow"}
 _ALLOWED_SCOPE_TYPES = {"symbol", "market", "sector"}
-_ALLOWED_MARKETS = {"vn", "cn", "hk", "us", "jp", "kr", "tw", "global"}
+_ALLOWED_MARKETS = {"vn", "global"}
 _PRIVATE_HOSTNAMES = {"localhost", "localhost.localdomain"}
 _MAX_FEED_BYTES = 2 * 1024 * 1024
 _MAX_FEED_REDIRECTS = 5
@@ -38,24 +38,6 @@ _DISABLE_REQUEST_PROXIES = {"http": None, "https": None}
 _DNS_GUARD_LOCK = threading.Lock()
 _AUTO_FETCH_MIN_INTERVAL_SECONDS = 60 * 60
 _BUILTIN_SOURCE_TEMPLATES = [
-    {
-        "template_id": "sec-company-news",
-        "name": "SEC Latest Filings",
-        "source_type": "rss",
-        "url": "https://www.sec.gov/news/pressreleases.rss",
-        "scope_type": "market",
-        "market": "us",
-        "description": "SEC official press release RSS feed for US market evidence.",
-    },
-    {
-        "template_id": "hkex-news",
-        "name": "HKEX Market News",
-        "source_type": "rss",
-        "url": "https://www.hkex.com.hk/Services/RSS-Feeds/News-Releases?sc_lang=en",
-        "scope_type": "market",
-        "market": "hk",
-        "description": "HKEX public news entry for Hong Kong market evidence. Test before enabling.",
-    },
     {
         "template_id": "vn-cafef-chung-khoan",
         "name": "CafeF - Thị trường chứng khoán",
@@ -121,43 +103,6 @@ _BUILTIN_SOURCE_TEMPLATES = [
         "scope_type": "market",
         "market": "global",
         "description": "Public market news RSS for global market context. Test before enabling.",
-    },
-]
-_NEWSNOW_DEFAULT_SOURCE_DEFS = [
-    {
-        "template_id": "newsnow-cls-hot",
-        "name": "NewsNow 财联社热门",
-        "source_id": "cls-hot",
-        "market": "cn",
-        "description": "NewsNow 财联社热门财经资讯，适合 A 股大盘和题材热点。",
-    },
-    {
-        "template_id": "newsnow-xueqiu-hotstock",
-        "name": "NewsNow 雪球热门股票",
-        "source_id": "xueqiu-hotstock",
-        "market": "cn",
-        "description": "NewsNow 雪球热门股票，适合捕捉 A 股和港美股散户关注度。",
-    },
-    {
-        "template_id": "newsnow-wallstreetcn-quick",
-        "name": "NewsNow 华尔街见闻快讯",
-        "source_id": "wallstreetcn-quick",
-        "market": "cn",
-        "description": "NewsNow 华尔街见闻快讯，适合宏观、商品和市场事件上下文。",
-    },
-    {
-        "template_id": "newsnow-jin10",
-        "name": "NewsNow 金十数据",
-        "source_id": "jin10",
-        "market": "global",
-        "description": "NewsNow 金十数据实时财经消息，适合全球宏观和外盘事件。",
-    },
-    {
-        "template_id": "newsnow-gelonghui",
-        "name": "NewsNow 格隆汇事件",
-        "source_id": "gelonghui",
-        "market": "hk",
-        "description": "NewsNow 格隆汇事件资讯，适合港股和中概股市场上下文。",
     },
 ]
 
@@ -420,7 +365,7 @@ class IntelligenceService:
         source_type = str(payload.get("source_type") or "rss").strip().lower()
         scope_type = str(payload.get("scope_type") or "market").strip().lower()
         scope_value = str(payload.get("scope_value") or "").strip() or None
-        market = str(payload.get("market") or "cn").strip().lower()
+        market = str(payload.get("market") or "vn").strip().lower()
         enabled = bool(payload.get("enabled", True))
         description = str(payload.get("description") or "").strip() or None
         if not name:
@@ -859,25 +804,7 @@ class IntelligenceService:
         return cls._parse_datetime(raw)
 
     def _builtin_source_templates(self) -> List[Dict[str, Any]]:
-        templates = [dict(template) for template in _BUILTIN_SOURCE_TEMPLATES]
-        for item in _NEWSNOW_DEFAULT_SOURCE_DEFS:
-            templates.append({
-                "template_id": item["template_id"],
-                "name": item["name"],
-                "source_type": "newsnow",
-                "url": self._build_newsnow_url(item["source_id"]),
-                "scope_type": "market",
-                "market": item["market"],
-                "description": item["description"],
-            })
-        return templates
-
-    def _build_newsnow_url(self, source_id: str) -> str:
-        base_url = (self.config.newsnow_base_url or "https://newsnow.busiyi.world").strip().rstrip("/")
-        parsed = urlparse(f"{base_url}/api/s")
-        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-        query["id"] = source_id
-        return urlunparse(parsed._replace(query=urlencode(query)))
+        return [dict(template) for template in _BUILTIN_SOURCE_TEMPLATES]
 
 
     @staticmethod

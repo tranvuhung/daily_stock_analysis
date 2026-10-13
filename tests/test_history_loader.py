@@ -49,7 +49,7 @@ class HistoryLoaderTestCase(unittest.TestCase):
         mock_db.get_data_range.return_value = [fake_bar] * 40
         mock_get_db.return_value = mock_db
 
-        df, source = load_history_df("600519", days=60, target_date=date(2026, 4, 18))
+        df, source = load_history_df("HPG", days=60, target_date=date(2026, 4, 18))
 
         self.assertIsNotNone(df)
         self.assertEqual(source, "db_cache")
@@ -73,11 +73,11 @@ class HistoryLoaderTestCase(unittest.TestCase):
         mock_fm.get_daily_data.return_value = (fake_df, "eastmoney")
         mock_get_fm.return_value = mock_fm
 
-        df, source = load_history_df("600519", days=60, target_date=date(2026, 4, 18))
+        df, source = load_history_df("HPG", days=60, target_date=date(2026, 4, 18))
 
         self.assertIsNotNone(df)
         self.assertEqual(source, "eastmoney")
-        mock_fm.get_daily_data.assert_called_once_with("600519", days=60)
+        mock_fm.get_daily_data.assert_called_once_with("HPG", days=60)
 
     # ------------------------------------------------------------------
     # ContextVar integration
@@ -99,7 +99,7 @@ class HistoryLoaderTestCase(unittest.TestCase):
             mock_db.get_data_range.return_value = [fake_bar] * 30
             mock_get_db.return_value = mock_db
 
-            df, source = load_history_df("600519", days=30)
+            df, source = load_history_df("HPG", days=30)
 
             self.assertEqual(source, "db_cache")
             call_args = mock_db.get_data_range.call_args
@@ -109,7 +109,7 @@ class HistoryLoaderTestCase(unittest.TestCase):
             reset_frozen_target_date(token)
 
     # ------------------------------------------------------------------
-    # normalize_stock_code fallback for prefixed codes
+    # normalize_stock_code fallback cho mã VN có tiền tố/hậu tố (vnHPG / HPG.VN)
     # ------------------------------------------------------------------
     @patch("src.storage.get_db")
     def test_uses_normalize_fallback_for_prefixed_code(self, mock_get_db):
@@ -121,14 +121,14 @@ class HistoryLoaderTestCase(unittest.TestCase):
         mock_db = MagicMock()
 
         def side_effect(code, start, end):
-            if code == "SH600519":
+            if code == "HPG.VN":
                 return []
             return [fake_bar] * 30
 
         mock_db.get_data_range.side_effect = side_effect
         mock_get_db.return_value = mock_db
 
-        df, source = load_history_df("SH600519", days=30, target_date=date(2026, 4, 18))
+        df, source = load_history_df("HPG.VN", days=30, target_date=date(2026, 4, 18))
 
         self.assertEqual(source, "db_cache")
         self.assertEqual(mock_db.get_data_range.call_count, 2)
@@ -149,7 +149,7 @@ class HistoryLoaderTestCase(unittest.TestCase):
         mock_fm.get_daily_data.side_effect = Exception("API down")
         mock_get_fm.return_value = mock_fm
 
-        df, source = load_history_df("600519", days=60, target_date=date(2026, 4, 18))
+        df, source = load_history_df("HPG", days=60, target_date=date(2026, 4, 18))
 
         self.assertIsNone(df)
         self.assertEqual(source, "none")

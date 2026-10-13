@@ -65,7 +65,7 @@ def client_and_db(tmp_path):
     env_path.write_text(
         "\n".join(
             [
-                "STOCK_LIST=600519",
+                "STOCK_LIST=HPG",
                 "GEMINI_API_KEY=test",
                 "ADMIN_AUTH_ENABLED=false",
                 f"DATABASE_PATH={db_path}",
@@ -100,9 +100,9 @@ def client_and_db(tmp_path):
 
 def _payload(**overrides):
     payload = {
-        "stock_code": "SH600519",
-        "stock_name": "贵州茅台",
-        "market": "cn",
+        "stock_code": "HPG.VN",
+        "stock_name": "Hòa Phát",
+        "market": "vn",
         "source_type": "analysis",
         "source_agent": "api-test",
         "source_report_id": 3001,
@@ -115,7 +115,7 @@ def _payload(**overrides):
         "horizon": "3d",
         "entry_low": 1680,
         "stop_loss": 1600,
-        "reason": "突破平台",
+        "reason": "Bứt phá nền giá",
         "evidence": {"source": "unit-test"},
         "metadata": {"task_id": "task-3001", "alert_trigger_id": "alert-1"},
     }
@@ -133,7 +133,7 @@ def test_decision_signal_api_requires_session_when_admin_auth_enabled(tmp_path) 
     env_path.write_text(
         "\n".join(
             [
-                "STOCK_LIST=600519",
+                "STOCK_LIST=HPG",
                 "GEMINI_API_KEY=test",
                 "ADMIN_AUTH_ENABLED=true",
                 f"DATABASE_PATH={db_path}",
@@ -175,7 +175,7 @@ def test_create_duplicate_list_detail_latest_and_status_update(client_and_db) ->
     created = created_resp.json()
     assert created["created"] is True
     signal_id = created["item"]["id"]
-    assert created["item"]["stock_code"] == "600519"
+    assert created["item"]["stock_code"] == "HPG"
     assert created["item"]["plan_quality"] == "partial"
     assert created["item"]["decision_profile"] == "balanced"
     assert created["item"]["metadata"]["decision_profile"] == "balanced"
@@ -183,19 +183,19 @@ def test_create_duplicate_list_detail_latest_and_status_update(client_and_db) ->
 
     duplicate_resp = client.post(
         "/api/v1/decision-signals",
-        json=_payload(reason="重复报告里不同文案不应覆盖旧信号"),
+        json=_payload(reason="Văn bản khác trong báo cáo trùng không được ghi đè tín hiệu cũ"),
     )
     assert duplicate_resp.status_code == 200, duplicate_resp.text
     duplicate = duplicate_resp.json()
     assert duplicate["created"] is False
     assert duplicate["item"]["id"] == signal_id
-    assert duplicate["item"]["reason"] == "突破平台"
+    assert duplicate["item"]["reason"] == "Bứt phá nền giá"
 
     list_resp = client.get(
         "/api/v1/decision-signals",
         params={
-            "market": "cn",
-            "stock_code": "600519.SH",
+            "market": "vn",
+            "stock_code": "HPG.VN",
             "action": "buy",
             "market_phase": "intraday",
             "source_type": "analysis",
@@ -212,7 +212,7 @@ def test_create_duplicate_list_detail_latest_and_status_update(client_and_db) ->
     assert detail_resp.status_code == 200, detail_resp.text
     assert detail_resp.json()["id"] == signal_id
 
-    latest_resp = client.get("/api/v1/decision-signals/latest/600519", params={"limit": 1})
+    latest_resp = client.get("/api/v1/decision-signals/latest/HPG", params={"limit": 1})
     assert latest_resp.status_code == 200, latest_resp.text
     assert latest_resp.json()["items"][0]["id"] == signal_id
 
@@ -445,7 +445,7 @@ def test_detail_endpoint_lazily_expires_active_signal(client_and_db) -> None:
     assert close_resp.status_code == 200, close_resp.text
     assert close_resp.json()["status"] == "closed"
 
-    latest_resp = client.get("/api/v1/decision-signals/latest/600519")
+    latest_resp = client.get("/api/v1/decision-signals/latest/HPG")
     assert latest_resp.status_code == 200, latest_resp.text
     assert latest_resp.json()["total"] == 0
 
@@ -578,7 +578,7 @@ def test_create_invalidates_opposing_active_signal_and_latest_filters_it(client_
     assert old["status"] == "invalidated"
     assert old["metadata"]["invalidated_by_signal_id"] == sell["id"]
 
-    latest_resp = client.get("/api/v1/decision-signals/latest/600519", params={"limit": 5})
+    latest_resp = client.get("/api/v1/decision-signals/latest/HPG", params={"limit": 5})
     assert latest_resp.status_code == 200, latest_resp.text
     latest = latest_resp.json()
     assert latest["total"] == 1
@@ -671,7 +671,7 @@ def test_timezone_aware_future_expiry_stays_active_in_non_utc_runtime(client_and
         for field_name in ("expires_at", "created_at", "updated_at"):
             assert datetime.fromisoformat(created[field_name]).tzinfo is None
 
-        latest_resp = client.get("/api/v1/decision-signals/latest/600519")
+        latest_resp = client.get("/api/v1/decision-signals/latest/HPG")
         assert latest_resp.status_code == 200, latest_resp.text
         assert latest_resp.json()["total"] == 1
         assert latest_resp.json()["items"][0]["id"] == created["id"]
@@ -704,7 +704,7 @@ def test_holding_only_uses_cached_positions_and_stock_code_variants(client_and_d
     client, db = client_and_db
     stock_resp = client.post(
         "/api/v1/decision-signals",
-        json=_payload(source_report_id=3201, trace_id="trace-3201", stock_code="600519.SH"),
+        json=_payload(source_report_id=3201, trace_id="trace-3201", stock_code="HPG.VN"),
     )
     assert stock_resp.status_code == 200, stock_resp.text
     other_resp = client.post(
@@ -712,9 +712,9 @@ def test_holding_only_uses_cached_positions_and_stock_code_variants(client_and_d
         json=_payload(
             source_report_id=3202,
             trace_id="trace-3202",
-            stock_code="AAPL",
-            stock_name="Apple",
-            market="us",
+            stock_code="FPT",
+            stock_name="FPT",
+            market="vn",
         ),
     )
     assert other_resp.status_code == 200, other_resp.text
@@ -723,9 +723,9 @@ def test_holding_only_uses_cached_positions_and_stock_code_variants(client_and_d
         json=_payload(
             source_report_id=3203,
             trace_id="trace-3203",
-            stock_code="TSLA",
-            stock_name="Tesla",
-            market="us",
+            stock_code="VNM",
+            stock_name="Vinamilk",
+            market="vn",
         ),
     )
     assert inactive_resp.status_code == 200, inactive_resp.text
@@ -734,29 +734,18 @@ def test_holding_only_uses_cached_positions_and_stock_code_variants(client_and_d
         json=_payload(
             source_report_id=3204,
             trace_id="trace-3204",
-            stock_code="MSFT",
-            stock_name="Microsoft",
-            market="us",
+            stock_code="MWG",
+            stock_name="Thế Giới Di Động",
+            market="vn",
         ),
     )
     assert zero_only_resp.status_code == 200, zero_only_resp.text
-    hk_same_symbol_resp = client.post(
-        "/api/v1/decision-signals",
-        json=_payload(
-            source_report_id=3205,
-            trace_id="trace-3205",
-            stock_code="AAPL",
-            stock_name="Apple HK synthetic",
-            market="hk",
-        ),
-    )
-    assert hk_same_symbol_resp.status_code == 200, hk_same_symbol_resp.text
 
     with db.session_scope() as session:
         account = PortfolioAccount(
             name="Test account",
-            market="cn",
-            base_currency="CNY",
+            market="vn",
+            base_currency="VND",
             is_active=True,
         )
         session.add(account)
@@ -766,21 +755,21 @@ def test_holding_only_uses_cached_positions_and_stock_code_variants(client_and_d
             PortfolioPosition(
                 account_id=account_id,
                 cost_method="fifo",
-                symbol="SH600519",
-                market="cn",
-                currency="CNY",
+                symbol="HPG.VN",
+                market="vn",
+                currency="VND",
                 quantity=100,
-                avg_cost=1600,
-                total_cost=160000,
+                avg_cost=26000,
+                total_cost=2600000,
             )
         )
         session.add(
             PortfolioPosition(
                 account_id=account_id,
                 cost_method="fifo",
-                symbol="AAPL",
-                market="us",
-                currency="USD",
+                symbol="FPT",
+                market="vn",
+                currency="VND",
                 quantity=0,
             )
         )
@@ -788,9 +777,9 @@ def test_holding_only_uses_cached_positions_and_stock_code_variants(client_and_d
             PortfolioPosition(
                 account_id=account_id,
                 cost_method="fifo",
-                symbol="MSFT",
-                market="us",
-                currency="USD",
+                symbol="MWG",
+                market="vn",
+                currency="VND",
                 quantity=0,
             )
         )
@@ -798,18 +787,18 @@ def test_holding_only_uses_cached_positions_and_stock_code_variants(client_and_d
             PortfolioPosition(
                 account_id=account_id,
                 cost_method="avg",
-                symbol="AAPL",
-                market="us",
-                currency="USD",
+                symbol="FPT",
+                market="vn",
+                currency="VND",
                 quantity=5,
-                avg_cost=180,
-                total_cost=900,
+                avg_cost=120000,
+                total_cost=600000,
             )
         )
         inactive_account = PortfolioAccount(
             name="Inactive account",
-            market="us",
-            base_currency="USD",
+            market="vn",
+            base_currency="VND",
             is_active=False,
         )
         session.add(inactive_account)
@@ -819,12 +808,12 @@ def test_holding_only_uses_cached_positions_and_stock_code_variants(client_and_d
             PortfolioPosition(
                 account_id=inactive_account_id,
                 cost_method="fifo",
-                symbol="TSLA",
-                market="us",
-                currency="USD",
+                symbol="VNM",
+                market="vn",
+                currency="VND",
                 quantity=3,
-                avg_cost=200,
-                total_cost=600,
+                avg_cost=60000,
+                total_cost=180000,
             )
         )
 
@@ -841,8 +830,8 @@ def test_holding_only_uses_cached_positions_and_stock_code_variants(client_and_d
     payload = holding_resp.json()
     assert payload["total"] == 2
     assert {(item["market"], item["stock_code"]) for item in payload["items"]} == {
-        ("cn", "600519"),
-        ("us", "AAPL"),
+        ("vn", "HPG"),
+        ("vn", "FPT"),
     }
 
     with patch(
@@ -858,8 +847,8 @@ def test_holding_only_uses_cached_positions_and_stock_code_variants(client_and_d
     all_active_payload = all_active_resp.json()
     assert all_active_payload["total"] == 2
     assert {(item["market"], item["stock_code"]) for item in all_active_payload["items"]} == {
-        ("cn", "600519"),
-        ("us", "AAPL"),
+        ("vn", "HPG"),
+        ("vn", "FPT"),
     }
 
     with patch(
@@ -874,12 +863,12 @@ def test_holding_only_uses_cached_positions_and_stock_code_variants(client_and_d
     assert inactive_holding_resp.json()["total"] == 0
     assert inactive_holding_resp.json()["items"] == []
 
-    variant_resp = client.get("/api/v1/decision-signals", params={"stock_code": "SH600519"})
+    variant_resp = client.get("/api/v1/decision-signals", params={"stock_code": "hpg.vn"})
     assert variant_resp.status_code == 200, variant_resp.text
     assert variant_resp.json()["total"] == 1
 
     with db.session_scope() as session:
-        empty_account = PortfolioAccount(name="Empty account", market="cn", base_currency="CNY")
+        empty_account = PortfolioAccount(name="Empty account", market="vn", base_currency="VND")
         session.add(empty_account)
         session.flush()
         empty_account_id = empty_account.id
@@ -948,7 +937,7 @@ def test_corrupt_persisted_json_returns_internal_error_consistently(client_and_d
 
     cases = [
         (
-            client.get("/api/v1/decision-signals", params={"stock_code": "600519"}),
+            client.get("/api/v1/decision-signals", params={"stock_code": "HPG"}),
             "List decision signals failed",
         ),
         (
@@ -956,7 +945,7 @@ def test_corrupt_persisted_json_returns_internal_error_consistently(client_and_d
             "Get decision signal failed",
         ),
         (
-            client.get("/api/v1/decision-signals/latest/600519"),
+            client.get("/api/v1/decision-signals/latest/HPG"),
             "Get latest decision signals failed",
         ),
     ]
@@ -1060,7 +1049,7 @@ def test_dedup_distinguishes_horizon_and_market_phase(client_and_db) -> None:
     list_resp = client.get(
         "/api/v1/decision-signals",
         params={
-            "stock_code": "600519",
+            "stock_code": "HPG",
             "source_type": "analysis",
             "source_report_id": 3401,
             "trace_id": "trace-3401",
@@ -1070,7 +1059,7 @@ def test_dedup_distinguishes_horizon_and_market_phase(client_and_db) -> None:
     assert list_resp.status_code == 200, list_resp.text
     assert list_resp.json()["total"] == 3
 
-    latest_resp = client.get("/api/v1/decision-signals/latest/600519", params={"limit": 3})
+    latest_resp = client.get("/api/v1/decision-signals/latest/HPG", params={"limit": 3})
     assert latest_resp.status_code == 200, latest_resp.text
     assert latest_resp.json()["total"] == 3
 
@@ -1120,43 +1109,42 @@ def test_dedup_distinguishes_source_type_for_weak_report_ids(client_and_db) -> N
 
     list_resp = client.get(
         "/api/v1/decision-signals",
-        params={"stock_code": "600519", "source_report_id": 3451},
+        params={"stock_code": "HPG", "source_report_id": 3451},
     )
     assert list_resp.status_code == 200, list_resp.text
     assert list_resp.json()["total"] == 2
 
     analysis_list_resp = client.get(
         "/api/v1/decision-signals",
-        params={"stock_code": "600519", "source_report_id": 3451, "source_type": "analysis"},
+        params={"stock_code": "HPG", "source_report_id": 3451, "source_type": "analysis"},
     )
     assert analysis_list_resp.status_code == 200, analysis_list_resp.text
     assert analysis_list_resp.json()["total"] == 1
 
     manual_list_resp = client.get(
         "/api/v1/decision-signals",
-        params={"stock_code": "600519", "source_report_id": 3451, "source_type": "manual"},
+        params={"stock_code": "HPG", "source_report_id": 3451, "source_type": "manual"},
     )
     assert manual_list_resp.status_code == 200, manual_list_resp.text
     assert manual_list_resp.json()["total"] == 1
 
 
-def test_stock_filter_codes_cover_market_optional_hk_without_widening_other_markets() -> None:
+def test_stock_filter_codes_normalize_vn_code_shapes() -> None:
     from src.services.decision_signal_service import DecisionSignalService
 
     cases = [
-        ("00700", None, ["00700", "HK00700"]),
-        ("HK00700", None, ["HK00700"]),
-        ("00700.HK", None, ["HK00700"]),
-        ("00700", "hk", ["HK00700"]),
-        ("600519", None, ["600519"]),
-        ("600519.SH", None, ["600519"]),
-        ("AAPL", None, ["AAPL"]),
+        ("HPG", None, ["HPG"]),
+        ("hpg", None, ["HPG"]),
+        ("HPG.VN", None, ["HPG"]),
+        ("HPG", "vn", ["HPG"]),
+        ("FUEVN100", None, ["FUEVN100"]),
+        ("VNINDEX", None, ["VNINDEX"]),
     ]
     for raw_code, market, expected_codes in cases:
         assert DecisionSignalService._stock_filter_codes(raw_code, market=market) == expected_codes
 
 
-def test_hk_stock_identity_variants_deduplicate_and_latest_matches(client_and_db) -> None:
+def test_vn_stock_identity_variants_deduplicate_and_latest_matches(client_and_db) -> None:
     client, _db = client_and_db
 
     first_resp = client.post(
@@ -1164,25 +1152,25 @@ def test_hk_stock_identity_variants_deduplicate_and_latest_matches(client_and_db
         json=_payload(
             source_report_id=3501,
             trace_id="trace-3501-a",
-            stock_code="00700",
-            stock_name="Tencent",
-            market="hk",
+            stock_code="FPT",
+            stock_name="FPT",
+            market="vn",
         ),
     )
     assert first_resp.status_code == 200, first_resp.text
     first = first_resp.json()
     assert first["created"] is True
-    assert first["item"]["stock_code"] == "HK00700"
+    assert first["item"]["stock_code"] == "FPT"
 
-    for raw_code, trace_id in (("HK00700", "trace-3501-b"), ("00700.HK", "trace-3501-c")):
+    for raw_code, trace_id in (("fpt", "trace-3501-b"), ("FPT.VN", "trace-3501-c")):
         duplicate_resp = client.post(
             "/api/v1/decision-signals",
             json=_payload(
                 source_report_id=3501,
                 trace_id=trace_id,
                 stock_code=raw_code,
-                stock_name="Tencent",
-                market="hk",
+                stock_name="FPT",
+                market="vn",
             ),
         )
         assert duplicate_resp.status_code == 200, duplicate_resp.text
@@ -1190,34 +1178,19 @@ def test_hk_stock_identity_variants_deduplicate_and_latest_matches(client_and_db
         assert duplicate["created"] is False
         assert duplicate["item"]["id"] == first["item"]["id"]
 
-    latest_resp = client.get(
-        "/api/v1/decision-signals/latest/00700",
-        params={"market": "hk"},
-    )
-    assert latest_resp.status_code == 200, latest_resp.text
-    assert latest_resp.json()["total"] == 1
-    assert latest_resp.json()["items"][0]["id"] == first["item"]["id"]
-
-    latest_cases = [
-        ("00700", {}),
-        ("HK00700", {}),
-        ("00700.HK", {}),
-        ("00700", {"market": "hk"}),
+    identity_cases = [
+        ("FPT", {}),
+        ("fpt", {}),
+        ("FPT.VN", {}),
+        ("FPT", {"market": "vn"}),
     ]
-    for raw_code, params in latest_cases:
+    for raw_code, params in identity_cases:
         latest_resp = client.get(f"/api/v1/decision-signals/latest/{raw_code}", params=params)
         assert latest_resp.status_code == 200, latest_resp.text
         latest_payload = latest_resp.json()
         assert latest_payload["total"] == 1
         assert latest_payload["items"][0]["id"] == first["item"]["id"]
 
-    list_cases = [
-        ("00700", {}),
-        ("HK00700", {}),
-        ("00700.HK", {}),
-        ("00700", {"market": "hk"}),
-    ]
-    for raw_code, params in list_cases:
         list_resp = client.get(
             "/api/v1/decision-signals",
             params={"stock_code": raw_code, **params},
@@ -1226,37 +1199,6 @@ def test_hk_stock_identity_variants_deduplicate_and_latest_matches(client_and_db
         list_payload = list_resp.json()
         assert list_payload["total"] == 1
         assert list_payload["items"][0]["id"] == first["item"]["id"]
-
-
-def test_dedup_distinguishes_market_for_same_symbol(client_and_db) -> None:
-    client, _db = client_and_db
-
-    us_resp = client.post(
-        "/api/v1/decision-signals",
-        json=_payload(
-            source_report_id=3601,
-            trace_id="trace-3601-us",
-            stock_code="DUPL",
-            stock_name="Duplicate US",
-            market="us",
-        ),
-    )
-    assert us_resp.status_code == 200, us_resp.text
-    assert us_resp.json()["created"] is True
-
-    hk_resp = client.post(
-        "/api/v1/decision-signals",
-        json=_payload(
-            source_report_id=3601,
-            trace_id="trace-3601-hk",
-            stock_code="DUPL",
-            stock_name="Duplicate HK",
-            market="hk",
-        ),
-    )
-    assert hk_resp.status_code == 200, hk_resp.text
-    assert hk_resp.json()["created"] is True
-    assert hk_resp.json()["item"]["id"] != us_resp.json()["item"]["id"]
 
 
 def test_list_decision_profile_filter_distinguishes_unknown_from_omitted(client_and_db) -> None:
@@ -1294,14 +1236,14 @@ def test_list_decision_profile_filter_distinguishes_unknown_from_omitted(client_
         row = session.query(DecisionSignalRecord).filter_by(id=legacy_id).one()
         row.decision_profile = None
 
-    all_resp = client.get("/api/v1/decision-signals", params={"stock_code": "600519", "status": "active"})
+    all_resp = client.get("/api/v1/decision-signals", params={"stock_code": "HPG", "status": "active"})
     unknown_resp = client.get(
         "/api/v1/decision-signals",
-        params={"stock_code": "600519", "status": "active", "decision_profile": "unknown"},
+        params={"stock_code": "HPG", "status": "active", "decision_profile": "unknown"},
     )
     aggressive_list_resp = client.get(
         "/api/v1/decision-signals",
-        params={"stock_code": "600519", "status": "active", "decision_profile": "aggressive"},
+        params={"stock_code": "HPG", "status": "active", "decision_profile": "aggressive"},
     )
 
     assert all_resp.status_code == 200, all_resp.text
@@ -1321,9 +1263,9 @@ def _decision_signal_count(db: DatabaseManager) -> int:
 def _save_reassess_history(
     db: DatabaseManager,
     *,
-    code: str = "600519",
+    code: str = "HPG",
     report_type: str = "full",
-    operation_advice: str | None = "买入",
+    operation_advice: str | None = "Mua",
     raw_result: dict | str | None = None,
     context_snapshot: dict | str | None = None,
     sentiment_score: int | None = 72,
@@ -1340,12 +1282,12 @@ def _save_reassess_history(
         row = AnalysisHistory(
             query_id="query-reassess-test",
             code=code,
-            name="贵州茅台",
+            name="Hòa Phát",
             report_type=report_type,
             sentiment_score=sentiment_score,
             operation_advice=operation_advice,
-            trend_prediction="震荡上行",
-            analysis_summary="趋势改善但需要风控。",
+            trend_prediction="Dao động đi lên",
+            analysis_summary="Xu hướng cải thiện nhưng cần quản trị rủi ro.",
             raw_result=raw_payload,
             context_snapshot=context_payload,
             ideal_buy=1680,
@@ -1371,11 +1313,11 @@ def _set_reassess_history_created_at(
 def _valid_reassess_raw(**overrides) -> dict:
     raw = {
         "action": "buy",
-        "operation_advice": "买入",
+        "operation_advice": "Mua",
         "sentiment_score": 72,
-        "confidence_level": "中",
-        "analysis_summary": "趋势改善但需要确认。",
-        "risk_warning": "跌破关键支撑需退出。",
+        "confidence_level": "Trung bình",
+        "analysis_summary": "Xu hướng cải thiện nhưng cần xác nhận.",
+        "risk_warning": "Thủng hỗ trợ then chốt cần thoát.",
         "dashboard": {
             "battle_plan": {
                 "sniper_points": {
@@ -1384,10 +1326,10 @@ def _valid_reassess_raw(**overrides) -> dict:
                     "stop_loss": 1600,
                     "take_profit": 1850,
                 },
-                "action_checklist": ["放量突破", "资金流转正"],
+                "action_checklist": ["Bứt phá với khối lượng lớn", "Dòng tiền chuyển dương"],
             },
             "phase_decision": {
-                "watch_conditions": ["量能维持"],
+                "watch_conditions": ["Duy trì khối lượng"],
             },
         },
     }
@@ -1411,17 +1353,17 @@ def _persist_auto_balanced_signal(
     raw_result: dict | None = None,
     context_snapshot: dict | None = None,
 ) -> dict:
-    raw = raw_result or _valid_reassess_raw(invalidation="跌破关键支撑")
+    raw = raw_result or _valid_reassess_raw(invalidation="Thủng hỗ trợ then chốt")
     result = AnalysisResult(
-        code="600519",
-        name="贵州茅台",
+        code="HPG",
+        name="Hòa Phát",
         sentiment_score=raw.get("sentiment_score", 72),
-        trend_prediction="震荡上行",
-        operation_advice=raw.get("operation_advice", "买入"),
+        trend_prediction="Dao động đi lên",
+        operation_advice=raw.get("operation_advice", "Mua"),
         decision_type="buy",
-        confidence_level=raw.get("confidence_level", "中"),
-        analysis_summary=raw.get("analysis_summary", "趋势改善但需要确认。"),
-        risk_warning=raw.get("risk_warning", "跌破关键支撑需退出。"),
+        confidence_level=raw.get("confidence_level", "Trung bình"),
+        analysis_summary=raw.get("analysis_summary", "Xu hướng cải thiện nhưng cần xác nhận."),
+        risk_warning=raw.get("risk_warning", "Thủng hỗ trợ then chốt cần thoát."),
         report_language="zh",
         action=raw.get("action", "buy"),
     )
@@ -1527,9 +1469,9 @@ def test_reassess_error_mapping(client_and_db) -> None:
 
     insufficient_id = _save_reassess_history(
         db,
-        code="600519",
+        code="HPG",
         operation_advice=None,
-        raw_result={"analysis_summary": "仅有摘要，不能推断动作"},
+        raw_result={"analysis_summary": "Chỉ có tóm tắt, không suy ra được hành động"},
         context_snapshot=_valid_reassess_context(),
     )
     insufficient = client.post(
@@ -1609,14 +1551,14 @@ def test_reassess_preview_prefers_stability_adjusted_score(client_and_db) -> Non
     raw_result = _valid_reassess_raw(
         action=None,
         sentiment_score=72,
-        operation_advice="观望",
+        operation_advice="Quan sát",
     )
     dashboard = raw_result["dashboard"]
     dashboard["decision_score_calibration"] = {
         "raw_score": 72,
         "adjusted_score": 59,
         "final_action": "watch",
-        "guardrail_reason": "资金流偏弱，先观望回撤到 45-59。",
+        "guardrail_reason": "Dòng tiền yếu, quan sát và hạ về 45-59.",
     }
     raw_result["dashboard"] = dashboard
     record_id = _save_reassess_history(
@@ -1681,7 +1623,7 @@ def test_reassess_persist_writes_authoritative_item_and_deduplicates(client_and_
     client, db = client_and_db
     record_id = _save_reassess_history(
         db,
-        raw_result=_valid_reassess_raw(invalidation="跌破关键支撑且资金流转负"),
+        raw_result=_valid_reassess_raw(invalidation="Thủng hỗ trợ then chốt và dòng tiền chuyển âm"),
         context_snapshot=_valid_reassess_context(),
     )
     request = {
@@ -1721,7 +1663,7 @@ def test_reassess_persist_writes_authoritative_item_and_deduplicates(client_and_
 
     timeline = client.get(
         "/api/v1/decision-signals",
-        params={"stock_code": "600519", "decision_profile": "aggressive", "page_size": 100},
+        params={"stock_code": "HPG", "decision_profile": "aggressive", "page_size": 100},
     )
     assert timeline.status_code == 200, timeline.text
     assert [signal["id"] for signal in timeline.json()["items"]] == [item["id"]]
@@ -1741,7 +1683,7 @@ def test_reassess_persist_anchors_expired_signal_to_report_lifecycle(client_and_
         db,
         raw_result=_valid_reassess_raw(
             horizon="intraday",
-            invalidation="跌破关键支撑且资金流转负",
+            invalidation="Thủng hỗ trợ then chốt và dòng tiền chuyển âm",
         ),
         context_snapshot=context,
     )
@@ -1773,7 +1715,7 @@ def test_reassess_persist_anchors_expired_signal_to_report_lifecycle(client_and_
     )
     assert listed.status_code == 200, listed.text
     assert [listed_item["id"] for listed_item in listed.json()["items"]] == [item["id"]]
-    latest = client.get("/api/v1/decision-signals/latest/600519", params={"limit": 5})
+    latest = client.get("/api/v1/decision-signals/latest/HPG", params={"limit": 5})
     assert latest.status_code == 200, latest.text
     assert latest.json()["items"] == []
 
@@ -1785,7 +1727,7 @@ def test_reassess_persist_uses_saved_raw_phase_summary_when_context_summary_is_m
     report_created_at = utc_naive_now().replace(microsecond=0) - timedelta(days=30)
     raw = _valid_reassess_raw(
         horizon="intraday",
-        invalidation="跌破关键支撑",
+        invalidation="Thủng hỗ trợ then chốt",
         market_phase_summary={"phase": "intraday", "minutes_to_close": 7},
     )
     context = _valid_reassess_context()
@@ -1822,7 +1764,7 @@ def test_reassess_persist_returns_final_invalidated_item_without_harming_newer_s
         db,
         raw_result=_valid_reassess_raw(
             horizon="3d",
-            invalidation="跌破关键支撑且资金流转负",
+            invalidation="Thủng hỗ trợ then chốt và dòng tiền chuyển âm",
         ),
         context_snapshot=context,
     )
@@ -1852,7 +1794,7 @@ def test_reassess_persist_returns_final_invalidated_item_without_harming_newer_s
     assert item["status"] == "invalidated"
     assert item["metadata"]["invalidated_by_signal_id"] == newer_sell["id"]
     assert client.get(f"/api/v1/decision-signals/{newer_sell['id']}").json()["status"] == "active"
-    latest = client.get("/api/v1/decision-signals/latest/600519", params={"limit": 5})
+    latest = client.get("/api/v1/decision-signals/latest/HPG", params={"limit": 5})
     assert [latest_item["id"] for latest_item in latest.json()["items"]] == [newer_sell["id"]]
 
 
@@ -1861,7 +1803,7 @@ def test_reassess_history_refresh_uses_created_at_not_updated_at_for_invalidatio
 ) -> None:
     client, db = client_and_db
     report_created_at = utc_naive_now().replace(microsecond=0) - timedelta(days=1)
-    raw = _valid_reassess_raw(horizon="3d", invalidation="跌破关键支撑")
+    raw = _valid_reassess_raw(horizon="3d", invalidation="Thủng hỗ trợ then chốt")
     context = _valid_reassess_context()
     context["market_phase_summary"] = {"phase": "postmarket"}
     record_id = _save_reassess_history(db, raw_result=raw, context_snapshot=context)
@@ -1912,7 +1854,7 @@ def test_reassess_persist_requires_report_time_without_breaking_preview(client_a
     client, db = client_and_db
     record_id = _save_reassess_history(
         db,
-        raw_result=_valid_reassess_raw(invalidation="跌破关键支撑"),
+        raw_result=_valid_reassess_raw(invalidation="Thủng hỗ trợ then chốt"),
         context_snapshot=_valid_reassess_context(),
     )
     _set_reassess_history_created_at(db, record_id, None)
@@ -1938,7 +1880,7 @@ def test_reassess_balanced_persist_creates_when_auto_extraction_has_no_signal(cl
     client, db = client_and_db
     record_id = _save_reassess_history(
         db,
-        raw_result=_valid_reassess_raw(invalidation="跌破关键支撑"),
+        raw_result=_valid_reassess_raw(invalidation="Thủng hỗ trợ then chốt"),
         context_snapshot=_valid_reassess_context(),
     )
 
@@ -1961,7 +1903,7 @@ def test_reassess_balanced_persist_creates_when_auto_extraction_has_no_signal(cl
 
 def test_reassess_balanced_persist_reuses_actual_auto_generated_signal(client_and_db) -> None:
     client, db = client_and_db
-    raw = _valid_reassess_raw(invalidation="跌破关键支撑")
+    raw = _valid_reassess_raw(invalidation="Thủng hỗ trợ then chốt")
     context = _valid_reassess_context()
     record_id = _save_reassess_history(db, raw_result=raw, context_snapshot=context)
     auto_item = _persist_auto_balanced_signal(
@@ -1991,7 +1933,7 @@ def test_reassess_balanced_persist_reuses_actual_auto_generated_signal(client_an
 
 def test_reassess_balanced_persist_refreshes_expired_auto_generated_signal(client_and_db) -> None:
     client, db = client_and_db
-    raw = _valid_reassess_raw(invalidation="跌破关键支撑")
+    raw = _valid_reassess_raw(invalidation="Thủng hỗ trợ then chốt")
     context = _valid_reassess_context()
     record_id = _save_reassess_history(db, raw_result=raw, context_snapshot=context)
     auto_item = _persist_auto_balanced_signal(
@@ -2031,7 +1973,7 @@ def test_reassess_balanced_persist_reports_relaxed_phase_fill_without_overwritin
     client_and_db,
 ) -> None:
     client, db = client_and_db
-    raw = _valid_reassess_raw(invalidation="跌破关键支撑")
+    raw = _valid_reassess_raw(invalidation="Thủng hỗ trợ then chốt")
     context = _valid_reassess_context()
     record_id = _save_reassess_history(db, raw_result=raw, context_snapshot=context)
     auto_item = _persist_auto_balanced_signal(
@@ -2070,7 +2012,7 @@ def test_reassess_balanced_persist_returns_terminal_auto_signal_without_reactiva
     terminal_status,
 ) -> None:
     client, db = client_and_db
-    raw = _valid_reassess_raw(invalidation="跌破关键支撑")
+    raw = _valid_reassess_raw(invalidation="Thủng hỗ trợ then chốt")
     context = _valid_reassess_context()
     record_id = _save_reassess_history(db, raw_result=raw, context_snapshot=context)
     auto_item = _persist_auto_balanced_signal(
@@ -2103,7 +2045,7 @@ def test_reassess_persist_distinguishes_profiles(client_and_db) -> None:
     client, db = client_and_db
     record_id = _save_reassess_history(
         db,
-        raw_result=_valid_reassess_raw(invalidation="跌破关键支撑"),
+        raw_result=_valid_reassess_raw(invalidation="Thủng hỗ trợ then chốt"),
         context_snapshot=_valid_reassess_context(),
     )
 
@@ -2148,7 +2090,7 @@ def test_reassess_persist_invalidates_only_same_profile_opposing_signal(client_a
     ).json()["item"]
     record_id = _save_reassess_history(
         db,
-        raw_result=_valid_reassess_raw(invalidation="跌破关键支撑"),
+        raw_result=_valid_reassess_raw(invalidation="Thủng hỗ trợ then chốt"),
         context_snapshot=_valid_reassess_context(),
     )
 
@@ -2199,7 +2141,7 @@ def test_reassess_persist_guardrail_block_returns_structured_error_without_write
     client, db = client_and_db
     record_id = _save_reassess_history(
         db,
-        raw_result=_valid_reassess_raw(invalidation="跌破关键支撑"),
+        raw_result=_valid_reassess_raw(invalidation="Thủng hỗ trợ then chốt"),
         context_snapshot=_valid_reassess_context(),
         stop_loss=1900,
         take_profit=1800,

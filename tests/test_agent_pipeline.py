@@ -591,7 +591,6 @@ class TestAgentResultConversion(unittest.TestCase):
             mock_cfg.searxng_public_instances_enabled = False
             mock_cfg.news_max_age_days = 7
             mock_cfg.enable_realtime_quote = True
-            mock_cfg.enable_chip_distribution = True
             mock_cfg.realtime_source_priority = []
             mock_cfg.save_context_snapshot = False
             mock_config.return_value = mock_cfg
@@ -807,20 +806,20 @@ class TestAgentResultConversion(unittest.TestCase):
             content="{}",
             dashboard={
                 "sentiment_score": 68,
-                "trend_prediction": "震荡",
-                "operation_advice": "买入",
+                "trend_prediction": "Đi ngang",
+                "operation_advice": "Mua",
                 "decision_type": "buy",
                 "action": "buy",
-                "analysis_summary": "等待确认",
+                "analysis_summary": "Chờ xác nhận",
             },
             provider="gemini",
         )
 
         result = pipeline._agent_result_to_analysis_result(
-            agent_result, "600519", "贵州茅台", ReportType.SIMPLE, "q-action-refresh"
+            agent_result, "HPG", "Hòa Phát", ReportType.SIMPLE, "q-action-refresh"
         )
         previous_operation_advice = result.operation_advice
-        result.operation_advice = "持有观察"
+        result.operation_advice = "Nắm giữ và quan sát"
         result.decision_type = "hold"
 
         pipeline._refresh_decision_action_for_final_result(
@@ -969,8 +968,8 @@ class TestAgentResultConversion(unittest.TestCase):
             content="{}",
             dashboard={
                 "operation_advice": {
-                    "has_position": "买入",
-                    "no_position": "观望",
+                    "has_position": "Mua",
+                    "no_position": "Quan sát",
                 },
                 "trend_prediction": "看多",
                 "sentiment_score": 74,
@@ -1001,7 +1000,7 @@ class TestAgentResultConversion(unittest.TestCase):
             success=True,
             content="{}",
             dashboard={
-                "operation_advice": "不跌破支撑位继续持有",
+                "operation_advice": "Tiếp tục nắm giữ nếu không thủng hỗ trợ",
                 "sentiment_score": 72,
             },
             provider="gemini",
@@ -1022,7 +1021,7 @@ class TestAgentResultConversion(unittest.TestCase):
             trend_result=trend_result,
         )
 
-        self.assertEqual(result.operation_advice, "不跌破支撑位继续持有")
+        self.assertEqual(result.operation_advice, "Tiếp tục nắm giữ nếu không thủng hỗ trợ")
         self.assertEqual(result.decision_type, "hold")
 
     def test_convert_empty_top_level_advice_uses_nested_dashboard_advice(self):
@@ -1038,7 +1037,7 @@ class TestAgentResultConversion(unittest.TestCase):
             dashboard={
                 "operation_advice": {},
                 "dashboard": {
-                    "operation_advice": "减仓",
+                    "operation_advice": "Giảm tỷ trọng",
                     "trend_prediction": "看空",
                     "sentiment_score": 42,
                 },
@@ -1054,9 +1053,9 @@ class TestAgentResultConversion(unittest.TestCase):
             "q-nested-advice",
         )
 
-        self.assertEqual(result.operation_advice, "减仓")
+        self.assertEqual(result.operation_advice, "Giảm tỷ trọng")
         self.assertEqual(result.decision_type, "sell")
-        self.assertEqual(result.dashboard["operation_advice"], "减仓")
+        self.assertEqual(result.dashboard["operation_advice"], "Giảm tỷ trọng")
 
     def test_convert_placeholder_top_level_advice_uses_nested_dashboard_advice(self):
         """Placeholder advice dict should not block nested dashboard fallback."""
@@ -1070,11 +1069,11 @@ class TestAgentResultConversion(unittest.TestCase):
             content="{}",
             dashboard={
                 "operation_advice": {
-                    "has_position": "待补充",
+                    "has_position": "Chưa rõ",
                     "no_position": "TBD",
                 },
                 "dashboard": {
-                    "operation_advice": "减仓",
+                    "operation_advice": "Giảm tỷ trọng",
                     "trend_prediction": "看空",
                     "sentiment_score": 42,
                 },
@@ -1090,9 +1089,9 @@ class TestAgentResultConversion(unittest.TestCase):
             "q-placeholder-advice",
         )
 
-        self.assertEqual(result.operation_advice, "减仓")
+        self.assertEqual(result.operation_advice, "Giảm tỷ trọng")
         self.assertEqual(result.decision_type, "sell")
-        self.assertEqual(result.dashboard["operation_advice"], "减仓")
+        self.assertEqual(result.dashboard["operation_advice"], "Giảm tỷ trọng")
 
     def test_convert_malformed_top_level_summary_uses_nested_dashboard_summary(self):
         """Malformed top-level analysis_summary should not block nested dashboard fallback."""
@@ -1262,7 +1261,7 @@ class TestAgentResultConversion(unittest.TestCase):
             dashboard={
                 "sentiment_score": 65,
                 "trend_prediction": "看空",
-                "operation_advice": "减仓",
+                "operation_advice": "Giảm tỷ trọng",
             },
             provider="gemini",
         )
@@ -1282,7 +1281,7 @@ class TestAgentResultConversion(unittest.TestCase):
             trend_result=trend_result,
         )
 
-        self.assertEqual(result.operation_advice, "减仓")
+        self.assertEqual(result.operation_advice, "Giảm tỷ trọng")
         self.assertEqual(result.decision_type, "sell")
 
     def test_convert_partial_dashboard_uses_trend_fallback_for_missing_scalars(self):
@@ -1392,7 +1391,7 @@ class TestAgentResultConversion(unittest.TestCase):
             dashboard={
                 "stock_name": "贵州茅台",
                 "dashboard": {
-                    "core_conclusion": {"one_sentence": "待补充"},
+                    "core_conclusion": {"one_sentence": "Chưa rõ"},
                     "intelligence": {},
                     "battle_plan": {"sniper_points": {"stop_loss": ""}},
                 },
@@ -1575,7 +1574,6 @@ class TestPipelineRouting(unittest.TestCase):
             mock_cfg.searxng_public_instances_enabled = False
             mock_cfg.news_max_age_days = 7
             mock_cfg.enable_realtime_quote = True
-            mock_cfg.enable_chip_distribution = True
             mock_cfg.realtime_source_priority = []
             mock_cfg.save_context_snapshot = False
             mock_config.return_value = mock_cfg
@@ -1591,12 +1589,12 @@ class TestPipelineRouting(unittest.TestCase):
 
             pipeline._analyze_with_agent.assert_called_once()
             call_args = pipeline._analyze_with_agent.call_args
-            # Positional args: code, report_type, query_id, stock_name, realtime_quote, chip_data, fundamental_context, trend_result
+            # Positional args: code, report_type, query_id, stock_name, realtime_quote, fundamental_context, trend_result
             self.assertEqual(call_args[0][0], "600519")
             self.assertEqual(call_args[0][1], ReportType.SIMPLE)
             self.assertEqual(call_args[0][2], "q1")
-            # trend_result (8th arg) should be present (may be a TrendAnalysisResult or None)
-            self.assertEqual(len(call_args[0]), 8)
+            # trend_result (7th arg) should be present (may be a TrendAnalysisResult or None)
+            self.assertEqual(len(call_args[0]), 7)
 
     def test_legacy_mode_does_not_call_agent(self):
         """When agent_mode=False, analyze_stock should NOT call _analyze_with_agent."""
@@ -1621,7 +1619,6 @@ class TestPipelineRouting(unittest.TestCase):
             mock_cfg.searxng_public_instances_enabled = False
             mock_cfg.news_max_age_days = 7
             mock_cfg.enable_realtime_quote = True
-            mock_cfg.enable_chip_distribution = True
             mock_cfg.realtime_source_priority = []
             mock_cfg.save_context_snapshot = False
             mock_config.return_value = mock_cfg
@@ -1632,7 +1629,6 @@ class TestPipelineRouting(unittest.TestCase):
 
             # Mock the fetcher_manager to return None for realtime
             pipeline.fetcher_manager.get_realtime_quote.return_value = None
-            pipeline.fetcher_manager.get_chip_distribution.return_value = None
             # Mock search service
             pipeline.search_service.is_available = False
             # Mock DB context
@@ -1668,7 +1664,6 @@ class TestPipelineRouting(unittest.TestCase):
             mock_cfg.searxng_public_instances_enabled = False
             mock_cfg.news_max_age_days = 7
             mock_cfg.enable_realtime_quote = True
-            mock_cfg.enable_chip_distribution = True
             mock_cfg.realtime_source_priority = []
             mock_cfg.save_context_snapshot = False
             mock_config.return_value = mock_cfg
@@ -1713,10 +1708,9 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
             mock_cfg.searxng_public_instances_enabled = False
             mock_cfg.news_max_age_days = 7
             mock_cfg.enable_realtime_quote = True
-            mock_cfg.enable_chip_distribution = True
             mock_cfg.realtime_source_priority = []
             mock_cfg.save_context_snapshot = False
-            mock_cfg.report_language = "zh"
+            mock_cfg.report_language = "vi"
             mock_config.return_value = mock_cfg
 
             from src.agent.executor import AgentResult
@@ -1736,12 +1730,12 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
                 success=True,
                 content="{}",
                 dashboard={
-                    "stock_name": "贵州茅台",
+                    "stock_name": "Hòa Phát",
                     "sentiment_score": 80,
-                    "trend_prediction": "看多",
-                    "operation_advice": "持有",
+                    "trend_prediction": "Tăng",
+                    "operation_advice": "Nắm giữ",
                     "decision_type": "hold",
-                    "analysis_summary": "高分但模型建议持有。",
+                    "analysis_summary": "Điểm cao nhưng mô hình khuyến nghị nắm giữ.",
                 },
                 provider="gemini",
                 runtime_facts=AgentRuntimeFacts(
@@ -1759,18 +1753,17 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
             mock_build_executor.return_value = mock_executor
 
             result = pipeline._analyze_with_agent(
-                code="600519",
+                code="HPG",
                 report_type=ReportType.SIMPLE,
                 query_id="q-review-hold-to-buy",
-                stock_name="贵州茅台",
+                stock_name="Hòa Phát",
                 realtime_quote=None,
-                chip_data=None,
             )
 
             self.assertIsNotNone(result)
             self.assertEqual(result.decision_type, "hold")
             self.assertEqual(result.action, "buy")
-            self.assertEqual(result.action_label, "买入")
+            self.assertEqual(result.action_label, "Mua")
 
             explanation = result.dashboard["agent_disagreement_explanation"]
             self.assertNotIn("final_signal", explanation)
@@ -1825,7 +1818,6 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
             mock_cfg.searxng_public_instances_enabled = False
             mock_cfg.news_max_age_days = 7
             mock_cfg.enable_realtime_quote = True
-            mock_cfg.enable_chip_distribution = True
             mock_cfg.realtime_source_priority = []
             mock_cfg.save_context_snapshot = False
             mock_cfg.report_language = "zh"
@@ -1876,7 +1868,6 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
                 query_id="q-review-ambiguous-action",
                 stock_name="贵州茅台",
                 realtime_quote=None,
-                chip_data=None,
             )
 
             self.assertIsNotNone(result)
@@ -1928,7 +1919,6 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
             mock_cfg.searxng_public_instances_enabled = False
             mock_cfg.news_max_age_days = 7
             mock_cfg.enable_realtime_quote = True
-            mock_cfg.enable_chip_distribution = True
             mock_cfg.realtime_source_priority = []
             mock_cfg.save_context_snapshot = False
             mock_config.return_value = mock_cfg
@@ -1968,7 +1958,6 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
                 query_id="q-news",
                 stock_name="股票588200",
                 realtime_quote=None,
-                chip_data=None
             )
 
             self.assertIsNotNone(result)
@@ -2005,10 +1994,9 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
             mock_cfg.searxng_public_instances_enabled = False
             mock_cfg.news_max_age_days = 7
             mock_cfg.enable_realtime_quote = True
-            mock_cfg.enable_chip_distribution = True
             mock_cfg.realtime_source_priority = []
             mock_cfg.save_context_snapshot = False
-            mock_cfg.report_language = "zh"
+            mock_cfg.report_language = "vi"
             mock_cfg.agent_orchestrator_timeout_s = 600
             mock_config.return_value = mock_cfg
 
@@ -2025,12 +2013,12 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
                 content="{}",
                 dashboard={
                     "sentiment_score": 30,
-                    "trend_prediction": "震荡",
-                    "operation_advice": "卖出",
+                    "trend_prediction": "Đi ngang",
+                    "operation_advice": "Bán",
                     "decision_type": "sell",
-                    "analysis_summary": "原始建议",
+                    "analysis_summary": "Khuyến nghị ban đầu",
                     "dashboard": {
-                        "core_conclusion": {"one_sentence": "初始结论"},
+                        "core_conclusion": {"one_sentence": "Kết luận ban đầu"},
                     },
                 },
                 provider="gemini",
@@ -2059,40 +2047,30 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
             pipeline._extract_decision_signal_after_history_save = MagicMock()
 
             trend_result = TrendAnalysisResult(
-                code="002812",
+                code="HPG",
                 trend_status=TrendStatus.BULL,
                 buy_signal=BuySignal.SELL,
                 signal_score=30,
                 support_levels=[30.0],
                 resistance_levels=[34.0],
             )
-            fundamental_context = {
-                "capital_flow": {
-                    "status": "ok",
-                    "data": {
-                        "stock_flow": {
-                            "main_net_inflow": 800_000,
-                        }
-                    },
-                }
-            }
+            fundamental_context = {}
 
             result = pipeline._analyze_with_agent(
-                code="002812",
+                code="HPG",
                 report_type=ReportType.SIMPLE,
                 query_id="q-agent-stability",
-                stock_name="恩捷股份",
+                stock_name="Hòa Phát",
                 realtime_quote={"price": 30.4, "change_pct": -2.1},
-                chip_data=None,
                 fundamental_context=fundamental_context,
                 trend_result=trend_result,
             )
 
             self.assertIsNotNone(result)
             self.assertEqual(result.decision_type, "hold")
-            self.assertEqual(result.operation_advice, "洗盘观察")
+            self.assertEqual(result.operation_advice, "Quan sát rũ bỏ")
             self.assertEqual(result.dashboard.get("decision_type"), "hold")
-            self.assertEqual(result.dashboard.get("operation_advice"), "洗盘观察")
+            self.assertEqual(result.dashboard.get("operation_advice"), "Quan sát rũ bỏ")
             self.assertEqual(result.dashboard.get("sentiment_score"), result.sentiment_score)
             explanation = result.dashboard["agent_disagreement_explanation"]
             self.assertEqual(explanation["risk_control"]["post_risk_signal"], "sell")
@@ -2153,10 +2131,9 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
             mock_cfg.searxng_public_instances_enabled = False
             mock_cfg.news_max_age_days = 7
             mock_cfg.enable_realtime_quote = True
-            mock_cfg.enable_chip_distribution = True
             mock_cfg.realtime_source_priority = []
             mock_cfg.save_context_snapshot = False
-            mock_cfg.report_language = "zh"
+            mock_cfg.report_language = "vi"
             mock_cfg.report_integrity_enabled = True
             mock_cfg.agent_orchestrator_timeout_s = 600
             mock_config.return_value = mock_cfg
@@ -2184,13 +2161,13 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
                 content="{}",
                 dashboard={
                     "sentiment_score": 62,
-                    "trend_prediction": "震荡",
-                    "operation_advice": "减仓",
+                    "trend_prediction": "Đi ngang",
+                    "operation_advice": "Giảm tỷ trọng",
                     "decision_type": "sell",
-                    "confidence_level": "中",
-                    "analysis_summary": "盘中风险偏高",
+                    "confidence_level": "Trung bình",
+                    "analysis_summary": "Rủi ro trong phiên cao",
                     "dashboard": {
-                        "core_conclusion": {"one_sentence": "盘中风险偏高"},
+                        "core_conclusion": {"one_sentence": "Rủi ro trong phiên cao"},
                         "intelligence": {"risk_alerts": []},
                     },
                 },
@@ -2202,8 +2179,8 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
 
             phase_context = {
                 "phase": "intraday",
-                "market": "cn",
-                "market_local_time": "2026-06-02T10:30:00+08:00",
+                "market": "vn",
+                "market_local_time": "2026-06-02T10:30:00+07:00",
             }
             phase_summary = {
                 **phase_context,
@@ -2214,12 +2191,11 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
             }
 
             result = pipeline._analyze_with_agent(
-                code="600519",
+                code="HPG",
                 report_type=ReportType.SIMPLE,
                 query_id="q-agent-phase-integrity",
-                stock_name="贵州茅台",
+                stock_name="Hòa Phát",
                 realtime_quote=None,
-                chip_data=None,
                 market_phase_context=phase_context,
                 market_phase_summary=phase_summary,
             )
@@ -2229,11 +2205,11 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
             self.assertTrue(ok, missing)
             phase_decision = result.dashboard["phase_decision"]
             self.assertEqual(phase_decision["phase_context"]["phase"], "intraday")
-            self.assertEqual(phase_decision["action_window"], "模型未提供阶段化行动窗口")
-            self.assertEqual(phase_decision["immediate_action"], "模型未提供阶段化即时动作")
+            self.assertEqual(phase_decision["action_window"], "Model did not provide a phase action window")
+            self.assertEqual(phase_decision["immediate_action"], "Model did not provide a phase-aware immediate action")
             self.assertEqual(phase_decision["watch_conditions"], [])
-            self.assertEqual(phase_decision["next_check_time"], "模型未提供下一次检查点")
-            self.assertEqual(phase_decision["confidence_reason"], "模型未提供阶段化置信度理由")
+            self.assertEqual(phase_decision["next_check_time"], "Model did not provide a next check point")
+            self.assertEqual(phase_decision["confidence_reason"], "Model did not provide a phase confidence rationale")
 
     def test_analyze_with_agent_explains_daily_market_softening_before_risk(self):
         """A partial result produced before risk must retain its Pipeline start signal."""
@@ -2259,7 +2235,6 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
             mock_cfg.searxng_public_instances_enabled = False
             mock_cfg.news_max_age_days = 7
             mock_cfg.enable_realtime_quote = True
-            mock_cfg.enable_chip_distribution = True
             mock_cfg.realtime_source_priority = []
             mock_cfg.save_context_snapshot = False
             mock_cfg.report_language = "en"
@@ -2323,14 +2298,13 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
             mock_build_executor.return_value = mock_executor
 
             result = pipeline._analyze_with_agent(
-                code="AAPL",
+                code="HPG",
                 report_type=ReportType.SIMPLE,
                 query_id="q-agent-daily-final",
-                stock_name="Apple",
+                stock_name="Hoa Phat",
                 realtime_quote=None,
-                chip_data=None,
                 daily_market_context=DailyMarketContext(
-                    region="us",
+                    region="vn",
                     trade_date=date(2026, 7, 19),
                     summary="High risk and risk-off; remain conservative.",
                     risk_tags=["high_risk", "conservative"],
@@ -2374,82 +2348,6 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
             self.assertEqual(signal_payload["action"], explanation["final_action"])
             self.assertEqual(signal_payload["action"], result.action)
 
-    def test_analyze_with_agent_preserves_chip_structure_when_prefetch_missing(self):
-        """Agent tool chip metrics should not be cleared when prefetch chip_data is unavailable."""
-        with patch('src.core.pipeline.get_config') as mock_config, \
-             patch('src.core.pipeline.get_db'), \
-             patch('src.core.pipeline.DataFetcherManager'), \
-             patch('src.core.pipeline.GeminiAnalyzer'), \
-             patch('src.core.pipeline.NotificationService'), \
-             patch('src.core.pipeline.SearchService'), \
-             patch('src.agent.factory.build_agent_executor') as mock_build_executor:
-
-            mock_cfg = MagicMock()
-            mock_cfg.max_workers = 2
-            mock_cfg.agent_mode = True
-            mock_cfg.agent_max_steps = 10
-            mock_cfg.agent_skills = []
-            mock_cfg.bocha_api_keys = []
-            mock_cfg.tavily_api_keys = []
-            mock_cfg.brave_api_keys = []
-            mock_cfg.serpapi_keys = []
-            mock_cfg.searxng_base_urls = []
-            mock_cfg.searxng_public_instances_enabled = False
-            mock_cfg.news_max_age_days = 7
-            mock_cfg.enable_realtime_quote = True
-            mock_cfg.enable_chip_distribution = True
-            mock_cfg.realtime_source_priority = []
-            mock_cfg.save_context_snapshot = False
-            mock_cfg.report_language = "zh"
-            mock_cfg.report_integrity_enabled = False
-            mock_cfg.agent_orchestrator_timeout_s = 600
-            mock_config.return_value = mock_cfg
-
-            from src.core.pipeline import StockAnalysisPipeline
-            from src.agent.executor import AgentResult
-            from src.enums import ReportType
-            pipeline = StockAnalysisPipeline(config=mock_cfg)
-            pipeline.search_service.is_available = False
-
-            agent_result = AgentResult(
-                success=True,
-                content="{}",
-                dashboard={
-                    "sentiment_score": 70,
-                    "trend_prediction": "震荡",
-                    "operation_advice": "持有",
-                    "decision_type": "hold",
-                    "dashboard": {
-                        "data_perspective": {
-                            "chip_structure": {
-                                "profit_ratio": "52.0%",
-                                "avg_cost": 1850.0,
-                                "concentration": "0.00%",
-                                "chip_health": "健康",
-                            }
-                        }
-                    },
-                },
-                provider="gemini",
-            )
-            mock_executor = MagicMock()
-            mock_executor.run.return_value = agent_result
-            mock_build_executor.return_value = mock_executor
-
-            result = pipeline._analyze_with_agent(
-                code="600519",
-                report_type=ReportType.SIMPLE,
-                query_id="q-agent-chip",
-                stock_name="贵州茅台",
-                realtime_quote=None,
-                chip_data=None,
-            )
-
-            self.assertIsNotNone(result)
-            dp = result.dashboard["data_perspective"]
-            self.assertEqual(dp["chip_structure"]["concentration"], "0.00%")
-            self.assertNotIn("chip_unavailable_reason", dp)
-
     def test_analyze_with_agent_history_context_includes_diagnostic_snapshot(self):
         """Persisted agent analyses must keep the diagnostics snapshot so history diagnostics never return unknown."""
         with patch('src.core.pipeline.get_config') as mock_config, \
@@ -2476,7 +2374,6 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
             mock_cfg.searxng_public_instances_enabled = False
             mock_cfg.news_max_age_days = 7
             mock_cfg.enable_realtime_quote = True
-            mock_cfg.enable_chip_distribution = True
             mock_cfg.realtime_source_priority = []
             mock_cfg.save_context_snapshot = True
             mock_cfg.report_language = "zh"
@@ -2529,7 +2426,6 @@ class TestAnalyzeWithAgentStockName(unittest.TestCase):
                     query_id="q-1391",
                     stock_name="科创芯片ETF",
                     realtime_quote=None,
-                    chip_data=None,
                 )
 
             self.assertIsNotNone(result)
@@ -3273,7 +3169,6 @@ class TestSafeInt(unittest.TestCase):
             mock_cfg.searxng_public_instances_enabled = False
             mock_cfg.news_max_age_days = 7
             mock_cfg.enable_realtime_quote = True
-            mock_cfg.enable_chip_distribution = True
             mock_cfg.realtime_source_priority = []
             mock_cfg.save_context_snapshot = False
             mock_config.return_value = mock_cfg
@@ -3416,7 +3311,6 @@ class TestSkillActivation(unittest.TestCase):
             mock_cfg.searxng_public_instances_enabled = False
             mock_cfg.news_max_age_days = 7
             mock_cfg.enable_realtime_quote = True
-            mock_cfg.enable_chip_distribution = True
             mock_cfg.realtime_source_priority = []
             mock_cfg.save_context_snapshot = False
             mock_config.return_value = mock_cfg

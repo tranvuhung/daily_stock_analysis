@@ -60,7 +60,7 @@ class TestTavilySearchProvider(unittest.TestCase):
             {
                 "results": [
                     {
-                        "title": "Alibaba earnings beat",
+                        "title": "Hoa Phat earnings beat",
                         "url": "https://example.com/alibaba-earnings",
                         "content": "Fresh coverage",
                         "published_date": published_text,
@@ -68,7 +68,7 @@ class TestTavilySearchProvider(unittest.TestCase):
                 ]
             }
         ):
-            resp = provider.search("BABA latest news", max_results=5, days=3, topic="news")
+            resp = provider.search("HPG latest news", max_results=5, days=3, topic="news")
 
         self.assertTrue(resp.success)
         self.assertEqual(_FakeTavilyClient.init_api_keys, ["dummy_key"])
@@ -88,7 +88,7 @@ class TestTavilySearchProvider(unittest.TestCase):
             {
                 "results": [
                     {
-                        "title": "Alibaba guidance update",
+                        "title": "Hoa Phat guidance update",
                         "url": "https://example.com/alibaba-guidance",
                         "content": "Fresh coverage",
                         "publishedDate": "2026-03-20T11:00:00Z",
@@ -96,7 +96,7 @@ class TestTavilySearchProvider(unittest.TestCase):
                 ]
             }
         ):
-            resp = provider.search("BABA latest news", max_results=5, days=7, topic="news")
+            resp = provider.search("HPG latest news", max_results=5, days=7, topic="news")
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 1)
@@ -109,14 +109,14 @@ class TestTavilySearchProvider(unittest.TestCase):
             {
                 "results": [
                     {
-                        "title": "Alibaba price action",
+                        "title": "Hoa Phat price action",
                         "url": "https://example.com/alibaba-price",
                         "content": "General search result",
                     }
                 ]
             }
         ):
-            resp = provider.search("BABA stock price", max_results=3)
+            resp = provider.search("HPG stock price", max_results=3)
 
         self.assertTrue(resp.success)
         self.assertEqual(len(_FakeTavilyClient.search_calls), 1)
@@ -147,7 +147,7 @@ class TestTavilySearchProvider(unittest.TestCase):
                         news_max_age_days=3,
                         news_strategy_profile="short",
                     )
-                    resp = service.search_stock_news("BABA", "阿里巴巴", max_results=3)
+                    resp = service.search_stock_news("HPG", "Hòa Phát", max_results=3)
 
                 self.assertTrue(resp.success)
                 self.assertEqual(len(resp.results), 1)
@@ -159,8 +159,8 @@ class TestTavilySearchProvider(unittest.TestCase):
             {
                 "results": [
                     {
-                        "title": "Alibaba quarterly results",
-                        "url": "https://example.com/alibaba-event",
+                        "title": "Hoa Phat quarterly results",
+                        "url": "https://example.com/hoa-phat-event",
                         "content": "Event coverage",
                     }
                 ]
@@ -170,7 +170,7 @@ class TestTavilySearchProvider(unittest.TestCase):
                 tavily_keys=["dummy_key"],
                 searxng_public_instances_enabled=False,
             )
-            resp = service.search_stock_events("BABA", "阿里巴巴")
+            resp = service.search_stock_events("HPG", "Hòa Phát")
 
         self.assertTrue(resp.success)
         self.assertEqual(len(resp.results), 1)
@@ -184,8 +184,8 @@ class TestTavilySearchProvider(unittest.TestCase):
             {
                 "results": [
                     {
-                        "title": "Alibaba intel article",
-                        "url": "https://example.com/alibaba-intel",
+                        "title": "Hoa Phat intel article",
+                        "url": "https://example.com/hoa-phat-intel",
                         "content": "Recent intel",
                         "published_date": published_text,
                     }
@@ -198,7 +198,7 @@ class TestTavilySearchProvider(unittest.TestCase):
                 news_max_age_days=3,
                 news_strategy_profile="short",
             )
-            intel = service.search_comprehensive_intel("BABA", "阿里巴巴", max_searches=2)
+            intel = service.search_comprehensive_intel("HPG", "Hòa Phát", max_searches=2)
 
         self.assertIn("latest_news", intel)
         self.assertIn("market_analysis", intel)
@@ -228,7 +228,7 @@ class TestTavilySearchProvider(unittest.TestCase):
                 news_max_age_days=3,
                 news_strategy_profile="short",
             )
-            intel = service.search_comprehensive_intel("510300", "沪深300ETF", max_searches=3)
+            intel = service.search_comprehensive_intel("FUEVN100", "Quỹ ETF DCVFMVN100", max_searches=3)
 
         self.assertIn("latest_news", intel)
         self.assertIn("market_analysis", intel)
@@ -246,8 +246,8 @@ class TestTavilySearchProvider(unittest.TestCase):
             {
                 "results": [
                     {
-                        "title": "Moutai intel article",
-                        "url": "https://example.com/moutai-intel",
+                        "title": "FPT intel article",
+                        "url": "https://example.com/fpt-intel",
                         "content": "Recent non-ETF coverage",
                         "published_date": published_text,
                     }
@@ -260,7 +260,7 @@ class TestTavilySearchProvider(unittest.TestCase):
                 news_max_age_days=3,
                 news_strategy_profile="short",
             )
-            intel = service.search_comprehensive_intel("600519", "贵州茅台", max_searches=3)
+            intel = service.search_comprehensive_intel("FPT", "FPT Corporation", max_searches=3)
 
         self.assertIn("latest_news", intel)
         self.assertIn("market_analysis", intel)

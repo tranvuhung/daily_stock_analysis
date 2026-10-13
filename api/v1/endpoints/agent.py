@@ -20,11 +20,10 @@ from src.config import get_config
 from src.services.agent_chat_session_service import AgentChatSessionService
 from src.services.agent_model_service import list_agent_model_deployments
 
-# Tool name -> Chinese display name mapping
+# Tên công cụ -> tên hiển thị (tiếng Anh). / Tool name -> English display name mapping.
 TOOL_DISPLAY_NAMES: Dict[str, str] = {
     "get_realtime_quote":         "Get realtime quote",
     "get_daily_history":          "Get historical K-lines",
-    "get_chip_distribution":      "Analyze chip distribution",
     "get_analysis_context":       "Get analysis context",
     "get_stock_info":             "Get stock fundamentals",
     "search_stock_news":          "Search stock news",
@@ -34,7 +33,6 @@ TOOL_DISPLAY_NAMES: Dict[str, str] = {
     "get_volume_analysis":        "Analyze volume changes",
     "analyze_pattern":            "Identify candlestick patterns",
     "get_market_indices":         "Get market indices",
-    "get_sector_rankings":        "Analyze industry sectors",
     "get_skill_backtest_summary": "Get skill backtest overview",
     "get_strategy_backtest_summary": "Get strategy backtest overview",
     "get_stock_backtest_summary": "Get per-stock backtest data",

@@ -33,7 +33,7 @@ class DecisionAgent(BaseAgent):
         return ctx.meta.get("response_mode") == "chat"
 
     def system_prompt(self, ctx: AgentContext) -> str:
-        report_language = normalize_report_language(ctx.meta.get("report_language", "zh"))
+        report_language = normalize_report_language(ctx.meta.get("report_language", "vi"))
         if self._is_chat_mode(ctx):
             prompt = """\
 You are a **Decision Synthesis Agent** replying directly to the user's latest
@@ -49,11 +49,12 @@ Requirements:
 - Highlight the main signal, key reasoning, and major risks
 - Do NOT output JSON or code fences unless the user explicitly asks for them
 """
-            if report_language in ("en", "vi"):
-                return prompt + "\nAlways answer in English.\n"
-            if report_language == "ko":
-                return prompt + "\n항상 한국어로 답변하세요.\n"
-            return prompt + "\n默认使用中文回答。\n"
+            if report_language == "vi":
+                return prompt + (
+                    "\nAlways answer in Vietnamese (Tiếng Việt) with correct diacritics; "
+                    "never write Chinese characters.\n"
+                )
+            return prompt + "\nAlways answer in English.\n"
 
         skills = ""
         if self.skill_instructions:
@@ -93,7 +94,7 @@ Your task: synthesise all inputs into a single, actionable Decision Dashboard.
 
 ## Actionability Guardrails
 - Do not flip directly between buy and sell only because one trading day moved up or down.
-- Base operation_advice on support/resistance, volume/chip context, main-force capital flow, and risk flags.
+- Base operation_advice on support/resistance, volume context, and risk flags.
 - If price is between support and resistance and capital flow is not clearly one-sided, prefer a neutral action such as hold/watch/range-bound/shakeout watch; keep decision_type as hold.
 - Buy requires support confirmation or a valid resistance breakout with volume/capital-flow confirmation.
 - Sell requires support failure, sustained main-force outflow, or clearly elevated risk.
@@ -117,7 +118,7 @@ keys: ``phase_context``, ``action_window``, ``immediate_action``,
 current action, watch conditions, and next check point. For pre-market,
 non-trading, or unknown phases, do not invent today's intraday movement. If
 quote, daily bars, or technical data is stale, fallback, missing, fetch_failed,
-partial, or estimated, ``confidence_level`` must not be High/高 and the
+partial, or estimated, ``confidence_level`` must not be High and the
 limitation must be reflected in ``confidence_reason`` or ``data_limitations``.
 
 The nested ``dashboard`` object should include optional ``signal_attribution`` when
@@ -141,28 +142,12 @@ should sum to 100; all-zero means no effective signal and must not be faked.
 - Write all human-readable JSON values in Vietnamese (Tiếng Việt), with correct diacritics.
 - Use standard Vietnamese securities terminology (mua / nắm giữ / bán, hỗ trợ / kháng cự, cắt lỗ).
 """
-        if report_language in ("en", "vi"):
-            return prompt + """
+        return prompt + """
 
 ## Output Language
 - Keep every JSON key unchanged.
 - `decision_type` must remain `buy|hold|sell`.
 - Write all human-readable JSON values in English.
-"""
-        if report_language == "ko":
-            return prompt + """
-
-## Output Language
-- Keep every JSON key unchanged.
-- `decision_type` must remain `buy|hold|sell`.
-- Write all human-readable JSON values in Korean (한국어).
-"""
-        return prompt + """
-
-## 输出语言
-- 所有 JSON 键名保持不变。
-- `decision_type` 必须保持为 `buy|hold|sell`。
-- 所有面向用户的人类可读文本值必须使用中文。
 """
 
     def build_user_message(self, ctx: AgentContext) -> str:
@@ -203,10 +188,10 @@ should sum to 100; all-zero means no effective signal and must not be faked.
         invalid_opinions = ctx.meta.get("invalid_opinions") or []
         if invalid_opinions:
             reason_labels = {
-                "skill_timeout": "执行超时",
-                "skill_error": "执行异常或未产出结构化观点",
-                "missing_signal": "signal 缺失",
-                "unrecognized_signal": "signal 无法识别",
+                "skill_timeout": "timed out",
+                "skill_error": "errored or produced no structured opinion",
+                "missing_signal": "missing signal",
+                "unrecognized_signal": "unrecognized signal",
             }
             reason_counts = {}
             for item in invalid_opinions:
@@ -214,15 +199,15 @@ should sum to 100; all-zero means no effective signal and must not be faked.
                     continue
                 reason = str(item.get("reason") or "unrecognized_signal")
                 reason_counts[reason] = reason_counts.get(reason, 0) + 1
-            reason_summary = "、".join(
-                f"{reason_labels.get(reason, reason)} {count} 个"
+            reason_summary = ", ".join(
+                f"{reason_labels.get(reason, reason)}: {count}"
                 for reason, count in reason_counts.items()
             )
             parts.append("## Invalid Skill Opinions (Diagnostics only — not in evidence chain)")
             parts.append(
-                f"共 {len(invalid_opinions)} 个 skill 观点未进入证据链"
-                f"（{reason_summary or '原因未分类'}）；"
-                f"仅供你在 data_limitations 中标注，不得作为决策依据。"
+                f"{len(invalid_opinions)} skill opinion(s) were excluded from the evidence chain "
+                f"({reason_summary or 'reason not classified'}); "
+                f"mention them only in data_limitations and never use them as decision evidence."
             )
             parts.append("")
 

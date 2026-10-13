@@ -20,21 +20,16 @@ def _pipeline_config(*, daily_market_context_enabled: bool) -> SimpleNamespace:
     return SimpleNamespace(
         max_workers=1,
         save_context_snapshot=False,
-        bocha_api_keys=[],
         tavily_api_keys=[],
         anspire_api_keys=[],
         brave_api_keys=[],
         serpapi_keys=[],
-        minimax_api_keys=[],
         searxng_base_urls=[],
         searxng_public_instances_enabled=False,
         news_max_age_days=3,
         news_strategy_profile="short",
         enable_realtime_quote=False,
         realtime_source_priority=[],
-        enable_chip_distribution=False,
-        social_sentiment_api_key="",
-        social_sentiment_api_url="https://example.invalid/social",
         daily_market_context_enabled=daily_market_context_enabled,
     )
 
@@ -45,24 +40,21 @@ def _build_initialized_pipeline(
 ) -> StockAnalysisPipeline:
     search_service = MagicMock()
     search_service.is_available = False
-    social_sentiment_service = MagicMock()
-    social_sentiment_service.is_available = False
 
     with patch("src.core.pipeline.get_db", return_value=MagicMock()), \
          patch("src.core.pipeline.DataFetcherManager", return_value=MagicMock()), \
          patch("src.core.pipeline.StockTrendAnalyzer", return_value=MagicMock()), \
          patch("src.core.pipeline.GeminiAnalyzer", return_value=MagicMock()), \
          patch("src.core.pipeline.NotificationService", return_value=MagicMock()), \
-         patch("src.core.pipeline.SearchService", return_value=search_service), \
-         patch("src.core.pipeline.SocialSentimentService", return_value=social_sentiment_service):
+         patch("src.core.pipeline.SearchService", return_value=search_service):
         return StockAnalysisPipeline(config=config, **kwargs)
 
 
 def _market_context() -> DailyMarketContext:
     return DailyMarketContext(
-        region="cn",
+        region="vn",
         trade_date=date(2026, 6, 6),
-        summary="大盘退潮，高风险，建议观望，仓位上限30%。",
+        summary="Thị trường suy yếu, rủi ro cao, nên quan sát, tỷ trọng tối đa 30%.",
         risk_tags=["high_risk", "low_position_cap"],
         source="analysis_history",
     )
@@ -98,7 +90,7 @@ def test_pipeline_loads_daily_market_context_when_market_review_enabled() -> Non
     pipeline.config = SimpleNamespace(
         market_review_enabled=True,
         daily_market_context_enabled=True,
-        report_language="zh",
+        report_language="vi",
     )
     pipeline.daily_market_context_enabled = True
     pipeline.db = MagicMock()
@@ -113,12 +105,12 @@ def test_pipeline_loads_daily_market_context_when_market_review_enabled() -> Non
 
         target_date = date(2026, 6, 6)
 
-        context = pipeline._load_daily_market_context("cn", target_date=target_date)
+        context = pipeline._load_daily_market_context("vn", target_date=target_date)
 
     assert context is not None
     service_cls.assert_called_once_with(db_manager=pipeline.db)
     service.get_context.assert_called_once_with(
-        region="cn",
+        region="vn",
         config=pipeline.config,
         notifier=pipeline.notifier,
         analyzer=pipeline.analyzer,
@@ -135,7 +127,7 @@ def test_pipeline_can_load_daily_market_context_without_runtime_generation() -> 
     pipeline.config = SimpleNamespace(
         market_review_enabled=True,
         daily_market_context_enabled=True,
-        report_language="zh",
+        report_language="vi",
     )
     pipeline.daily_market_context_enabled = True
     pipeline.db = MagicMock()
@@ -149,7 +141,7 @@ def test_pipeline_can_load_daily_market_context_without_runtime_generation() -> 
         service.get_context.return_value = None
 
         context = pipeline._load_daily_market_context(
-            "cn",
+            "vn",
             target_date=date(2026, 6, 6),
         )
 
@@ -163,13 +155,13 @@ def test_pipeline_skips_daily_market_context_when_context_is_disabled() -> None:
     pipeline.config = SimpleNamespace(
         market_review_enabled=True,
         daily_market_context_enabled=True,
-        report_language="zh",
+        report_language="vi",
     )
     pipeline.daily_market_context_enabled = False
 
     with patch("src.core.pipeline.DailyMarketContextService") as service_cls:
         context = pipeline._load_daily_market_context(
-            "cn",
+            "vn",
             target_date=date(2026, 6, 6),
         )
 
@@ -182,13 +174,13 @@ def test_pipeline_skips_daily_market_context_when_config_is_disabled() -> None:
     pipeline.config = SimpleNamespace(
         market_review_enabled=True,
         daily_market_context_enabled=False,
-        report_language="zh",
+        report_language="vi",
     )
     pipeline.daily_market_context_enabled = True
 
     with patch("src.core.pipeline.DailyMarketContextService") as service_cls:
         context = pipeline._load_daily_market_context(
-            "cn",
+            "vn",
             target_date=date(2026, 6, 6),
         )
 
@@ -201,7 +193,7 @@ def test_pipeline_initializes_daily_market_context_service_once_across_threads()
     pipeline.config = SimpleNamespace(
         market_review_enabled=True,
         daily_market_context_enabled=True,
-        report_language="zh",
+        report_language="vi",
     )
     pipeline.daily_market_context_enabled = True
     pipeline.db = MagicMock()
@@ -219,7 +211,7 @@ def test_pipeline_initializes_daily_market_context_service_once_across_threads()
     def _load() -> DailyMarketContext:
         start_barrier.wait(timeout=2)
         return pipeline._load_daily_market_context(
-            "cn",
+            "vn",
             target_date=date(2026, 6, 6),
         )
 
@@ -247,9 +239,9 @@ def test_pipeline_uses_market_phase_effective_date_for_daily_market_context() ->
         effective_daily_bar_date=date(2026, 3, 26),
         to_dict=MagicMock(
             return_value={
-                "market": "cn",
+                "market": "vn",
                 "phase": "intraday",
-                "market_local_time": "2026-03-27T10:00:00+08:00",
+                "market_local_time": "2026-03-27T10:00:00+07:00",
                 "session_date": "2026-03-27",
                 "effective_daily_bar_date": "2026-03-26",
                 "is_trading_day": True,
@@ -265,9 +257,8 @@ def test_pipeline_uses_market_phase_effective_date_for_daily_market_context() ->
     )
     pipeline.config = SimpleNamespace(
         enable_realtime_quote=False,
-        enable_chip_distribution=False,
         market_review_enabled=True,
-        report_language="zh",
+        report_language="vi",
         agent_mode=False,
         save_context_snapshot=False,
         report_integrity_enabled=False,
@@ -277,14 +268,13 @@ def test_pipeline_uses_market_phase_effective_date_for_daily_market_context() ->
     pipeline.analysis_phase = "auto"
     pipeline.portfolio_context = None
     pipeline.fetcher_manager = MagicMock()
-    pipeline.fetcher_manager.get_stock_name.return_value = "贵州茅台"
-    pipeline.fetcher_manager.get_chip_distribution.return_value = None
+    pipeline.fetcher_manager.get_stock_name.return_value = "Hòa Phát"
     pipeline.fetcher_manager.get_fundamental_context.return_value = {}
     pipeline.fetcher_manager.build_failed_fundamental_context.return_value = {}
     pipeline.db = MagicMock()
     pipeline.db.get_analysis_context.return_value = {
-        "code": "600519",
-        "stock_name": "贵州茅台",
+        "code": "HPG",
+        "stock_name": "Hòa Phát",
         "today": {},
         "yesterday": {},
     }
@@ -299,30 +289,30 @@ def test_pipeline_uses_market_phase_effective_date_for_daily_market_context() ->
 
     with patch("src.core.pipeline.build_market_phase_context", return_value=phase_context):
         pipeline.analyze_stock(
-            "600519",
+            "HPG",
             ReportType.SIMPLE,
             "q-effective-date",
         )
 
     pipeline._load_daily_market_context.assert_called_once_with(
-        "cn",
+        "vn",
         target_date=date(2026, 3, 26),
     )
 
 
 def test_pipeline_attaches_low_sensitive_market_context_to_enhanced_context() -> None:
     pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)
-    enhanced_context = {"code": "600519"}
+    enhanced_context = {"code": "HPG"}
 
     pipeline._attach_daily_market_context(
         enhanced_context,
         _market_context(),
-        report_language="zh",
+        report_language="vi",
     )
 
-    assert enhanced_context["daily_market_context"]["region"] == "cn"
-    assert enhanced_context["daily_market_context"]["summary"].startswith("大盘退潮")
-    assert "大盘环境摘要" in enhanced_context["daily_market_context_summary"]
+    assert enhanced_context["daily_market_context"]["region"] == "vn"
+    assert enhanced_context["daily_market_context"]["summary"].startswith("Thị trường suy yếu")
+    assert "Daily Market Context" in enhanced_context["daily_market_context_summary"]
     assert "market_review_payload" not in str(enhanced_context)
 
 
@@ -330,15 +320,15 @@ def test_analyzer_prompt_renders_daily_market_context_before_technical_data() ->
     analyzer = GeminiAnalyzer.__new__(GeminiAnalyzer)
     analyzer._get_skill_prompt_sections = lambda: ("", "", False)
     context = {
-        "code": "600519",
-        "stock_name": "贵州茅台",
+        "code": "HPG",
+        "stock_name": "Hòa Phát",
         "date": "2026-06-06",
         "today": {"close": 1800, "open": 1790, "high": 1810, "low": 1780},
         "daily_market_context": _market_context().to_safe_dict(),
     }
 
-    prompt = analyzer._format_prompt(context, "贵州茅台", report_language="zh")
+    prompt = analyzer._format_prompt(context, "Hòa Phát", report_language="vi")
 
-    assert "大盘环境摘要" in prompt
-    assert "大盘退潮" in prompt
-    assert prompt.index("大盘环境摘要") < prompt.index("Technical Data")
+    assert "Daily Market Context" in prompt
+    assert "Thị trường suy yếu" in prompt
+    assert prompt.index("Daily Market Context") < prompt.index("Technical Data")

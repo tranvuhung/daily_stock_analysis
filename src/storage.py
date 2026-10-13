@@ -123,7 +123,7 @@ class StockDaily(Base):
     
     # Trading data
     volume = Column(Float)  # Volume (shares)
-    amount = Column(Float)  # Turnover amount (CNY)
+    amount = Column(Float)  # Giá trị giao dịch (VND) / Turnover amount (VND)
     pct_chg = Column(Float)  # Percent change (%)
     
     # Technical indicators
@@ -237,7 +237,7 @@ class IntelligenceSource(Base):
     enabled = Column(Boolean, nullable=False, default=True, index=True)
     scope_type = Column(String(32), nullable=False, default='market', index=True)
     scope_value = Column(String(64), index=True)
-    market = Column(String(32), nullable=False, default='cn', index=True)
+    market = Column(String(32), nullable=False, default='vn', index=True)
     description = Column(Text)
     last_status = Column(String(32))
     last_error = Column(Text)
@@ -267,7 +267,7 @@ class IntelligenceItem(Base):
     fetched_at = Column(DateTime, default=datetime.now, index=True)
     scope_type = Column(String(32), nullable=False, default='market', index=True)
     scope_value = Column(String(64), nullable=False, default=INTELLIGENCE_ITEM_NULL_SCOPE_VALUE, index=True)
-    market = Column(String(32), nullable=False, default='cn', index=True)
+    market = Column(String(32), nullable=False, default='vn', index=True)
     raw_payload = Column(Text)
 
     __table_args__ = (
@@ -307,32 +307,6 @@ class FundamentalSnapshot(Base):
 
     def __repr__(self) -> str:
         return f"<FundamentalSnapshot(query_id={self.query_id}, code={self.code})>"
-
-
-class ScreeningRun(Base):
-    """A completed built-in screening run persisted by DSA."""
-
-    __tablename__ = 'screening_runs'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    run_id = Column(String(64), nullable=False, unique=True, index=True)
-    strategy = Column(String(64), nullable=False, index=True)
-    market = Column(String(16), nullable=False, index=True)
-    snapshot_source = Column(String(64), index=True)
-    snapshot_count = Column(Integer)
-    after_filter_count = Column(Integer)
-    candidate_count = Column(Integer, nullable=False, default=0)
-    llm_ranked = Column(Boolean)
-    daily_enriched = Column(Boolean)
-    source_errors_json = Column(Text)
-    warnings_json = Column(Text)
-    result_json = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=utc_naive_now, nullable=False, index=True)
-
-    __table_args__ = (
-        Index('ix_screening_run_strategy_created', 'strategy', 'created_at'),
-        Index('ix_screening_run_market_created', 'market', 'created_at'),
-    )
 
 
 class AnalysisHistory(Base):
@@ -531,8 +505,8 @@ class PortfolioAccount(Base):
     owner_id = Column(String(64), index=True)
     name = Column(String(64), nullable=False)
     broker = Column(String(64))
-    market = Column(String(8), nullable=False, default='cn', index=True)  # cn/hk/us
-    base_currency = Column(String(8), nullable=False, default='CNY')
+    market = Column(String(8), nullable=False, default='vn', index=True)  # vn
+    base_currency = Column(String(8), nullable=False, default='VND')
     is_active = Column(Boolean, nullable=False, default=True, index=True)
     created_at = Column(DateTime, default=datetime.now, index=True)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
@@ -551,8 +525,8 @@ class PortfolioTrade(Base):
     account_id = Column(Integer, ForeignKey('portfolio_accounts.id'), nullable=False, index=True)
     trade_uid = Column(String(128))
     symbol = Column(String(16), nullable=False, index=True)
-    market = Column(String(8), nullable=False, default='cn')
-    currency = Column(String(8), nullable=False, default='CNY')
+    market = Column(String(8), nullable=False, default='vn')
+    currency = Column(String(8), nullable=False, default='VND')
     trade_date = Column(Date, nullable=False, index=True)
     side = Column(String(8), nullable=False)  # buy/sell
     quantity = Column(Float, nullable=False)
@@ -580,7 +554,7 @@ class PortfolioCashLedger(Base):
     event_date = Column(Date, nullable=False, index=True)
     direction = Column(String(8), nullable=False)  # in/out
     amount = Column(Float, nullable=False)
-    currency = Column(String(8), nullable=False, default='CNY')
+    currency = Column(String(8), nullable=False, default='VND')
     note = Column(String(255))
     created_at = Column(DateTime, default=datetime.now, index=True)
 
@@ -597,8 +571,8 @@ class PortfolioCorporateAction(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     account_id = Column(Integer, ForeignKey('portfolio_accounts.id'), nullable=False, index=True)
     symbol = Column(String(16), nullable=False, index=True)
-    market = Column(String(8), nullable=False, default='cn')
-    currency = Column(String(8), nullable=False, default='CNY')
+    market = Column(String(8), nullable=False, default='vn')
+    currency = Column(String(8), nullable=False, default='VND')
     effective_date = Column(Date, nullable=False, index=True)
     action_type = Column(String(24), nullable=False)  # cash_dividend/split_adjustment
     cash_dividend_per_share = Column(Float)
@@ -620,15 +594,15 @@ class PortfolioPosition(Base):
     account_id = Column(Integer, ForeignKey('portfolio_accounts.id'), nullable=False, index=True)
     cost_method = Column(String(8), nullable=False, default='fifo')
     symbol = Column(String(16), nullable=False, index=True)
-    market = Column(String(8), nullable=False, default='cn')
-    currency = Column(String(8), nullable=False, default='CNY')
+    market = Column(String(8), nullable=False, default='vn')
+    currency = Column(String(8), nullable=False, default='VND')
     quantity = Column(Float, nullable=False, default=0.0)
     avg_cost = Column(Float, nullable=False, default=0.0)
     total_cost = Column(Float, nullable=False, default=0.0)
     last_price = Column(Float, nullable=False, default=0.0)
     market_value_base = Column(Float, nullable=False, default=0.0)
     unrealized_pnl_base = Column(Float, nullable=False, default=0.0)
-    valuation_currency = Column(String(8), nullable=False, default='CNY')
+    valuation_currency = Column(String(8), nullable=False, default='VND')
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, index=True)
 
     __table_args__ = (
@@ -652,8 +626,8 @@ class PortfolioPositionLot(Base):
     account_id = Column(Integer, ForeignKey('portfolio_accounts.id'), nullable=False, index=True)
     cost_method = Column(String(8), nullable=False, default='fifo')
     symbol = Column(String(16), nullable=False, index=True)
-    market = Column(String(8), nullable=False, default='cn')
-    currency = Column(String(8), nullable=False, default='CNY')
+    market = Column(String(8), nullable=False, default='vn')
+    currency = Column(String(8), nullable=False, default='VND')
     open_date = Column(Date, nullable=False, index=True)
     remaining_quantity = Column(Float, nullable=False, default=0.0)
     unit_cost = Column(Float, nullable=False, default=0.0)
@@ -674,7 +648,7 @@ class PortfolioDailySnapshot(Base):
     account_id = Column(Integer, ForeignKey('portfolio_accounts.id'), nullable=False, index=True)
     snapshot_date = Column(Date, nullable=False, index=True)
     cost_method = Column(String(8), nullable=False, default='fifo')  # fifo/avg
-    base_currency = Column(String(8), nullable=False, default='CNY')
+    base_currency = Column(String(8), nullable=False, default='VND')
     total_cash = Column(Float, nullable=False, default=0.0)
     total_market_value = Column(Float, nullable=False, default=0.0)
     total_equity = Column(Float, nullable=False, default=0.0)
@@ -693,30 +667,6 @@ class PortfolioDailySnapshot(Base):
             'snapshot_date',
             'cost_method',
             name='uix_portfolio_snapshot_account_date_method',
-        ),
-    )
-
-
-class PortfolioFxRate(Base):
-    """Cached FX rates used for cross-currency portfolio conversion."""
-
-    __tablename__ = 'portfolio_fx_rates'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    from_currency = Column(String(8), nullable=False, index=True)
-    to_currency = Column(String(8), nullable=False, index=True)
-    rate_date = Column(Date, nullable=False, index=True)
-    rate = Column(Float, nullable=False)
-    source = Column(String(32), nullable=False, default='manual')
-    is_stale = Column(Boolean, nullable=False, default=False)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
-
-    __table_args__ = (
-        UniqueConstraint(
-            'from_currency',
-            'to_currency',
-            'rate_date',
-            name='uix_portfolio_fx_pair_date',
         ),
     )
 
@@ -1387,7 +1337,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
             self._ensure_intelligence_items_unique_index()
 
             self._initialized = True
-            logger.info(f"数据库初始化完成: {db_url}")
+            logger.info(f"Khởi tạo cơ sở dữ liệu hoàn tất: {db_url}")
 
             # Register an exit hook to close database connections when the program exits
             atexit.register(DatabaseManager._cleanup_engine, self._engine)
@@ -1397,7 +1347,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                 if created_engine is not None:
                     created_engine.dispose()
             except Exception as cleanup_exc:
-                logger.warning("数据库初始化失败后的引擎清理也失败: %s", cleanup_exc)
+                logger.warning("Dọn dẹp engine sau khi khởi tạo cơ sở dữ liệu thất bại cũng thất bại: %s", cleanup_exc)
             self._engine = None
             self._SessionLocal = None
             self.__class__._instance = None
@@ -1671,7 +1621,6 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                     raise
 
         self._backfill_stock_daily_canonical_id()
-        self._backfill_canonical_ids()
         self._ensure_stock_daily_canonical_id_index()
 
     def _ensure_stock_daily_canonical_id_index(self) -> None:
@@ -1832,135 +1781,6 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
             "[StockDaily] canonical_id backfill stats: backfilled_count=%s "
             "skipped_count=%s",
             total_backfilled,
-            total_skipped,
-        )
-
-    def _backfill_canonical_ids(self) -> None:
-        """Idempotent, batched repair of historical bare-code canonical_id buckets.
-
-        The previous ``_derive_canonical_id`` behavior preferred
-        ``matched_index.canonical_id``, so a bare six-digit code that collided
-        with an index identity (e.g. ``000001`` / ``000016`` / ``000688`` /
-        ``930955``) was written with the *index* canonical_id (``sh000001`` /
-        ``csi930955``) instead of the stock-path canonical_id (``sz000001`` /
-        ``bj930955``). This method repairs those rows.
-
-        Only rows matching ALL of the following are touched:
-          * ``code`` is a bare 6-digit numeric string (no explicit prefix/suffix)
-          * current ``canonical_id`` is non-NULL and hits an active index identity
-          * the parser's stock canonical_id differs from the current value
-
-        Explicit ``sh``/``sz``/``csi`` prefix and ``.SH``/``.SZ``/``.CSI``
-        suffix rows are never modified. The repair uses a monotonic ``id``
-        cursor and a conditional UPDATE (guarded by the current value) so it is
-        idempotent and safe under concurrent writers. When the registry is
-        empty the repair is a no-op and logs a WARNING.
-        """
-        if not self._is_sqlite_engine:
-            return
-        if not inspect(self._engine).has_table(StockDaily.__tablename__):
-            return
-
-        try:
-            from src.services.stock_list_parser import parse_analysis_target
-            from src.data.stock_index_loader import _load_active_index_rows
-        except Exception as exc:
-            logger.warning(
-                "[StockDaily] canonical_id repair cannot import parser/loader: %s — skipping",
-                exc,
-            )
-            return
-
-        active_rows = _load_active_index_rows()
-        if not active_rows:
-            logger.warning("[StockDaily] canonical_id repair skipped: index registry is empty")
-            return
-
-        # Build the set of active index canonical_ids to detect mis-bucketed rows.
-        active_index_canonicals = {
-            str(row[0]).strip() for row in active_rows if row and str(row[0]).strip()
-        }
-        if not active_index_canonicals:
-            logger.warning("[StockDaily] canonical_id repair skipped: no active index canonicals")
-            return
-
-        _BATCH_SIZE = 5000
-        total_repaired = 0
-        total_skipped = 0
-        last_id = 0
-
-        # Only rows whose current canonical_id hits an active index identity are
-        # candidates for repair. Push this filter into the SQL so repeated
-        # startup repairs do not scan the full table.
-        canonical_placeholders = ", ".join(f":c{i}" for i in range(len(active_index_canonicals)))
-        canonical_params = {f"c{i}": c for i, c in enumerate(sorted(active_index_canonicals))}
-
-        while True:
-            with self._engine.begin() as connection:
-                rows = connection.execute(
-                    text(
-                        f"SELECT id, code, canonical_id FROM {StockDaily.__tablename__} "
-                        "WHERE id > :last_id "
-                        f"AND canonical_id IN ({canonical_placeholders}) "
-                        "AND length(code) = 6 "
-                        "AND code NOT GLOB '*[^0-9]*' "
-                        f"ORDER BY id LIMIT {_BATCH_SIZE}"
-                    ),
-                    {"last_id": last_id, **canonical_params},
-                ).fetchall()
-
-            if not rows:
-                break
-
-            with self._engine.begin() as connection:
-                for row_id, code, current_canonical in rows:
-                    last_id = row_id
-                    code_str = str(code or "").strip()
-                    current = str(current_canonical or "").strip()
-
-                    # Only bare 6-digit numeric codes are candidates for repair.
-                    if not (code_str.isdigit() and len(code_str) == 6):
-                        total_skipped += 1
-                        continue
-
-                    try:
-                        target = parse_analysis_target(code_str)
-                    except Exception as exc:
-                        logger.warning(
-                            "[StockDaily] canonical_id repair derivation failed for "
-                            "code=%r (id=%s): %s — skipping",
-                            code_str, row_id, exc,
-                        )
-                        total_skipped += 1
-                        continue
-
-                    derived = target.canonical_id or None
-                    if not derived or derived == current:
-                        total_skipped += 1
-                        continue
-
-                    result = connection.execute(
-                        text(
-                            f"UPDATE {StockDaily.__tablename__} "
-                            "SET canonical_id = :derived "
-                            "WHERE id = :row_id AND canonical_id = :current"
-                        ),
-                        {"derived": derived, "row_id": row_id, "current": current},
-                    )
-                    if result.rowcount == 1:
-                        total_repaired += 1
-                    elif result.rowcount == 0:
-                        # Lost the race with a concurrent writer — safe to skip.
-                        total_skipped += 1
-                    else:
-                        raise RuntimeError(
-                            "canonical_id repair updated an unexpected number "
-                            f"of rows for id={row_id}: {result.rowcount}"
-                        )
-
-        logger.info(
-            "[StockDaily] canonical_id repair stats: repaired_count=%s skipped_count=%s",
-            total_repaired,
             total_skipped,
         )
 
@@ -2128,7 +1948,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                 for column in inspect(self._engine).get_columns(IntelligenceItem.__tablename__)
             }
         except Exception as exc:
-            logger.warning("资讯池 scope_value 回填检查失败，已跳过: %s", exc)
+            logger.warning("Kiểm tra backfill scope_value của kho tin tức thất bại, đã bỏ qua: %s", exc)
             return
         if "scope_value" not in existing:
             return
@@ -2141,7 +1961,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                     (INTELLIGENCE_ITEM_NULL_SCOPE_VALUE,),
                 )
         except Exception as exc:
-            logger.warning("资讯池 scope_value 回填失败，已跳过: %s", exc)
+            logger.warning("Backfill scope_value của kho tin tức thất bại, đã bỏ qua: %s", exc)
 
     @classmethod
     def get_instance(cls) -> 'DatabaseManager':
@@ -2174,9 +1994,9 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
         try:
             if engine is not None:
                 engine.dispose()
-                logger.debug("数据库引擎已清理")
+                logger.debug("Đã dọn dẹp engine cơ sở dữ liệu")
         except Exception as e:
-            logger.warning(f"清理数据库引擎时出错: {e}")
+            logger.warning(f"Lỗi khi dọn dẹp engine cơ sở dữ liệu: {e}")
 
     def _install_sqlite_pragma_handler(self) -> None:
         """Install contention-protection parameters for SQLite connections."""
@@ -2191,7 +2011,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                 if self._sqlite_file_db and self._sqlite_wal_enabled:
                     cursor.execute("PRAGMA journal_mode=WAL")
             except Exception as exc:
-                logger.warning("初始化 SQLite PRAGMA 失败: %s", exc)
+                logger.warning("Khởi tạo SQLite PRAGMA thất bại: %s", exc)
             finally:
                 cursor.close()
 
@@ -2226,7 +2046,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                 ):
                     delay = self._sqlite_write_retry_base_delay * (2 ** attempt)
                     logger.warning(
-                        "SQLite 写入锁冲突，准备重试: %s (%s/%s, %.2fs)",
+                        "Xung đột khoá ghi SQLite, chuẩn bị thử lại: %s (%s/%s, %.2fs)",
                         operation_name,
                         attempt + 1,
                         max_retries,
@@ -2284,8 +2104,8 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
         """
         if not getattr(self, '_initialized', False) or not hasattr(self, '_SessionLocal'):
             raise RuntimeError(
-                "DatabaseManager 未正确初始化。"
-                "请确保通过 DatabaseManager.get_instance() 获取实例。"
+                "DatabaseManager chưa được khởi tạo đúng cách. "
+                "Hãy lấy instance thông qua DatabaseManager.get_instance()."
             )
         session = self._SessionLocal()
         try:
@@ -2478,7 +2298,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                         session.flush()
                     local_saved_count += 1
                 except IntegrityError:
-                    logger.debug("新闻情报重复（已跳过）: %s %s", code, url_key)
+                    logger.debug("Tin tức tình báo trùng lặp (đã bỏ qua): %s %s", code, url_key)
 
             return local_saved_count
 
@@ -2487,9 +2307,9 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                 f"save_news_intel[{code}]",
                 _write,
             )
-            logger.info(f"保存新闻情报成功: {code}, 新增 {saved_count} 条")
+            logger.info(f"Lưu tin tức tình báo thành công: {code}, thêm mới {saved_count} bản ghi")
         except Exception as e:
-            logger.error(f"保存新闻情报失败: {e}")
+            logger.error(f"Lưu tin tức tình báo thất bại: {e}")
             raise
 
         return saved_count
@@ -2526,7 +2346,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
             )
         except Exception as e:
             logger.debug(
-                "基本面快照写入失败（fail-open）: query_id=%s code=%s err=%s",
+                "Ghi snapshot cơ bản thất bại (fail-open): query_id=%s code=%s err=%s",
                 query_id,
                 code,
                 e,
@@ -2561,7 +2381,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                 ).scalar_one_or_none()
             except Exception as e:
                 logger.debug(
-                    "基本面快照读取失败（fail-open）: query_id=%s code=%s err=%s",
+                    "Đọc snapshot cơ bản thất bại (fail-open): query_id=%s code=%s err=%s",
                     query_id,
                     code,
                     e,
@@ -2575,89 +2395,6 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                 return payload if isinstance(payload, dict) else None
             except Exception:
                 return None
-
-    def save_screening_run(self, payload: Dict[str, Any]) -> int:
-        """Persist one completed screening response without blocking screening on DB errors."""
-        run_id = str(payload.get("run_id") or "").strip()
-        if not run_id:
-            return 0
-        normalized_payload = dict(payload)
-        warnings = self._screening_warning_values(normalized_payload)
-        normalized_payload["warnings"] = warnings
-
-        values = {
-            "strategy": str(normalized_payload.get("strategy") or "").strip() or "unknown",
-            "market": str(normalized_payload.get("market") or "").strip() or "cn",
-            "snapshot_source": str(normalized_payload.get("snapshot_source") or "").strip() or None,
-            "snapshot_count": self._optional_int(normalized_payload.get("snapshot_count")),
-            "after_filter_count": self._optional_int(normalized_payload.get("after_filter_count")),
-            "candidate_count": self._optional_int(normalized_payload.get("candidate_count")) or 0,
-            "llm_ranked": self._optional_bool(normalized_payload.get("llm_ranked")),
-            "daily_enriched": self._optional_bool(normalized_payload.get("daily_enriched")),
-            "source_errors_json": self._safe_json_dumps(normalized_payload.get("source_errors") or []),
-            "warnings_json": self._safe_json_dumps(warnings),
-            "result_json": self._safe_json_dumps(normalized_payload),
-        }
-
-        try:
-            def _write(session: Session) -> int:
-                row = session.execute(
-                    select(ScreeningRun).where(ScreeningRun.run_id == run_id)
-                ).scalar_one_or_none()
-                if row is None:
-                    session.add(ScreeningRun(run_id=run_id, **values))
-                else:
-                    for key, value in values.items():
-                        setattr(row, key, value)
-                return 1
-
-            return self._run_write_transaction(
-                f"save_screening_run[{run_id}]",
-                _write,
-            )
-        except Exception as exc:
-            logger.warning(
-                "选股运行历史写入失败（fail-open）: run_id=%s err=%s",
-                run_id,
-                exc,
-            )
-            return 0
-
-    def list_screening_runs(
-        self,
-        *,
-        limit: int = 20,
-        strategy: Optional[str] = None,
-        market: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        """List recent screening runs as compact summaries."""
-        normalized_limit = max(0, min(int(limit), 100))
-        if normalized_limit <= 0:
-            return []
-
-        with self.get_session() as session:
-            statement = select(ScreeningRun)
-            if strategy:
-                statement = statement.where(ScreeningRun.strategy == str(strategy).strip())
-            if market:
-                statement = statement.where(ScreeningRun.market == str(market).strip())
-            rows = session.execute(
-                statement.order_by(desc(ScreeningRun.created_at), desc(ScreeningRun.id)).limit(normalized_limit)
-            ).scalars().all()
-            return [self._screening_run_to_dict(row, include_result=False) for row in rows]
-
-    def get_screening_run(self, run_id: str) -> Optional[Dict[str, Any]]:
-        """Load a completed screening run by its stable run id."""
-        normalized_run_id = str(run_id or "").strip()
-        if not normalized_run_id:
-            return None
-        with self.get_session() as session:
-            row = session.execute(
-                select(ScreeningRun).where(ScreeningRun.run_id == normalized_run_id)
-            ).scalar_one_or_none()
-            if row is None:
-                return None
-            return self._screening_run_to_dict(row, include_result=True)
 
     @staticmethod
     def _optional_int(value: Any) -> Optional[int]:
@@ -2682,67 +2419,6 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                 return False
             return None
         return bool(value)
-
-    @staticmethod
-    def _screening_json_list(value: Optional[str]) -> List[Any]:
-        try:
-            decoded = json.loads(value or "[]")
-        except (TypeError, ValueError):
-            return []
-        return decoded if isinstance(decoded, list) else []
-
-    @staticmethod
-    def _screening_text_list(value: Any) -> List[str]:
-        if isinstance(value, list):
-            result = []
-            for item in value:
-                text = str(item or "").strip()
-                if text:
-                    result.append(text)
-            return result
-        text = str(value or "").strip()
-        return [text] if text else []
-
-    @classmethod
-    def _screening_warning_values(cls, payload: Dict[str, Any]) -> List[str]:
-        warnings: List[str] = []
-        seen: set[str] = set()
-        for key in ("warnings", "degradation"):
-            for item in cls._screening_text_list(payload.get(key)):
-                if item in seen:
-                    continue
-                seen.add(item)
-                warnings.append(item)
-        return warnings
-
-    @classmethod
-    def _screening_run_to_dict(
-        cls,
-        row: ScreeningRun,
-        *,
-        include_result: bool,
-    ) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {
-            "run_id": row.run_id,
-            "strategy": row.strategy,
-            "market": row.market,
-            "snapshot_source": row.snapshot_source or "",
-            "snapshot_count": row.snapshot_count,
-            "after_filter_count": row.after_filter_count,
-            "candidate_count": row.candidate_count,
-            "llm_ranked": row.llm_ranked,
-            "daily_enriched": row.daily_enriched,
-            "source_errors": cls._screening_json_list(row.source_errors_json),
-            "warnings": cls._screening_json_list(row.warnings_json),
-            "created_at": row.created_at.isoformat() if row.created_at else None,
-        }
-        if include_result:
-            try:
-                result = json.loads(row.result_json or "{}")
-            except (TypeError, ValueError):
-                result = {}
-            payload["result"] = result if isinstance(result, dict) else {}
-        return payload
 
     def get_recent_news(self, code: str, days: int = 7, limit: int = 20) -> List[NewsIntel]:
         """
@@ -2843,7 +2519,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                 _write,
             )
         except Exception as e:
-            logger.error(f"保存分析历史失败: {e}")
+            logger.error(f"Lưu lịch sử phân tích thất bại: {e}")
             return 0
 
     def update_analysis_history_diagnostics(
@@ -2918,7 +2594,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
             )
         except Exception as e:
             logger.warning(
-                "更新分析历史诊断快照失败（fail-open）: query_id=%s code=%s err=%s",
+                "Cập nhật snapshot chẩn đoán lịch sử phân tích thất bại (fail-open): query_id=%s code=%s err=%s",
                 query_id,
                 code,
                 e,
@@ -3323,7 +2999,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
             Number of records actually inserted this time (excluding updates)
         """
         if df is None or df.empty:
-            logger.warning(f"保存数据为空，跳过 {code}")
+            logger.warning(f"Dữ liệu cần lưu rỗng, bỏ qua {code}")
             return 0
 
         # D1: canonical_id=None → derive via the Phase 1 parser; on failure
@@ -3474,10 +3150,10 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                 f"save_daily_data[{code}]",
                 _write,
             )
-            logger.info(f"保存 {code} 数据成功，新增 {saved_count} 条")
+            logger.info(f"Lưu dữ liệu {code} thành công, thêm mới {saved_count} bản ghi")
             return saved_count
         except Exception as e:
-            logger.error(f"保存 {code} 数据失败: {e}")
+            logger.error(f"Lưu dữ liệu {code} thất bại: {e}")
             raise
     
     def get_analysis_context(
@@ -3508,7 +3184,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
         recent_data = self.get_latest_data(code, days=2)
         
         if not recent_data:
-            logger.warning(f"未找到 {code} 的数据")
+            logger.warning(f"Không tìm thấy dữ liệu của {code}")
             return None
         
         today_data = recent_data[0]
@@ -3557,15 +3233,15 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
         ma20 = data.ma20 or 0
         
         if close > ma5 > ma10 > ma20 > 0:
-            return "多头排列 📈"
+            return "MA xếp tăng 📈"
         elif close < ma5 < ma10 < ma20 and ma20 > 0:
-            return "空头排列 📉"
+            return "MA xếp giảm 📉"
         elif close > ma5 and ma5 > ma10:
-            return "短期向好 🔼"
+            return "Ngắn hạn tích cực 🔼"
         elif close < ma5 and ma5 < ma10:
-            return "短期走弱 🔽"
+            return "Ngắn hạn suy yếu 🔽"
         else:
-            return "震荡整理 ↔️"
+            return "Đi ngang tích lũy ↔️"
 
     @staticmethod
     def _parse_published_date(value: Optional[str]) -> Optional[datetime]:
@@ -4010,7 +3686,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                     .order_by(ConversationMessage.created_at)
                     .limit(1)
                 ).scalar()
-                title = (first_user_msg or "新对话")[:60]
+                title = (first_user_msg or "Cuộc trò chuyện mới")[:60]
 
                 results.append({
                     "session_id": sid,
@@ -4341,12 +4017,12 @@ if __name__ == "__main__":
     
     db = get_db()
     
-    print("=== 数据库测试 ===")
-    print(f"数据库初始化成功")
+    print("=== Kiểm thử cơ sở dữ liệu ===")
+    print("Khởi tạo cơ sở dữ liệu thành công")
     
     # Test checking today's data
-    has_data = db.has_today_data('600519')
-    print(f"茅台今日是否有数据: {has_data}")
+    has_data = db.has_today_data('FPT')
+    print(f"FPT hôm nay đã có dữ liệu chưa: {has_data}")
     
     # Test saving data
     test_df = pd.DataFrame({
@@ -4364,9 +4040,9 @@ if __name__ == "__main__":
         'volume_ratio': [1.2],
     })
     
-    saved = db.save_daily_data(test_df, '600519', 'TestSource')
-    print(f"保存测试数据: {saved} 条")
+    saved = db.save_daily_data(test_df, 'FPT', 'TestSource')
+    print(f"Lưu dữ liệu kiểm thử: {saved} bản ghi")
     
     # Test getting context
-    context = db.get_analysis_context('600519')
-    print(f"分析上下文: {context}")
+    context = db.get_analysis_context('FPT')
+    print(f"Ngữ cảnh phân tích: {context}")

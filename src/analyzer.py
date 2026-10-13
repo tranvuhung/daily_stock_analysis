@@ -84,16 +84,13 @@ from src.llm.provider_cache import (
 )
 from src.llm.response_content import strip_leading_think_wrapper
 from src.storage import persist_llm_usage
-from src.data.stock_mapping import STOCK_NAME_MAP
+from src.data.stock_mapping import PLACEHOLDER_NAME_PREFIXES, STOCK_NAME_MAP
 from src.report_language import (
     get_signal_level,
-    get_no_data_text,
     get_placeholder_text,
     get_unknown_text,
-    get_chip_unavailable_text,
     infer_decision_type_from_advice,
-    is_chip_placeholder_value,
-    localize_chip_health,
+    is_placeholder_value,
     get_localized_stock_name,
     get_pipeline_progress_text,
     localize_confidence_level,
@@ -111,19 +108,20 @@ from src.schemas.report_schema import AnalysisReportSchema
 from src.market_context import detect_market, get_market_role, get_market_guidelines
 from src.services.daily_market_context import format_daily_market_context_prompt_section
 from src.market_phase_prompt import format_market_phase_prompt_section
-from src.market_structure_prompt import format_market_structure_prompt_section
 
 logger = logging.getLogger(__name__)
 
 
-def _localized_text(language: Any, *, en: str, zh: str, ko: str) -> str:
-    """Pick a deterministic fallback string for the report language (zh/en/ko)."""
+def _localized_text(language: Any, *, en: str, vi: Optional[str] = None) -> str:
+    """Pick a deterministic fallback string for the report language (vi/en).
+
+    Khi không truyền ``vi`` thì cả hai ngôn ngữ đều dùng chuỗi tiếng Anh.
+    When ``vi`` is not given, both languages use the English string.
+    """
     normalized = normalize_report_language(language)
-    if normalized in ("en", "vi"):
-        return en
-    if normalized == "ko":
-        return ko
-    return zh
+    if normalized == "vi" and vi:
+        return vi
+    return en
 
 
 def _normalize_risk_warning_values(value: Any) -> List[str]:
@@ -229,16 +227,12 @@ def _should_hide_regular_session_ohlc(context: Dict[str, Any]) -> bool:
 def _market_currency(stock_code: Any) -> str:
     """Đơn vị yết giá theo thị trường của mã. / Quote currency for the stock's market.
 
-    Trước đây prompt in cứng ``元`` (CNY) cho mọi thị trường — sai với mã Việt Nam
+    Trước đây prompt in cứng đơn vị CNY cho mọi thị trường — sai với mã Việt Nam
     (VND). Tái dùng bảng thị trường sẵn có thay vì tự khai báo lần nữa.
-    The prompt used to hardcode ``元`` (CNY) for every market, which is wrong for
+    The prompt used to hardcode CNY for every market, which is wrong for
     Vietnamese tickers (VND). Reuse the existing market registry instead.
     """
-    # Dùng ``_market_tag`` chứ KHÔNG dùng ``detect_market`` của market_context:
-    # hàm sau chỉ biết cn/hk/us và trả "us" cho mọi mã Việt Nam trần (HPG -> us).
-    # Import trễ theo đúng khuôn đã có ở ``src/core/pipeline.py:396``.
-    # Use ``_market_tag``, NOT market_context's ``detect_market``: the latter only
-    # knows cn/hk/us and maps every bare Vietnamese ticker to "us".
+    # Import trễ theo đúng khuôn đã có trong ``src/core/pipeline.py``.
     from data_provider.base import _market_tag
     from src.core.markets import get_spec
 
@@ -250,8 +244,7 @@ def _legacy_market_group(stock_code: Any) -> str:
     code = str(stock_code or "").strip()
     if not code or code.lower() == "unknown":
         return "unknown"
-    market = detect_market(code)
-    return market if market in {"cn", "hk", "us"} else "unknown"
+    return detect_market(code)
 
 
 def _legacy_audit_marker_specs(
@@ -282,9 +275,8 @@ def _legacy_audit_marker_specs(
     add("stock_code", code)
     add("stock_name", stock_name)
     add("analysis_date", context.get("date"))
-    add("market_phase", "## Market Phase Context" if report_language in ("en", "ko", "vi") else "## 市场阶段上下文")
-    add("daily_market_context", "## Daily Market Context" if report_language in ("en", "ko", "vi") else "## 大盘环境摘要")
-    add("market_structure_context", "## Market Structure Context" if report_language in ("en", "ko", "vi") else "## 市场结构上下文")
+    add("market_phase", "## Market Phase Context")
+    add("daily_market_context", "## Daily Market Context")
     add("analysis_context_pack", analysis_context_pack_summary)
     add("quote", "## 📈 Technical Data")
     add("news_context", "## 📰 News Intelligence" if news_context else None)
@@ -434,32 +426,24 @@ def apply_placeholder_fill(result: "AnalysisResult", missing_fields: List[str]) 
             return not value.strip()
         return False
 
-    report_language = normalize_report_language(getattr(result, "report_language", "zh"))
+    report_language = normalize_report_language(getattr(result, "report_language", "vi"))
     placeholder = get_placeholder_text(report_language)
     phase_decision_placeholders = {
         "dashboard.phase_decision.action_window": _localized_text(
             report_language,
             en="Model did not provide a phase action window",
-            zh="模型未提供阶段化行动窗口",
-            ko="모델이 단계별 행동 구간을 제공하지 않았습니다",
         ),
         "dashboard.phase_decision.immediate_action": _localized_text(
             report_language,
             en="Model did not provide a phase-aware immediate action",
-            zh="模型未提供阶段化即时动作",
-            ko="모델이 단계 인식 즉시 동작을 제공하지 않았습니다",
         ),
         "dashboard.phase_decision.next_check_time": _localized_text(
             report_language,
             en="Model did not provide a next check point",
-            zh="模型未提供下一次检查点",
-            ko="모델이 다음 점검 시점을 제공하지 않았습니다",
         ),
         "dashboard.phase_decision.confidence_reason": _localized_text(
             report_language,
             en="Model did not provide a phase confidence rationale",
-            zh="模型未提供阶段化置信度理由",
-            ko="모델이 단계별 신뢰도 근거를 제공하지 않았습니다",
         ),
     }
     for field in missing_fields:
@@ -529,14 +513,9 @@ def apply_placeholder_fill(result: "AnalysisResult", missing_fields: List[str]) 
                     phase_decision[field.rsplit(".", 1)[-1]] = phase_decision_placeholders[field]
 
 
-# ---------- chip_structure fallback (Issue #589) ----------
-
-_CHIP_KEYS: tuple = ("profit_ratio", "avg_cost", "concentration", "chip_health")
-
-
 def _is_value_placeholder(v: Any) -> bool:
-    """True if value is empty or placeholder (N/A, 数据缺失, etc.)."""
-    return is_chip_placeholder_value(v)
+    """True if value is empty or placeholder (N/A, missing data, etc.)."""
+    return is_placeholder_value(v)
 
 
 _RISK_WARNING_PLACEHOLDER_TEXTS = {
@@ -547,41 +526,42 @@ _RISK_WARNING_PLACEHOLDER_TEXTS = {
     "null",
     "unknown",
     "tbd",
-    "暂无",
-    "待补充",
-    "数据缺失",
-    "未知",
-    "无",
+    # Giá trị giữ chỗ tiếng Việt / Vietnamese placeholders
+    "chưa có",
+    "đang cập nhật",
+    "thiếu dữ liệu",
+    "không rõ",
+    "không có",
 }
 
 _STRUCTURAL_RISK_PHRASE_HINTS = (
-    "重大利空",
-    "重大风险",
-    "关键风险",
-    "减持",
-    "高位减持",
-    "退市",
-    "退市风险",
-    "停牌",
-    "重大问询",
-    "处罚",
-    "限售",
-    "违规",
-    "违规风险",
-    "诉讼",
-    "问询",
-    "监管",
-    "财务",
-    "审计",
-    "爆雷",
-    "暴雷",
-    "违约",
-    "违约风险",
-    "流动性危机",
-    "债务",
-    "清算",
-    "破产",
-    "重大变脸",
+    # Tiếng Việt (LLM viết báo cáo bằng tiếng Việt) / Vietnamese phrases
+    "rủi ro trọng yếu",
+    "rủi ro lớn",
+    "rủi ro then chốt",
+    "tin xấu lớn",
+    "thoái vốn",
+    "cổ đông lớn bán ra",
+    "hủy niêm yết",
+    "huỷ niêm yết",
+    "đình chỉ giao dịch",
+    "tạm ngừng giao dịch",
+    "diện kiểm soát",
+    "diện cảnh báo",
+    "xử phạt",
+    "vi phạm",
+    "kiện tụng",
+    "thanh tra",
+    "điều tra",
+    "ý kiến kiểm toán",
+    "kiểm toán ngoại trừ",
+    "vỡ nợ",
+    "chậm trả",
+    "khủng hoảng thanh khoản",
+    "giải chấp",
+    "thanh lý",
+    "phá sản",
+    "lỗ đột biến",
     "major risk",
     "material adverse",
     "suspension",
@@ -591,20 +571,6 @@ _STRUCTURAL_RISK_PHRASE_HINTS = (
     "liquidity",
     "default",
 )
-
-_CAPITAL_FLOW_UNAVAILABLE_STATUS = {
-    "not_supported",
-    "not supported",
-    "unsupported",
-    "unavailable",
-    "not_available",
-    "not available",
-    "none",
-    "na",
-    "n/a",
-    "null",
-    "missing",
-}
 
 
 def _is_meaningful_text(value: Any) -> bool:
@@ -616,7 +582,7 @@ def _is_meaningful_text(value: Any) -> bool:
 
 
 def _safe_float(v: Any, default: float = 0.0) -> float:
-    """Safely convert to float; return default on failure. Private helper for chip fill."""
+    """Safely convert to float; return default on failure. Private helper for numeric fills."""
     if v is None:
         return default
     if isinstance(v, (int, float)):
@@ -630,88 +596,65 @@ def _safe_float(v: Any, default: float = 0.0) -> float:
         return default
 
 
-def _coerce_chip_metric(v: Any) -> Optional[float]:
-    """Convert chip metrics while preserving the distinction between missing and zero."""
-    if v is None:
-        return None
-    try:
-        numeric = float(v)
-    except (TypeError, ValueError):
-        try:
-            numeric = float(str(v).strip())
-        except (TypeError, ValueError):
-            return None
-    return None if math.isnan(numeric) else numeric
-
-
 _BULLISH_TREND_HINTS: Tuple[str, ...] = (
-    "多头排列",
-    "持续上涨",
-    "趋势向上",
-    "上升趋势",
-    "向上发散",
+    "xếp tăng",
+    "tăng liên tục",
+    "xu hướng tăng",
+    "mở rộng lên",
     "bullish",
     "uptrend",
 )
-_WEAK_BULLISH_TREND_HINTS: Tuple[str, ...] = ("弱势多头",)
+_WEAK_BULLISH_TREND_HINTS: Tuple[str, ...] = ("tăng yếu",)
 _BEARISH_TREND_HINTS: Tuple[str, ...] = (
-    "空头排列",
-    "持续下跌",
-    "趋势向下",
-    "下降趋势",
-    "向下发散",
+    "xếp giảm",
+    "giảm liên tục",
+    "xu hướng giảm",
+    "mở rộng xuống",
     "bearish",
     "downtrend",
 )
-_WEAK_BEARISH_TREND_HINTS: Tuple[str, ...] = ("弱势空头",)
+_WEAK_BEARISH_TREND_HINTS: Tuple[str, ...] = ("giảm yếu",)
 _NEGATION_TOKENS: Tuple[str, ...] = (
-    "不是",
-    "并非",
-    "并未",
-    "没有",
-    "尚不",
-    "尚未",
-    "未",
-    "无",
-    "不属",
-    "非",
+    "không",
+    "chưa",
+    "chẳng",
     "not ",
     "no ",
 )
 _NEGATION_BREAK_CHARS: Tuple[str, ...] = (",", ".", ";", ":", "!", "?", "，", "。", "；", "：", "！", "？", "\n")
-_NEGATION_LOOKBACK_CHARS = 16
-_NEGATION_MAX_GAP_CHARS = 8
+# Cửa sổ tính theo ký tự; từ tiếng Việt dài hơn chữ Hán nên cửa sổ rộng hơn bản cũ (16/8).
+# Character windows; Vietnamese words are longer than CJK, so wider than the legacy 16/8.
+_NEGATION_LOOKBACK_CHARS = 24
+_NEGATION_MAX_GAP_CHARS = 12
 _NEGATION_SCOPE_BREAK_TOKENS: Tuple[str, ...] = (
-    "而是",
-    "但是",
-    "但",
-    "反而",
-    "反倒",
-    "转为",
-    "转成",
-    "改为",
-    "改成",
+    "nhưng",
+    "mà là",
+    "thay vào",
+    "ngược lại",
+    "chuyển sang",
+    "đổi thành",
     " but ",
     " instead ",
     " rather ",
 )
+# Từ phủ định ngắn, dễ nhập nhằng ("không", "chưa"): chỉ tính là phủ định khi phần
+# chen giữa bắt đầu bằng một động từ/liên từ trong danh sách này.
+# Short ambiguous negations only count when the gap starts with one of these words.
+_GAP_RESTRICTED_NEGATION_TOKENS: Tuple[str, ...] = ("không", "chưa")
 _SINGLE_CHAR_NEGATION_GAP_PREFIXES: Tuple[str, ...] = (
-    "形成",
-    "出现",
-    "进入",
-    "转为",
-    "转成",
-    "构成",
-    "呈现",
-    "显示",
-    "属于",
-    "是",
-    "有",
-    "能",
-    "见",
-    "站",
-    "守",
-    "破",
+    "phải",
+    "hình thành",
+    "xuất hiện",
+    "vào",
+    "chuyển",
+    "là",
+    "có",
+    "còn",
+    "thấy",
+    "thuộc",
+    "giữ",
+    "duy trì",
+    "phá",
 )
 
 
@@ -742,7 +685,7 @@ def _contains_trend_hint(text: str, hints: Tuple[str, ...]) -> bool:
     def _is_valid_negation_gap(token: str, gap: str) -> bool:
         if not gap:
             return True
-        if token not in {"未", "无", "非"}:
+        if token not in _GAP_RESTRICTED_NEGATION_TOKENS:
             return True
         return any(gap.startswith(prefix) for prefix in _SINGLE_CHAR_NEGATION_GAP_PREFIXES)
 
@@ -835,10 +778,10 @@ def _sanitize_trend_analysis_for_prompt(
             _BULLISH_TREND_HINTS + _WEAK_BULLISH_TREND_HINTS,
         )
         if len(filtered_signal_reasons) != len(signal_reasons):
-            prompt_notes.append("当前技术结构偏空，已剔除与空头主判断直接冲突的看多结构理由。")
+            prompt_notes.append("Technical structure is bearish; bullish-structure reasons that directly conflict with the bearish view were removed.")
         signal_reasons = filtered_signal_reasons
         prompt_notes.append(
-            "若新闻、业绩或政策催化偏多，只能表述为“事件先行、技术待确认”或“基本面偏多，但技术面尚未确认”，严禁写成确定性买点。"
+            "If news, earnings or policy catalysts are bullish, phrase them only as 'event-led, technicals unconfirmed' or 'fundamentals bullish, technicals not yet confirmed'; never present them as a definite buy point."
         )
     elif trend_direction == "bullish":
         filtered_signal_reasons = _filter_conflicting_trend_items(
@@ -846,20 +789,20 @@ def _sanitize_trend_analysis_for_prompt(
             _BEARISH_TREND_HINTS + _WEAK_BEARISH_TREND_HINTS,
         )
         if len(filtered_signal_reasons) != len(signal_reasons):
-            prompt_notes.append("当前技术结构偏多，已剔除与多头主判断直接冲突的空头结构理由。")
+            prompt_notes.append("Technical structure is bullish; bearish-structure reasons that directly conflict with the bullish view were removed.")
         signal_reasons = filtered_signal_reasons
         filtered_risk_factors = _filter_conflicting_trend_items(
             risk_factors,
             _BEARISH_TREND_HINTS + _WEAK_BEARISH_TREND_HINTS,
         )
         if len(filtered_risk_factors) != len(risk_factors):
-            prompt_notes.append("当前技术结构偏多，已剔除与多头主判断直接冲突的空头结构风险表述。")
+            prompt_notes.append("Technical structure is bullish; bearish-structure risk statements that directly conflict with the bullish view were removed.")
         risk_factors = filtered_risk_factors
 
     parsed_volume_change = _safe_float(volume_change_ratio, default=math.nan)
     if math.isfinite(parsed_volume_change) and parsed_volume_change > 10:
         prompt_notes.append(
-            f"成交量较昨日变化约 {parsed_volume_change:.2f} 倍，可能存在异常数据或一次性冲量；量能信号必须降权解读，不能机械视为强确认。"
+            f"Volume changed about {parsed_volume_change:.2f}x versus yesterday, which may be abnormal data or a one-off spike; down-weight the volume signal and do not treat it mechanically as strong confirmation."
         )
 
     trend_dict["signal_reasons"] = signal_reasons
@@ -867,112 +810,6 @@ def _sanitize_trend_analysis_for_prompt(
     trend_dict["prompt_consistency_notes"] = prompt_notes
     trend_dict["prompt_trend_direction"] = trend_direction
     return trend_dict
-
-
-def _derive_chip_health(profit_ratio: float, concentration_90: float, language: str = "zh") -> str:
-    """Derive chip_health from profit_ratio and concentration_90."""
-    if profit_ratio >= 0.9:
-        return localize_chip_health("警惕", language)  # very high profit-taking ratio
-    if concentration_90 >= 0.25:
-        return localize_chip_health("警惕", language)  # dispersed chips
-    if concentration_90 < 0.15 and 0.3 <= profit_ratio < 0.9:
-        return localize_chip_health("健康", language)  # concentrated with a moderate profit ratio
-    return localize_chip_health("一般", language)
-
-
-def _build_chip_structure_from_data(chip_data: Any, language: str = "zh") -> Dict[str, Any]:
-    """Build chip_structure dict from ChipDistribution or dict."""
-    if hasattr(chip_data, "profit_ratio"):
-        pr = _safe_float(chip_data.profit_ratio)
-        ac = chip_data.avg_cost
-        c90 = _safe_float(chip_data.concentration_90)
-    else:
-        d = chip_data if isinstance(chip_data, dict) else {}
-        pr = _safe_float(d.get("profit_ratio"))
-        ac = d.get("avg_cost")
-        c90 = _safe_float(d.get("concentration_90"))
-    chip_health = _derive_chip_health(pr, c90, language=language)
-    return {
-        "profit_ratio": f"{pr:.1%}",
-        "avg_cost": ac if (ac is not None and _safe_float(ac) != 0.0) else "N/A",
-        "concentration": f"{c90:.2%}",
-        "chip_health": chip_health,
-    }
-
-
-def _has_meaningful_chip_data(chip_data: Any) -> bool:
-    """Return True when chip data has the core metrics required for reporting."""
-    if not chip_data:
-        return False
-    if hasattr(chip_data, "avg_cost"):
-        avg_cost = _coerce_chip_metric(getattr(chip_data, "avg_cost", None))
-        concentration_90 = _coerce_chip_metric(getattr(chip_data, "concentration_90", None))
-        concentration_70 = _coerce_chip_metric(getattr(chip_data, "concentration_70", None))
-    else:
-        d = chip_data if isinstance(chip_data, dict) else {}
-        avg_cost = _coerce_chip_metric(d.get("avg_cost"))
-        concentration_90_value = d.get("concentration_90")
-        if concentration_90_value is None:
-            concentration_90_value = d.get("concentration")
-        concentration_90 = _coerce_chip_metric(concentration_90_value)
-        concentration_70 = _coerce_chip_metric(d.get("concentration_70"))
-    return (
-        avg_cost is not None
-        and avg_cost > 0
-        and (
-            (concentration_90 is not None and concentration_90 >= 0)
-            or (concentration_70 is not None and concentration_70 >= 0)
-        )
-    )
-
-
-def _mark_chip_structure_unavailable(result: "AnalysisResult", language: str) -> None:
-    if not result or not isinstance(result.dashboard, dict):
-        return
-    data_perspective = result.dashboard.get("data_perspective")
-    if not isinstance(data_perspective, dict):
-        return
-    data_perspective["chip_structure"] = {}
-    data_perspective["chip_unavailable_reason"] = get_chip_unavailable_text(language)
-
-
-def normalize_chip_structure_availability(result: "AnalysisResult", chip_data: Any) -> None:
-    """Fill valid chip metrics or collapse placeholder-only chip fields to one fallback line."""
-    if not result:
-        return
-    language = getattr(result, "report_language", "zh")
-    if _has_meaningful_chip_data(chip_data):
-        fill_chip_structure_if_needed(result, chip_data)
-        return
-    _mark_chip_structure_unavailable(result, language)
-
-
-def fill_chip_structure_if_needed(result: "AnalysisResult", chip_data: Any) -> None:
-    """When chip_data exists, fill chip_structure placeholder fields from chip_data (in-place)."""
-    if not result or not _has_meaningful_chip_data(chip_data):
-        return
-    try:
-        if not result.dashboard:
-            result.dashboard = {}
-        dash = result.dashboard
-        # Use `or {}` rather than setdefault so that an explicit `null` from LLM is also replaced
-        dp = dash.get("data_perspective") or {}
-        dash["data_perspective"] = dp
-        cs = dp.get("chip_structure") or {}
-        filled = _build_chip_structure_from_data(
-            chip_data,
-            language=getattr(result, "report_language", "zh"),
-        )
-        # Start from a copy of cs to preserve any extra keys the LLM may have added
-        merged = dict(cs)
-        for k in _CHIP_KEYS:
-            if _is_value_placeholder(merged.get(k)):
-                merged[k] = filled[k]
-        if merged != cs:
-            dp["chip_structure"] = merged
-            logger.info("[chip_structure] Filled placeholder chip fields from data source (Issue #589)")
-    except Exception as e:
-        logger.warning("[chip_structure] Fill failed, skipping: %s", e)
 
 
 _PRICE_POS_KEYS = ("ma5", "ma10", "ma20", "bias_ma5", "bias_status", "current_price", "support_level", "resistance_level")
@@ -1035,18 +872,18 @@ def stabilize_decision_with_structure(
     fundamental_context: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
-    Calibrate aggressive buy/sell advice with price levels and capital flow.
+    Hiệu chỉnh khuyến nghị mua/bán quá đà dựa trên vùng giá hỗ trợ/kháng cự.
 
-    The LLM can overreact to one-day price movement.  This guard keeps the
-    public `decision_type` enum stable while allowing richer neutral wording
-    such as 震荡/洗盘观察 when support, resistance, and fund flow do not confirm
-    an immediate buy/sell action.
+    Calibrate aggressive buy/sell advice with support/resistance levels. The LLM
+    can overreact to one-day price movement; this guard keeps the public
+    `decision_type` enum stable while allowing neutral wording (range-bound /
+    shakeout watch) when price structure does not confirm an immediate action.
     """
     if not result:
         return
 
     try:
-        language = normalize_report_language(getattr(result, "report_language", "zh"))
+        language = normalize_report_language(getattr(result, "report_language", "vi"))
         dashboard = result.dashboard if isinstance(result.dashboard, dict) else {}
         data_perspective = dashboard.get("data_perspective") if isinstance(dashboard, dict) else {}
         if not isinstance(data_perspective, dict):
@@ -1074,33 +911,6 @@ def stabilize_decision_with_structure(
             default=getattr(result, "decision_type", "hold") or "hold",
         )
         decision_type = decision_type if decision_type in {"buy", "hold", "sell"} else "hold"
-        advice_decision_type = infer_decision_type_from_advice(
-            getattr(result, "operation_advice", ""),
-            default="",
-        )
-
-        flow_bias, flow_reason = _capital_flow_bias_with_status(fundamental_context)
-        if flow_bias == "unavailable":
-            if isinstance(fundamental_context, dict) and "capital_flow" in fundamental_context:
-                if decision_type == "buy" or advice_decision_type == "buy":
-                    _downgrade_buy_without_capital_flow(
-                        result,
-                        language,
-                        current_price=current_price,
-                        support=support,
-                        resistance=resistance,
-                        flow_status=flow_reason,
-                    )
-                else:
-                    _set_decision_stability_unavailable(
-                        result,
-                        language,
-                        current_price=current_price,
-                        support=support,
-                        resistance=resistance,
-                        flow_status=flow_reason,
-                    )
-            return
 
         if current_price is None:
             return
@@ -1121,42 +931,22 @@ def stabilize_decision_with_structure(
 
         has_significant_risk = _has_structural_risk_alert(result)
 
+        # Chỉ hiệu chỉnh theo cấu trúc giá (hỗ trợ/kháng cự); thị trường Việt Nam không
+        # có dữ liệu dòng tiền chủ lực nên không dùng tín hiệu dòng tiền.
+        # Structure-only calibration: Vietnam has no main-force capital-flow data.
         if decision_type == "buy":
-            if near_resistance and flow_bias != "inflow":
+            if near_resistance or mid_range:
                 _downgrade_to_structural_hold(
                     result,
                     language,
                     advice_key="range",
-                    reason_key="buy_near_resistance",
+                    reason_key="buy_near_resistance" if near_resistance else "hold_mid_range",
                     current_price=current_price,
                     support=support,
                     resistance=resistance,
-                    flow_bias=flow_bias,
-                )
-            elif flow_bias == "outflow" and not breakout:
-                _downgrade_to_structural_hold(
-                    result,
-                    language,
-                    advice_key="range",
-                    reason_key="buy_with_outflow",
-                    current_price=current_price,
-                    support=support,
-                    resistance=resistance,
-                    flow_bias=flow_bias,
-                )
-            elif mid_range and flow_bias == "neutral":
-                _downgrade_to_structural_hold(
-                    result,
-                    language,
-                    advice_key="range",
-                    reason_key="hold_mid_range",
-                    current_price=current_price,
-                    support=support,
-                    resistance=resistance,
-                    flow_bias=flow_bias,
                 )
         elif decision_type == "sell":
-            if near_support and (flow_bias != "outflow") and not has_significant_risk:
+            if near_support and not has_significant_risk:
                 _downgrade_to_structural_hold(
                     result,
                     language,
@@ -1165,22 +955,10 @@ def stabilize_decision_with_structure(
                     current_price=current_price,
                     support=support,
                     resistance=resistance,
-                    flow_bias=flow_bias,
-                )
-            elif flow_bias == "inflow" and not broke_support and not has_significant_risk:
-                _downgrade_to_structural_hold(
-                    result,
-                    language,
-                    advice_key="hold",
-                    reason_key="sell_with_inflow",
-                    current_price=current_price,
-                    support=support,
-                    resistance=resistance,
-                    flow_bias=flow_bias,
                 )
         elif decision_type == "hold":
             change_pct = _first_numeric_value(getattr(result, "change_pct", None))
-            if change_pct is not None and change_pct < 0 and near_support and flow_bias != "outflow":
+            if change_pct is not None and change_pct < 0 and near_support:
                 _set_structural_hold_wording(
                     result,
                     language,
@@ -1189,9 +967,8 @@ def stabilize_decision_with_structure(
                     current_price=current_price,
                     support=support,
                     resistance=resistance,
-                    flow_bias=flow_bias,
                 )
-            elif mid_range and flow_bias == "neutral":
+            elif mid_range:
                 _set_structural_hold_wording(
                     result,
                     language,
@@ -1200,7 +977,6 @@ def stabilize_decision_with_structure(
                     current_price=current_price,
                     support=support,
                     resistance=resistance,
-                    flow_bias=flow_bias,
                 )
         _sync_stability_dashboard_fields(result)
     except Exception as exc:
@@ -1241,7 +1017,7 @@ def _is_significant_structural_risk(value: Any) -> bool:
     if any(keyword in normalized for keyword in _STRUCTURAL_RISK_PHRASE_HINTS):
         return True
 
-    return "重大" in text and "风险" in normalized
+    return ("trọng yếu" in normalized or "nghiêm trọng" in normalized) and "rủi ro" in normalized
 
 
 def _sync_stability_dashboard_fields(result: "AnalysisResult") -> None:
@@ -1279,7 +1055,7 @@ def _coerce_numeric_value(value: Any) -> Optional[float]:
         if math.isfinite(float(value)):
             return float(value)
         return None
-    text = str(value).replace(",", "").replace("，", "").strip()
+    text = str(value).replace(",", "").strip()
     if not text or text.upper() in {"N/A", "NA", "NONE", "NULL"}:
         return None
     match = re.search(r"[-+]?\d+(?:\.\d+)?", text)
@@ -1302,84 +1078,6 @@ def _first_numeric_value(*values: Any) -> Optional[float]:
         if numeric is not None:
             return numeric
     return None
-
-
-def _capital_flow_bias(fundamental_context: Optional[Dict[str, Any]]) -> str:
-    return _capital_flow_bias_with_status(fundamental_context)[0]
-
-
-def _capital_flow_bias_with_status(
-    fundamental_context: Optional[Dict[str, Any]],
-) -> tuple[str, str]:
-    if not isinstance(fundamental_context, dict):
-        return "unavailable", "invalid_context"
-    block = fundamental_context.get("capital_flow")
-    if not isinstance(block, dict):
-        return "unavailable", "capital_flow_block_missing"
-    status = str(block.get("status") or "").strip().lower()
-    normalized_status = status.replace("-", " ").replace("_", " ").strip()
-    if normalized_status in _CAPITAL_FLOW_UNAVAILABLE_STATUS or "not supported" in normalized_status:
-        return "unavailable", status or "not_supported"
-    data = block.get("data") if isinstance(block.get("data"), dict) else block
-    stock_flow = data.get("stock_flow") if isinstance(data, dict) else None
-    if not isinstance(stock_flow, dict) or not stock_flow:
-        return "unavailable", "empty_stock_flow"
-
-    def _flow_direction(value: Optional[float]) -> Optional[str]:
-        if value is None or value == 0:
-            return None
-        return "inflow" if value > 0 else "outflow"
-
-    numeric_values = [
-        _coerce_numeric_value(stock_flow.get("main_net_inflow")),
-        _coerce_numeric_value(stock_flow.get("inflow_5d")),
-        _coerce_numeric_value(stock_flow.get("inflow_10d")),
-    ]
-    if all(value is None for value in numeric_values):
-        return "unavailable", "missing_or_na_flow_fields"
-
-    ordered_signals = [
-        _flow_direction(value) for value in numeric_values
-    ]
-    directions = {signal for signal in ordered_signals if signal is not None}
-    if not directions or len(directions) > 1:
-        return "neutral", "conflict_or_missing"
-    for signal in ordered_signals:
-        if signal is not None:
-            return signal, "ok"
-    return "neutral", "neutral"
-
-
-def _capital_flow_status_for_stability(reason: str, language: str) -> str:
-    normalized = str(reason or "").strip().lower()
-    if "not_supported" in normalized or "unsupported" in normalized or "not available" in normalized:
-        return "市场资金流服务暂不支持" if language == "zh" else "Capital flow source unsupported"
-    if "empty_stock_flow" in normalized or "missing" in normalized:
-        return "资金流数据缺失" if language == "zh" else "capital flow data unavailable"
-    return "资金流数据不可用" if language == "zh" else "capital flow unavailable"
-
-
-def _set_decision_stability_unavailable(
-    result: "AnalysisResult",
-    language: str,
-    *,
-    current_price: Optional[float],
-    support: Optional[float],
-    resistance: Optional[float],
-    flow_status: str,
-) -> None:
-    dashboard = result.dashboard if isinstance(result.dashboard, dict) else {}
-    result.dashboard = dashboard
-    dashboard["decision_stability"] = {
-        "applied": False,
-        "reason": "资金流不可用，未使用资金流校准" if language == "zh" else "Capital flow unavailable; stability calibration not applied",
-        "capital_flow_status": _capital_flow_status_for_stability(flow_status, language),
-        "current_price": current_price,
-        "support": support,
-        "resistance": resistance,
-        "capital_flow_bias": "unavailable",
-    }
-    _sync_stability_dashboard_fields(result)
 
 
 def _record_decision_score_calibration(
@@ -1435,10 +1133,8 @@ def _apply_hold_watch_dashboard(
     current_price: Optional[float],
     support: Optional[float],
     resistance: Optional[float],
-    flow_bias: str,
     no_position: str,
     has_position: str,
-    capital_flow_status: Optional[str] = None,
 ) -> None:
     result.operation_advice = advice
 
@@ -1448,8 +1144,8 @@ def _apply_hold_watch_dashboard(
     if not isinstance(core, dict):
         core = {}
         dashboard["core_conclusion"] = core
-    core["signal_type"] = "🟡持有观望" if language == "zh" else "🟡 Hold / Watch"
-    core["one_sentence"] = f"{advice}：{reason}" if language == "zh" else f"{advice}: {reason}"
+    core["signal_type"] = "🟡 Hold / Watch"
+    core["one_sentence"] = f"{advice}: {reason}"
 
     position_advice = core.get("position_advice")
     if not isinstance(position_advice, dict):
@@ -1464,10 +1160,7 @@ def _apply_hold_watch_dashboard(
         "current_price": current_price,
         "support": support,
         "resistance": resistance,
-        "capital_flow_bias": flow_bias,
     }
-    if capital_flow_status is not None:
-        stability["capital_flow_status"] = capital_flow_status
     score_calibration = dashboard.get("decision_score_calibration")
     if isinstance(score_calibration, dict):
         stability["raw_score"] = score_calibration.get("raw_score")
@@ -1476,52 +1169,9 @@ def _apply_hold_watch_dashboard(
     dashboard["decision_stability"] = stability
 
     if reason and reason not in str(result.risk_warning or ""):
-        sep = "；" if language == "zh" else "; "
+        sep = "; "
         result.risk_warning = f"{result.risk_warning}{sep}{reason}" if result.risk_warning else reason
     result.buy_reason = reason or result.buy_reason
-
-
-def _downgrade_buy_without_capital_flow(
-    result: "AnalysisResult",
-    language: str,
-    *,
-    current_price: Optional[float],
-    support: Optional[float],
-    resistance: Optional[float],
-    flow_status: str,
-) -> None:
-    status_text = _capital_flow_status_for_stability(flow_status, language)
-    if language == "zh":
-        advice = "持有观察"
-        reason = f"{status_text}，买入结论缺少资金面确认，先按观察处理。"
-        no_position = "空仓先不追买，等待资金流恢复、支撑确认或有效突破后再行动。"
-        has_position = "持仓以关键支撑为风控线，资金流恢复前控制仓位。"
-        confidence = "低"
-    else:
-        advice = "Hold and watch"
-        reason = f"{status_text}; the buy call lacks capital-flow confirmation, so treat it as watch-only."
-        no_position = "Do not chase; wait for capital-flow recovery, support confirmation, or a valid breakout."
-        has_position = "Use key support as the risk line and keep position size controlled until capital flow recovers."
-        confidence = "Low"
-
-    result.decision_type = "hold"
-    result.confidence_level = confidence
-    _bound_hold_watch_sentiment_score(result, reason=reason, final_action="hold")
-    _apply_hold_watch_dashboard(
-        result,
-        language,
-        advice=advice,
-        reason=reason,
-        current_price=current_price,
-        support=support,
-        resistance=resistance,
-        flow_bias="unavailable",
-        no_position=no_position,
-        has_position=has_position,
-        capital_flow_status=status_text,
-    )
-    _sync_stability_dashboard_fields(result)
-    logger.info("[decision_stability] Downgraded buy because capital flow is unavailable: %s", flow_status)
 
 
 def _downgrade_to_structural_hold(
@@ -1533,7 +1183,6 @@ def _downgrade_to_structural_hold(
     current_price: float,
     support: Optional[float],
     resistance: Optional[float],
-    flow_bias: str,
 ) -> None:
     result.decision_type = "hold"
     _set_structural_hold_wording(
@@ -1544,7 +1193,6 @@ def _downgrade_to_structural_hold(
         current_price=current_price,
         support=support,
         resistance=resistance,
-        flow_bias=flow_bias,
         calibrate_score=True,
     )
 
@@ -1558,7 +1206,6 @@ def _set_structural_hold_wording(
     current_price: float,
     support: Optional[float],
     resistance: Optional[float],
-    flow_bias: str,
     calibrate_score: bool = False,
 ) -> None:
     advice_map = {
@@ -1567,61 +1214,29 @@ def _set_structural_hold_wording(
             "shakeout": "Quan sát rũ bỏ",
             "hold": "Nắm giữ và quan sát",
         },
-        "zh": {
-            "range": "震荡观望",
-            "shakeout": "洗盘观察",
-            "hold": "持有观察",
-        },
         "en": {
             "range": "Range-bound watch",
             "shakeout": "Shakeout watch",
             "hold": "Hold and watch",
         },
-        "ko": {
-            "range": "박스권 관망",
-            "shakeout": "흔들기 관찰",
-            "hold": "보유 관찰",
-        },
     }
     advice_default = {
         "vi": "Nắm giữ và quan sát",
-        "zh": "持有观察",
         "en": "Hold and watch",
-        "ko": "보유 관찰",
     }.get(language, "Nắm giữ và quan sát")
     advice = advice_map.get(language, advice_map["vi"]).get(advice_key, advice_default)
     reason_templates = {
         "vi": {
-            "buy_near_resistance": "Giá đang sát vùng kháng cự và chưa xác nhận dòng tiền lớn vào, nên việc mua đuổi nhịp hồi là không khả thi.",
-            "buy_with_outflow": "Dòng tiền lớn đang rút ra, mâu thuẫn với khuyến nghị mua; nên chờ xác nhận hỗ trợ hoặc dòng tiền quay lại.",
-            "sell_near_support": "Giá đang sát vùng hỗ trợ và chưa có dòng tiền rút ra kéo dài, một phiên giảm chưa đủ cơ sở để bán.",
-            "sell_with_inflow": "Dòng tiền lớn đang vào, mâu thuẫn với khuyến nghị bán; tạm xử lý theo hướng nắm giữ và theo dõi ngưỡng hỗ trợ.",
-            "hold_shakeout": "Giá lùi về sát hỗ trợ nhưng chưa xác nhận dòng tiền rút ra, phù hợp xử lý như một nhịp rũ bỏ.",
-            "hold_mid_range": "Giá nằm giữa hỗ trợ và kháng cự, dòng tiền chưa rõ ràng, nên quan sát vùng dao động sẽ khả thi hơn.",
-        },
-        "zh": {
-            "buy_near_resistance": "价格接近压力位且主力资金未确认流入，不宜仅因短线反弹追买。",
-            "buy_with_outflow": "主力资金流出与买入结论冲突，买点需等待支撑确认或资金回流。",
-            "sell_near_support": "价格贴近支撑且未见资金持续流出，不宜仅因单日下跌直接卖出。",
-            "sell_with_inflow": "主力资金流入与卖出结论冲突，先按持有观察处理并跟踪支撑失效。",
-            "hold_shakeout": "价格回落至支撑附近但资金未确认流出，更适合按洗盘观察处理。",
-            "hold_mid_range": "价格处于支撑与压力之间且资金流不明确，维持震荡观望更可操作。",
+            "buy_near_resistance": "Giá đang sát vùng kháng cự và chưa bứt phá rõ ràng, nên việc mua đuổi nhịp hồi là không khả thi.",
+            "sell_near_support": "Giá đang sát vùng hỗ trợ và chưa thủng hỗ trợ, một phiên giảm chưa đủ cơ sở để bán.",
+            "hold_shakeout": "Giá lùi về sát hỗ trợ nhưng chưa thủng hỗ trợ, phù hợp xử lý như một nhịp rũ bỏ.",
+            "hold_mid_range": "Giá nằm giữa hỗ trợ và kháng cự, chưa có tín hiệu rõ ràng, nên quan sát vùng dao động sẽ khả thi hơn.",
         },
         "en": {
-            "buy_near_resistance": "Price is near resistance without confirmed main-force inflow, so chasing the rebound is not actionable.",
-            "buy_with_outflow": "Main-force outflow conflicts with a buy call; wait for support confirmation or capital inflow.",
-            "sell_near_support": "Price is near support without sustained outflow, so a one-day drop is not enough to sell.",
-            "sell_with_inflow": "Main-force inflow conflicts with a sell call; hold and watch for support failure.",
-            "hold_shakeout": "Price pulled back near support without confirmed outflow, which is better treated as a shakeout watch.",
-            "hold_mid_range": "Price is between support and resistance with neutral fund flow, so range-bound watch is more actionable.",
-        },
-        "ko": {
-            "buy_near_resistance": "가격이 저항선에 근접했고 주력 자금 유입이 확인되지 않아 단기 반등만 보고 추격 매수하기 어렵습니다.",
-            "buy_with_outflow": "주력 자금 유출이 매수 결론과 상충하므로 지지 확인이나 자금 재유입을 기다려야 합니다.",
-            "sell_near_support": "가격이 지지선에 근접했고 지속적 유출이 없어 하루 하락만으로 매도하기 어렵습니다.",
-            "sell_with_inflow": "주력 자금 유입이 매도 결론과 상충하므로 우선 보유 관찰하며 지지 이탈을 추적합니다.",
-            "hold_shakeout": "가격이 지지선 부근까지 눌렸지만 유출이 확인되지 않아 흔들기 관찰로 처리하는 것이 적절합니다.",
-            "hold_mid_range": "가격이 지지선과 저항선 사이이고 자금 흐름이 불명확해 박스권 관망이 더 실행 가능합니다.",
+            "buy_near_resistance": "Price is near resistance without a confirmed breakout, so chasing the rebound is not actionable.",
+            "sell_near_support": "Price is near support and has not broken it, so a one-day drop is not enough to sell.",
+            "hold_shakeout": "Price pulled back near support without breaking it, which is better treated as a shakeout watch.",
+            "hold_mid_range": "Price is between support and resistance without a clear signal, so range-bound watch is more actionable.",
         },
     }
     reason = reason_templates.get(language, reason_templates["vi"]).get(reason_key, "")
@@ -1630,22 +1245,10 @@ def _set_structural_hold_wording(
         _bound_hold_watch_sentiment_score(result, reason=reason, final_action=final_action)
     result.operation_advice = advice
     if advice_key == "range":
-        if language == "zh" and "震荡" not in str(result.trend_prediction):
-            result.trend_prediction = "震荡"
-        elif language in ("en", "vi"):
-            result.trend_prediction = "Sideways"
-        elif language == "ko":
-            result.trend_prediction = "횡보"
+        result.trend_prediction = "Sideways"
 
-    if language == "zh":
-        no_position = "空仓先不追涨杀跌，等待支撑确认、放量突破或资金回流后再行动。"
-        has_position = "持仓以关键支撑为风控线，未跌破前以观察和分批控仓为主。"
-    elif language == "ko":
-        no_position = "현금 보유 시 추격·투매를 삼가고 지지 확인·대량 돌파·자금 재유입 후 행동하세요."
-        has_position = "보유 시 핵심 지지선을 리스크 관리선으로 삼고, 이탈 전까지 관찰과 분할 관리 위주로 대응하세요."
-    else:
-        no_position = "Do not chase or panic; wait for support confirmation, breakout, or renewed inflow."
-        has_position = "Use key support as the risk line and manage position size unless support fails."
+    no_position = "Do not chase or panic; wait for support confirmation or a valid breakout."
+    has_position = "Use key support as the risk line and manage position size unless support fails."
     _apply_hold_watch_dashboard(
         result,
         language,
@@ -1654,7 +1257,6 @@ def _set_structural_hold_wording(
         current_price=current_price,
         support=support,
         resistance=resistance,
-        flow_bias=flow_bias,
         no_position=no_position,
         has_position=has_position,
     )
@@ -1687,9 +1289,9 @@ def get_stock_name_multi_source(
         # Ưu tiên trường stock_name. / Prefer the stock_name field.
         if context.get('stock_name'):
             name = context['stock_name']
-            # `股票` là tiền tố của tên giữ chỗ dùng chung giữa các module — giữ nguyên.
-            # `股票` is the shared cross-module placeholder prefix; it stays as data.
-            if name and not name.startswith('股票'):
+            # Bỏ qua tên giữ chỗ (tiền tố trong PLACEHOLDER_NAME_PREFIXES).
+            # Skip placeholder names (prefixes in PLACEHOLDER_NAME_PREFIXES).
+            if name and not name.startswith(PLACEHOLDER_NAME_PREFIXES):
                 return name
 
         # Kế đến là dữ liệu realtime. / Then the realtime payload.
@@ -1719,7 +1321,7 @@ def get_stock_name_multi_source(
             logger.debug(f"Failed to get the stock name from the data source: {e}")
 
     # 4. Tên mặc định. / Default placeholder name.
-    return f'股票{stock_code}'
+    return f'Cổ phiếu {stock_code}'
 
 
 @dataclass
@@ -1737,11 +1339,10 @@ class AnalysisResult:
     trend_prediction: str  # Dự báo xu hướng / trend prediction
     operation_advice: str  # Khuyến nghị hành động / operation advice
     decision_type: str = "hold"  # Loại quyết định: buy/hold/sell (dùng cho thống kê)
-    # Giá trị canonical: `高/中/低` cũng được `src/report_language.py` nhận, và hàng chục
-    # test đang assert đúng chuỗi này — đây là dữ liệu, không phải nhãn hiển thị.
-    # Canonical value: `src/report_language.py` accepts it and many tests assert on it.
-    confidence_level: str = "中"  # Độ tin cậy / confidence: 高(high)/中(medium)/低(low)
-    report_language: str = "zh"  # Ngôn ngữ báo cáo / report output language
+    # Giá trị mặc định là nhãn tiếng Việt mà `src/report_language.py` nhận ra.
+    # Default is a Vietnamese label recognized by `src/report_language.py`.
+    confidence_level: str = "Trung bình"  # Độ tin cậy / confidence: Cao/Trung bình/Thấp (High/Medium/Low)
+    report_language: str = "vi"  # Ngôn ngữ báo cáo / report output language
     action: Optional[str] = None  # Taxonomy hành động: buy/add/hold/reduce/sell/watch/avoid/alert
     action_label: Optional[str] = None  # Nhãn hành động đã bản địa hoá / localized action label
 
@@ -1811,7 +1412,6 @@ class AnalysisResult:
 
     # ========== Ngữ cảnh cơ bản (chỉ runtime, dùng ghép thông báo; KHÔNG lưu vào to_dict) ==========
     fundamental_context: Optional[Dict[str, Any]] = None
-    market_structure_context: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Chuyển thành dict. / Convert to a dict."""
@@ -1854,7 +1454,6 @@ class AnalysisResult:
             'current_price': self.current_price,
             'change_pct': self.change_pct,
             'model_used': self.model_used,
-            'market_structure_context': self.market_structure_context,
         }
 
     def get_core_conclusion(self) -> str:
@@ -1902,11 +1501,11 @@ class AnalysisResult:
     def get_confidence_stars(self) -> str:
         """Trả số sao theo độ tin cậy. / Star rating for the confidence level."""
         star_map = {
-            "高": "⭐⭐⭐",
+            "cao": "⭐⭐⭐",
             "high": "⭐⭐⭐",
-            "中": "⭐⭐",
+            "trung bình": "⭐⭐",
             "medium": "⭐⭐",
-            "低": "⭐",
+            "thấp": "⭐",
             "low": "⭐",
         }
         return star_map.get(str(self.confidence_level or "").strip().lower(), "⭐⭐")
@@ -1930,7 +1529,7 @@ def populate_decision_action_fields(
         operation_advice=getattr(result, "operation_advice", None),
         explicit_action=action_source,
         report_type=report_type,
-        report_language=getattr(result, "report_language", "zh"),
+        report_language=getattr(result, "report_language", "vi"),
         sentiment_score=getattr(result, "sentiment_score", None),
         guardrail_reason=getattr(result, "guardrail_reason", None),
         align_with_score=align_with_score,
@@ -2019,12 +1618,6 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
                 "volume_status": "Expanding volume/Shrinking volume/Normal volume",
                 "turnover_rate": turnover rate percentage,
                 "volume_meaning": "What the volume means (e.g. a low-volume pullback means selling pressure is easing)"
-            },
-            "chip_structure": {
-                "profit_ratio": profit ratio,
-                "avg_cost": average cost,
-                "concentration": chip concentration,
-                "chip_health": "Healthy/Average/Caution"
             }
         },
 
@@ -2053,8 +1646,7 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
                 "✅/⚠️/❌ Check 2: bias is reasonable (may be relaxed in a strong trend)",
                 "✅/⚠️/❌ Check 3: volume confirms",
                 "✅/⚠️/❌ Check 4: no major negative news",
-                "✅/⚠️/❌ Check 5: chip structure is healthy",
-                "✅/⚠️/❌ Check 6: PE valuation is reasonable"
+                "✅/⚠️/❌ Check 5: PE valuation is reasonable"
             ]
         },
 
@@ -2108,7 +1700,6 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
 - ✅ Bullish alignment: MA5 > MA10 > MA20
 - ✅ Low bias: <2%, the ideal entry
 - ✅ Low-volume pullback or high-volume breakout
-- ✅ Chips are concentrated and healthy
 - ✅ Positive news catalyst
 
 ### Buy (60-79):
@@ -2143,7 +1734,7 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
 ## Actionability and Stability Constraints
 
 - Do not swing violently between "Buy" and "Sell" merely because of a single day's move or a score crossing a band boundary.
-- The recommendation must consider price position (support/resistance), volume and chip structure, main-force capital flow, and risk events together.
+- The recommendation must consider price position (support/resistance), volume, and risk events together.
 - When price sits between support and resistance and capital flow is unclear, prefer an actionable neutral call such as "Hold / Sideways / Watch / Shakeout watch"; `decision_type` stays `hold`.
 - Only call a buy when price is near confirmed support or has broken resistance decisively, with capital flow and price-volume confirming. Never chase near resistance while capital is flowing out.
 - Only call a sell or reduce when key support breaks, main-force capital keeps flowing out, or risk clearly escalates.
@@ -2209,12 +1800,6 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
                 "volume_status": "Expanding volume/Shrinking volume/Normal volume",
                 "turnover_rate": turnover rate percentage,
                 "volume_meaning": "What the volume means (e.g. a low-volume pullback means selling pressure is easing)"
-            },
-            "chip_structure": {
-                "profit_ratio": profit ratio,
-                "avg_cost": average cost,
-                "concentration": chip concentration,
-                "chip_health": "Healthy/Average/Caution"
             }
         },
 
@@ -2241,7 +1826,7 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
             "action_checklist": [
                 "✅/⚠️/❌ Check 1: does the current structure meet the activated skill's conditions",
                 "✅/⚠️/❌ Check 2: are the entry level and risk-reward reasonable",
-                "✅/⚠️/❌ Check 3: do price-volume, volatility and chip structure support the call",
+                "✅/⚠️/❌ Check 3: do price-volume and volatility support the call",
                 "✅/⚠️/❌ Check 4: no major negative news",
                 "✅/⚠️/❌ Check 5: position size and stop-loss plan are explicit",
                 "✅/⚠️/❌ Check 6: valuation, earnings and catalysts match the conclusion"
@@ -2331,7 +1916,7 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
 ## Actionability and Stability Constraints
 
 - Do not swing violently between "Buy" and "Sell" merely because of a single day's move or a score crossing a band boundary.
-- The recommendation must consider price position (support/resistance), volume and chip structure, main-force capital flow, and risk events together.
+- The recommendation must consider price position (support/resistance), volume, and risk events together.
 - When price sits between support and resistance and capital flow is unclear, prefer an actionable neutral call such as "Hold / Sideways / Watch / Shakeout watch"; `decision_type` stays `hold`.
 - Only call a buy when price is near confirmed support or has broken resistance decisively, with capital flow and price-volume confirming. Never chase near resistance while capital is flowing out.
 - Only call a sell or reduce when key support breaks, main-force capital keeps flowing out, or risk clearly escalates.
@@ -2478,26 +2063,9 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
 - Use the common English company name when you are confident; otherwise keep the original listed company name instead of inventing one.
 - This includes `stock_name`, `trend_prediction`, `operation_advice`, `confidence_level`, nested dashboard text, checklist items, and all narrative summaries.
 """
-        if lang == "ko":
-            return base_prompt + """
-
-## Output Language (highest priority)
-
-- Keep all JSON keys unchanged.
-- `decision_type` must remain `buy|hold|sell`.
-- All human-readable JSON values must be written in Korean (한국어).
-- Use the common Korean or original listed company name when confident; do not invent one.
-- This includes `stock_name`, `trend_prediction`, `operation_advice`, `confidence_level`, nested dashboard text, checklist items, and all narrative summaries.
-"""
-        return base_prompt + """
-
-## 输出语言（最高优先级）
-
-- 所有 JSON 键名保持不变。
-- `decision_type` 必须保持为 `buy|hold|sell`。
-- 所有面向用户的人类可读文本值必须使用中文。
-- 上方 JSON 模板中的示例值（如 `Expanding volume/Shrinking volume/Normal volume`）只是英文占位示例，不得照抄，请写出对应中文。
-"""
+        # Mọi ngôn ngữ khác 'en' đã được chuẩn hoá về 'vi' ở trên.
+        # Every non-'en' language is normalized to 'vi' above.
+        return base_prompt
 
     def _has_channel_config(self, config: Config) -> bool:
         """Check if multi-channel config (channels / YAML / legacy model_list) is active."""
@@ -3802,7 +3370,7 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
 
         code = context.get('code', 'Unknown')
         config = self._get_runtime_config()
-        report_language = normalize_report_language(getattr(config, "report_language", "zh"))
+        report_language = normalize_report_language(getattr(config, "report_language", "vi"))
         system_prompt = self._get_analysis_system_prompt(report_language, stock_code=code)
         skill_instructions, default_skill_policy, use_legacy_default_prompt = self._get_skill_prompt_sections()
         
@@ -3815,13 +3383,13 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
         
         # Ưu tiên tên cổ phiếu từ context (do main.py truyền vào).
         name = context.get('stock_name')
-        if not name or name.startswith('股票'):
+        if not name or name.startswith(PLACEHOLDER_NAME_PREFIXES):
             # Dự phòng: lấy từ realtime. / Fallback: the realtime payload.
             if 'realtime' in context and context['realtime'].get('name'):
                 name = context['realtime']['name']
             else:
                 # Cuối cùng là bảng ánh xạ. / Last resort: the mapping table.
-                name = STOCK_NAME_MAP.get(code, f'股票{code}')
+                name = STOCK_NAME_MAP.get(code, f'Cổ phiếu {code}')
 
         backend_error = self.get_generation_backend_config_error()
         if backend_error is not None and not self._can_use_generation_fallback(backend_error):
@@ -3829,40 +3397,21 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
             field = str(details.get("field") or "GENERATION_BACKEND")
             requested_backend = str(details.get("requested_backend") or backend_error.backend)
             reason = str(details.get("reason") or backend_error.error_code.value)
-            if report_language in ("en", "vi"):
-                summary = (
-                    "AI analysis is unavailable because the generation backend "
-                    f"cannot start: {backend_error.error_code.value}."
-                )
-                risk_warning = (
-                    f"Check {field}={requested_backend} ({reason}) or set a valid "
-                    "backend/fallback before retrying."
-                )
-            elif report_language == "ko":
-                summary = (
-                    "생성 백엔드를 시작할 수 없어 AI 분석을 사용할 수 없습니다: "
-                    f"{backend_error.error_code.value}."
-                )
-                risk_warning = (
-                    f"{field}={requested_backend} ({reason})를 확인하거나 유효한 "
-                    "백엔드/폴백을 설정한 뒤 다시 시도하세요."
-                )
-            else:
-                summary = (
-                    "AI 分析功能不可用：生成后端无法启动，"
-                    f"{backend_error.error_code.value}。"
-                )
-                risk_warning = (
-                    f"请检查 {field}={requested_backend}（{reason}），"
-                    "或配置有效后端/回退后重试。"
-                )
+            summary = (
+                "AI analysis is unavailable because the generation backend "
+                f"cannot start: {backend_error.error_code.value}."
+            )
+            risk_warning = (
+                f"Check {field}={requested_backend} ({reason}) or set a valid "
+                "backend/fallback before retrying."
+            )
             return AnalysisResult(
                 code=code,
                 name=name,
                 sentiment_score=50,
-                trend_prediction=localize_trend_prediction('震荡', report_language),
-                operation_advice=localize_operation_advice('持有', report_language),
-                confidence_level=localize_confidence_level('低', report_language),
+                trend_prediction=localize_trend_prediction('sideways', report_language),
+                operation_advice=localize_operation_advice('hold', report_language),
+                confidence_level=localize_confidence_level('low', report_language),
                 analysis_summary=summary,
                 risk_warning=risk_warning,
                 success=False,
@@ -3879,27 +3428,21 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
                 code=code,
                 name=name,
                 sentiment_score=50,
-                trend_prediction=localize_trend_prediction('震荡', report_language),
-                operation_advice=localize_operation_advice('持有', report_language),
-                confidence_level=localize_confidence_level('低', report_language),
+                trend_prediction=localize_trend_prediction('sideways', report_language),
+                operation_advice=localize_operation_advice('hold', report_language),
+                confidence_level=localize_confidence_level('low', report_language),
                 analysis_summary=_localized_text(
                     report_language,
                     en='AI analysis is unavailable because no API key is configured.',
-                    zh='AI 分析功能未启用（未配置 API Key）',
-                    ko='API 키가 설정되지 않아 AI 분석을 사용할 수 없습니다.',
                 ),
                 risk_warning=_localized_text(
                     report_language,
                     en='Configure an LLM API key (GEMINI_API_KEY/ANTHROPIC_API_KEY/OPENAI_API_KEY) and retry.',
-                    zh='请配置 LLM API Key（GEMINI_API_KEY/ANTHROPIC_API_KEY/OPENAI_API_KEY）后重试',
-                    ko='LLM API 키(GEMINI_API_KEY/ANTHROPIC_API_KEY/OPENAI_API_KEY)를 설정한 뒤 다시 시도하세요.',
                 ),
                 success=False,
                 error_message=_localized_text(
                     report_language,
                     en='LLM API key is not configured',
-                    zh='LLM API Key 未配置',
-                    ko='LLM API 키가 설정되지 않았습니다',
                 ),
                 model_used=None,
                 report_language=report_language,
@@ -4019,7 +3562,6 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
                 result.market_snapshot = self._build_market_snapshot(context, report_language)
                 result.model_used = model_used
                 result.report_language = report_language
-                normalize_chip_structure_availability(result, context.get("chip"))
 
                 # Kiểm tra tính đầy đủ của nội dung (tuỳ chọn).
                 if not config.report_integrity_enabled:
@@ -4071,20 +3613,16 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
                 code=code,
                 name=name,
                 sentiment_score=50,
-                trend_prediction=localize_trend_prediction('震荡', report_language),
-                operation_advice=localize_operation_advice('持有', report_language),
-                confidence_level=localize_confidence_level('低', report_language),
+                trend_prediction=localize_trend_prediction('sideways', report_language),
+                operation_advice=localize_operation_advice('hold', report_language),
+                confidence_level=localize_confidence_level('low', report_language),
                 analysis_summary=_localized_text(
                     report_language,
                     en=f'Analysis failed: {safe_error[:100]}',
-                    zh=f'分析过程出错: {safe_error[:100]}',
-                    ko=f'분석 중 오류가 발생했습니다: {safe_error[:100]}',
                 ),
                 risk_warning=_localized_text(
                     report_language,
                     en='Analysis failed. Please retry later or review manually.',
-                    zh='分析失败，请稍后重试或手动分析',
-                    ko='분석에 실패했습니다. 잠시 후 다시 시도하거나 수동으로 검토하세요.',
                 ),
                 success=False,
                 error_message=safe_error,
@@ -4097,16 +3635,16 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
         context: Dict[str, Any], 
         name: str,
         news_context: Optional[str] = None,
-        report_language: str = "zh",
+        report_language: str = "vi",
         analysis_context_pack_summary: Optional[str] = None,
     ) -> str:
         """Dựng prompt phân tích (Decision Dashboard v2.0).
 
-        Gồm: chỉ báo kỹ thuật, giá realtime (volume ratio, thanh khoản), phân bố chip,
-        phân tích xu hướng và tin tức.
+        Gồm: chỉ báo kỹ thuật, giá realtime (volume ratio, thanh khoản), phân tích xu
+        hướng và tin tức.
 
         Build the analysis prompt (Decision Dashboard v2.0): technical indicators,
-        realtime quote, chip distribution, trend analysis and news.
+        realtime quote, trend analysis and news.
 
         Thân prompt luôn là tiếng Anh cho mọi thị trường; ngôn ngữ đầu ra do mục
         "Output language requirements" ở cuối quyết định.
@@ -4131,17 +3669,15 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
 
         # Ưu tiên tên cổ phiếu trong context (lấy từ realtime_quote).
         # Prefer the stock name carried in the context (from realtime_quote).
-        # `股票{code}` là giá trị dùng chung giữa các module (`src/core/pipeline.py:612`
-        # sinh đúng chuỗi này), nên giữ nguyên tiếng Trung — đây là dữ liệu, không phải nhãn.
-        # `股票{code}` is a cross-module data value produced by pipeline.py too; it stays
-        # Chinese because it is data, not a display label.
+        # Tên giữ chỗ (tiền tố trong PLACEHOLDER_NAME_PREFIXES, kể cả bản ghi cũ) được thay
+        # bằng tên trong bảng ánh xạ nếu có.
+        # Placeholder names (PLACEHOLDER_NAME_PREFIXES, incl. legacy ones) fall back to the map.
         stock_name = context.get('stock_name', name)
-        if not stock_name or stock_name == f'股票{code}':
-            stock_name = STOCK_NAME_MAP.get(code, f'股票{code}')
+        if not stock_name or stock_name.startswith(PLACEHOLDER_NAME_PREFIXES):
+            stock_name = STOCK_NAME_MAP.get(code, f'Cổ phiếu {code}')
             
         today = context.get('today', {})
         unknown_text = get_unknown_text(report_language)
-        no_data_text = get_no_data_text(report_language)
         quote_section_title, close_price_label = _phase_aware_quote_labels(context)
         hide_regular_session_ohlc = _should_hide_regular_session_ohlc(context)
         realtime_overlay_quote = hide_regular_session_ohlc and _today_has_realtime_overlay(today)
@@ -4190,12 +3726,6 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
         )
         if daily_market_context_section:
             prompt += daily_market_context_section
-        market_structure_section = format_market_structure_prompt_section(
-            context.get("market_structure_context"),
-            report_language=report_language,
-        )
-        if market_structure_section:
-            prompt += market_structure_section
         if isinstance(analysis_context_pack_summary, str) and analysis_context_pack_summary:
             prompt += analysis_context_pack_summary
         prompt += f"""
@@ -4280,121 +3810,6 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
 > If any field above is N/A or missing, state plainly that the data is missing and no judgement can be made. Never make it up.
 """
 
-        capital_flow_block = (
-            fundamental_context.get("capital_flow", {})
-            if isinstance(fundamental_context, dict)
-            else {}
-        )
-        capital_flow_data = (
-            capital_flow_block.get("data", {})
-            if isinstance(capital_flow_block, dict)
-            else {}
-        )
-        stock_flow = (
-            capital_flow_data.get("stock_flow", {})
-            if isinstance(capital_flow_data, dict)
-            else {}
-        )
-        sector_flow = (
-            capital_flow_data.get("sector_rankings", {})
-            if isinstance(capital_flow_data, dict)
-            else {}
-        )
-        has_capital_flow = (
-            isinstance(stock_flow, dict)
-            and any(v is not None for v in stock_flow.values())
-        ) or (
-            isinstance(sector_flow, dict)
-            and (sector_flow.get("top") or sector_flow.get("bottom"))
-        )
-        if has_capital_flow:
-            top_sectors = sector_flow.get("top", []) if isinstance(sector_flow, dict) else []
-            bottom_sectors = sector_flow.get("bottom", []) if isinstance(sector_flow, dict) else []
-            top_sector_text = ", ".join(
-                str(item.get("name", "")).strip()
-                for item in top_sectors[:3]
-                if isinstance(item, dict) and str(item.get("name", "")).strip()
-            ) or "N/A"
-            bottom_sector_text = ", ".join(
-                str(item.get("name", "")).strip()
-                for item in bottom_sectors[:3]
-                if isinstance(item, dict) and str(item.get("name", "")).strip()
-            ) or "N/A"
-            prompt += f"""
-### Main-force Capital Flow (recommendation filter)
-| Metric | Value | Decision meaning |
-|------|------|----------|
-| Main-force net inflow | {stock_flow.get('main_net_inflow', 'N/A')} | Positive supports, negative weighs down |
-| 5-day net inflow | {stock_flow.get('inflow_5d', 'N/A')} | Shows whether the flow persists |
-| 10-day net inflow | {stock_flow.get('inflow_10d', 'N/A')} | Shows whether the flow persists |
-| Top inflow sectors | {top_sector_text} | Sector-level confirmation |
-| Top outflow sectors | {bottom_sector_text} | Sector-level risk |
-
-> Capital flow is only a filter on price position: never chase near resistance while main-force capital is flowing out. Near support without a high-volume breakdown, prefer hold-and-watch, sideways, or shakeout-watch.
-"""
-
-        # Bổ sung động thái ba nhóm nhà đầu tư tổ chức (bộ lọc chip cho TTCK Đài Loan)
-        # — chỉ dùng cho tw; chỉ chèn khi khối institution có status='ok' và có số liệu
-        # ròng. Thị trường khác trả status='not_supported' nên bị bỏ qua, thuần additive.
-        institution_block = (
-            fundamental_context.get("institution", {})
-            if isinstance(fundamental_context, dict)
-            else {}
-        )
-        institution_data = (
-            institution_block.get("data", {})
-            if isinstance(institution_block, dict)
-            else {}
-        )
-        if (
-            isinstance(institution_block, dict)
-            and institution_block.get("status") == "ok"
-            and isinstance(institution_data, dict)
-            and all(
-                institution_data.get(key) is not None
-                for key in ("foreign_net", "trust_net", "dealer_net", "total_net")
-            )
-        ):
-            prompt += f"""
-### Institutional Flows (Taiwan chip filter, net buy/sell, unit: shares)
-| Institution | Net buy/sell | Decision meaning |
-|------|------|----------|
-| Foreign investors | {institution_data.get('foreign_net', 'N/A')} | Positive = net buying, supportive; negative = net selling, a drag |
-| Investment trusts | {institution_data.get('trust_net', 'N/A')} | Sustained trust buying often accompanies a medium-term uptrend |
-| Dealers | {institution_data.get('dealer_net', 'N/A')} | Short-term hedging / proprietary direction |
-| All three combined | {institution_data.get('total_net', 'N/A')} | The most watched chip signal in Taiwan |
-| Data date | {institution_data.get('date', 'N/A')} | Source {institution_data.get('source', 'N/A')} |
-
-> Institutional flows are Taiwan's chip filter (the counterpart of A-share main-force flow, but measured differently and not interchangeable): foreign investors and trusts buying in the same direction supports price, selling together weighs on it. Judge the Taiwan chip structure from this, and do not write "chip structure: data missing" when this data is present.
-"""
-
-        # Bổ sung dữ liệu phân bố chip.
-        # Add chip distribution data.
-        if 'chip' in context:
-            chip = context['chip']
-            profit_ratio = chip.get('profit_ratio', 0)
-            prompt += f"""
-### Chip Distribution (efficiency metrics)
-| Metric | Value | Healthy range |
-|------|------|----------|
-| **Profit ratio** | **{profit_ratio:.1%}** | Be wary at 70-90% |
-| Average cost | {chip.get('avg_cost', 'N/A')}{price_unit} | Price should sit 5-15% above |
-| 90% chip concentration | {chip.get('concentration_90', 0):.2%} | <15% means concentrated |
-| 70% chip concentration | {chip.get('concentration_70', 0):.2%} | |
-| Chip status | {chip.get('chip_status', unknown_text)} | |
-"""
-        else:
-            chip_unavailable_text = get_chip_unavailable_text(report_language)
-            chip_instruction = (
-                "Do not fabricate profit ratio, average cost, or concentration. Mention chip data "
-                "unavailability only once in the report; do not repeat per-field no-data text in `chip_structure`."
-            )
-            prompt += f"""
-### Chip Distribution (efficiency metrics)
-> {chip_unavailable_text}
-> {chip_instruction}
-"""
-        
         # Bổ sung kết quả phân tích xu hướng (chỉ nhánh bull_trend mặc định ngầm
         # mới giữ cách diễn đạt cũ).
         if 'trend_analysis' in context:
@@ -4576,8 +3991,7 @@ If the name shown above is a generic placeholder built from the ticker, or is ot
 1. ❓ Is the bullish alignment MA5>MA10>MA20 satisfied?
 2. ❓ Is the current bias within the safe range (<5%)? Above 5% you must flag "do not chase"
 3. ❓ Does volume confirm (low-volume pullback / high-volume breakout)?
-4. ❓ Is the chip structure healthy?
-5. ❓ Is there major negative news? (share reductions, penalties, earnings reversals, and so on)
+4. ❓ Is there major negative news? (share reductions, penalties, earnings reversals, and so on)
 """
         else:
             prompt += f"""
@@ -4585,7 +3999,7 @@ If the name shown above is a generic placeholder built from the ticker, or is ot
 ### Must answer explicitly:
 1. ❓ Does the current structure meet the activated skill's key trigger conditions?
 2. ❓ Are the entry level and risk-reward reasonable? If the price is too stretched, state the conditions to wait for
-3. ❓ Do volume, volatility and chip structure support the current conclusion?
+3. ❓ Do volume and volatility support the current conclusion?
 4. ❓ Is there major negative news, or anything that conflicts with the skill's conclusion?
 5. ❓ If the conclusion holds, what exactly are the trigger conditions, the stop loss, and the checkpoints?
 """
@@ -4626,26 +4040,6 @@ Output the complete Decision Dashboard in JSON."""
 - Use the common English company name when you are confident. If not, keep the listed company name rather than inventing one.
 - When data is missing, explain it in English instead of Chinese.
 """
-        elif report_language == "ko":
-            prompt += """
-
-### Output language requirements (highest priority)
-- Keep every JSON key exactly as defined above; do not translate keys.
-- `decision_type` must remain `buy`, `hold`, or `sell`.
-- All human-readable JSON values must be in Korean (한국어).
-- This includes `stock_name`, `trend_prediction`, `operation_advice`, `confidence_level`, all nested dashboard text, checklist items, and every summary field.
-- Use the common Korean or original listed company name when you are confident. If not, keep the listed company name rather than inventing one.
-- When data is missing, explain it in Korean instead of Chinese.
-"""
-        else:
-            prompt += f"""
-
-### 输出语言要求（最高优先级）
-- 所有 JSON 键名必须保持不变，不要翻译键名。
-- `decision_type` 必须保持为 `buy`、`hold`、`sell`。
-- 所有面向用户的人类可读文本值必须使用中文。
-- 当数据缺失时，请使用中文直接说明“{no_data_text}，无法判断”。
-"""
         
         return prompt
     
@@ -4653,8 +4047,8 @@ Output the complete Decision Dashboard in JSON."""
         """Định dạng khối lượng giao dịch. / Format the traded volume.
 
         Báo cáo tiếng Việt dùng bậc thập phân tiếng Việt (nghìn / triệu / tỷ) chứ không
-        dùng 万/亿 của tiếng Trung: vừa khó hiểu trong ngữ cảnh tiếng Việt, vừa nhóm bậc
-        khác nhau (万 = 1e4 không có đơn vị tương ứng trong tiếng Việt).
+        dùng bậc vạn/ức kiểu Trung Quốc. Báo cáo tiếng Anh dùng K / M / B.
+        Vietnamese reports use thousand/million/billion units; English uses K/M/B.
         """
         if volume is None:
             return 'N/A'
@@ -4669,12 +4063,13 @@ Output the complete Decision Dashboard in JSON."""
             if volume >= 1e3:
                 return f"{volume / 1e3:.2f} nghìn cp"
             return f"{volume:.0f} cp"
-        if volume >= 1e8:
-            return f"{volume / 1e8:.2f} 亿股"
-        elif volume >= 1e4:
-            return f"{volume / 1e4:.2f} 万股"
-        else:
-            return f"{volume:.0f} 股"
+        if volume >= 1e9:
+            return f"{volume / 1e9:.2f}B shares"
+        if volume >= 1e6:
+            return f"{volume / 1e6:.2f}M shares"
+        if volume >= 1e3:
+            return f"{volume / 1e3:.2f}K shares"
+        return f"{volume:.0f} shares"
 
     def _format_amount(self, amount: Optional[float], language: Optional[str] = None) -> str:
         """Định dạng giá trị giao dịch (tiếng Việt dùng triệu / tỷ). / Format turnover."""
@@ -4689,12 +4084,11 @@ Output the complete Decision Dashboard in JSON."""
             if amount >= 1e6:
                 return f"{amount / 1e6:.2f} triệu VND"
             return f"{amount:.0f} VND"
-        if amount >= 1e8:
-            return f"{amount / 1e8:.2f} 亿元"
-        elif amount >= 1e4:
-            return f"{amount / 1e4:.2f} 万元"
-        else:
-            return f"{amount:.0f} 元"
+        if amount >= 1e9:
+            return f"{amount / 1e9:.2f}B VND"
+        if amount >= 1e6:
+            return f"{amount / 1e6:.2f}M VND"
+        return f"{amount:.0f} VND"
 
     def _format_percent(self, value: Optional[float]) -> str:
         """Định dạng phần trăm. / Format a percentage."""
@@ -4741,7 +4135,7 @@ Output the complete Decision Dashboard in JSON."""
                 change_amount = None
 
         snapshot = {
-            "date": context.get('date', '未知'),
+            "date": context.get('date', 'Không rõ'),
             "close": self._format_price(close),
             "open": self._format_price(today.get('open')),
             "high": self._format_price(high),
@@ -4773,68 +4167,37 @@ Output the complete Decision Dashboard in JSON."""
         """Delegate to module-level check_content_integrity."""
         return check_content_integrity(result, require_phase_decision=require_phase_decision)
 
-    def _build_integrity_complement_prompt(self, missing_fields: List[str], report_language: str = "zh") -> str:
+    def _build_integrity_complement_prompt(self, missing_fields: List[str], report_language: str = "vi") -> str:
         """Build complement instruction for missing mandatory fields."""
         report_language = normalize_report_language(report_language)
-        if report_language in ("en", "ko", "vi"):
-            lines = ["### Completion requirements: fill the missing mandatory fields below and output the full JSON again:"]
-            for f in missing_fields:
-                if f == "sentiment_score":
-                    lines.append("- sentiment_score: integer score from 0 to 100")
-                elif f == "operation_advice":
-                    lines.append("- operation_advice: localized action advice")
-                elif f == "analysis_summary":
-                    lines.append("- analysis_summary: concise analysis summary")
-                elif f == "dashboard.core_conclusion.one_sentence":
-                    lines.append("- dashboard.core_conclusion.one_sentence: one-line decision")
-                elif f == "dashboard.intelligence.risk_alerts":
-                    lines.append("- dashboard.intelligence.risk_alerts: risk alert list (can be empty)")
-                elif f == "dashboard.battle_plan.sniper_points.stop_loss":
-                    lines.append("- dashboard.battle_plan.sniper_points.stop_loss: stop-loss level")
-                elif f == "dashboard.phase_decision.phase_context":
-                    lines.append("- dashboard.phase_decision.phase_context: public market phase summary subset")
-                elif f == "dashboard.phase_decision.action_window":
-                    lines.append("- dashboard.phase_decision.action_window: phase-aware action window")
-                elif f == "dashboard.phase_decision.immediate_action":
-                    lines.append("- dashboard.phase_decision.immediate_action: act now / wait / watch / no intraday action")
-                elif f == "dashboard.phase_decision.watch_conditions":
-                    lines.append("- dashboard.phase_decision.watch_conditions: list of watch conditions")
-                elif f == "dashboard.phase_decision.next_check_time":
-                    lines.append("- dashboard.phase_decision.next_check_time: next check point or market-local time")
-                elif f == "dashboard.phase_decision.confidence_reason":
-                    lines.append("- dashboard.phase_decision.confidence_reason: confidence rationale and data limits")
-                elif f == "dashboard.phase_decision.data_limitations":
-                    lines.append("- dashboard.phase_decision.data_limitations: list of phase/data quality limitations")
-            return "\n".join(lines)
-
-        lines = ["### 补全要求：请在上方分析基础上补充以下必填内容，并输出完整 JSON："]
+        lines = ["### Completion requirements: fill the missing mandatory fields below and output the full JSON again:"]
         for f in missing_fields:
             if f == "sentiment_score":
-                lines.append("- sentiment_score: 0-100 综合评分")
+                lines.append("- sentiment_score: integer score from 0 to 100")
             elif f == "operation_advice":
-                lines.append("- operation_advice: 买入/加仓/持有/减仓/卖出/观望")
+                lines.append("- operation_advice: localized action advice")
             elif f == "analysis_summary":
-                lines.append("- analysis_summary: 综合分析摘要")
+                lines.append("- analysis_summary: concise analysis summary")
             elif f == "dashboard.core_conclusion.one_sentence":
-                lines.append("- dashboard.core_conclusion.one_sentence: 一句话决策")
+                lines.append("- dashboard.core_conclusion.one_sentence: one-line decision")
             elif f == "dashboard.intelligence.risk_alerts":
-                lines.append("- dashboard.intelligence.risk_alerts: 风险警报列表（可为空数组）")
+                lines.append("- dashboard.intelligence.risk_alerts: risk alert list (can be empty)")
             elif f == "dashboard.battle_plan.sniper_points.stop_loss":
-                lines.append("- dashboard.battle_plan.sniper_points.stop_loss: 止损价")
+                lines.append("- dashboard.battle_plan.sniper_points.stop_loss: stop-loss level")
             elif f == "dashboard.phase_decision.phase_context":
-                lines.append("- dashboard.phase_decision.phase_context: 公开低敏市场阶段摘要子集")
+                lines.append("- dashboard.phase_decision.phase_context: public market phase summary subset")
             elif f == "dashboard.phase_decision.action_window":
-                lines.append("- dashboard.phase_decision.action_window: 阶段化行动窗口")
+                lines.append("- dashboard.phase_decision.action_window: phase-aware action window")
             elif f == "dashboard.phase_decision.immediate_action":
-                lines.append("- dashboard.phase_decision.immediate_action: 立即行动/等待确认/观察/无盘中动作")
+                lines.append("- dashboard.phase_decision.immediate_action: act now / wait / watch / no intraday action")
             elif f == "dashboard.phase_decision.watch_conditions":
-                lines.append("- dashboard.phase_decision.watch_conditions: 观察条件数组")
+                lines.append("- dashboard.phase_decision.watch_conditions: list of watch conditions")
             elif f == "dashboard.phase_decision.next_check_time":
-                lines.append("- dashboard.phase_decision.next_check_time: 下一次检查点或市场本地时间")
+                lines.append("- dashboard.phase_decision.next_check_time: next check point or market-local time")
             elif f == "dashboard.phase_decision.confidence_reason":
-                lines.append("- dashboard.phase_decision.confidence_reason: 置信度理由与数据限制")
+                lines.append("- dashboard.phase_decision.confidence_reason: confidence rationale and data limits")
             elif f == "dashboard.phase_decision.data_limitations":
-                lines.append("- dashboard.phase_decision.data_limitations: 阶段/数据质量限制数组")
+                lines.append("- dashboard.phase_decision.data_limitations: list of phase/data quality limitations")
         return "\n".join(lines)
 
     def _build_integrity_retry_prompt(
@@ -4842,15 +4205,12 @@ Output the complete Decision Dashboard in JSON."""
         base_prompt: str,
         previous_response: str,
         missing_fields: List[str],
-        report_language: str = "zh",
+        report_language: str = "vi",
     ) -> str:
         """Build retry prompt using the previous response as the complement baseline."""
         complement = self._build_integrity_complement_prompt(missing_fields, report_language=report_language)
         previous_output = previous_response.strip()
-        if normalize_report_language(report_language) in ("en", "ko", "vi"):
-            prefix = "### The previous output is below. Complete the missing fields based on that output and return the full JSON again. Do not omit existing fields:"
-        else:
-            prefix = "### 上一次输出如下，请在该输出基础上补齐缺失字段，并重新输出完整 JSON。不要省略已有字段："
+        prefix = "### The previous output is below. Complete the missing fields based on that output and return the full JSON again. Do not omit existing fields:"
         return "\n\n".join([
             base_prompt,
             prefix,
@@ -5008,7 +4368,7 @@ Output the complete Decision Dashboard in JSON."""
         """
         try:
             report_language = normalize_report_language(
-                getattr(self._get_runtime_config(), "report_language", "zh")
+                getattr(self._get_runtime_config(), "report_language", "vi")
             )
             try:
                 _json_str, data = self._extract_analysis_json_object(response_text)
@@ -5031,14 +4391,14 @@ Output the complete Decision Dashboard in JSON."""
 
             # Ưu tiên tên do AI trả về nếu tên gốc không hợp lệ hoặc chứa mã.
             ai_stock_name = data.get('stock_name')
-            if ai_stock_name and (name.startswith('股票') or name == code or 'Unknown' in name):
+            if ai_stock_name and (name.startswith(PLACEHOLDER_NAME_PREFIXES) or name == code or 'Unknown' in name):
                 name = ai_stock_name
 
             # Parse mọi trường, có giá trị mặc định để tránh thiếu.
             # Parse decision_type; thiếu thì suy ra từ operation_advice.
             decision_type = data.get('decision_type', '')
             if not decision_type:
-                op = data.get('operation_advice', localize_operation_advice('持有', report_language))
+                op = data.get('operation_advice', localize_operation_advice('hold', report_language))
                 decision_type = infer_decision_type_from_advice(op, default='hold')
 
             explicit_action = data.get("action")
@@ -5050,11 +4410,11 @@ Output the complete Decision Dashboard in JSON."""
                 name=name,
                 # Chỉ số cốt lõi / core metrics
                 sentiment_score=int(data.get('sentiment_score', 50)),
-                trend_prediction=data.get('trend_prediction', localize_trend_prediction('震荡', report_language)),
-                operation_advice=data.get('operation_advice', localize_operation_advice('持有', report_language)),
+                trend_prediction=data.get('trend_prediction', localize_trend_prediction('sideways', report_language)),
+                operation_advice=data.get('operation_advice', localize_operation_advice('hold', report_language)),
                 decision_type=decision_type,
                 confidence_level=localize_confidence_level(
-                    data.get('confidence_level', localize_confidence_level('中', report_language)),
+                    data.get('confidence_level', localize_confidence_level('medium', report_language)),
                     report_language,
                 ),
                 report_language=report_language,
@@ -5079,14 +4439,14 @@ Output the complete Decision Dashboard in JSON."""
                 hot_topics=data.get('hot_topics', ''),
                 # Tổng hợp / summary
                 analysis_summary=data.get('analysis_summary', _localized_text(
-                    report_language, en='Analysis completed', zh='分析完成', ko='분석 완료')),
+                    report_language, en='Analysis completed')),
                 key_points=data.get('key_points', ''),
                 risk_warning=data.get('risk_warning', ''),
                 buy_reason=data.get('buy_reason', ''),
                 # Metadata
                 search_performed=data.get('search_performed', False),
                 data_sources=data.get('data_sources', _localized_text(
-                    report_language, en='Technical data', zh='技术面数据', ko='기술적 데이터')),
+                    report_language, en='Technical data')),
                 success=True,
             )
             return populate_decision_action_fields(
@@ -5170,38 +4530,38 @@ Output the complete Decision Dashboard in JSON."""
         Best-effort extraction from a plain-text (non-JSON) response.
         """
         report_language = normalize_report_language(
-            getattr(self._get_runtime_config(), "report_language", "zh")
+            getattr(self._get_runtime_config(), "report_language", "vi")
         )
         # Nhận diện từ khoá để đoán tâm lý. / Keyword-based sentiment guess.
         sentiment_score = 50
-        trend = localize_trend_prediction('震荡', report_language)
-        advice = localize_operation_advice('持有', report_language)
+        trend = localize_trend_prediction('sideways', report_language)
+        advice = localize_operation_advice('hold', report_language)
         
         text_lower = response_text.lower()
         
         # Nhận diện tâm lý đơn giản. / Simple sentiment detection.
-        positive_keywords = ['看多', '买入', '上涨', '突破', '强势', '利好', '加仓', 'bullish', 'buy']
-        negative_keywords = ['看空', '卖出', '下跌', '跌破', '弱势', '利空', '减仓', 'bearish', 'sell']
+        positive_keywords = ['tích cực', 'mua', 'tăng giá', 'bứt phá', 'tăng mạnh', 'tin tốt', 'mua thêm', 'bullish', 'buy']
+        negative_keywords = ['tiêu cực', 'bán', 'giảm giá', 'thủng', 'suy yếu', 'tin xấu', 'giảm tỷ trọng', 'bearish', 'sell']
         
         positive_count = sum(1 for kw in positive_keywords if kw in text_lower)
         negative_count = sum(1 for kw in negative_keywords if kw in text_lower)
         
         if positive_count > negative_count + 1:
             sentiment_score = 65
-            trend = localize_trend_prediction('看多', report_language)
-            advice = localize_operation_advice('买入', report_language)
+            trend = localize_trend_prediction('bullish', report_language)
+            advice = localize_operation_advice('buy', report_language)
             decision_type = 'buy'
         elif negative_count > positive_count + 1:
             sentiment_score = 35
-            trend = localize_trend_prediction('看空', report_language)
-            advice = localize_operation_advice('卖出', report_language)
+            trend = localize_trend_prediction('bearish', report_language)
+            advice = localize_operation_advice('sell', report_language)
             decision_type = 'sell'
         else:
             decision_type = 'hold'
         
         # Lấy 500 ký tự đầu làm tóm tắt. / First 500 chars as the summary.
         summary = response_text[:500] if response_text else _localized_text(
-            report_language, en='No analysis result', zh='无分析结果', ko='분석 결과 없음')
+            report_language, en='No analysis result')
         
         result = AnalysisResult(
             code=code,
@@ -5210,19 +4570,15 @@ Output the complete Decision Dashboard in JSON."""
             trend_prediction=trend,
             operation_advice=advice,
             decision_type=decision_type,
-            confidence_level=localize_confidence_level('低', report_language),
+            confidence_level=localize_confidence_level('low', report_language),
             analysis_summary=summary,
             key_points=_localized_text(
                 report_language,
                 en='JSON parsing failed; treat this as best-effort output.',
-                zh='JSON解析失败，仅供参考',
-                ko='JSON 파싱에 실패했습니다. 참고용으로만 사용하세요.',
             ),
             risk_warning=_localized_text(
                 report_language,
                 en='The result may be inaccurate. Cross-check with other information.',
-                zh='分析结果可能不准确，建议结合其他信息判断',
-                ko='결과가 부정확할 수 있습니다. 다른 정보와 교차 확인하세요.',
             ),
             raw_response=response_text,
             success=False,
@@ -5288,7 +4644,7 @@ if __name__ == "__main__":
             'ma20': 1790.0,
             'volume_ratio': 1.2,
         },
-        'ma_status': '多头排列 📈',
+        'ma_status': 'MA xếp tăng 📈',
         'volume_change_ratio': 1.3,
         'price_change_ratio': 1.5,
     }
@@ -5296,8 +4652,8 @@ if __name__ == "__main__":
     analyzer = GeminiAnalyzer()
     
     if analyzer.is_available():
-        print("=== AI 分析测试 ===")
+        print("=== Kiểm thử phân tích AI ===")
         result = analyzer.analyze(test_context)
-        print(f"分析结果: {result.to_dict()}")
+        print(f"Kết quả phân tích: {result.to_dict()}")
     else:
-        print("Gemini API 未配置，跳过测试")
+        print("Chưa cấu hình Gemini API, bỏ qua kiểm thử")

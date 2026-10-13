@@ -104,7 +104,7 @@ def sanitize_diagnostic_text(value: Any, *, max_length: int = 300) -> Optional[s
 
 
 # Lý do chuẩn (tiếng Anh) cho các ``error_type`` ổn định. Bản ghi cũ trong DB có thể
-# lưu ``error_message`` bằng tiếng Trung (ví dụ "过滤后无有效新闻"); khi đọc, code đã
+# lưu ``error_message`` bằng tiếng Trung (ví dụ thông báo "không còn tin hợp lệ sau lọc"); khi đọc, code đã
 # biết được quy về câu này để message không lộ tiếng Trung. Web bản địa hóa lại
 # theo ``runFlow.errorReason.<error_type>``.
 # Canonical English reasons for stable error_type codes; applied at read time so
@@ -574,7 +574,6 @@ _DATA_TYPE_LABELS = {
     "fundamental": "Fundamentals",
     "fundamentals": "Fundamentals",
     "belong_boards": "Sector boards",
-    "chip": "Chip structure",
 }
 
 

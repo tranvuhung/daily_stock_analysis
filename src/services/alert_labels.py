@@ -30,15 +30,6 @@ _LABELS = {
         "account": "Account {target}",
         "overflow": "Expanded targets over limit",
     },
-    "zh": {
-        "title": "事件告警",
-        "default_content": "告警已触发",
-        "watchlist": "自选股",
-        "holdings": "持仓",
-        "all_accounts": "全部账户",
-        "account": "账户 {target}",
-        "overflow": "展开目标超限",
-    },
 }
 
 

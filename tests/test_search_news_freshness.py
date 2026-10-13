@@ -61,7 +61,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         response: SearchResponse | None = None,
     ):
         service = SearchService(
-            bocha_keys=["dummy_key"],
+            tavily_keys=["dummy_key"],
             searxng_public_instances_enabled=False,
             news_max_age_days=news_max_age_days,
             news_strategy_profile=news_strategy_profile,
@@ -79,7 +79,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             news_max_age_days=3,
             news_strategy_profile="medium",  # 7
         )
-        service.search_stock_news("600519", "贵州茅台", max_results=5)
+        service.search_stock_news("VNM", "Vinamilk", max_results=5)
         kwargs = mock_search.call_args[1]
         self.assertEqual(kwargs["days"], 3)
 
@@ -108,7 +108,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             news_max_age_days=30,
             news_strategy_profile="invalid_profile",
         )
-        service.search_stock_news("600519", "贵州茅台", max_results=5)
+        service.search_stock_news("VNM", "Vinamilk", max_results=5)
         kwargs = mock_search.call_args[1]
         self.assertEqual(kwargs["days"], 3)
 
@@ -134,7 +134,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             ),
         )
 
-        resp = service.search_stock_news("600519", "贵州茅台", max_results=5)
+        resp = service.search_stock_news("VNM", "Vinamilk", max_results=5)
         titles = [r.title for r in resp.results]
         self.assertEqual(titles, ["future_1", "fresh"])
         for item in resp.results:
@@ -146,7 +146,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             news_max_age_days=3,
             news_strategy_profile="short",
         )
-        service.search_stock_news("600519", "贵州茅台", max_results=4)
+        service.search_stock_news("VNM", "Vinamilk", max_results=4)
         args, kwargs = mock_search.call_args
         requested = kwargs.get("max_results")
         if requested is None:
@@ -160,7 +160,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         fresh = today.isoformat()
 
         service = SearchService(
-            bocha_keys=["dummy_key"],
+            tavily_keys=["dummy_key"],
             searxng_public_instances_enabled=False,
             news_max_age_days=3,
             news_strategy_profile="short",
@@ -178,7 +178,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         )
         service._providers = [p1, p2]
 
-        resp = service.search_stock_news("600519", "贵州茅台", max_results=3)
+        resp = service.search_stock_news("VNM", "Vinamilk", max_results=3)
         self.assertEqual([r.title for r in resp.results], ["fresh"])
         p1.search.assert_called_once()
         p2.search.assert_called_once()
@@ -189,7 +189,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         old = (today - timedelta(days=90)).isoformat()
         fresh = today.isoformat()
         service = SearchService(
-            bocha_keys=["dummy_key"],
+            tavily_keys=["dummy_key"],
             searxng_public_instances_enabled=False,
             news_max_age_days=3,
             news_strategy_profile="short",
@@ -202,7 +202,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         searxng = SimpleNamespace(
             is_available=True,
             name="SearXNG",
-            search=MagicMock(return_value=_response([_result("贵州茅台 600519 最新公告", fresh)])),
+            search=MagicMock(return_value=_response([_result("Vinamilk VNM 最新公告", fresh)])),
         )
         service._providers = [tavily, searxng]
 
@@ -210,16 +210,16 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             trace_id="trace-news",
             task_id="task-news",
             query_id="query-news",
-            stock_code="600519",
+            stock_code="VNM",
             trigger_source="api",
         )
         try:
-            response = service.search_stock_news("600519", "贵州茅台", max_results=3)
+            response = service.search_stock_news("VNM", "Vinamilk", max_results=3)
             diagnostics = current_diagnostic_snapshot()
         finally:
             reset_run_diagnostic_context(token)
 
-        self.assertEqual([item.title for item in response.results], ["贵州茅台 600519 最新公告"])
+        self.assertEqual([item.title for item in response.results], ["Vinamilk VNM 最新公告"])
         provider_runs = diagnostics["provider_runs"]
         self.assertEqual([run["data_type"] for run in provider_runs], ["news_search", "news_search"])
         self.assertEqual([run["provider"] for run in provider_runs], ["Tavily", "SearXNG"])
@@ -227,11 +227,11 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         self.assertTrue(provider_runs[1]["success"])
         self.assertEqual(provider_runs[1]["record_count"], 1)
 
-    def test_search_stock_news_tries_next_provider_when_chinese_context_is_english_only(self) -> None:
-        """Chinese-preferred queries should not stop on English-only provider results."""
+    def test_search_stock_news_keeps_first_provider_with_direct_hit(self) -> None:
+        """Provider đầu tiên có tin trực tiếp thì dừng, không gọi provider sau."""
         fresh = datetime.now().date().isoformat()
         service = SearchService(
-            bocha_keys=["dummy_key"],
+            tavily_keys=["dummy_key"],
             searxng_public_instances_enabled=False,
             news_max_age_days=3,
             news_strategy_profile="short",
@@ -240,204 +240,17 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         p1 = SimpleNamespace(
             is_available=True,
             name="P1",
-            search=MagicMock(
-                return_value=_response(
-                    [
-                        _result("English headline", fresh),
-                        _result("Another English story", fresh),
-                    ]
-                )
-            ),
+            search=MagicMock(return_value=_response([_result("Hòa Phát HPG lợi nhuận quý tăng mạnh", fresh)])),
         )
         p2 = SimpleNamespace(
             is_available=True,
             name="P2",
-            search=MagicMock(return_value=_response([_result("中文资讯", fresh)])),
+            search=MagicMock(return_value=_response([_result("Tin ngành thép", fresh)])),
         )
         service._providers = [p1, p2]
 
-        resp = service.search_stock_news("600519", "贵州茅台", max_results=3)
-        self.assertEqual([r.title for r in resp.results], ["中文资讯"])
-        p1.search.assert_called_once()
-        p2.search.assert_called_once()
-
-    def test_search_stock_news_prioritizes_chinese_items_within_mixed_results(self) -> None:
-        """Chinese items should be ordered ahead of English items in mixed batches."""
-        fresh = datetime.now().date().isoformat()
-        service = SearchService(
-            bocha_keys=["dummy_key"],
-            searxng_public_instances_enabled=False,
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-
-        mixed_provider = SimpleNamespace(
-            is_available=True,
-            name="Mixed",
-            search=MagicMock(
-                return_value=_response(
-                    [
-                        _result("English headline", fresh),
-                        _result("中文快讯", fresh),
-                        _result("Second English headline", fresh),
-                    ]
-                )
-            ),
-        )
-        service._providers = [mixed_provider]
-
-        resp = service.search_stock_news("600519", "贵州茅台", max_results=3)
-        self.assertEqual(
-            [r.title for r in resp.results],
-            ["中文快讯", "English headline", "Second English headline"],
-        )
-
-    def test_search_stock_news_prioritizes_chinese_before_truncating_results(self) -> None:
-        """Chinese candidates beyond the first raw slot should still win after reprioritization."""
-        fresh = datetime.now().date().isoformat()
-        service = SearchService(
-            bocha_keys=["dummy_key"],
-            searxng_public_instances_enabled=False,
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-
-        p1 = SimpleNamespace(
-            is_available=True,
-            name="P1",
-            search=MagicMock(
-                return_value=_response(
-                    [
-                        _result("English headline", fresh),
-                        _result("中文快讯", fresh),
-                    ]
-                )
-            ),
-        )
-        p2 = SimpleNamespace(
-            is_available=True,
-            name="P2",
-            search=MagicMock(return_value=_response([_result("后续中文资讯", fresh)])),
-        )
-        service._providers = [p1, p2]
-
-        resp = service.search_stock_news("600519", "贵州茅台", max_results=1)
-        self.assertEqual([r.title for r in resp.results], ["中文快讯"])
-        p1.search.assert_called_once()
-        p2.search.assert_called_once()
-
-    def test_search_stock_news_prefers_chinese_direct_hit_before_score_truncation(self) -> None:
-        """Chinese direct hits should outrank higher-scored English direct hits before limiting."""
-        fresh = datetime.now().date().isoformat()
-        service = SearchService(
-            bocha_keys=["dummy_key"],
-            searxng_public_instances_enabled=False,
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-
-        provider = SimpleNamespace(
-            is_available=True,
-            name="MixedDirect",
-            search=MagicMock(
-                return_value=_response(
-                    [
-                        _result(
-                            "Kweichow Moutai 600519 announces buyback",
-                            fresh,
-                            snippet="The company reported an updated share repurchase plan.",
-                        ),
-                        _result(
-                            "贵州茅台 发布回购公告",
-                            fresh,
-                            snippet="公司披露回购方案。",
-                        ),
-                    ]
-                )
-            ),
-        )
-        service._providers = [provider]
-
-        resp = service.search_stock_news("600519", "贵州茅台", max_results=1)
-
-        self.assertEqual([r.title for r in resp.results], ["贵州茅台 发布回购公告"])
-        self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
-        provider.search.assert_called_once()
-
-    def test_a_share_chinese_sector_provider_beats_higher_scored_english_sector(self) -> None:
-        """When no direct hit exists, Chinese-preferred flows should compare language before score."""
-        fresh = datetime.now().date().isoformat()
-        service = SearchService(
-            bocha_keys=["dummy_key"],
-            searxng_public_instances_enabled=False,
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-
-        p1 = SimpleNamespace(
-            is_available=True,
-            name="EnglishSector",
-            search=MagicMock(
-                return_value=_response(
-                    [
-                        _result(
-                            "Baijiu industry quarterly results improve",
-                            fresh,
-                            snippet="Sector peers report better market share.",
-                            source="sec.gov",
-                        )
-                    ]
-                )
-            ),
-        )
-        p2 = SimpleNamespace(
-            is_available=True,
-            name="ChineseSector",
-            search=MagicMock(
-                return_value=_response(
-                    [
-                        _result(
-                            "白酒板块资金回暖",
-                            fresh,
-                            snippet="消费行业反弹。",
-                        )
-                    ]
-                )
-            ),
-        )
-        service._providers = [p1, p2]
-
-        resp = service.search_stock_news("600519", "贵州茅台", max_results=1)
-
-        self.assertEqual([r.title for r in resp.results], ["白酒板块资金回暖"])
-        self.assertEqual(resp.results[0].relevance_category, "sector_related_news")
-        p1.search.assert_called_once()
-        p2.search.assert_called_once()
-
-    def test_search_stock_news_keeps_english_provider_order_for_us_stock(self) -> None:
-        """English stock searches should keep the first successful provider result."""
-        fresh = datetime.now().date().isoformat()
-        service = SearchService(
-            bocha_keys=["dummy_key"],
-            searxng_public_instances_enabled=False,
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-
-        p1 = SimpleNamespace(
-            is_available=True,
-            name="P1",
-            search=MagicMock(return_value=_response([_result("Apple earnings beat", fresh)])),
-        )
-        p2 = SimpleNamespace(
-            is_available=True,
-            name="P2",
-            search=MagicMock(return_value=_response([_result("苹果资讯", fresh)])),
-        )
-        service._providers = [p1, p2]
-
-        resp = service.search_stock_news("AAPL", "Apple", max_results=3)
-        self.assertEqual([r.title for r in resp.results], ["Apple earnings beat"])
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=3)
+        self.assertEqual([r.title for r in resp.results], ["Hòa Phát HPG lợi nhuận quý tăng mạnh"])
         p1.search.assert_called_once()
         p2.search.assert_not_called()
 
@@ -445,7 +258,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         """A-share direct company hits should beat generic sector news from earlier providers."""
         fresh = datetime.now().date().isoformat()
         service = SearchService(
-            bocha_keys=["dummy_key"],
+            tavily_keys=["dummy_key"],
             searxng_public_instances_enabled=False,
             news_max_age_days=3,
             news_strategy_profile="short",
@@ -474,10 +287,10 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
                     [
                         _result("沪指震荡收涨，市场情绪回暖", fresh),
                         _result(
-                            "贵州茅台 600519 发布回购公告",
+                            "Vinamilk VNM 发布回购公告",
                             fresh,
-                            snippet="贵州茅台披露公司公告，董事会审议通过回购方案。",
-                            source="cninfo",
+                            snippet="Vinamilk披露公司公告，董事会审议通过回购方案。",
+                            source="hose",
                         ),
                     ]
                 )
@@ -485,11 +298,11 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         )
         service._providers = [p1, p2]
 
-        resp = service.search_stock_news("600519", "贵州茅台", max_results=2)
+        resp = service.search_stock_news("VNM", "Vinamilk", max_results=2)
 
-        self.assertEqual(resp.results[0].title, "贵州茅台 600519 发布回购公告")
+        self.assertEqual(resp.results[0].title, "Vinamilk VNM 发布回购公告")
         self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
-        self.assertIn("股票代码", "；".join(resp.results[0].relevance_reasons or []))
+        self.assertIn("mã cổ phiếu", "; ".join(resp.results[0].relevance_reasons or []))
         p1.search.assert_called_once()
         p2.search.assert_called_once()
 
@@ -497,7 +310,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         """Download/listing pages and zero-relevance fillers should not enter stock news context."""
         fresh = datetime.now().date().isoformat()
         service = SearchService(
-            bocha_keys=["dummy_key"],
+            tavily_keys=["dummy_key"],
             searxng_public_instances_enabled=False,
             news_max_age_days=3,
             news_strategy_profile="short",
@@ -509,7 +322,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
                 return_value=_response(
                     [
                         _result(
-                            "腾讯控股 00700 极速版安装包下载",
+                            "Hòa Phát HPG 极速版安装包下载",
                             fresh,
                             snippet="当前版本 686.38MB，84%好评，适合下载安装到手机。",
                             url="https://download.example.invalid/apps/douyang",
@@ -530,10 +343,10 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
                             source="news.example.invalid",
                         ),
                         _result(
-                            "腾讯控股 00700 早盘走强",
+                            "Hòa Phát HPG 早盘走强",
                             fresh,
-                            snippet="腾讯控股成交活跃，港股科技板块反弹。",
-                            url="https://finance.example.invalid/00700",
+                            snippet="Hòa Phát成交活跃，港股科技板块反弹。",
+                            url="https://finance.example.invalid/HPG",
                             source="finance.example.invalid",
                         ),
                     ]
@@ -542,9 +355,9 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         )
         service._providers = [provider]
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=3)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=3)
 
-        self.assertEqual([item.title for item in resp.results], ["腾讯控股 00700 早盘走强"])
+        self.assertEqual([item.title for item in resp.results], ["Hòa Phát HPG 早盘走强"])
         self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
 
     def test_download_like_news_without_size_or_url_hints_is_filtered(self) -> None:
@@ -556,25 +369,25 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "腾讯控股 00700 官方版客户端安卓版下载",
+                        "Hòa Phát HPG 官方版客户端安卓版下载",
                         fresh,
                         snippet="点此获取最新版安卓版客户端，支持一键下载安装包。",
-                        url="https://finance.example.invalid/tencent/stock/00700",
+                        url="https://finance.example.invalid/tencent/stock/HPG",
                         source="finance.example.invalid",
                     ),
                     _result(
-                        "腾讯控股 00700 发布回购公告",
+                        "Hòa Phát HPG 发布回购公告",
                         fresh,
-                        snippet="腾讯控股披露股份回购公告。",
-                        source="hkexnews",
+                        snippet="Hòa Phát披露股份回购公告。",
+                        source="hose",
                     ),
                 ]
             ),
         )
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=2)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=2)
 
-        self.assertEqual([item.title for item in resp.results], ["腾讯控股 00700 发布回购公告"])
+        self.assertEqual([item.title for item in resp.results], ["Hòa Phát HPG 发布回购公告"])
 
     def test_package_security_news_does_not_trigger_download_filter(self) -> None:
         """Bare package wording in product/security news should not look like a download page."""
@@ -612,7 +425,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "证券时报客户端讯，贵州茅台 600519 发布回购公告",
+                        "证券时报客户端讯，Vinamilk VNM 发布回购公告",
                         fresh,
                         snippet="贵茅披露股票回购公告。",
                         source="finance.example.invalid",
@@ -621,11 +434,11 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             ),
         )
 
-        resp = service.search_stock_news("600519", "贵州茅台", max_results=1)
+        resp = service.search_stock_news("VNM", "Vinamilk", max_results=1)
 
         self.assertEqual(
             [item.title for item in resp.results],
-            ["证券时报客户端讯，贵州茅台 600519 发布回购公告"],
+            ["证券时报客户端讯，Vinamilk VNM 发布回购公告"],
         )
 
     def test_outer_market_phrase_is_not_filtered_as_adult_spam(self) -> None:
@@ -646,7 +459,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             ),
         )
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=1)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=1)
 
         self.assertEqual(
             [item.title for item in resp.results],
@@ -662,23 +475,23 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "腾讯控股 00700 发布回购公告",
+                        "Hòa Phát HPG 发布回购公告",
                         fresh,
-                        snippet="腾讯控股披露股份回购公告，成交维持活跃。",
-                        url="https://app.finance.example.invalid/apps/markets/00700",
+                        snippet="Hòa Phát披露股份回购公告，成交维持活跃。",
+                        url="https://app.finance.example.invalid/apps/markets/HPG",
                         source="app.finance.example.invalid",
                     )
                 ]
             ),
         )
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=1)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=1)
 
-        self.assertEqual([item.title for item in resp.results], ["腾讯控股 00700 发布回购公告"])
+        self.assertEqual([item.title for item in resp.results], ["Hòa Phát HPG 发布回购公告"])
         self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
 
-    def test_apple_rating_phrase_does_not_trigger_app_download_filter(self) -> None:
-        """Apple should not satisfy the bare app/download term in admission filtering."""
+    def test_rating_phrase_does_not_trigger_app_download_filter(self) -> None:
+        """Analyst star ratings in ticker news should not trip the app/download filter."""
         fresh = datetime.now().date().isoformat()
         service, _ = self._create_service_with_mock_provider(
             news_max_age_days=3,
@@ -686,21 +499,21 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "Apple gets 5 stars from analysts after earnings",
+                        "FPT gets 5 stars from analysts after earnings",
                         fresh,
-                        snippet="AAPL shares rose after Apple revenue guidance improved.",
-                        url="https://finance.example.invalid/aapl-analyst-rating",
+                        snippet="FPT shares rose after FPT Corporation revenue guidance improved.",
+                        url="https://finance.example.invalid/fpt-analyst-rating",
                         source="finance.example.invalid",
                     )
                 ]
             ),
         )
 
-        resp = service.search_stock_news("AAPL", "Apple", max_results=1)
+        resp = service.search_stock_news("FPT", "FPT Corporation", max_results=1)
 
         self.assertEqual(
             [item.title for item in resp.results],
-            ["Apple gets 5 stars from analysts after earnings"],
+            ["FPT gets 5 stars from analysts after earnings"],
         )
         self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
 
@@ -743,21 +556,21 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "腾讯控股 00700 新游上线获玩家评分 9.0",
+                        "Hòa Phát HPG 新游上线获玩家评分 9.0",
                         fresh,
                         snippet="腾讯游戏新品上线首周表现强劲，玩家评分 9.0。",
-                        url="https://finance.example.invalid/app/news/00700-game-rating",
+                        url="https://finance.example.invalid/app/news/HPG-game-rating",
                         source="finance.example.invalid",
                     )
                 ]
             ),
         )
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=1)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=1)
 
         self.assertEqual(
             [item.title for item in resp.results],
-            ["腾讯控股 00700 新游上线获玩家评分 9.0"],
+            ["Hòa Phát HPG 新游上线获玩家评分 9.0"],
         )
         self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
 
@@ -915,26 +728,26 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "腾讯控股 00700 app store rating",
+                        "Hòa Phát HPG app store rating",
                         fresh,
                         snippet="4.8 stars, 10M downloads, version 12.8 for mobile app users.",
-                        url="https://apps.example.invalid/tencent/00700",
+                        url="https://apps.example.invalid/tencent/HPG",
                         source="apps.example.invalid",
                     ),
                     _result(
-                        "腾讯控股 00700 发布回购公告",
+                        "Hòa Phát HPG 发布回购公告",
                         fresh,
-                        snippet="腾讯控股披露股份回购公告。",
-                        url="https://finance.example.invalid/news/00700-buyback",
+                        snippet="Hòa Phát披露股份回购公告。",
+                        url="https://finance.example.invalid/news/HPG-buyback",
                         source="finance.example.invalid",
                     ),
                 ]
             ),
         )
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=1)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=1)
 
-        self.assertEqual([item.title for item in resp.results], ["腾讯控股 00700 发布回购公告"])
+        self.assertEqual([item.title for item in resp.results], ["Hòa Phát HPG 发布回购公告"])
 
     def test_app_listing_metric_with_version_rating_still_filtered(self) -> None:
         """Business metric wording should not rescue obvious app listing pages."""
@@ -945,26 +758,26 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "腾讯控股 00700 下载量突破1000万",
+                        "Hòa Phát HPG 下载量突破1000万",
                         fresh,
                         snippet="应用版本 12.8，评分 4.9，安装包 256MB，下载量突破1000万。",
-                        url="https://apps.example.invalid/tencent/00700/download",
+                        url="https://apps.example.invalid/tencent/HPG/download",
                         source="apps.example.invalid",
                     ),
                     _result(
-                        "腾讯控股 00700 发布业绩公告",
+                        "Hòa Phát HPG 发布业绩公告",
                         fresh,
-                        snippet="腾讯控股披露季度业绩，收入与利润保持增长。",
-                        url="https://finance.example.invalid/news/00700-earnings",
+                        snippet="Hòa Phát披露季度业绩，收入与利润保持增长。",
+                        url="https://finance.example.invalid/news/HPG-earnings",
                         source="finance.example.invalid",
                     ),
                 ]
             ),
         )
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=1)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=1)
 
-        self.assertEqual([item.title for item in resp.results], ["腾讯控股 00700 发布业绩公告"])
+        self.assertEqual([item.title for item in resp.results], ["Hòa Phát HPG 发布业绩公告"])
 
     def test_finance_client_boilerplate_does_not_trigger_download_filter(self) -> None:
         """Finance media boilerplate such as 客户端讯 should not look like an app page."""
@@ -975,19 +788,19 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "贵州茅台 600519 发布回购公告",
+                        "Vinamilk VNM 发布回购公告",
                         fresh,
-                        snippet="证券时报客户端讯，贵州茅台披露股份回购公告。",
-                        url="https://finance.example.invalid/news/600519-buyback",
+                        snippet="证券时报客户端讯，Vinamilk披露股份回购公告。",
+                        url="https://finance.example.invalid/news/VNM-buyback",
                         source="证券时报",
                     )
                 ]
             ),
         )
 
-        resp = service.search_stock_news("600519", "贵州茅台", max_results=1)
+        resp = service.search_stock_news("VNM", "Vinamilk", max_results=1)
 
-        self.assertEqual([item.title for item in resp.results], ["贵州茅台 600519 发布回购公告"])
+        self.assertEqual([item.title for item in resp.results], ["Vinamilk VNM 发布回购公告"])
         self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
 
     def test_market_peripheral_phrase_does_not_trigger_adult_spam_filter(self) -> None:
@@ -999,21 +812,21 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "腾讯控股 00700 受外围市场走弱拖累",
+                        "Hòa Phát HPG 受外围市场走弱拖累",
                         fresh,
-                        snippet="外围市场走弱拖累港股科技股，腾讯控股成交活跃。",
-                        url="https://finance.example.invalid/markets/00700",
+                        snippet="外围市场走弱拖累港股科技股，Hòa Phát成交活跃。",
+                        url="https://finance.example.invalid/markets/HPG",
                         source="finance.example.invalid",
                     )
                 ]
             ),
         )
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=1)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=1)
 
         self.assertEqual(
             [item.title for item in resp.results],
-            ["腾讯控股 00700 受外围市场走弱拖累"],
+            ["Hòa Phát HPG 受外围市场走弱拖累"],
         )
         self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
 
@@ -1134,7 +947,7 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "腾讯控股 00700 QQ2024 开放预约",
+                        "Hòa Phát HPG QQ2024 开放预约",
                         fresh,
                         snippet="QQ2024 产品升级开放预约，企业通信功能增强。",
                         url="https://finance.example.invalid/products/QQ2024",
@@ -1144,11 +957,11 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             ),
         )
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=1)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=1)
 
         self.assertEqual(
             [item.title for item in resp.results],
-            ["腾讯控股 00700 QQ2024 开放预约"],
+            ["Hòa Phát HPG QQ2024 开放预约"],
         )
         self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
 
@@ -1161,26 +974,26 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "腾讯控股 00700 小姐上门 QQ：123456",
+                        "Hòa Phát HPG 小姐上门 QQ：123456",
                         fresh,
                         snippet="联系获取详情。",
                         url="https://spam.example.invalid/local/qq123456",
                         source="spam.example.invalid",
                     ),
                     _result(
-                        "腾讯控股 00700 发布回购公告",
+                        "Hòa Phát HPG 发布回购公告",
                         fresh,
-                        snippet="腾讯控股披露股份回购公告。",
-                        url="https://finance.example.invalid/news/00700-buyback",
+                        snippet="Hòa Phát披露股份回购公告。",
+                        url="https://finance.example.invalid/news/HPG-buyback",
                         source="finance.example.invalid",
                     ),
                 ]
             ),
         )
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=1)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=1)
 
-        self.assertEqual([item.title for item in resp.results], ["腾讯控股 00700 发布回购公告"])
+        self.assertEqual([item.title for item in resp.results], ["Hòa Phát HPG 发布回购公告"])
 
     def test_adult_alphanumeric_contact_handle_is_filtered(self) -> None:
         """Contact handles such as 微信：abc123 should count as adult-service spam signals."""
@@ -1191,26 +1004,26 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "腾讯控股 00700 小姐上门 微信：abc123",
+                        "Hòa Phát HPG 小姐上门 微信：abc123",
                         fresh,
                         snippet="联系获取详情。",
                         url="https://spam.example.invalid/local/wechat-abc123",
                         source="spam.example.invalid",
                     ),
                     _result(
-                        "腾讯控股 00700 发布回购公告",
+                        "Hòa Phát HPG 发布回购公告",
                         fresh,
-                        snippet="腾讯控股披露股份回购公告。",
-                        url="https://finance.example.invalid/news/00700-buyback",
+                        snippet="Hòa Phát披露股份回购公告。",
+                        url="https://finance.example.invalid/news/HPG-buyback",
                         source="finance.example.invalid",
                     ),
                 ]
             ),
         )
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=1)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=1)
 
-        self.assertEqual([item.title for item in resp.results], ["腾讯控股 00700 发布回购公告"])
+        self.assertEqual([item.title for item in resp.results], ["Hòa Phát HPG 发布回购公告"])
 
     def test_adult_phone_contact_is_filtered(self) -> None:
         """Phone contact labels should count as contact signals with adult-service context."""
@@ -1221,26 +1034,26 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "腾讯控股 00700 小姐上门 电话13800138000",
+                        "Hòa Phát HPG 小姐上门 电话13800138000",
                         fresh,
                         snippet="联系获取详情。",
                         url="https://spam.example.invalid/local/phone-13800138000",
                         source="spam.example.invalid",
                     ),
                     _result(
-                        "腾讯控股 00700 发布回购公告",
+                        "Hòa Phát HPG 发布回购公告",
                         fresh,
-                        snippet="腾讯控股披露股份回购公告。",
-                        url="https://finance.example.invalid/news/00700-buyback",
+                        snippet="Hòa Phát披露股份回购公告。",
+                        url="https://finance.example.invalid/news/HPG-buyback",
                         source="finance.example.invalid",
                     ),
                 ]
             ),
         )
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=1)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=1)
 
-        self.assertEqual([item.title for item in resp.results], ["腾讯控股 00700 发布回购公告"])
+        self.assertEqual([item.title for item in resp.results], ["Hòa Phát HPG 发布回购公告"])
 
     def test_healthcare_phone_contact_news_does_not_trigger_adult_spam_filter(self) -> None:
         """Normal phone contacts plus healthcare category wording are not adult-service spam."""
@@ -1278,21 +1091,21 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "腾讯控股 00700 加强色情低俗内容治理",
+                        "Hòa Phát HPG 加强色情低俗内容治理",
                         fresh,
-                        snippet="腾讯控股升级内容安全体系，持续治理色情低俗内容风险。",
-                        url="https://finance.example.invalid/news/00700-content-safety",
+                        snippet="Hòa Phát升级内容安全体系，持续治理色情低俗内容风险。",
+                        url="https://finance.example.invalid/news/HPG-content-safety",
                         source="finance.example.invalid",
                     )
                 ]
             ),
         )
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=1)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=1)
 
         self.assertEqual(
             [item.title for item in resp.results],
-            ["腾讯控股 00700 加强色情低俗内容治理"],
+            ["Hòa Phát HPG 加强色情低俗内容治理"],
         )
         self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
 
@@ -1308,65 +1121,29 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
                         title="董事会公告",
                         snippet="股份回购事项。",
                         url="",
-                        source="hkexnews",
+                        source="hose",
                         published_date=fresh,
                     ),
                     _result(
-                        "腾讯控股 00700 发布回购公告",
+                        "Hòa Phát HPG 发布回购公告",
                         fresh,
-                        snippet="腾讯控股披露股份回购公告。",
-                        url="https://finance.example.invalid/news/00700-buyback",
+                        snippet="Hòa Phát披露股份回购公告。",
+                        url="https://finance.example.invalid/news/HPG-buyback",
                         source="finance.example.invalid",
                     ),
                 ]
             ),
         )
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=2)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=2)
 
         self.assertEqual(
             [item.title for item in resp.results],
-            ["腾讯控股 00700 发布回购公告", "董事会公告"],
+            ["Hòa Phát HPG 发布回购公告", "董事会公告"],
         )
         official_result = resp.results[1]
         self.assertGreater(official_result.relevance_score or 0, 0)
-        self.assertIn("来源接近公告或交易所渠道", official_result.relevance_reasons)
-
-    def test_full_chinese_official_source_label_is_honored_without_url(self) -> None:
-        """Full Chinese exchange labels without URL should retain official-source treatment."""
-        fresh = datetime.now().date().isoformat()
-        service, _ = self._create_service_with_mock_provider(
-            news_max_age_days=3,
-            news_strategy_profile="short",
-            response=_response(
-                [
-                    SearchResult(
-                        title="上市公司公告",
-                        snippet="股份回购事项。",
-                        url="",
-                        source="上海证券交易所",
-                        published_date=fresh,
-                    ),
-                    _result(
-                        "贵州茅台 600519 发布回购公告",
-                        fresh,
-                        snippet="贵州茅台披露股份回购公告。",
-                        url="https://finance.example.invalid/news/600519-buyback",
-                        source="finance.example.invalid",
-                    ),
-                ]
-            ),
-        )
-
-        resp = service.search_stock_news("600519", "贵州茅台", max_results=2)
-
-        self.assertEqual(
-            [item.title for item in resp.results],
-            ["贵州茅台 600519 发布回购公告", "上市公司公告"],
-        )
-        official_result = resp.results[1]
-        self.assertGreater(official_result.relevance_score or 0, 0)
-        self.assertIn("来源接近公告或交易所渠道", official_result.relevance_reasons)
+        self.assertIn("Nguồn gần với kênh công bố thông tin hoặc sở giao dịch", official_result.relevance_reasons)
 
     def test_spoofed_official_tokens_do_not_bypass_news_admission(self) -> None:
         """Official exemptions should require trusted parsed hosts or exact source labels."""
@@ -1377,47 +1154,47 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "腾讯控股 00700 极速版安装包下载",
+                        "Hòa Phát HPG 极速版安装包下载",
                         fresh,
                         snippet="当前版本 686.38MB，84%好评，适合下载安装到手机。",
-                        url="https://spam.example.invalid/sec.gov/apps/douyang",
+                        url="https://spam.example.invalid/ssc.gov.vn/apps/douyang",
                         source="spam.example.invalid",
                     ),
                     _result(
                         "1000+ 宜昌小姐上门特殊服务",
                         fresh,
                         snippet="小姐预约 yue2345，同城约炮、保健按摩、推油套餐。",
-                        url="https://hkexnews.evil.invalid/local/yue2345",
-                        source="hkexnews.evil.invalid",
+                        url="https://hsx.vn.evil.invalid/local/yue2345",
+                        source="hsx.vn.evil.invalid",
                     ),
                     _result(
-                        "腾讯控股 00700 官方app下载链接",
+                        "Hòa Phát HPG 官方app下载链接",
                         fresh,
                         snippet="安卓客户端下载，支持极速版下载。",
-                        url="https://hkexnews.evil.invalid/guide/officialdownload",
-                        source="hkexnews",
+                        url="https://hsx.vn.evil.invalid/guide/officialdownload",
+                        source="hose",
                     ),
                     _result(
-                        "腾讯控股 00700 SEC 官方app下载链接",
+                        "Hòa Phát HPG SEC 官方app下载链接",
                         fresh,
                         snippet="安卓客户端下载，支持极速版下载。",
                         url="https://spam.example.invalid/apps/sec-download",
-                        source="sec.gov",
+                        source="ssc.gov.vn",
                     ),
                     _result(
-                        "腾讯控股 00700 发布回购公告",
+                        "Hòa Phát HPG 发布回购公告",
                         fresh,
-                        snippet="腾讯控股披露股份回购公告。",
-                        url="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0613/example.pdf",
-                        source="hkexnews",
+                        snippet="Hòa Phát披露股份回购公告。",
+                        url="https://www.hsx.vn/listedco/listconews/sehk/2026/0613/example.pdf",
+                        source="hose",
                     ),
                 ]
             ),
         )
 
-        resp = service.search_stock_news("00700.HK", "腾讯控股", max_results=3)
+        resp = service.search_stock_news("HPG", "Hòa Phát", max_results=3)
 
-        self.assertEqual([item.title for item in resp.results], ["腾讯控股 00700 发布回购公告"])
+        self.assertEqual([item.title for item in resp.results], ["Hòa Phát HPG 发布回购公告"])
 
     def test_comprehensive_intel_filters_fillers_before_prompt_context(self) -> None:
         """Admission filtering should run before per-dimension result limiting."""
@@ -1428,31 +1205,31 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             response=_response(
                 [
                     _result(
-                        "腾讯控股 00700 极速版安装包下载",
+                        "Hòa Phát HPG 极速版安装包下载",
                         fresh,
                         snippet="当前版本 686.38MB，84%好评，适合下载安装到手机。",
-                        url="https://cdn.example.invalid/apps/00700/download",
+                        url="https://cdn.example.invalid/apps/HPG/download",
                         source="cdn.example.invalid",
                     ),
                     _result(
-                        "腾讯控股 00700 Android 安装包评分",
+                        "Hòa Phát HPG Android 安装包评分",
                         fresh,
                         snippet="应用版本 12.8，评分 4.9，安装后可查看行情。",
-                        url="https://finance.example.invalid/tencent/00700-rating",
+                        url="https://finance.example.invalid/tencent/HPG-rating",
                         source="finance.example.invalid",
                     ),
                     _result(
-                        "腾讯控股 00700 iOS 旧版下载",
+                        "Hòa Phát HPG iOS 旧版下载",
                         fresh,
                         snippet="历史版本安装包 256MB，用户好评率 96%。",
-                        url="https://download.example.invalid/ios/00700",
+                        url="https://download.example.invalid/ios/HPG",
                         source="download.example.invalid",
                     ),
                     _result(
-                        "腾讯控股 00700 发布回购公告",
+                        "Hòa Phát HPG 发布回购公告",
                         fresh,
-                        snippet="腾讯控股披露股份回购公告。",
-                        source="hkexnews",
+                        snippet="Hòa Phát披露股份回购公告。",
+                        source="hose",
                     ),
                 ]
             ),
@@ -1460,195 +1237,38 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
 
         with patch("src.search_service.time.sleep"):
             intel = service.search_comprehensive_intel(
-                stock_code="00700.HK",
-                stock_name="腾讯控股",
+                stock_code="HPG",
+                stock_name="Hòa Phát",
                 max_searches=1,
             )
 
         self.assertEqual(
             [item.title for item in intel["latest_news"].results],
-            ["腾讯控股 00700 发布回购公告"],
+            ["Hòa Phát HPG 发布回购公告"],
         )
         mock_search.assert_called_once()
 
-    def test_a_share_chinese_direct_news_beats_english_direct_provider_fallback(self) -> None:
-        """Chinese-preferred queries should keep looking past English-only direct hits."""
-        fresh = datetime.now().date().isoformat()
-        service = SearchService(
-            bocha_keys=["dummy_key"],
-            searxng_public_instances_enabled=False,
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-
-        p1 = SimpleNamespace(
-            is_available=True,
-            name="EnglishDirect",
-            search=MagicMock(
-                return_value=_response(
-                    [
-                        _result(
-                            "Kweichow Moutai 600519 announces buyback",
-                            fresh,
-                            snippet="The company reported an updated share repurchase plan.",
-                        )
-                    ]
-                )
-            ),
-        )
-        p2 = SimpleNamespace(
-            is_available=True,
-            name="ChineseDirect",
-            search=MagicMock(
-                return_value=_response(
-                    [
-                        _result(
-                            "贵州茅台 600519 发布回购公告",
-                            fresh,
-                            snippet="贵州茅台披露公司回购公告。",
-                        )
-                    ]
-                )
-            ),
-        )
-        service._providers = [p1, p2]
-
-        resp = service.search_stock_news("600519", "贵州茅台", max_results=1)
-
-        self.assertEqual(resp.results[0].title, "贵州茅台 600519 发布回购公告")
-        self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
-        p1.search.assert_called_once()
-        p2.search.assert_called_once()
-
-    def test_hk_stock_relevance_drops_similar_name_noise(self) -> None:
-        """HK stock matching should drop similar-name noise when exact hits exist."""
-        fresh = datetime.now().date().isoformat()
-        service = SearchService(
-            bocha_keys=["dummy_key"],
-            searxng_public_instances_enabled=False,
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-        provider = SimpleNamespace(
-            is_available=True,
-            name="HKProvider",
-            search=MagicMock(
-                return_value=_response(
-                    [
-                        _result(
-                            "腾讯音乐发布新专辑合作计划",
-                            fresh,
-                            snippet="腾讯音乐娱乐集团宣布内容合作。",
-                        ),
-                        _result(
-                            "腾讯控股 00700 公告：回购股份",
-                            fresh,
-                            snippet="腾讯控股在港交所披露股份回购公告。",
-                            source="hkexnews",
-                        ),
-                    ]
-                )
-            ),
-        )
-        service._providers = [provider]
-
-        resp = service.search_stock_news("hk00700", "腾讯控股", max_results=2)
-
-        self.assertEqual(resp.results[0].title, "腾讯控股 00700 公告：回购股份")
-        self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
-        self.assertEqual(len(resp.results), 1)
-
-    def test_hk_stock_bare_short_code_does_not_match_index_points(self) -> None:
-        """Bare HK short codes should not make index-point headlines direct hits."""
-        result = SearchService._score_news_relevance(
-            _result(
-                "恒生指数大涨700点 科技股普遍反弹",
-                datetime.now().date().isoformat(),
-                snippet="港股市场情绪回暖，指数走强。",
-            ),
-            stock_code="hk00700",
-            stock_name="腾讯控股",
-        )
-
-        self.assertNotEqual(result.relevance_category, "direct_company_news")
-        self.assertNotIn("股票代码 700", "；".join(result.relevance_reasons or []))
-
-    def test_us_stock_ticker_relevance_beats_ambiguous_company_word(self) -> None:
-        """US ticker hits should outrank ambiguous common-word company-name noise."""
-        fresh = datetime.now().date().isoformat()
-        service = SearchService(
-            bocha_keys=["dummy_key"],
-            searxng_public_instances_enabled=False,
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-        provider = SimpleNamespace(
-            is_available=True,
-            name="USProvider",
-            search=MagicMock(
-                return_value=_response(
-                    [
-                        _result(
-                            "Apple growers face lower fruit prices",
-                            fresh,
-                            snippet="Agriculture market report on orchards.",
-                        ),
-                        _result(
-                            "AAPL Apple earnings beat analyst expectations",
-                            fresh,
-                            snippet="Apple shares rose after quarterly revenue guidance improved.",
-                        ),
-                    ]
-                )
-            ),
-        )
-        service._providers = [provider]
-
-        resp = service.search_stock_news("AAPL", "Apple", max_results=2)
-
-        self.assertEqual(resp.results[0].title, "AAPL Apple earnings beat analyst expectations")
-        self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
-        self.assertEqual(resp.results[1].relevance_category, "sector_related_news")
-
-    def test_ambiguous_company_name_with_generic_event_terms_stays_background(self) -> None:
-        """Generic event words should not make ambiguous company names direct without ticker."""
-        scored = SearchService._score_news_relevance(
-            _result(
-                "Apple stock results harvest",
-                datetime.now().date().isoformat(),
-                snippet="Agriculture market report on orchards.",
-            ),
-            stock_code="AAPL",
-            stock_name="Apple",
-        )
-
-        self.assertNotEqual(scored.relevance_category, "direct_company_news")
-        self.assertFalse(
-            any(
-                reason.startswith(("标题命中股票代码", "摘要命中股票代码", "链接命中股票代码"))
-                for reason in (scored.relevance_reasons or [])
-            )
-        )
-
     def test_suffixed_stock_codes_keep_canonical_identity_terms(self) -> None:
-        """Suffixed market codes should still emit canonical direct-match variants."""
+        """Mã Việt Nam dạng hậu tố/tiền tố vẫn sinh đủ biến thể khớp danh tính."""
         cases = (
-            ("00700.HK", {"00700", "HK00700"}),
-            ("600519.SH", {"600519", "600519.SH"}),
-            ("AAPL.US", {"AAPL", "NASDAQ:AAPL", "NYSE:AAPL"}),
+            ("HPG", {"HPG", "HPG.VN", "HOSE:HPG"}),
+            ("HPG.VN", {"HPG", "HPG.VN", "HOSE:HPG"}),
+            ("vnHPG", {"HPG", "HPG.VN"}),
+            ("FUEVN100", {"FUEVN100", "FUEVN100.VN"}),
+            ("VNINDEX", {"VNINDEX", "VN-Index"}),
         )
         for stock_code, expected_terms in cases:
             with self.subTest(stock_code=stock_code):
                 terms = set(SearchService._stock_code_identity_terms(stock_code))
-                self.assertTrue(expected_terms.issubset(terms))
+                self.assertTrue(expected_terms.issubset(terms), terms)
 
     def test_suffixed_market_codes_score_canonical_code_hits_as_direct(self) -> None:
         """Canonical code hits from suffixed inputs should be direct company news."""
         fresh = datetime.now().date().isoformat()
         cases = (
-            ("00700.HK", "HK00700 announces buyback"),
-            ("600519.SH", "600519 发布回购公告"),
-            ("AAPL.US", "AAPL announces quarterly results"),
+            ("HPG.VN", "HPG công bố kết quả kinh doanh quý"),
+            ("vnFPT", "HOSE:FPT announces quarterly results"),
+            ("VNM", "VNM.VN chia cổ tức tiền mặt"),
         )
         for stock_code, title in cases:
             with self.subTest(stock_code=stock_code):
@@ -1656,100 +1276,39 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
                     _result(
                         title,
                         fresh,
-                        snippet="The company reported a share buyback and quarterly results.",
+                        snippet="Doanh nghiệp công bố lợi nhuận và cổ tức.",
                     ),
                     stock_code=stock_code,
                     stock_name="Unmatched Name",
                 )
                 self.assertEqual(scored.relevance_category, "direct_company_news")
-                self.assertIn("股票代码", "；".join(scored.relevance_reasons or []))
+                self.assertIn("mã cổ phiếu", "; ".join(scored.relevance_reasons or []))
 
-    def test_us_ticker_matches_before_known_dotted_market_suffix(self) -> None:
-        """Ticker boundaries should allow explicit market suffixes from news feeds."""
-        self.assertTrue(
-            SearchService._contains_stock_code_identity_term("AAPL.US shares rally", "AAPL")
-        )
-        self.assertTrue(
-            SearchService._contains_stock_code_identity_term("aapl.us shares rally", "AAPL")
-        )
-        self.assertTrue(
-            SearchService._contains_stock_code_identity_term("aapl shares rally", "AAPL")
-        )
-        self.assertTrue(
-            SearchService._contains_stock_code_identity_term("TSLA.O gains after results", "TSLA")
-        )
-        self.assertTrue(
-            SearchService._contains_stock_code_identity_term("tsla.o gains after results", "TSLA")
-        )
+    def test_vn_ticker_matches_before_vn_suffix(self) -> None:
+        """Ticker boundaries should allow the ``.VN`` suffix and sentence punctuation."""
+        match = SearchService._contains_stock_code_identity_term
+        self.assertTrue(match("HPG.VN tăng trần", "HPG"))
+        self.assertTrue(match("hpg.vn tăng trần", "HPG"))
+        self.assertTrue(match("https://cafef.vn/hpg-lai-lon.chn", "HPG"))
+        self.assertTrue(match("Cổ phiếu HPG.", "HPG"))
+        self.assertTrue(match("Cổ phiếu HPG, FPT tăng", "FPT"))
+        self.assertFalse(match("HPG.COM ra mắt", "HPG"))
+        self.assertFalse(match("HPGX tăng", "HPG"))
+
+    def test_common_word_vn_ticker_does_not_match_title_case_words(self) -> None:
+        """Ticker trùng từ tiếng Anh (GAS) không được khớp từ viết hoa chữ đầu."""
         self.assertFalse(
-            SearchService._contains_stock_code_identity_term("AAPL.COM launches update", "AAPL")
+            SearchService._contains_stock_code_identity_term("Gas prices climb in Asia", "GAS")
         )
-
-        scored = SearchService._score_news_relevance(
-            _result(
-                "msft.us earnings beat expectations",
-                datetime.now().date().isoformat(),
-                snippet="Quarterly revenue guidance improved.",
-            ),
-            stock_code="MSFT",
-            stock_name="Microsoft",
+        self.assertTrue(
+            SearchService._contains_stock_code_identity_term("GAS báo lãi quý III", "GAS")
         )
-        self.assertEqual(scored.relevance_category, "direct_company_news")
-        self.assertIn("股票代码", "；".join(scored.relevance_reasons or []))
-
-    def test_one_letter_us_ticker_does_not_match_common_article_words(self) -> None:
-        """Bare one-letter US tickers should not make ordinary words direct hits."""
-        fresh = datetime.now().date().isoformat()
-        service = SearchService(
-            bocha_keys=["dummy_key"],
-            searxng_public_instances_enabled=False,
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-        p1 = SimpleNamespace(
-            is_available=True,
-            name="GenericProvider",
-            search=MagicMock(
-                return_value=_response(
-                    [
-                        _result(
-                            "A new investing playbook emerges",
-                            fresh,
-                            snippet="Markets weigh a broad macro update.",
-                        )
-                    ]
-                )
-            ),
-        )
-        p2 = SimpleNamespace(
-            is_available=True,
-            name="CompanyProvider",
-            search=MagicMock(
-                return_value=_response(
-                    [
-                        _result(
-                            "Agilent Technologies announces quarterly earnings",
-                            fresh,
-                            snippet="Agilent Technologies revenue guidance improved.",
-                        )
-                    ]
-                )
-            ),
-        )
-        service._providers = [p1, p2]
-
-        resp = service.search_stock_news("A", "Agilent Technologies", max_results=1)
-
-        self.assertEqual(resp.results[0].title, "Agilent Technologies announces quarterly earnings")
-        self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
-        p1.search.assert_called_once()
-        p2.search.assert_called_once()
 
     def test_common_word_us_ticker_does_not_match_title_case_words(self) -> None:
         """Bare alphabetic tickers should not turn ordinary words into direct hits."""
         fresh = datetime.now().date().isoformat()
         service = SearchService(
-            bocha_keys=["dummy_key"],
+            tavily_keys=["dummy_key"],
             searxng_public_instances_enabled=False,
             news_max_age_days=3,
             news_strategy_profile="short",
@@ -1793,79 +1352,31 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         p1.search.assert_called_once()
         p2.search.assert_called_once()
 
-    def test_ambiguous_english_name_generic_event_does_not_stop_provider_fallback(self) -> None:
-        """Ambiguous title-only names plus broad event words should not count as direct hits."""
-        fresh = datetime.now().date().isoformat()
-        service = SearchService(
-            bocha_keys=["dummy_key"],
-            searxng_public_instances_enabled=False,
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-        p1 = SimpleNamespace(
-            is_available=True,
-            name="AmbiguousProvider",
-            search=MagicMock(
-                return_value=_response(
-                    [
-                        _result(
-                            "Apple stock results improve after harvest update",
-                            fresh,
-                            snippet="Fruit market coverage tracks inventory and crop supply.",
-                        )
-                    ]
-                )
-            ),
-        )
-        p2 = SimpleNamespace(
-            is_available=True,
-            name="TickerProvider",
-            search=MagicMock(
-                return_value=_response(
-                    [
-                        _result(
-                            "AAPL Apple earnings beat analyst expectations",
-                            fresh,
-                            snippet="Apple revenue guidance improved after quarterly earnings.",
-                        )
-                    ]
-                )
-            ),
-        )
-        service._providers = [p1, p2]
-
-        resp = service.search_stock_news("AAPL", "Apple", max_results=1)
-
-        self.assertEqual(resp.results[0].title, "AAPL Apple earnings beat analyst expectations")
-        self.assertEqual(resp.results[0].relevance_category, "direct_company_news")
-        p1.search.assert_called_once()
-        p2.search.assert_called_once()
-
     def test_relevance_metadata_is_visible_in_news_context(self) -> None:
         result = SearchResult(
-            title="贵州茅台 600519 发布公告",
-            snippet="公司披露董事会决议。",
+            title="Vinamilk VNM công bố nghị quyết",
+            snippet="Doanh nghiệp công bố nghị quyết hội đồng quản trị.",
             url="https://example.com/news",
-            source="cninfo",
+            source="hose",
             published_date=datetime.now().date().isoformat(),
             relevance_score=100,
             relevance_category="direct_company_news",
-            relevance_reasons=["标题命中股票代码 600519", "标题命中公司名 贵州茅台"],
+            relevance_reasons=["Tiêu đề khớp mã cổ phiếu VNM", "Tiêu đề khớp tên công ty Vinamilk"],
         )
-        context = SearchResponse(query="贵州茅台", results=[result], provider="Unit").to_context()
+        context = SearchResponse(query="Vinamilk", results=[result], provider="Unit").to_context()
 
-        self.assertIn("关联度", context)
+        self.assertIn("Mức liên quan", context)
         self.assertIn("direct_company_news", context)
-        self.assertIn("标题命中股票代码 600519", context)
+        self.assertIn("Tiêu đề khớp mã cổ phiếu VNM", context)
 
     def test_search_stock_news_brave_locale_matches_market_context(self) -> None:
-        """Brave locale should follow Chinese-preferred vs US-stock contexts."""
+        """Brave locale luôn hướng về Việt Nam (vi / VN)."""
         fresh_dt = datetime.now(timezone.utc).replace(microsecond=0)
         fresh_iso = fresh_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         for stock_code, stock_name, expected_lang, expected_country, title, description in (
-            ("600519", "贵州茅台", "zh-hans", "CN", "中文资讯", "中文摘要"),
-            ("AAPL", "Apple", "en", "US", "Apple earnings beat", "English summary"),
+            ("VNM", "Vinamilk", "vi", "VN", "Vinamilk VNM tin mới", "Tóm tắt"),
+            ("VNINDEX", "VN-Index", "vi", "VN", "VN-Index tăng điểm", "Tóm tắt thị trường"),
         ):
             with self.subTest(stock_code=stock_code):
                 fake_response = MagicMock()
@@ -1916,8 +1427,8 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         ]
         with patch("src.search_service.time.sleep"):
             intel = service.search_comprehensive_intel(
-                stock_code="600519",
-                stock_name="贵州茅台",
+                stock_code="VNM",
+                stock_name="Vinamilk",
                 max_searches=2,
             )
 
@@ -1949,15 +1460,14 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             _response([_result("latest_news", fresh_text)]),
             _response([_result("market_analysis", None)]),
             _response([_result("risk_check", fresh_text)]),
-            _response([_result("announcement_item", fresh_text)]),
             _response([_result("earnings", None)]),
         ]
 
         with patch("src.search_service.time.sleep"):
             intel = service.search_comprehensive_intel(
-                stock_code="600519",
-                stock_name="贵州茅台",
-                max_searches=5,
+                stock_code="VNM",
+                stock_name="Vinamilk",
+                max_searches=4,
             )
 
         self.assertIn("earnings", intel)
@@ -1966,7 +1476,6 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             [
                 3,
                 service.ANALYTICAL_INTEL_LOOKBACK_DAYS,
-                3,
                 3,
                 service.ANALYTICAL_INTEL_LOOKBACK_DAYS,
             ],
@@ -1992,7 +1501,6 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
                 _result("market_analysis_in_window", in_window),
             ]),
             _response([_result("risk_check", fresh_text)]),
-            _response([_result("announcement_item", fresh_text)]),
             _response([
                 _result("earnings_too_old", very_old),
                 _result("earnings_unknown", None),
@@ -2002,9 +1510,9 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
 
         with patch("src.search_service.time.sleep"):
             intel = service.search_comprehensive_intel(
-                stock_code="600519",
-                stock_name="贵州茅台",
-                max_searches=5,
+                stock_code="VNM",
+                stock_name="Vinamilk",
+                max_searches=4,
             )
 
         self.assertEqual(
@@ -2038,8 +1546,8 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
 
         with patch("src.search_service.time.sleep"):
             intel = service.search_comprehensive_intel(
-                stock_code="510300",
-                stock_name="沪深300ETF",
+                stock_code="FUEVN100",
+                stock_name="Quỹ ETF DCVFMVN100",
                 max_searches=3,
             )
 
@@ -2067,8 +1575,8 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
 
         with patch("src.search_service.time.sleep"):
             intel = service.search_comprehensive_intel(
-                stock_code="600519",
-                stock_name="贵州茅台",
+                stock_code="VNM",
+                stock_name="Vinamilk",
                 max_searches=3,
             )
 
@@ -2076,90 +1584,6 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
         self.assertEqual([item.title for item in intel["market_analysis"].results], ["market_analysis_unknown"])
         self.assertIsNone(intel["market_analysis"].results[0].published_date)
         self.assertEqual(intel["risk_check"].results, [])
-
-    def test_announcements_dimension_included_within_max_searches_5(self) -> None:
-        """announcements is now at index 3 so it is processed when max_searches>=4."""
-        fresh_dt = datetime.now(timezone.utc).replace(microsecond=0)
-        fresh_text = fresh_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        service, mock_search = self._create_service_with_mock_provider(
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-        mock_search.side_effect = [
-            _response([_result("latest_news", fresh_text)]),
-            _response([_result("market_analysis", None)]),
-            _response([_result("risk_check", fresh_text)]),
-            _response([_result("announcement_item", fresh_text)]),
-        ]
-
-        with patch("src.search_service.time.sleep"):
-            intel = service.search_comprehensive_intel(
-                stock_code="600519",
-                stock_name="贵州茅台",
-                max_searches=4,
-            )
-
-        self.assertIn("announcements", intel)
-        self.assertEqual(
-            [item.title for item in intel["announcements"].results],
-            ["announcement_item"],
-        )
-
-    def test_announcements_dimension_uses_news_topic_and_strict_filter(self) -> None:
-        """announcements uses tavily_topic='news' and strict_freshness=True."""
-        fresh_dt = datetime.now(timezone.utc).replace(microsecond=0)
-        fresh_text = fresh_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-        old = (datetime.now().date() - timedelta(days=30)).isoformat()
-
-        service, mock_search = self._create_service_with_mock_provider(
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-        mock_search.side_effect = [
-            _response([_result("latest_news", fresh_text)]),
-            _response([_result("market_analysis", None)]),
-            _response([_result("risk_check", fresh_text)]),
-            _response([_result("old_announcement", old), _result("fresh_announcement", fresh_text)]),
-        ]
-
-        with patch("src.search_service.time.sleep"):
-            intel = service.search_comprehensive_intel(
-                stock_code="600519",
-                stock_name="贵州茅台",
-                max_searches=4,
-            )
-
-        self.assertIn("announcements", intel)
-        # strict_freshness=True: stale result is filtered out
-        titles = [item.title for item in intel["announcements"].results]
-        self.assertNotIn("old_announcement", titles)
-        self.assertIn("fresh_announcement", titles)
-
-    def test_announcements_etf_is_not_strict(self) -> None:
-        """For ETF, announcements dimension also uses tavily_topic='news' and strict_freshness=True."""
-        fresh_dt = datetime.now(timezone.utc).replace(microsecond=0)
-        fresh_text = fresh_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        service, mock_search = self._create_service_with_mock_provider(
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-        mock_search.side_effect = [
-            _response([_result("latest_news", fresh_text)]),
-            _response([_result("market_analysis", None)]),
-            _response([_result("risk_check", None)]),
-            _response([_result("announcement_item", fresh_text)]),
-        ]
-
-        with patch("src.search_service.time.sleep"):
-            intel = service.search_comprehensive_intel(
-                stock_code="510300",
-                stock_name="沪深300ETF",
-                max_searches=4,
-            )
-
-        self.assertIn("announcements", intel)
 
     def test_effective_window_helper_has_no_side_effect(self) -> None:
         """_effective_news_window_days should not mutate stored news_window_days."""
@@ -2203,148 +1627,9 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
     # single source of truth (STOCK_ENGLISH_NAME_MAP in src/data/stock_mapping.py)
     # before contacting English news providers. These tests pin the contract.
 
-    def test_is_foreign_stock_accepts_canonical_suffix_forms(self) -> None:
-        """_is_foreign_stock must accept .US/.HK suffix and HK-prefixed inputs (massif-01 blocker 1)."""
-        for code, expected in (
-            ("AAPL", True),
-            ("AAPL.US", True),
-            ("AAPL.N", True),
-            ("00700", True),
-            ("00700.HK", True),
-            ("HK00700", True),
-            ("BRK.B", True),
-            ("600519", False),
-            ("600519.SH", False),
-            ("", False),
-        ):
-            with self.subTest(stock_code=code):
-                self.assertEqual(
-                    SearchService._is_foreign_stock(code),
-                    expected,
-                    f"_is_foreign_stock({code!r}) should be {expected}",
-                )
-
-    def test_foreign_english_aliases_returns_canonical_tuple_for_chinese_display_name(self) -> None:
-        """Stock with Chinese display name must resolve to canonical English alias tuple."""
-        cases = (
-            ("AAPL", "苹果", ("Apple Inc.", "Apple")),
-            ("00700", "腾讯控股", ("Tencent Holdings", "Tencent")),
-            ("BABA", "阿里巴巴", ("Alibaba Group Holding Limited", "Alibaba")),
-            ("09988", "阿里巴巴", ("Alibaba Group Holding", "Alibaba")),
-            ("PDD", "拼多多", ("PDD Holdings Inc.", "Pinduoduo")),
-        )
-        for code, name, expected in cases:
-            with self.subTest(stock_code=code, stock_name=name):
-                aliases = SearchService._foreign_english_query_terms(code, name)
-                self.assertEqual(aliases, expected)
-
-    def test_foreign_english_aliases_empty_for_english_display_name(self) -> None:
-        """Stock whose STOCK_NAME_MAP value is already English must not invent aliases."""
-        for code, name in (("AMD", "AMD"), ("META", "Meta"), ("COIN", "Coinbase")):
-            with self.subTest(stock_code=code, stock_name=name):
-                aliases = SearchService._foreign_english_query_terms(code, name)
-                self.assertEqual(aliases, ())
-
-    def test_score_news_relevance_english_alias_for_chinese_display_name(self) -> None:
-        """massif-01 blocker 2: English alias must enable English-news matching."""
-        fresh = datetime.now().date().isoformat()
-        cases = (
-            ("AAPL", "苹果", "Apple reports earnings beat", "Quarterly results surpass estimates."),
-            ("AAPL.US", "苹果", "Apple reports earnings beat", "Quarterly results surpass estimates."),
-            ("00700", "腾讯控股", "Tencent reports profit rise", "Quarterly profit up 12% YoY"),
-            ("00700.HK", "腾讯控股", "Tencent reports profit rise", "Quarterly profit up 12% YoY"),
-            ("BABA", "阿里巴巴", "Alibaba reports earnings beat", "Quarterly revenue up 9% YoY"),
-            ("AMZN", "亚马逊", "Amazon reports earnings beat", "AWS growth re-accelerates"),
-            ("PDD", "拼多多", "Pinduoduo reports quarterly earnings", "Active buyers up 15% QoQ"),
-        )
-        for code, name, title, snippet in cases:
-            with self.subTest(stock_code=code, stock_name=name):
-                scored = SearchService._score_news_relevance(
-                    _result(title, fresh, snippet=snippet),
-                    stock_code=code,
-                    stock_name=name,
-                )
-                self.assertEqual(scored.relevance_category, "direct_company_news")
-                joined_reasons = "；".join(scored.relevance_reasons or [])
-                self.assertIn("英文别名", joined_reasons)
-
-    def test_search_stock_news_query_uses_english_alias_for_chinese_display_name(self) -> None:
-        """massif-01 blocker 1: foreign query path must use canonical English alias, not Chinese name."""
-        service = SearchService(
-            bocha_keys=["dummy_key"],
-            searxng_public_instances_enabled=False,
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-        captured_query = {}
-
-        def _capture(query, max_results, **kwargs):
-            captured_query["value"] = query
-            return _response([_result("Apple earnings beat", datetime.now().date().isoformat())])
-
-        provider = SimpleNamespace(is_available=True, name="USProvider", search=MagicMock(side_effect=_capture))
-        service._providers = [provider]
-
-        with patch("src.search_service.time.sleep"):
-            service.search_stock_news("AAPL", "苹果", max_results=5)
-
-        q = captured_query.get("value", "")
-        self.assertIn("Apple", q)
-        self.assertNotIn("苹果", q)
-
-    def test_search_comprehensive_intel_query_uses_english_alias_for_chinese_display_name(self) -> None:
-        """search_comprehensive_intel foreign branch must use canonical English alias."""
-        service, mock_search = self._create_service_with_mock_provider(
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-        captured_queries: list[str] = []
-
-        def _capture(query, max_results, **kwargs):
-            captured_queries.append(query)
-            return _response([_result("latest_news", datetime.now().date().isoformat())])
-
-        mock_search.side_effect = _capture
-
-        with patch("src.search_service.time.sleep"):
-            service.search_comprehensive_intel(
-                stock_code="AMZN",
-                stock_name="亚马逊",
-                max_searches=3,
-            )
-
-        self.assertTrue(captured_queries, "no queries captured")
-        for q in captured_queries:
-            self.assertIn("Amazon", q)
-            self.assertNotIn("亚马逊", q)
-
-    def test_search_stock_events_query_uses_english_alias_for_chinese_display_name(self) -> None:
-        """search_stock_events foreign branch must use canonical English alias."""
-        service = SearchService(
-            bocha_keys=["dummy_key"],
-            searxng_public_instances_enabled=False,
-            news_max_age_days=3,
-            news_strategy_profile="short",
-        )
-        captured_query = {}
-
-        def _capture(query, max_results, **kwargs):
-            captured_query["value"] = query
-            return _response([_result("MSFT earnings beat", datetime.now().date().isoformat())])
-
-        provider = SimpleNamespace(is_available=True, name="USProvider", search=MagicMock(side_effect=_capture))
-        service._providers = [provider]
-
-        with patch("src.search_service.time.sleep"):
-            service.search_stock_events("MSFT", "微软")
-
-        q = captured_query.get("value", "")
-        self.assertIn("Microsoft", q)
-        self.assertNotIn("微软", q)
-
     def test_search_stock_events_reuses_search_cache(self) -> None:
         service = SearchService(
-            bocha_keys=["dummy_key"],
+            tavily_keys=["dummy_key"],
             searxng_public_instances_enabled=False,
         )
         provider = SimpleNamespace(
@@ -2352,74 +1637,18 @@ class SearchNewsFreshnessTestCase(unittest.TestCase):
             name="EventProvider",
             search=MagicMock(
                 return_value=_response(
-                    [_result("贵州茅台年度报告", datetime.now().date().isoformat())]
+                    [_result("Vinamilk年度报告", datetime.now().date().isoformat())]
                 )
             ),
         )
         service._providers = [provider]
 
-        first = service.search_stock_events("600519", "贵州茅台")
-        second = service.search_stock_events("600519", "贵州茅台")
+        first = service.search_stock_events("VNM", "Vinamilk")
+        second = service.search_stock_events("VNM", "Vinamilk")
 
         self.assertIs(second, first)
         provider.search.assert_called_once()
 
-    def test_stock_english_name_map_is_subset_of_stock_name_map_foreign_keys(self) -> None:
-        """Single source of truth invariant (massif-01 blocker 3):
-        STOCK_ENGLISH_NAME_MAP keys must be a subset of STOCK_NAME_MAP's
-        foreign-ticker keys. This pins the canonical-boundary contract so the
-        two static tables cannot drift.
-        """
-        from src.data.stock_mapping import (
-            STOCK_ENGLISH_NAME_MAP,
-            STOCK_NAME_MAP,
-            canonicalize_foreign_stock_code,
-        )
-
-        stock_name_foreign_keys = {
-            canonicalize_foreign_stock_code(code)
-            for code in STOCK_NAME_MAP
-            if SearchService._is_foreign_stock(code)
-        }
-        english_map_keys = {
-            canonicalize_foreign_stock_code(code)
-            for code in STOCK_ENGLISH_NAME_MAP
-        }
-        self.assertTrue(
-            english_map_keys.issubset(stock_name_foreign_keys),
-            f"STOCK_ENGLISH_NAME_MAP has orphan keys: "
-            f"{sorted(english_map_keys - stock_name_foreign_keys)}",
-        )
-
-    def test_score_news_relevance_english_alias_dedup_prevents_double_count(self) -> None:
-        """massif-01 blocker follow-up: alias expansion dedup prevents
-        double-counting when legal alias and short alias resolve to same term.
-        For AAPL: STOCK_ENGLISH_NAME_MAP['AAPL'] = ('Apple Inc.', 'Apple')
-        _company_identity_terms('Apple Inc.') -> ['Apple Inc.', 'Apple']
-        _company_identity_terms('Apple') -> ['Apple']
-        Without dedup: snippet 'Apple reports earnings beat' would match
-        'Apple' twice (once from each alias path) → 16+16=32 direct_signal
-        With event term +12 = 44 → direct_company_news (incorrect).
-        With dedup: only one 'Apple' term scored → 16 direct_signal
-        With event term +12 = 28 → sector_related_news (correct).
-        """
-        # Setup: generic market title, snippet with only English alias hit
-        item = SearchResult(
-            title="US stocks mixed after Fed comments",
-            snippet="Apple reports earnings beat and revenue grows.",
-            url="",
-            source=""
-        )
-        scored = SearchService._score_news_relevance(
-            item, stock_code="AAPL", stock_name="苹果"
-        )
-        # Should NOT be direct (insufficient signal without title hit)
-        self.assertEqual(scored.relevance_category, "sector_related_news")
-        self.assertLess(scored.relevance_score, 38)
-        # Should have exactly one hit on the alias term
-        reasons = "；".join(scored.relevance_reasons or [])
-        self.assertIn("摘要命中公司英文别名 Apple", reasons)
-        self.assertNotIn("标题命中公司英文别名", reasons)
 
 if __name__ == "__main__":
     unittest.main()

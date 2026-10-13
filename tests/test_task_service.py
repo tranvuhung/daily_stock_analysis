@@ -93,18 +93,18 @@ class TestTaskService(unittest.TestCase):
         executor.submit.side_effect = capture_submit
         service._executor = executor
 
-        with patch("src.services.task_service.resolve_index_stock_code_for_analysis", return_value="005930.KS"):
-            result = service.submit_analysis("005930", report_type="simple", query_source="cli")
+        with patch("src.services.task_service.resolve_index_stock_code_for_analysis", return_value="FPT"):
+            result = service.submit_analysis("fpt", report_type="simple", query_source="cli")
 
-        self.assertEqual(result["code"], "005930.KS")
+        self.assertEqual(result["code"], "FPT")
         self.assertIn("args", captured)
-        self.assertEqual(captured["args"][1], "005930.KS")
+        self.assertEqual(captured["args"][1], "FPT")
 
     def test_submit_analysis_passes_parser_canonical_to_executor(self):
-        """Real task-layer regression: TaskService must hand the executor the
-        parser canonical ``csi930955`` (not the raw alias ``930955.CSI`` or the
-        old uppercase ``CSI930955``) so the analysis pipeline receives one
-        consistent identity for the same registered CSI index."""
+        """TaskService phải chuyển cho executor mã VN chuẩn (``HPG``), không phải
+        cách viết gốc ``hpg``, để pipeline nhận một định danh thống nhất.
+
+        TaskService hands the executor the canonical VN code."""
         service = TaskService()
         service._tasks = {}
         service._tasks_lock = threading.Lock()
@@ -119,15 +119,13 @@ class TestTaskService(unittest.TestCase):
         executor.submit.side_effect = capture_submit
         service._executor = executor
 
-        # Use the real resolver (not a mock): ``930955.CSI`` is a registered CSI
-        # explicit identity and must converge to the parser canonical
-        # ``csi930955``, which is what gets handed to the executor.
-        result = service.submit_analysis("930955.CSI", report_type="simple", query_source="cli")
+        # Dùng resolver thật (không mock). / Use the real resolver.
+        result = service.submit_analysis("hpg", report_type="simple", query_source="cli")
 
-        self.assertEqual(result["code"], "csi930955")
+        self.assertEqual(result["code"], "HPG")
         self.assertIn("args", captured)
         # executor.submit(self._run_analysis, code, task_id, ...) — code is arg[1]
-        self.assertEqual(captured["args"][1], "csi930955")
+        self.assertEqual(captured["args"][1], "HPG")
 
     def test_submit_analysis_with_index_target_skips_resolver_and_keeps_canonical(self):
         """PR2: when an INDEX ``AnalysisTarget`` is supplied, ``submit_analysis``

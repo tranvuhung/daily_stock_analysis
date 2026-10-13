@@ -22,9 +22,6 @@ from src.report_language import (
     localize_volume_status,
     get_report_labels,
     get_signal_level,
-    get_chip_unavailable_reason,
-    is_chip_structure_unavailable,
-    localize_chip_health,
     localize_conflict_severity,
     localize_consensus_level,
     localize_operation_advice,
@@ -103,7 +100,7 @@ def render(
     Render report using Jinja2 template.
 
     Args:
-        platform: One of: markdown, wechat, brief
+        platform: One of: markdown, brief
         results: List of AnalysisResult
         report_date: Report date string (default: today)
         summary_only: Whether to output summary only
@@ -229,7 +226,6 @@ def render(
         "label_sep": label_sep,
         "localize_volume_status": localize_volume_status,
         "report_language": report_language,
-        "report_language": report_language,
         "models_used": models_used,
         "show_llm_model": show_llm_model,
         "market_status_line": market_status_line(),
@@ -238,12 +234,9 @@ def render(
         "failed_checks": failed_checks,
         "phase_pack_excerpt": phase_pack_excerpt,
         "history_by_code": {},
-        "get_chip_unavailable_reason": get_chip_unavailable_reason,
-        "is_chip_structure_unavailable": is_chip_structure_unavailable,
         "localize_operation_advice": localize_operation_advice,
         "localize_action_label": localize_action_label,
         "localize_trend_prediction": localize_trend_prediction,
-        "localize_chip_health": localize_chip_health,
         "localize_strategy_signal": localize_strategy_signal,
         "localize_strategy_skill": localize_strategy_skill,
         "localize_strategy_conflict_description": localize_strategy_conflict_description,

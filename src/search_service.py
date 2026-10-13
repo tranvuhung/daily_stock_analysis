@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-A-share Watchlist Intelligent Analysis System - Search Service Module
+Vietnam Watchlist Intelligent Analysis System - Search Service Module
 ===================================
 
 Responsibilities:
 1. Provide a unified news search interface
-2. Support multiple search engines: Bocha, Tavily, Brave, SerpAPI, SearXNG
+2. Support multiple search engines: Anspire, Tavily, Brave, SerpAPI, SearXNG
 3. Multi-key load balancing and failover
 4. Search result caching and formatting
 """
@@ -33,15 +33,10 @@ from tenacity import (
     before_sleep_log,
 )
 
-from data_provider.us_index_mapping import is_us_index_code
 from src.config import (
     NEWS_STRATEGY_WINDOWS,
     normalize_news_strategy_profile,
     resolve_news_window_days,
-)
-from src.data.stock_mapping import (
-    canonicalize_foreign_stock_code,
-    foreign_stock_english_aliases,
 )
 from src.services.run_diagnostics import record_provider_run, record_provider_run_started
 
@@ -213,7 +208,9 @@ def fetch_url_content(url: str, timeout: int = 5) -> str:
         config.fetch_images = False  # Do not download images
         config.memoize_articles = False # No caching
 
-        article = Article(url, config=config, language='zh') # Chinese by default, but other languages are supported too
+        # Mặc định tiếng Việt (thị trường VN); newspaper vẫn xử lý được ngôn ngữ khác.
+        # Default to Vietnamese (VN market); other languages still parse fine.
+        article = Article(url, config=config, language='vi')
         article.download()
         article.parse()
 
@@ -252,8 +249,8 @@ class SearchResult:
         if self.relevance_score is not None:
             relevance_parts.append(f"score={self.relevance_score}")
         if self.relevance_reasons:
-            relevance_parts.append(f"依据: {'；'.join(self.relevance_reasons[:3])}")
-        relevance_str = f"\n关联度: {'; '.join(relevance_parts)}" if relevance_parts else ""
+            relevance_parts.append(f"căn cứ: {'; '.join(self.relevance_reasons[:3])}")
+        relevance_str = f"\nMức liên quan: {'; '.join(relevance_parts)}" if relevance_parts else ""
         return f"【{self.source}】{self.title}{date_str}\n{self.snippet}{relevance_str}"
 
 
@@ -270,9 +267,9 @@ class SearchResponse:
     def to_context(self, max_results: int = 5) -> str:
         """Convert search results into context usable for AI analysis"""
         if not self.success or not self.results:
-            return f"搜索 '{self.query}' 未找到相关结果。"
+            return f"Tìm kiếm '{self.query}' không có kết quả liên quan."
         
-        lines = [f"【{self.query} 搜索结果】（来源：{self.provider}）"]
+        lines = [f"【Kết quả tìm kiếm: {self.query}】(nguồn: {self.provider})"]
         for i, result in enumerate(self.results[:max_results], 1):
             lines.append(f"\n{i}. {result.to_text()}")
         
@@ -324,7 +321,7 @@ class BaseSearchProvider(ABC):
                     return key
             
             # All keys have problems; reset error counts and return the first one
-            logger.warning(f"[{self._name}] 所有 API Key 都有错误记录，重置错误计数")
+            logger.warning(f"[{self._name}] mọi API Key đều đã ghi nhận lỗi, đặt lại bộ đếm lỗi")
             self._key_errors = {key: 0 for key in self._api_keys}
             return self._api_keys[0] if self._api_keys else None
     
@@ -341,7 +338,7 @@ class BaseSearchProvider(ABC):
         with self._state_lock:
             self._key_errors[key] = self._key_errors.get(key, 0) + 1
             error_count = self._key_errors[key]
-        logger.warning(f"[{self._name}] API Key {key[:8]}... 错误计数: {error_count}")
+        logger.warning(f"[{self._name}] API Key {key[:8]}... số lỗi: {error_count}")
     
     @abstractmethod
     def _do_search(self, query: str, api_key: str, max_results: int, days: int = 7) -> SearchResponse:
@@ -375,7 +372,7 @@ class BaseSearchProvider(ABC):
 
             if response.success:
                 self._record_success(api_key)
-                logger.info(f"[{self._name}] 搜索 '{query}' 成功，返回 {len(response.results)} 条结果，耗时 {response.search_time:.2f}s")
+                logger.info(f"[{self._name}] tìm kiếm '{query}' thành công, trả về {len(response.results)} kết quả, mất {response.search_time:.2f}s")
             else:
                 self._record_error(api_key)
 
@@ -384,7 +381,7 @@ class BaseSearchProvider(ABC):
         except Exception as e:
             self._record_error(api_key)
             elapsed = time.time() - start_time
-            logger.error(f"[{self._name}] 搜索 '{query}' 失败: {e}")
+            logger.error(f"[{self._name}] tìm kiếm '{query}' thất bại: {e}")
             return SearchResponse(
                 query=query,
                 results=[],
@@ -464,8 +461,8 @@ class TavilySearchProvider(BaseSearchProvider):
             )
             
             # Log the raw response
-            logger.info(f"[Tavily] 搜索完成，query='{query}', 返回 {len(response.get('results', []))} 条结果")
-            logger.debug(f"[Tavily] 原始响应: {response}")
+            logger.info(f"[Tavily] tìm kiếm xong, query='{query}', trả về {len(response.get('results', []))} kết quả")
+            logger.debug(f"[Tavily] phản hồi gốc: {response}")
             
             # Parse results
             results = []
@@ -527,7 +524,7 @@ class TavilySearchProvider(BaseSearchProvider):
 
             if response.success:
                 self._record_success(api_key)
-                logger.info(f"[{self._name}] 搜索 '{query}' 成功，返回 {len(response.results)} 条结果，耗时 {response.search_time:.2f}s")
+                logger.info(f"[{self._name}] tìm kiếm '{query}' thành công, trả về {len(response.results)} kết quả, mất {response.search_time:.2f}s")
             else:
                 self._record_error(api_key)
 
@@ -536,7 +533,7 @@ class TavilySearchProvider(BaseSearchProvider):
         except Exception as e:
             self._record_error(api_key)
             elapsed = time.time() - start_time
-            logger.error(f"[{self._name}] 搜索 '{query}' 失败: {e}")
+            logger.error(f"[{self._name}] tìm kiếm '{query}' thất bại: {e}")
             return SearchResponse(
                 query=query,
                 results=[],
@@ -553,9 +550,9 @@ class TavilySearchProvider(BaseSearchProvider):
             from urllib.parse import urlparse
             parsed = urlparse(url)
             domain = parsed.netloc.replace('www.', '')
-            return domain or '未知来源'
+            return domain or 'Nguồn không xác định'
         except Exception:
-            return '未知来源'
+            return 'Nguồn không xác định'
 
 
 class SerpAPISearchProvider(BaseSearchProvider):
@@ -643,9 +640,9 @@ class SerpAPISearchProvider(BaseSearchProvider):
                 "engine": "google",
                 "q": query,
                 "api_key": api_key,
-                "google_domain": "google.com.hk", # Use Google Hong Kong for better Chinese support
-                "hl": "zh-cn",  # Chinese interface
-                "gl": "cn",     # China region preference
+                "google_domain": "google.com.vn",  # Google Việt Nam / Google Vietnam domain
+                "hl": "vi",  # Giao diện tiếng Việt / Vietnamese interface
+                "gl": "vn",  # Ưu tiên khu vực Việt Nam / Vietnam region preference
                 "tbs": tbs,     # Time range restriction
                 "num": max_results # Number of results requested; note: the Google API does not always honor it strictly
             }
@@ -654,7 +651,7 @@ class SerpAPISearchProvider(BaseSearchProvider):
             response = search.get_dict()
             
             # Log the raw response
-            logger.debug(f"[SerpAPI] 原始响应 keys: {response.keys()}")
+            logger.debug(f"[SerpAPI] phản hồi gốc keys: {response.keys()}")
             
             # Parse results
             results = []
@@ -662,7 +659,7 @@ class SerpAPISearchProvider(BaseSearchProvider):
             # 1. Parse Knowledge Graph
             kg = response.get('knowledge_graph', {})
             if kg:
-                title = kg.get('title', '知识图谱')
+                title = kg.get('title', 'Knowledge Graph')
                 desc = kg.get('description', '')
                 
                 # Extract extra attributes
@@ -675,7 +672,7 @@ class SerpAPISearchProvider(BaseSearchProvider):
                 snippet = f"{desc}\n" + " | ".join(details) if details else desc
                 
                 results.append(SearchResult(
-                    title=f"[知识图谱] {title}",
+                    title=f"[Knowledge Graph] {title}",
                     snippet=snippet,
                     url=kg.get('source', {}).get('link', ''),
                     source="Google Knowledge Graph"
@@ -684,7 +681,7 @@ class SerpAPISearchProvider(BaseSearchProvider):
             # 2. Parse Answer Box (featured answer / quote card)
             ab = response.get('answer_box', {})
             if ab:
-                ab_title = ab.get('title', '精选回答')
+                ab_title = ab.get('title', 'Câu trả lời nổi bật')
                 ab_snippet = ""
                 
                 # Finance-type answer
@@ -696,8 +693,8 @@ class SerpAPISearchProvider(BaseSearchProvider):
                     mv_val = movement.get('percentage', 0)
                     mv_dir = movement.get('movement', '')
                     
-                    ab_title = f"[行情卡片] {stock}"
-                    ab_snippet = f"价格: {price} {currency}\n涨跌: {mv_dir} {mv_val}%"
+                    ab_title = f"[Thẻ giá] {stock}"
+                    ab_snippet = f"Giá: {price} {currency}\nBiến động: {mv_dir} {mv_val}%"
                     
                     # Extract table data
                     if 'table' in ab:
@@ -720,7 +717,7 @@ class SerpAPISearchProvider(BaseSearchProvider):
                     
                 if ab_snippet:
                     results.append(SearchResult(
-                        title=f"[精选回答] {ab_title}",
+                        title=f"[Câu trả lời nổi bật] {ab_title}",
                         snippet=ab_snippet,
                         url=ab.get('link', '') or ab.get('displayed_link', ''),
                         source="Google Answer Box"
@@ -735,7 +732,7 @@ class SerpAPISearchProvider(BaseSearchProvider):
                 
                 if question and snippet:
                      results.append(SearchResult(
-                        title=f"[相关问题] {question}",
+                        title=f"[Câu hỏi liên quan] {question}",
                         snippet=snippet,
                         url=link,
                         source="Google Related Questions"
@@ -801,9 +798,9 @@ class SerpAPISearchProvider(BaseSearchProvider):
         """Extract the domain from the URL"""
         try:
             parsed = urlparse(url)
-            return parsed.netloc.replace('www.', '') or '未知来源'
+            return parsed.netloc.replace('www.', '') or 'Nguồn không xác định'
         except Exception:
-            return '未知来源'
+            return 'Nguồn không xác định'
 
     @classmethod
     def _normalize_organic_text(cls, value: Any) -> str:
@@ -993,206 +990,9 @@ class SerpAPISearchProvider(BaseSearchProvider):
             preview = f"{preview}..."
 
         if snippet:
-            return f"{snippet}\n\n【网页详情】\n{preview}"
+            return f"{snippet}\n\n【Chi tiết trang】\n{preview}"
 
-        return f"【网页详情】\n{preview}"
-
-
-class BochaSearchProvider(BaseSearchProvider):
-    """
-    Bocha search engine
-
-    Features:
-    - Chinese search API optimized for AI
-    - Accurate results and complete summaries
-    - Supports time range filtering and AI summaries
-    - Compatible with the Bing Search API format
-
-    Docs: https://bocha-ai.feishu.cn/wiki/RXEOw02rFiwzGSkd9mUcqoeAnNK
-    """
-    
-    def __init__(self, api_keys: List[str]):
-        super().__init__(api_keys, "Bocha")
-    
-    def _do_search(self, query: str, api_key: str, max_results: int, days: int = 7) -> SearchResponse:
-        """Perform a Bocha search"""
-        try:
-            import requests
-        except ImportError:
-            return SearchResponse(
-                query=query,
-                results=[],
-                provider=self.name,
-                success=False,
-                error_message="requests is not installed; run: pip install requests"
-            )
-        
-        try:
-            # API endpoint
-            url = "https://api.bocha.cn/v1/web-search"
-            
-            # Request headers
-            headers = {
-                'Authorization': f'Bearer {api_key}',
-                'Content-Type': 'application/json'
-            }
-            
-            # Determine the time range
-            freshness = "oneWeek"
-            if days <= 1:
-                freshness = "oneDay"
-            elif days <= 7:
-                freshness = "oneWeek"
-            elif days <= 30:
-                freshness = "oneMonth"
-            else:
-                freshness = "oneYear"
-
-            # Request parameters (strictly per the API docs)
-            payload = {
-                "query": query,
-                "freshness": freshness,  # Dynamic time range
-                "summary": True,  # Enable AI summary
-                "count": min(max_results, 50)  # Max 50 items
-            }
-            
-            # Perform the search (with retries on transient SSL/network errors)
-            response = _post_with_retry(url, headers=headers, json=payload, timeout=10)
-            
-            # Check the HTTP status code
-            if response.status_code != 200:
-                # Try to parse the error message
-                try:
-                    if response.headers.get('content-type', '').startswith('application/json'):
-                        error_data = response.json()
-                        error_message = error_data.get('message', response.text)
-                    else:
-                        error_message = response.text
-                except Exception:
-                    error_message = response.text
-                
-                # Handle by error code
-                if response.status_code == 403:
-                    error_msg = f"Insufficient balance: {error_message}"
-                elif response.status_code == 401:
-                    error_msg = f"Invalid API key: {error_message}"
-                elif response.status_code == 400:
-                    error_msg = f"Invalid request parameters: {error_message}"
-                elif response.status_code == 429:
-                    error_msg = f"Rate limit reached: {error_message}"
-                else:
-                    error_msg = f"HTTP {response.status_code}: {error_message}"
-                
-                logger.warning(f"[Bocha] 搜索失败: {error_msg}")
-                
-                return SearchResponse(
-                    query=query,
-                    results=[],
-                    provider=self.name,
-                    success=False,
-                    error_message=error_msg
-                )
-            
-            # Parse the response
-            try:
-                data = response.json()
-            except ValueError as e:
-                error_msg = f"Failed to parse JSON response: {str(e)}"
-                logger.error(f"[Bocha] {error_msg}")
-                return SearchResponse(
-                    query=query,
-                    results=[],
-                    provider=self.name,
-                    success=False,
-                    error_message=error_msg
-                )
-            
-            # Check the response code
-            if data.get('code') != 200:
-                error_msg = data.get('msg') or f"API returned error code: {data.get('code')}"
-                return SearchResponse(
-                    query=query,
-                    results=[],
-                    provider=self.name,
-                    success=False,
-                    error_message=error_msg
-                )
-            
-            # Log the raw response
-            logger.info(f"[Bocha] 搜索完成，query='{query}'")
-            logger.debug(f"[Bocha] 原始响应: {data}")
-            
-            # Parse search results
-            results = []
-            web_pages = data.get('data', {}).get('webPages', {})
-            value_list = web_pages.get('value', [])
-            
-            for item in value_list[:max_results]:
-                # Prefer summary (AI summary), fall back to snippet
-                snippet = item.get('summary') or item.get('snippet', '')
-                
-                # Truncate summary length
-                if snippet:
-                    snippet = snippet[:500]
-                
-                results.append(SearchResult(
-                    title=item.get('name', ''),
-                    snippet=snippet,
-                    url=item.get('url', ''),
-                    source=item.get('siteName') or self._extract_domain(item.get('url', '')),
-                    published_date=item.get('datePublished'),  # UTC+8 format, no conversion needed
-                ))
-            
-            logger.info(f"[Bocha] 成功解析 {len(results)} 条结果")
-            
-            return SearchResponse(
-                query=query,
-                results=results,
-                provider=self.name,
-                success=True,
-            )
-            
-        except requests.exceptions.Timeout:
-            error_msg = "Request timed out"
-            logger.error(f"[Bocha] {error_msg}")
-            return SearchResponse(
-                query=query,
-                results=[],
-                provider=self.name,
-                success=False,
-                error_message=error_msg
-            )
-        except requests.exceptions.RequestException as e:
-            error_msg = f"Network request failed: {str(e)}"
-            logger.error(f"[Bocha] {error_msg}")
-            return SearchResponse(
-                query=query,
-                results=[],
-                provider=self.name,
-                success=False,
-                error_message=error_msg
-            )
-        except Exception as e:
-            error_msg = f"Unknown error: {str(e)}"
-            logger.error(f"[Bocha] {error_msg}")
-            return SearchResponse(
-                query=query,
-                results=[],
-                provider=self.name,
-                success=False,
-                error_message=error_msg
-            )
-    
-    @staticmethod
-    def _extract_domain(url: str) -> str:
-        """Extract the domain from the URL as the source"""
-        try:
-            from urllib.parse import urlparse
-            parsed = urlparse(url)
-            domain = parsed.netloc.replace('www.', '')
-            return domain or '未知来源'
-        except Exception:
-            return '未知来源'
+        return f"【Chi tiết trang】\n{preview}"
 
 
 class AnspireSearchProvider(BaseSearchProvider):
@@ -1266,7 +1066,7 @@ class AnspireSearchProvider(BaseSearchProvider):
                 else:
                     error_msg = f"HTTP {response.status_code}: {error_message}"
                 
-                logger.warning(f"[Anspire] 搜索失败：{error_msg}")
+                logger.warning(f"[Anspire] tìm kiếm thất bại: {error_msg}")
                 
                 return SearchResponse(
                     query=query,
@@ -1292,7 +1092,7 @@ class AnspireSearchProvider(BaseSearchProvider):
             
             if 'code' in data and data.get('code') != 200:
                 error_msg = data.get('msg') or f"API returned error code: {data.get('code')}"
-                logger.warning(f"[Anspire] 搜索失败：{error_msg}")
+                logger.warning(f"[Anspire] tìm kiếm thất bại: {error_msg}")
                 return SearchResponse(
                     query=query,
                     results=[],
@@ -1303,7 +1103,7 @@ class AnspireSearchProvider(BaseSearchProvider):
             
             if 'results' not in data:
                 error_msg = "Response is missing the results field"
-                logger.error(f"[Anspire] {error_msg}，原始响应：{data}")
+                logger.error(f"[Anspire] {error_msg}, phản hồi gốc: {data}")
                 return SearchResponse(
                     query=query,
                     results=[],
@@ -1313,8 +1113,8 @@ class AnspireSearchProvider(BaseSearchProvider):
                 )
             
             # Log the raw response
-            logger.info(f"[Anspire] 搜索完成，query='{query}'")
-            logger.debug(f"[Anspire] 原始响应：{data}")
+            logger.info(f"[Anspire] tìm kiếm xong, query='{query}'")
+            logger.debug(f"[Anspire] phản hồi gốc: {data}")
             
             results = []
             value_list = data.get('results', [])
@@ -1332,7 +1132,7 @@ class AnspireSearchProvider(BaseSearchProvider):
                     published_date=item.get('date', '')
                 ))
             
-            logger.info(f"[Anspire] 成功解析 {len(results)} 条结果")
+            logger.info(f"[Anspire] phân tích thành công {len(results)} kết quả")
             
             return SearchResponse(
                 query=query,
@@ -1379,241 +1179,9 @@ class AnspireSearchProvider(BaseSearchProvider):
             from urllib.parse import urlparse
             parsed = urlparse(url)
             domain = parsed.netloc.replace('www.', '')
-            return domain or '未知来源'
+            return domain or 'Nguồn không xác định'
         except Exception:
-            return '未知来源'
-
-
-class MiniMaxSearchProvider(BaseSearchProvider):
-    """
-    MiniMax Web Search (Coding Plan API)
-
-    Features:
-    - Backed by MiniMax Coding Plan subscription
-    - Returns structured organic results with title/link/snippet/date
-    - No native time-range parameter; time filtering is done via query
-      augmentation and client-side date filtering
-    - Circuit-breaker protection: 3 consecutive failures -> 300s cooldown
-
-    API endpoint: POST https://api.minimaxi.com/v1/coding_plan/search
-    """
-
-    API_ENDPOINT = "https://api.minimaxi.com/v1/coding_plan/search"
-
-    # Circuit-breaker settings
-    _CB_FAILURE_THRESHOLD = 3
-    _CB_COOLDOWN_SECONDS = 300  # 5 minutes
-
-    def __init__(self, api_keys: List[str]):
-        super().__init__(api_keys, "MiniMax")
-        # Circuit breaker state
-        self._consecutive_failures = 0
-        self._circuit_open_until: float = 0.0
-
-    @property
-    def is_available(self) -> bool:
-        """Check availability considering circuit breaker state."""
-        with self._state_lock:
-            if not self._api_keys:
-                return False
-            if self._consecutive_failures >= self._CB_FAILURE_THRESHOLD:
-                if time.time() < self._circuit_open_until:
-                    return False
-                # Cooldown expired -> half-open, allow one probe
-            return True
-
-    def _record_success(self, key: str) -> None:
-        with self._state_lock:
-            super()._record_success(key)
-            # Reset circuit breaker on success
-            self._consecutive_failures = 0
-            self._circuit_open_until = 0.0
-
-    def _record_error(self, key: str) -> None:
-        warning_message = None
-        with self._state_lock:
-            super()._record_error(key)
-            self._consecutive_failures += 1
-            if self._consecutive_failures >= self._CB_FAILURE_THRESHOLD:
-                self._circuit_open_until = time.time() + self._CB_COOLDOWN_SECONDS
-                warning_message = (
-                    f"[MiniMax] Circuit breaker OPEN – "
-                    f"{self._consecutive_failures} consecutive failures, "
-                    f"cooldown {self._CB_COOLDOWN_SECONDS}s"
-                )
-        if warning_message:
-            logger.warning(warning_message)
-
-    # ------------------------------------------------------------------
-    # Time-range helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _time_hint(days: int, is_chinese: bool = True) -> str:
-        """Build a time-hint string to append to the search query."""
-        if is_chinese:
-            if days <= 1:
-                return "今天"
-            elif days <= 3:
-                return "最近三天"
-            elif days <= 7:
-                return "最近一周"
-            else:
-                return "最近一个月"
-        else:
-            if days <= 1:
-                return "today"
-            elif days <= 3:
-                return "past 3 days"
-            elif days <= 7:
-                return "past week"
-            else:
-                return "past month"
-
-    @staticmethod
-    def _is_within_days(date_str: Optional[str], days: int) -> bool:
-        """Check whether *date_str* falls within the last *days* days.
-
-        Accepts common formats: ``2025-06-01``, ``2025/06/01``,
-        ``Jun 1, 2025``, ISO-8601 with timezone, etc.
-        Returns True when date_str is None or unparseable (keep the result).
-        """
-        if not date_str:
-            return True
-        try:
-            from dateutil import parser as dateutil_parser
-            dt = dateutil_parser.parse(date_str, fuzzy=True)
-            from datetime import timedelta, timezone
-            now = datetime.now(timezone.utc) if dt.tzinfo else datetime.now()
-            return (now - dt) <= timedelta(days=days + 1)  # +1 buffer
-        except Exception:
-            return True  # Keep result when date is unparseable
-
-    # ------------------------------------------------------------------
-
-    def _do_search(self, query: str, api_key: str, max_results: int, days: int = 7) -> SearchResponse:
-        """Execute MiniMax web search."""
-        try:
-            # Detect language hint from query (simple heuristic)
-            has_cjk = any('\u4e00' <= ch <= '\u9fff' for ch in query)
-            time_hint = self._time_hint(days, is_chinese=has_cjk)
-            augmented_query = f"{query} {time_hint}"
-
-            headers = {
-                'Authorization': f'Bearer {api_key}',
-                'Content-Type': 'application/json',
-                'MM-API-Source': 'Minimax-MCP',
-            }
-            payload = {"q": augmented_query}
-
-            response = _post_with_retry(
-                self.API_ENDPOINT, headers=headers, json=payload, timeout=15
-            )
-
-            # HTTP error handling
-            if response.status_code != 200:
-                error_msg = self._parse_http_error(response)
-                logger.warning(f"[MiniMax] Search failed: {error_msg}")
-                return SearchResponse(
-                    query=query,
-                    results=[],
-                    provider=self.name,
-                    success=False,
-                    error_message=error_msg,
-                )
-
-            data = response.json()
-
-            # Check base_resp status
-            base_resp = data.get('base_resp', {})
-            if base_resp.get('status_code', 0) != 0:
-                error_msg = base_resp.get('status_msg', 'Unknown API error')
-                return SearchResponse(
-                    query=query,
-                    results=[],
-                    provider=self.name,
-                    success=False,
-                    error_message=error_msg,
-                )
-
-            logger.info(f"[MiniMax] Search done, query='{query}'")
-            logger.debug(f"[MiniMax] Raw response keys: {list(data.keys())}")
-
-            # Parse organic results
-            results: List[SearchResult] = []
-            for item in data.get('organic', []):
-                date_val = item.get('date')
-
-                # Client-side time filtering
-                if not self._is_within_days(date_val, days):
-                    continue
-
-                results.append(SearchResult(
-                    title=item.get('title', ''),
-                    snippet=(item.get('snippet', '') or '')[:500],
-                    url=item.get('link', ''),
-                    source=self._extract_domain(item.get('link', '')),
-                    published_date=date_val,
-                ))
-
-                if len(results) >= max_results:
-                    break
-
-            logger.info(f"[MiniMax] Parsed {len(results)} results (after time filter)")
-
-            return SearchResponse(
-                query=query,
-                results=results,
-                provider=self.name,
-                success=True,
-            )
-
-        except requests.exceptions.Timeout:
-            error_msg = "Request timeout"
-            logger.error(f"[MiniMax] {error_msg}")
-            return SearchResponse(
-                query=query, results=[], provider=self.name,
-                success=False, error_message=error_msg,
-            )
-        except requests.exceptions.RequestException as e:
-            error_msg = f"Network error: {e}"
-            logger.error(f"[MiniMax] {error_msg}")
-            return SearchResponse(
-                query=query, results=[], provider=self.name,
-                success=False, error_message=error_msg,
-            )
-        except Exception as e:
-            error_msg = f"Unexpected error: {e}"
-            logger.error(f"[MiniMax] {error_msg}")
-            return SearchResponse(
-                query=query, results=[], provider=self.name,
-                success=False, error_message=error_msg,
-            )
-
-    @staticmethod
-    def _parse_http_error(response) -> str:
-        """Parse HTTP error response from MiniMax API."""
-        try:
-            ct = response.headers.get('content-type', '')
-            if 'json' in ct:
-                err = response.json()
-                base_resp = err.get('base_resp', {})
-                msg = base_resp.get('status_msg') or err.get('message') or str(err)
-                return msg
-            return response.text[:200]
-        except Exception:
-            return f"HTTP {response.status_code}: {response.text[:200]}"
-
-    @staticmethod
-    def _extract_domain(url: str) -> str:
-        """Extract domain from URL as source label."""
-        try:
-            from urllib.parse import urlparse
-            parsed = urlparse(url)
-            domain = parsed.netloc.replace('www.', '')
-            return domain or '未知来源'
-        except Exception:
-            return '未知来源'
+            return 'Nguồn không xác định'
 
 
 class BraveSearchProvider(BaseSearchProvider):
@@ -1684,7 +1252,7 @@ class BraveSearchProvider(BaseSearchProvider):
             # Check the HTTP status code
             if response.status_code != 200:
                 error_msg = self._parse_error(response)
-                logger.warning(f"[Brave] 搜索失败: {error_msg}")
+                logger.warning(f"[Brave] tìm kiếm thất bại: {error_msg}")
                 return SearchResponse(
                     query=query,
                     results=[],
@@ -1707,8 +1275,8 @@ class BraveSearchProvider(BaseSearchProvider):
                     error_message=error_msg
                 )
 
-            logger.info(f"[Brave] 搜索完成，query='{query}'")
-            logger.debug(f"[Brave] 原始响应: {data}")
+            logger.info(f"[Brave] tìm kiếm xong, query='{query}'")
+            logger.debug(f"[Brave] phản hồi gốc: {data}")
 
             # Parse search results
             results = []
@@ -1735,7 +1303,7 @@ class BraveSearchProvider(BaseSearchProvider):
                     published_date=published_date
                 ))
 
-            logger.info(f"[Brave] 成功解析 {len(results)} 条结果")
+            logger.info(f"[Brave] phân tích thành công {len(results)} kết quả")
 
             return SearchResponse(
                 query=query,
@@ -1797,9 +1365,9 @@ class BraveSearchProvider(BaseSearchProvider):
             from urllib.parse import urlparse
             parsed = urlparse(url)
             domain = parsed.netloc.replace('www.', '')
-            return domain or '未知来源'
+            return domain or 'Nguồn không xác định'
         except Exception:
-            return '未知来源'
+            return 'Nguồn không xác định'
 
     def search(
         self,
@@ -1955,7 +1523,7 @@ class SearXNGSearchProvider(BaseSearchProvider):
             stale_urls: List[str] = []
             if cls._public_instances_cache is None and cls._public_instances_stale_retry_after > now:
                 logger.debug(
-                    "[SearXNG] 公共实例冷启动刷新退避中，剩余 %.0fs",
+                    "[SearXNG] đang lùi (backoff) làm mới danh sách instance công khai lúc khởi động, còn %.0fs",
                     cls._public_instances_stale_retry_after - now,
                 )
                 return []
@@ -1966,7 +1534,7 @@ class SearXNGSearchProvider(BaseSearchProvider):
                 stale_urls = list(cached_urls)
                 if cls._public_instances_stale_retry_after > now:
                     logger.debug(
-                        "[SearXNG] 公共实例刷新退避中，继续使用过期缓存，剩余 %.0fs",
+                        "[SearXNG] đang lùi (backoff) làm mới instance công khai, tiếp tục dùng cache hết hạn, còn %.0fs",
                         cls._public_instances_stale_retry_after - now,
                     )
                     return stale_urls
@@ -1978,7 +1546,7 @@ class SearXNGSearchProvider(BaseSearchProvider):
                 )
                 if response.status_code != 200:
                     logger.warning(
-                        "[SearXNG] 拉取公共实例列表失败: HTTP %s",
+                        "[SearXNG] lấy danh sách instance công khai thất bại: HTTP %s",
                         response.status_code,
                     )
                 else:
@@ -1986,19 +1554,19 @@ class SearXNGSearchProvider(BaseSearchProvider):
                     if urls:
                         cls._public_instances_cache = (now, list(urls))
                         cls._public_instances_stale_retry_after = 0.0
-                        logger.info("[SearXNG] 已刷新公共实例池，共 %s 个候选实例", len(urls))
+                        logger.info("[SearXNG] đã làm mới pool instance công khai, tổng %s instance ứng viên", len(urls))
                         return list(urls)
-                    logger.warning("[SearXNG] searx.space 未返回可用公共实例，保留已有缓存")
+                    logger.warning("[SearXNG] searx.space không trả về instance công khai khả dụng, giữ cache hiện có")
             except Exception as exc:
-                logger.warning("[SearXNG] 拉取公共实例列表失败: %s", exc)
+                logger.warning("[SearXNG] lấy danh sách instance công khai thất bại: %s", exc)
 
             if stale_urls:
                 cls._public_instances_stale_retry_after = (
                     now + cls.PUBLIC_INSTANCES_STALE_REFRESH_BACKOFF_SECONDS
                 )
                 logger.warning(
-                    "[SearXNG] 公共实例刷新失败，继续使用过期缓存，共 %s 个候选实例；"
-                    "%.0fs 内不再刷新",
+                    "[SearXNG] làm mới instance công khai thất bại, tiếp tục dùng cache hết hạn, tổng %s instance ứng viên; "
+                    "không làm mới lại trong %.0fs",
                     len(stale_urls),
                     cls.PUBLIC_INSTANCES_STALE_REFRESH_BACKOFF_SECONDS,
                 )
@@ -2007,7 +1575,7 @@ class SearXNGSearchProvider(BaseSearchProvider):
                 now + cls.PUBLIC_INSTANCES_STALE_REFRESH_BACKOFF_SECONDS
             )
             logger.warning(
-                "[SearXNG] 公共实例冷启动刷新失败，%.0fs 内不再刷新",
+                "[SearXNG] làm mới instance công khai lúc khởi động thất bại, không làm mới lại trong %.0fs",
                 cls.PUBLIC_INSTANCES_STALE_REFRESH_BACKOFF_SECONDS,
             )
             return []
@@ -2154,9 +1722,9 @@ class SearXNGSearchProvider(BaseSearchProvider):
 
             parsed = urlparse(url)
             domain = parsed.netloc.replace("www.", "")
-            return domain or "未知来源"
+            return domain or "Nguồn không xác định"
         except Exception:
-            return "未知来源"
+            return "Nguồn không xác định"
 
     def search(self, query: str, max_results: int = 5, days: int = 7) -> SearchResponse:
         """Execute SearXNG search with instance rotation and per-request failover."""
@@ -2168,7 +1736,7 @@ class SearXNGSearchProvider(BaseSearchProvider):
             )
             retry_enabled = True
             timeout = self._self_hosted_timeout_seconds
-            empty_error = "SearXNG 未配置可用实例"
+            empty_error = "SearXNG chưa cấu hình instance khả dụng"
         elif self._use_public_instances:
             public_instances = self._get_public_instances()
             candidates = self._rotate_candidates(
@@ -2177,12 +1745,12 @@ class SearXNGSearchProvider(BaseSearchProvider):
             )
             retry_enabled = False
             timeout = self.PUBLIC_INSTANCES_TIMEOUT_SECONDS
-            empty_error = "未获取到可用的公共 SearXNG 实例"
+            empty_error = "Không lấy được instance SearXNG công khai khả dụng"
         else:
             candidates = []
             retry_enabled = False
             timeout = self.PUBLIC_INSTANCES_TIMEOUT_SECONDS
-            empty_error = "SearXNG 未配置可用实例"
+            empty_error = "SearXNG chưa cấu hình instance khả dụng"
 
         if not candidates:
             return SearchResponse(
@@ -2207,7 +1775,7 @@ class SearXNGSearchProvider(BaseSearchProvider):
             response.search_time = time.time() - start_time
             if response.success:
                 logger.info(
-                    "[%s] 搜索 '%s' 成功，实例=%s，返回 %s 条结果，耗时 %.2fs",
+                    "[%s] tìm kiếm '%s' thành công, instance=%s, trả về %s kết quả, mất %.2fs",
                     self.name,
                     query,
                     base_url,
@@ -2217,7 +1785,7 @@ class SearXNGSearchProvider(BaseSearchProvider):
                 return response
 
             errors.append(f"{base_url}: {response.error_message or 'unknown error'}")
-            logger.warning("[%s] 实例 %s 搜索失败: %s", self.name, base_url, response.error_message)
+            logger.warning("[%s] instance %s tìm kiếm thất bại: %s", self.name, base_url, response.error_message)
 
         elapsed = time.time() - start_time
         return SearchResponse(
@@ -2225,7 +1793,7 @@ class SearXNGSearchProvider(BaseSearchProvider):
             results=[],
             provider=self.name,
             success=False,
-            error_message="；".join(errors[:3]) if errors else empty_error,
+            error_message="; ".join(errors[:3]) if errors else empty_error,
             search_time=elapsed,
         )
 
@@ -2239,33 +1807,26 @@ class SearchService:
     2. Automatic failover
     3. Result aggregation and formatting
     4. Enhanced search when data sources fail (stock price, trend, etc.)
-    5. HK/US stocks automatically use English search keywords
+    5. Vietnam-oriented queries (Vietnamese keywords, VN locale hints)
     """
-    
-    # Enhanced search keyword templates (A-shares, Chinese)
-    ENHANCED_SEARCH_KEYWORDS = [
-        "{name} 股票 今日 股价",
-        "{name} {code} 最新 行情 走势",
-        "{name} 股票 分析 走势图",
-        "{name} K线 技术分析",
-        "{name} {code} 涨跌 成交量",
-    ]
 
-    # Enhanced search keyword templates (HK/US stocks, English)
-    ENHANCED_SEARCH_KEYWORDS_EN = [
-        "{name} stock price today",
-        "{name} {code} latest quote trend",
-        "{name} stock analysis chart",
-        "{name} technical analysis",
-        "{name} {code} performance volume",
+    # Mẫu từ khoá tìm kiếm tăng cường khi nguồn dữ liệu lỗi (cổ phiếu Việt Nam).
+    # Enhanced search keyword templates used when data sources fail (Vietnam stocks).
+    ENHANCED_SEARCH_KEYWORDS = [
+        "{name} {code} giá cổ phiếu hôm nay",
+        "{name} {code} diễn biến giá mới nhất",
+        "{name} cổ phiếu phân tích kỹ thuật",
+        "{name} {code} biểu đồ giá",
+        "{name} {code} khối lượng giao dịch",
     ]
     NEWS_OVERSAMPLE_FACTOR = 2
     NEWS_OVERSAMPLE_MAX = 10
     FUTURE_TOLERANCE_DAYS = 1
     ANALYTICAL_INTEL_LOOKBACK_DAYS = 180
     ANALYTICAL_INTEL_DIMENSIONS = {"market_analysis", "earnings"}
-    _CHINESE_TEXT_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
-    _US_STOCK_RE = re.compile(r"^[A-Za-z]{1,5}(\.[A-Za-z])?$")
+    # Ticker dạng chữ hoa/số (HPG, FPT, VN30, FUEVN100) dùng để so khớp có biên từ.
+    # Uppercase ticker-like terms (HPG, FPT, VN30, FUEVN100) matched with word boundaries.
+    _TICKER_TERM_RE = re.compile(r"^[A-Z][A-Z0-9]{1,9}$")
     _DIRECT_NEWS_CATEGORY = "direct_company_news"
     _SECTOR_NEWS_CATEGORY = "sector_related_news"
     _MACRO_NEWS_CATEGORY = "macro_market_news"
@@ -2280,10 +1841,8 @@ class SearchService:
         "dividend", "lawsuit", "merger", "acquisition",
     )
     _COMPANY_EVENT_TERMS = (
-        "公告", "披露", "发布", "收购", "回购", "减持", "增持", "诉讼", "处罚",
-        "业绩", "财报", "营收", "净利润", "分红", "董事会", "股东大会", "订单",
-        "合作", "中标", "earnings", "revenue", "profit", "guidance", "filing",
-        "sec", "shares", "stock", "buyback", "dividend", "lawsuit", "merger",
+        "earnings", "revenue", "profit", "guidance", "filing",
+        "shares", "stock", "buyback", "dividend", "lawsuit", "merger",
         "acquisition", "results", "quarterly", "annual", "announces", "launches",
         # Tiếng Việt: thiếu nhóm này thì bài báo Việt không bao giờ được cộng điểm
         # "tin trực tiếp về doanh nghiệp", luôn bị xếp xuống nhóm tin nền.
@@ -2293,32 +1852,22 @@ class SearchService:
         "hợp tác", "niêm yết", "giao dịch nội bộ",
     )
     _SECTOR_NEWS_TERMS = (
-        "行业", "板块", "产业链", "龙头", "概念股", "赛道", "sector", "industry",
-        "peers", "competitors", "supply chain", "market share",
+        "sector", "industry", "peers", "competitors", "supply chain", "market share",
         "ngành", "nhóm ngành", "chuỗi cung ứng", "thị phần", "đối thủ",
     )
     _MACRO_NEWS_TERMS = (
-        "大盘", "市场", "指数", "宏观", "央行", "利率", "通胀", "a股", "港股",
-        "美股", "纳指", "标普", "market", "index", "fed", "inflation",
-        "interest rate", "nasdaq", "s&p 500", "dow jones",
+        "market", "index", "fed", "inflation", "interest rate", "central bank",
+        "nasdaq", "s&p 500", "dow jones",
         "vn-index", "vnindex", "vn30", "hnx", "upcom", "thị trường", "chỉ số",
-        "vĩ mô", "lãi suất", "lạm phát", "ngân hàng nhà nước",
+        "chứng khoán", "vĩ mô", "lãi suất", "lạm phát", "ngân hàng nhà nước",
+        "tỷ giá",
     )
-    _OFFICIAL_SOURCE_TERMS = (
-        "cninfo", "sse.com", "szse.cn", "hkexnews", "sec.gov", "nasdaq.com",
-        "nyse.com", "上交所", "深交所", "港交所", "证券交易所",
-        "hsx.vn", "hnx.vn", "ssc.gov.vn", "cafef.vn", "vietstock.vn",
-    )
+    # Việt Nam: hai sàn (HOSE/HNX) và Uỷ ban Chứng khoán Nhà nước.
+    # Vietnam: the two exchanges (HOSE/HNX) and the State Securities Commission.
     _OFFICIAL_SOURCE_HOSTS = (
-        "cninfo.com.cn", "sse.com", "sse.com.cn", "szse.cn", "hkexnews.hk",
-        "sec.gov", "nasdaq.com", "nyse.com",
-        # Việt Nam: hai sàn (HOSE/HNX) và Uỷ ban Chứng khoán Nhà nước.
         "hsx.vn", "hnx.vn", "ssc.gov.vn",
     )
     _OFFICIAL_SOURCE_LABELS = (
-        "cninfo", "hkexnews", "巨潮资讯", "巨潮资讯网",
-        "上交所", "深交所", "港交所", "证券交易所",
-        "上海证券交易所", "深圳证券交易所", "香港交易所", "香港联合交易所",
         "hose", "hnx", "sở giao dịch chứng khoán", "uỷ ban chứng khoán nhà nước",
         "ủy ban chứng khoán nhà nước",
     )
@@ -2406,12 +1955,10 @@ class SearchService:
 
     def __init__(
         self,
-        bocha_keys: Optional[List[str]] = None,
         tavily_keys: Optional[List[str]] = None,
         anspire_keys: Optional[List[str]] = None,
         brave_keys: Optional[List[str]] = None,
         serpapi_keys: Optional[List[str]] = None,
-        minimax_keys: Optional[List[str]] = None,
         searxng_base_urls: Optional[List[str]] = None,
         searxng_public_instances_enabled: bool = False,
         searxng_timeout_seconds: Optional[int] = None,
@@ -2422,24 +1969,20 @@ class SearchService:
         Initialize the search service
 
         Args:
-            bocha_keys: List of Bocha search API keys
             tavily_keys: List of Tavily API keys
             anspire_keys: List of Anspire Search API keys
             brave_keys: List of Brave Search API keys
             serpapi_keys: List of SerpAPI keys
-            minimax_keys: List of MiniMax API keys
             searxng_base_urls: List of SearXNG instance URLs (self-hosted, quota-free fallback)
             searxng_public_instances_enabled: Whether to use public SearXNG instances automatically when no self-hosted instance is configured
             news_max_age_days: Max news age (days)
             news_strategy_profile: News window strategy profile (ultra_short/short/medium/long)
         """
         self._constructor_kwargs: Dict[str, Any] = {
-            "bocha_keys": list(bocha_keys or []),
             "tavily_keys": list(tavily_keys or []),
             "anspire_keys": list(anspire_keys or []),
             "brave_keys": list(brave_keys or []),
             "serpapi_keys": list(serpapi_keys or []),
-            "minimax_keys": list(minimax_keys or []),
             "searxng_base_urls": list(searxng_base_urls or []),
             "searxng_public_instances_enabled": bool(searxng_public_instances_enabled),
             "searxng_timeout_seconds": searxng_timeout_seconds,
@@ -2452,7 +1995,7 @@ class SearchService:
         self.news_strategy_profile = normalize_news_strategy_profile(news_strategy_profile)
         if raw_profile != self.news_strategy_profile:
             logger.warning(
-                "NEWS_STRATEGY_PROFILE '%s' 无效，已回退为 'short'",
+                "NEWS_STRATEGY_PROFILE '%s' không hợp lệ, đã lùi về 'short'",
                 news_strategy_profile,
             )
         self.news_window_days = resolve_news_window_days(
@@ -2464,33 +2007,24 @@ class SearchService:
             NEWS_STRATEGY_WINDOWS["short"],
         )
 
+        # Khởi tạo các công cụ tìm kiếm theo thứ tự ưu tiên.
         # Initialize search engines (ordered by priority)
-        # 1. Bocha first (optimized for Chinese search, AI summaries)
-        if bocha_keys:
-            self._providers.append(BochaSearchProvider(bocha_keys))
-            logger.info(f"已配置 Bocha 搜索，共 {len(bocha_keys)} 个 API Key")
-
-        # 2. Tavily (larger free quota, 1000 per month)
+        # 1. Tavily (larger free quota, 1000 per month)
         if tavily_keys:
             self._providers.append(TavilySearchProvider(tavily_keys))
-            logger.info(f"已配置 Tavily 搜索，共 {len(tavily_keys)} 个 API Key")
+            logger.info("Đã cấu hình tìm kiếm Tavily, tổng %s API Key", len(tavily_keys))
 
-        # 3. Brave Search (privacy-first, global coverage)
+        # 2. Brave Search (privacy-first, global coverage)
         if brave_keys:
             self._providers.append(BraveSearchProvider(brave_keys))
-            logger.info(f"已配置 Brave 搜索，共 {len(brave_keys)} 个 API Key")
+            logger.info("Đã cấu hình tìm kiếm Brave, tổng %s API Key", len(brave_keys))
 
-        # 4. SerpAPI as a fallback (100 per month)
+        # 3. SerpAPI as a fallback (100 per month)
         if serpapi_keys:
             self._providers.append(SerpAPISearchProvider(serpapi_keys))
-            logger.info(f"已配置 SerpAPI 搜索，共 {len(serpapi_keys)} 个 API Key")
+            logger.info("Đã cấu hình tìm kiếm SerpAPI, tổng %s API Key", len(serpapi_keys))
 
-        # 5. MiniMax (Coding Plan Web Search, structured results)
-        if minimax_keys:
-            self._providers.append(MiniMaxSearchProvider(minimax_keys))
-            logger.info(f"已配置 MiniMax 搜索，共 {len(minimax_keys)} 个 API Key")
-
-        # 6. SearXNG (self-hosted instances first; public instances can be auto-discovered when none are configured)
+        # 4. SearXNG (self-hosted instances first; public instances can be auto-discovered when none are configured)
         searxng_provider = SearXNGSearchProvider(
             searxng_base_urls,
             use_public_instances=bool(searxng_public_instances_enabled and not searxng_base_urls),
@@ -2499,17 +2033,18 @@ class SearchService:
         if searxng_provider.is_available:
             self._providers.append(searxng_provider)
             if searxng_base_urls:
-                logger.info("已配置 SearXNG 搜索，共 %s 个自建实例", len(searxng_base_urls))
+                logger.info("Đã cấu hình tìm kiếm SearXNG, tổng %s instance tự host", len(searxng_base_urls))
             else:
-                logger.info("已启用 SearXNG 公共实例自动发现模式")
+                logger.info("Đã bật chế độ tự khám phá instance SearXNG công khai")
 
-        # 7. Anspire Search (optimized realtime intelligent search)
+        # 5. Anspire Search (optimized realtime intelligent search) — luôn đứng đầu khi được cấu hình.
+        # Anspire is inserted first whenever configured.
         if anspire_keys:
             self._providers.insert(0, AnspireSearchProvider(anspire_keys))
-            logger.info(f"已配置 Anspire Search 搜索，共 {len(anspire_keys)} 个 API Key")
-            
+            logger.info("Đã cấu hình tìm kiếm Anspire Search, tổng %s API Key", len(anspire_keys))
+
         if not self._providers:
-            logger.warning("未配置任何搜索能力，新闻搜索功能将不可用")
+            logger.warning("Chưa cấu hình công cụ tìm kiếm nào, tính năng tìm tin tức sẽ không khả dụng")
 
         # In-memory search result cache: {cache_key: (timestamp, SearchResponse)}
         self._cache: Dict[str, Tuple[float, 'SearchResponse']] = {}
@@ -2518,220 +2053,84 @@ class SearchService:
         # Default cache TTL in seconds (10 minutes)
         self._cache_ttl: int = 600
         logger.info(
-            "新闻时效策略已启用: profile=%s, profile_days=%s, NEWS_MAX_AGE_DAYS=%s, effective_window=%s",
+            "Đã bật chiến lược độ mới tin tức: profile=%s, profile_days=%s, NEWS_MAX_AGE_DAYS=%s, effective_window=%s",
             self.news_strategy_profile,
             self.news_profile_days,
             self.news_max_age_days,
             self.news_window_days,
         )
-    
-    @staticmethod
-    def _is_foreign_stock(stock_code: str) -> bool:
-        """Determine whether this is an HK or US stock.
-
-        Honours all canonical input forms — bare ticker (``AAPL`` / ``00700``),
-        suffixed ticker (``AAPL.US`` / ``00700.HK``), and prefixed HK ticker
-        (``HK00700``) — by canonicalizing to the key form used in
-        STOCK_ENGLISH_NAME_MAP before applying the existing structural checks.
-        This is the canonical-boundary unification that massif-01 asked for on
-        PR #2047 (so alias resolution and foreign-ness detection no longer
-        disagree on the same input).
-        """
-        code = canonicalize_foreign_stock_code(stock_code).strip()
-        if not code:
-            return False
-        # US stocks: 1-5 uppercase letters, possibly containing a dot (e.g. BRK.B)
-        if SearchService._US_STOCK_RE.match(code):
-            return True
-        # HK stocks: 5 pure digits. canonicalize_foreign_stock_code already normalizes the HK00700 prefix
-        # and the 00700.HK suffix to the 00700 form; the old lower.startswith('hk')
-        # branch became unreachable dead code after canonicalization and was removed.
-        if code.isdigit() and len(code) == 5:
-            return True
-        return False
 
     @staticmethod
-    def _foreign_english_query_terms(stock_code: str, stock_name: str) -> Tuple[str, ...]:
-        """Return English company name(s) to embed in foreign-stock search
-        queries. issue #2026: When STOCK_NAME_MAP maps a foreign ticker to a
-        Chinese display name, the search layer must not pass that Chinese name
-        to English news providers, otherwise the provider misses English
-        headlines entirely.
-
-        Returns the canonical alias tuple from ``STOCK_ENGLISH_NAME_MAP`` if the
-        supplied ``stock_name`` is Chinese and the canonical ticker has English
-        aliases. Otherwise returns an empty tuple (callers fall back to
-        ``stock_name`` itself).
-
-        Kept deliberately small and read-only: this helper never mutates the
-        alias set and never invents aliases outside the single source of truth
-        in ``src/data/stock_mapping.py``.
-        """
-        return foreign_stock_english_aliases(stock_code, stock_name)
-
-    @classmethod
-    def _contains_chinese_text(cls, value: Optional[str]) -> bool:
-        """Return True when the input contains CJK characters."""
-        return bool(value and cls._CHINESE_TEXT_RE.search(value))
-
-    @classmethod
-    def _is_us_stock(cls, stock_code: str) -> bool:
-        """Determine whether this is a US stock / US index code."""
-        code = (stock_code or "").strip().upper()
-        return bool(cls._US_STOCK_RE.match(code) or is_us_index_code(code))
-
-    @staticmethod
-    def _is_vn_symbol(stock_code: str, stock_name: str = "") -> bool:
-        """Mã này có thuộc thị trường Việt Nam hay không.
-
-        Tái dùng ``data_provider.base`` làm nguồn sự thật thay vì thêm một regex
-        thứ ba: mã Việt Nam trần (``HPG``/``FPT``) trùng hoàn toàn với hình dạng
-        ticker Mỹ ``^[A-Z]{1,5}$``, nên ``_US_STOCK_RE`` ở lớp này sẽ nhận nhầm
-        chúng là cổ phiếu Mỹ. ``src/core/markets.py`` đã giải va chạm đó bằng
-        ``detect_order`` và ``_is_vn_market`` mang sẵn quy tắc ấy.
+    def _vn_code_helpers() -> Optional[Dict[str, Any]]:
+        """Nạp trễ các hàm nhận diện mã Việt Nam từ ``data_provider.base``.
 
         Import trễ theo đúng quy ước sẵn có trong repo, tránh kéo cả
         ``data_provider.base`` vào thời điểm import module này.
+        Lazily import the Vietnam code helpers to keep module import light.
         """
 
         try:
-            from data_provider.base import _is_vn_market, is_vn_index_code
+            from data_provider import base as vn_base
         except Exception:  # pragma: no cover - chỉ xảy ra khi lắp ghép lỗi
-            return False
+            return None
+        return {
+            "is_vn_market": vn_base._is_vn_market,
+            "is_vn_index_code": vn_base.is_vn_index_code,
+            "is_vn_fund_code": vn_base.is_vn_fund_code,
+            "normalize_stock_code": vn_base.normalize_stock_code,
+        }
 
+    @classmethod
+    def _is_vn_symbol(cls, stock_code: str, stock_name: str = "") -> bool:
+        """Mã này có thuộc thị trường Việt Nam (cổ phiếu / chỉ số / quỹ) hay không.
+
+        Tái dùng ``data_provider.base`` làm nguồn sự thật thay vì thêm regex riêng.
+        Reuses ``data_provider.base`` as the single source of truth.
+        """
+
+        helpers = cls._vn_code_helpers()
+        if helpers is None:
+            return False
         for candidate in (stock_code, stock_name):
             text = (candidate or "").strip()
             if not text:
                 continue
-            if is_vn_index_code(text) or _is_vn_market(text):
+            if helpers["is_vn_index_code"](text) or helpers["is_vn_market"](text):
                 return True
         return False
 
     @classmethod
-    def _should_prefer_chinese_news(
-        cls,
-        stock_code: str,
-        stock_name: str,
-        focus_keywords: Optional[List[str]] = None,
-    ) -> bool:
-        """Prefer Chinese news for A-shares or Chinese name/keyword scenarios.
+    def _brave_search_locale(cls, stock_code: str = "") -> Dict[str, str]:
+        """Gợi ý locale cho Brave: hệ thống chỉ phục vụ thị trường Việt Nam.
 
-        Only returns True when there is a positive Chinese signal:
-        Chinese characters in keywords/stock_name, or a 6-digit A-stock code.
-        Avoids false positives for non-foreign but English contexts like
-        ``stock_code="market", stock_name="US market"``.
+        Brave locale hints: the system only serves the Vietnam market, so every
+        query (stock, index or topic) is biased towards Vietnamese results.
         """
-        if any(cls._contains_chinese_text(keyword) for keyword in (focus_keywords or [])):
-            return True
-        if cls._contains_chinese_text(stock_name):
-            return True
-        # Positive A-stock identification: 6-digit numeric codes (e.g. 600519)
-        code = (stock_code or "").strip()
-        return code.isdigit() and len(code) == 6
+        return {"search_lang": "vi", "country": "VN"}
 
     @classmethod
-    def _is_chinese_news_result(cls, item: SearchResult) -> bool:
-        """Heuristic check for Chinese-language news items."""
-        return cls._contains_chinese_text(" ".join(filter(None, [item.title, item.snippet, item.source])))
-
-    @classmethod
-    def _prioritize_news_language(
-        cls,
-        response: SearchResponse,
-        *,
-        prefer_chinese: bool,
-    ) -> Tuple[SearchResponse, int]:
-        """Reorder results by preferred language and return preferred-result count."""
-        if not prefer_chinese or not response.success or not response.results:
-            return response, 0
-
-        chinese_results: List[SearchResult] = []
-        other_results: List[SearchResult] = []
-        for item in response.results:
-            if cls._is_chinese_news_result(item):
-                chinese_results.append(item)
-            else:
-                other_results.append(item)
-
-        return (
-            SearchResponse(
-                query=response.query,
-                results=chinese_results + other_results,
-                provider=response.provider,
-                success=response.success,
-                error_message=response.error_message,
-                search_time=response.search_time,
-            ),
-            len(chinese_results),
-        )
-
-    @classmethod
-    def _is_better_preferred_news_response(
-        cls,
-        candidate: SearchResponse,
-        *,
-        candidate_preferred_count: int,
-        best_response: Optional[SearchResponse],
-        best_preferred_count: int,
-    ) -> bool:
-        """Prefer responses with more Chinese items, then more total items."""
-        if best_response is None:
-            return True
-        if candidate_preferred_count != best_preferred_count:
-            return candidate_preferred_count > best_preferred_count
-        return len(candidate.results) > len(best_response.results)
-
-    @classmethod
-    def _brave_search_locale(
-        cls,
-        stock_code: str,
-        *,
-        prefer_chinese: bool,
-    ) -> Dict[str, str]:
-        """Resolve Brave locale hints without forcing US bias onto non-US symbols."""
-        if prefer_chinese:
-            return {"search_lang": "zh-hans", "country": "CN"}
-        # Việt Nam phải xét TRƯỚC ``_is_us_stock``: hàm đó dùng chung ``_US_STOCK_RE``
-        # nên mã như HPG sẽ bị gắn ``country=US`` và Brave trả kết quả nhắm thị trường Mỹ.
-        if cls._is_vn_symbol(stock_code):
-            return {"search_lang": "vi", "country": "VN"}
-        if cls._is_us_stock(stock_code):
-            return {"search_lang": "en", "country": "US"}
-        return {}
-
-    # A-share ETF code prefixes (Shanghai 51/52/56/58, Shenzhen 15/16/18)
-    _A_ETF_PREFIXES = ('51', '52', '56', '58', '15', '16', '18')
-    _ETF_NAME_KEYWORDS = ('ETF', 'FUND', 'TRUST', 'INDEX', 'TRACKER', 'UNIT')  # US/HK ETF name hints
-
-    @staticmethod
-    def is_index_or_etf(stock_code: str, stock_name: str) -> bool:
+    def is_index_or_etf(cls, stock_code: str, stock_name: str) -> bool:
         """
-        Judge if symbol is index-tracking ETF or market index.
+        Xác định mã là chỉ số thị trường Việt Nam hay chứng chỉ quỹ ETF / quỹ Việt Nam.
+        Judge if symbol is a Vietnam market index or a Vietnam ETF / fund certificate.
         For such symbols, analysis focuses on index movement only, not issuer company risks.
         """
-        code = (stock_code or '').strip().split('.')[0]
-        if not code:
+        raw = (stock_code or '').strip()
+        if not raw:
             return False
-        # A-share ETF
-        if code.isdigit() and len(code) == 6 and code.startswith(SearchService._A_ETF_PREFIXES):
-            return True
-        # US index (SPX, DJI, IXIC etc.)
-        if is_us_index_code(code):
-            return True
+        helpers = cls._vn_code_helpers()
+        if helpers is None:
+            return False
         # Chỉ số Việt Nam (VNINDEX / VN30 / HNXIndex / HNXUpcomIndex ...): mã chính là
         # tên gọi nên đi thẳng qua bảng đăng ký thay vì suy đoán theo hình dạng.
-        try:
-            from data_provider.base import is_vn_index_code
-
-            if is_vn_index_code(code):
-                return True
-        except Exception:  # pragma: no cover - chỉ xảy ra khi lắp ghép lỗi
-            pass
-        # US/HK ETF: foreign symbol + name contains fund-like keywords
-        if SearchService._is_foreign_stock(code):
-            name_upper = (stock_name or '').upper()
-            return any(kw in name_upper for kw in SearchService._ETF_NAME_KEYWORDS)
-        return False
+        # Vietnam indices are looked up in the registry directly.
+        if helpers["is_vn_index_code"](raw):
+            return True
+        # Chứng chỉ quỹ ETF / quỹ đóng Việt Nam (FUEVN100, E1VFVN30, ...), chấp nhận
+        # cả dạng hậu tố ``.VN`` / tiền tố ``vn``.
+        # Vietnam fund certificates, including ``.VN`` suffix / ``vn`` prefix forms.
+        code = helpers["normalize_stock_code"](raw)
+        return bool(helpers["is_vn_fund_code"](code))
 
     @property
     def is_available(self) -> bool:
@@ -2868,60 +2267,33 @@ class SearchService:
 
     @classmethod
     def _stock_code_identity_terms(cls, stock_code: str) -> List[str]:
-        """Return code/ticker variants that should count as strong identity hits."""
+        """Các biến thể mã chứng khoán Việt Nam được tính là trùng khớp danh tính mạnh.
+
+        Return Vietnam code/ticker variants that should count as strong identity
+        hits: bare ticker (``HPG``), ``.VN`` suffix form and exchange-prefixed
+        forms (``HOSE:HPG`` / ``HNX:HPG`` / ``UPCOM:HPG``).
+        """
         raw = (stock_code or "").strip()
         if not raw:
             return []
 
         terms: List[str] = []
-        upper = raw.upper()
-        code_for_variants = upper
-        if "." in upper:
-            base, suffix = upper.rsplit(".", 1)
-            if suffix == "HK" and base.isdigit() and 1 <= len(base) <= 5:
-                code_for_variants = f"HK{base.zfill(5)}"
-            elif suffix in {"SH", "SZ", "SS", "BJ"} and base.isdigit() and len(base) == 6:
-                code_for_variants = base
-            elif suffix == "US" and re.fullmatch(r"[A-Z]{1,5}", base):
-                code_for_variants = base
+        helpers = cls._vn_code_helpers()
+        code = raw.upper()
+        if helpers is not None:
+            code = (helpers["normalize_stock_code"](raw) or raw).strip().upper()
 
-        is_us_ticker = bool(cls._US_STOCK_RE.match(code_for_variants))
-        if not is_us_ticker:
-            cls._append_unique(terms, raw)
-            cls._append_unique(terms, upper)
-            if code_for_variants != upper:
-                cls._append_unique(terms, code_for_variants)
-
-        lower = code_for_variants.lower()
-        hk_digits = ""
-        if lower.startswith("hk"):
-            hk_digits = re.sub(r"\D", "", code_for_variants)
-        elif code_for_variants.isdigit() and len(code_for_variants) == 5:
-            hk_digits = code_for_variants
-
-        if hk_digits:
-            padded = hk_digits.zfill(5)
-            short = str(int(hk_digits)) if hk_digits.isdigit() else hk_digits.lstrip("0")
-            cls._append_unique(terms, padded)
-            cls._append_unique(terms, f"HK{padded}")
-            cls._append_unique(terms, f"{padded}.HK")
-            cls._append_unique(terms, f"{short}.HK")
-            cls._append_unique(terms, f"HKEX:{short}")
+        cls._append_unique(terms, code)
+        if helpers is not None and helpers["is_vn_index_code"](code):
+            # Chỉ số: báo chí thường viết "VN-Index" thay cho mã VNINDEX.
+            # Indices: the press usually writes "VN-Index" instead of VNINDEX.
+            if code == "VNINDEX":
+                cls._append_unique(terms, "VN-Index")
             return terms
 
-        if code_for_variants.isdigit() and len(code_for_variants) == 6:
-            suffix = ".SH" if code_for_variants.startswith(("5", "6", "9")) else ".SZ"
-            cls._append_unique(terms, f"{code_for_variants}{suffix}")
-            return terms
-
-        if cls._US_STOCK_RE.match(code_for_variants):
-            cls._append_unique(terms, f"${code_for_variants}")
-            cls._append_unique(terms, f"NASDAQ:{code_for_variants}")
-            cls._append_unique(terms, f"NYSE:{code_for_variants}")
-            if len(code_for_variants) > 1:
-                cls._append_unique(terms, code_for_variants)
-            return terms
-
+        cls._append_unique(terms, f"{code}.VN")
+        for exchange in ("HOSE", "HNX", "UPCOM"):
+            cls._append_unique(terms, f"{exchange}:{code}")
         return terms
 
     @classmethod
@@ -2937,23 +2309,22 @@ class SearchService:
         without_market_suffix = re.sub(r"[-－（(].*$", "", raw).strip()
         cls._append_unique(terms, without_market_suffix)
 
-        if cls._contains_chinese_text(raw):
-            cleaned = re.sub(
-                r"(股份有限公司|有限责任公司|有限公司|控股集团|控股|集团|股份|公司)$",
-                "",
-                without_market_suffix,
-            ).strip()
-            if len(cleaned) >= 4:
-                cls._append_unique(terms, cleaned)
-        else:
-            cleaned = re.sub(
-                r"\b(incorporated|inc|corporation|corp|company|co|plc|ltd|limited|holdings?)\.?$",
-                "",
-                without_market_suffix,
-                flags=re.IGNORECASE,
-            ).strip()
-            if len(cleaned) >= 3:
-                cls._append_unique(terms, cleaned)
+        # Bỏ tiền tố loại hình doanh nghiệp Việt Nam ("Công ty Cổ phần", "Tập đoàn", ...).
+        # Strip Vietnamese legal-form prefixes so "Tập đoàn Hòa Phát" also matches "Hòa Phát".
+        cleaned = re.sub(
+            r"^(công ty cổ phần|công ty cp|ctcp|tổng công ty|tập đoàn|ngân hàng tmcp)\s+",
+            "",
+            without_market_suffix,
+            flags=re.IGNORECASE,
+        ).strip()
+        cleaned = re.sub(
+            r"\b(incorporated|inc|corporation|corp|company|co|plc|ltd|limited|holdings?|jsc)\.?$",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        ).strip()
+        if len(cleaned) >= 3:
+            cls._append_unique(terms, cleaned)
 
         return terms
 
@@ -2961,17 +2332,6 @@ class SearchService:
     def _contains_identity_term(cls, text: str, term: str) -> bool:
         if not text or not term:
             return False
-
-        if cls._contains_chinese_text(term):
-            start = 0
-            while True:
-                index = text.find(term, start)
-                if index < 0:
-                    return False
-                next_char = text[index + len(term):index + len(term) + 1]
-                if next_char not in {"镇", "村", "县"}:
-                    return True
-                start = index + len(term)
 
         lower_text = text.lower()
         lower_term = term.lower()
@@ -2986,12 +2346,15 @@ class SearchService:
         if not text or not term:
             return False
 
-        if cls._US_STOCK_RE.match(term) and term.upper() == term and not term.startswith("$"):
+        if cls._TICKER_TERM_RE.match(term):
+            # Ticker trần: chỉ khớp dạng viết hoa toàn bộ hoặc thường toàn bộ (URL),
+            # cho phép hậu tố ``.VN``; tránh khớp nhầm từ thường viết hoa chữ đầu.
+            # Bare ticker: match all-upper or all-lower (URL) forms, allow ``.VN``.
             ticker_pattern = f"(?:{re.escape(term)}|{re.escape(term.lower())})"
             pattern = (
                 r"(?<![A-Za-z0-9$:.])"
                 + ticker_pattern
-                + r"(?=$|[^A-Za-z0-9.]|\.(?:US|us|O|o|N|n|NYSE|nyse|NASDAQ|nasdaq|AMEX|amex)\b)"
+                + r"(?=$|[^A-Za-z0-9.]|\.(?:VN|vn)\b|\.(?![A-Za-z0-9]))"
             )
             return bool(re.search(pattern, text))
 
@@ -3256,7 +2619,7 @@ class SearchService:
                 score += 55
                 direct_signal += 55
                 has_stock_code_signal = True
-                add_reason(f"标题命中股票代码 {term}")
+                add_reason(f"Tiêu đề khớp mã cổ phiếu {term}")
                 break
         else:
             for term in cls._stock_code_identity_terms(stock_code):
@@ -3264,7 +2627,7 @@ class SearchService:
                     score += 34
                     direct_signal += 34
                     has_stock_code_signal = True
-                    add_reason(f"摘要命中股票代码 {term}")
+                    add_reason(f"Tóm tắt khớp mã cổ phiếu {term}")
                     break
             else:
                 for term in cls._stock_code_identity_terms(stock_code):
@@ -3272,14 +2635,11 @@ class SearchService:
                         score += 18
                         direct_signal += 18
                         has_stock_code_signal = True
-                        add_reason(f"链接命中股票代码 {term}")
+                        add_reason(f"Liên kết khớp mã cổ phiếu {term}")
                         break
 
         for term in cls._company_identity_terms(stock_name):
-            ambiguous_en = (
-                not cls._contains_chinese_text(term)
-                and term.lower() in cls._AMBIGUOUS_EN_COMPANY_NAMES
-            )
+            ambiguous_en = term.lower() in cls._AMBIGUOUS_EN_COMPANY_NAMES
             title_score = 26 if ambiguous_en else 45
             snippet_score = 16 if ambiguous_en else 28
             if cls._contains_identity_term(title, term):
@@ -3289,7 +2649,7 @@ class SearchService:
                     has_ambiguous_company_signal = True
                 else:
                     has_unambiguous_company_signal = True
-                add_reason(f"标题命中公司名 {term}")
+                add_reason(f"Tiêu đề khớp tên công ty {term}")
                 break
             if cls._contains_identity_term(snippet, term):
                 score += snippet_score
@@ -3298,60 +2658,8 @@ class SearchService:
                     has_ambiguous_company_signal = True
                 else:
                     has_unambiguous_company_signal = True
-                add_reason(f"摘要命中公司名 {term}")
+                add_reason(f"Tóm tắt khớp tên công ty {term}")
                 break
-
-        # Issue #2026: when STOCK_NAME_MAP maps a foreign ticker to a Chinese
-        # display name (e.g. AAPL -> 苹果), the loop above cannot match English
-        # news headlines ("Apple reports earnings beat"). Resolve English
-        # identity aliases from the single source of truth (STOCK_ENGLISH_NAME_MAP
-        # in src/data/stock_mapping.py — sibling of STOCK_NAME_MAP, asserted to
-        # be a subset of its foreign-ticker keys) and feed both the alias
-        # strings and their legal-suffix-stripped variants into the same
-        # identity-term scoring path.
-        english_aliases = foreign_stock_english_aliases(stock_code, stock_name)
-        if english_aliases:
-            # Issue #2026 / PR #2049 review: dedupe identity terms across all
-            # aliases BEFORE scoring. STOCK_ENGLISH_NAME_MAP legal alias
-            # (``Apple Inc.``) is intentionally designed to also expose its
-            # short alias (``Apple``) so the search-query construction path
-            # always has a concise term to put into English queries. But when
-            # the SAME short form appears both as an explicit alias tuple
-            # member AND as the cleaned output of _company_identity_terms on
-            # the legal alias, naive per-alias accumulation would double-count
-            # a single snippet hit on ``Apple`` (16+16=32) and push ambiguous
-            # snippet-only headlines over the direct_company_news threshold.
-            # Collect terms into a set first; score each unique term once.
-            seen_identity_terms: set = set()
-            for alias in english_aliases:
-                for term in cls._company_identity_terms(alias):
-                    if term in seen_identity_terms:
-                        continue
-                    seen_identity_terms.add(term)
-                    ambiguous_en = (
-                        not cls._contains_chinese_text(term)
-                        and term.lower() in cls._AMBIGUOUS_EN_COMPANY_NAMES
-                    )
-                    title_score = 26 if ambiguous_en else 45
-                    snippet_score = 16 if ambiguous_en else 28
-                    if cls._contains_identity_term(title, term):
-                        score += title_score
-                        direct_signal += title_score
-                        if ambiguous_en:
-                            has_ambiguous_company_signal = True
-                        else:
-                            has_unambiguous_company_signal = True
-                        add_reason(f"标题命中公司英文别名 {term}")
-                        break
-                    if cls._contains_identity_term(snippet, term):
-                        score += snippet_score
-                        direct_signal += snippet_score
-                        if ambiguous_en:
-                            has_ambiguous_company_signal = True
-                        else:
-                            has_unambiguous_company_signal = True
-                        add_reason(f"摘要命中公司英文别名 {term}")
-                        break
 
         has_company_event = cls._contains_any_news_term(full_text, cls._COMPANY_EVENT_TERMS)
         if has_company_event and direct_signal > 0:
@@ -3367,11 +2675,11 @@ class SearchService:
             )
             if not ambiguous_name_only or has_confirming_event:
                 direct_signal += 12
-            add_reason("命中公告/财报/交易等公司事件词")
+            add_reason("Khớp từ khoá sự kiện doanh nghiệp (công bố/báo cáo tài chính/giao dịch)")
 
         if cls._is_trusted_official_news_source(item):
             score += 8
-            add_reason("来源接近公告或交易所渠道")
+            add_reason("Nguồn gần với kênh công bố thông tin hoặc sở giao dịch")
 
         has_sector_signal = cls._contains_any_news_term(full_text, cls._SECTOR_NEWS_TERMS)
         has_macro_signal = cls._contains_any_news_term(full_text, cls._MACRO_NEWS_TERMS)
@@ -3381,14 +2689,14 @@ class SearchService:
         elif has_macro_signal and not direct_signal:
             category = cls._MACRO_NEWS_CATEGORY
             score = max(0, score - 12)
-            add_reason("未命中目标公司身份，归为宏观/市场新闻")
+            add_reason("Không khớp danh tính doanh nghiệp, xếp vào tin vĩ mô/thị trường")
         else:
             category = cls._SECTOR_NEWS_CATEGORY
             if has_sector_signal:
                 score += 6
-                add_reason("仅命中行业或板块背景")
+                add_reason("Chỉ khớp bối cảnh ngành")
             else:
-                add_reason("未命中股票代码或公司全称，降级为背景新闻")
+                add_reason("Không khớp mã cổ phiếu hoặc tên công ty, hạ xuống tin nền")
 
         score = max(0, min(100, score))
         return SearchResult(
@@ -3409,7 +2717,6 @@ class SearchService:
         *,
         stock_code: str,
         stock_name: str,
-        prefer_chinese: bool,
         max_results: int,
         log_scope: str,
     ) -> SearchResponse:
@@ -3424,15 +2731,12 @@ class SearchService:
 
         indexed_results = list(enumerate(scored_results))
 
-        def sort_key(entry: Tuple[int, SearchResult]) -> Tuple[int, int, int, int]:
+        def sort_key(entry: Tuple[int, SearchResult]) -> Tuple[int, int, int]:
             index, result = entry
             category = result.relevance_category or cls._SECTOR_NEWS_CATEGORY
             category_rank = cls._NEWS_CATEGORY_PRIORITY.get(category, 9)
-            language_rank = 0 if prefer_chinese and cls._is_chinese_news_result(result) else 1
-            if not prefer_chinese:
-                language_rank = 0
             score = result.relevance_score or 0
-            return (category_rank, language_rank, -score, index)
+            return (category_rank, -score, index)
 
         ranked_results = [result for _, result in sorted(indexed_results, key=sort_key)]
         limited_results = ranked_results[:max_results]
@@ -3447,14 +2751,14 @@ class SearchService:
         if limited_results:
             top = limited_results[0]
             logger.info(
-                "[新闻相关度] %s: direct=%s, sector=%s, macro=%s, top_score=%s, top_category=%s, reasons=%s",
+                "[Mức liên quan tin tức] %s: direct=%s, sector=%s, macro=%s, top_score=%s, top_category=%s, reasons=%s",
                 log_scope,
                 category_counts[cls._DIRECT_NEWS_CATEGORY],
                 category_counts[cls._SECTOR_NEWS_CATEGORY],
                 category_counts[cls._MACRO_NEWS_CATEGORY],
                 top.relevance_score,
                 top.relevance_category,
-                "；".join(top.relevance_reasons or []),
+                "; ".join(top.relevance_reasons or []),
             )
 
         return SearchResponse(
@@ -3512,7 +2816,7 @@ class SearchService:
 
         if dropped_low_quality or dropped_adult_spam or dropped_zero_relevance:
             logger.info(
-                "[新闻准入] %s: provider=%s, total=%s, kept=%s, "
+                "[Lọc chất lượng tin] %s: provider=%s, total=%s, kept=%s, "
                 "drop_low_quality=%s, drop_adult_spam=%s, drop_zero_relevance=%s",
                 log_scope,
                 response.provider,
@@ -3536,25 +2840,11 @@ class SearchService:
     def _news_relevance_stats(
         cls,
         response: SearchResponse,
-        *,
-        prefer_chinese: bool,
     ) -> Dict[str, int]:
         results = response.results if response and response.results else []
         return {
             "direct_count": sum(
                 1 for item in results if item.relevance_category == cls._DIRECT_NEWS_CATEGORY
-            ),
-            "preferred_direct_count": sum(
-                1
-                for item in results
-                if (
-                    prefer_chinese
-                    and item.relevance_category == cls._DIRECT_NEWS_CATEGORY
-                    and cls._is_chinese_news_result(item)
-                )
-            ),
-            "preferred_count": sum(
-                1 for item in results if prefer_chinese and cls._is_chinese_news_result(item)
             ),
             "max_score": max((item.relevance_score or 0 for item in results), default=0),
             "result_count": len(results),
@@ -3568,53 +2858,49 @@ class SearchService:
         candidate_stats: Dict[str, int],
         best_response: Optional[SearchResponse],
         best_stats: Optional[Dict[str, int]],
-        prefer_chinese: bool,
     ) -> bool:
         if best_response is None or best_stats is None:
             return True
         if candidate_stats["direct_count"] != best_stats["direct_count"]:
             return candidate_stats["direct_count"] > best_stats["direct_count"]
-        if (
-            prefer_chinese
-            and candidate_stats["preferred_direct_count"] != best_stats["preferred_direct_count"]
-        ):
-            return candidate_stats["preferred_direct_count"] > best_stats["preferred_direct_count"]
-        if prefer_chinese and candidate_stats["preferred_count"] != best_stats["preferred_count"]:
-            return candidate_stats["preferred_count"] > best_stats["preferred_count"]
         if candidate_stats["max_score"] != best_stats["max_score"]:
             return candidate_stats["max_score"] > best_stats["max_score"]
         return candidate_stats["result_count"] > best_stats["result_count"]
 
     @staticmethod
     def _parse_relative_news_date(text: str, now: datetime) -> Optional[date]:
-        """Parse common Chinese/English relative-time strings."""
+        """Phân tích chuỗi thời gian tương đối tiếng Việt / tiếng Anh.
+
+        Parse common Vietnamese/English relative-time strings
+        (``3 giờ trước`` / ``hôm qua`` / ``2 hours ago``).
+        """
         raw = (text or "").strip()
         if not raw:
             return None
 
         lower = raw.lower()
-        if raw in {"今天", "今日", "刚刚"} or lower in {"today", "just now", "now"}:
+        if lower in {"hôm nay", "vừa xong", "today", "just now", "now"}:
             return now.date()
-        if raw == "昨天" or lower == "yesterday":
+        if lower in {"hôm qua", "yesterday"}:
             return (now - timedelta(days=1)).date()
-        if raw == "前天":
+        if lower == "hôm kia":
             return (now - timedelta(days=2)).date()
 
-        zh = re.match(r"^\s*(\d+)\s*(分钟|小时|天|周|个月|月|年)\s*前\s*$", raw)
-        if zh:
-            amount = int(zh.group(1))
-            unit = zh.group(2)
-            if unit == "分钟":
+        vi = re.match(r"^\s*(\d+)\s*(phút|giờ|tiếng|ngày|tuần|tháng|năm)\s*trước\s*$", lower)
+        if vi:
+            amount = int(vi.group(1))
+            unit = vi.group(2)
+            if unit == "phút":
                 return (now - timedelta(minutes=amount)).date()
-            if unit == "小时":
+            if unit in {"giờ", "tiếng"}:
                 return (now - timedelta(hours=amount)).date()
-            if unit == "天":
+            if unit == "ngày":
                 return (now - timedelta(days=amount)).date()
-            if unit == "周":
+            if unit == "tuần":
                 return (now - timedelta(weeks=amount)).date()
-            if unit in {"个月", "月"}:
+            if unit == "tháng":
                 return (now - timedelta(days=amount * 30)).date()
-            if unit == "年":
+            if unit == "năm":
                 return (now - timedelta(days=amount * 365)).date()
 
         en = re.match(
@@ -3692,10 +2978,19 @@ class SearchService:
         except (TypeError, ValueError):
             pass
 
-        zh_match = re.search(r"(\d{4})\s*[年/\-.]\s*(\d{1,2})\s*[月/\-.]\s*(\d{1,2})\s*日?", text)
-        if zh_match:
+        ymd_match = re.search(r"(\d{4})\s*[/\-.]\s*(\d{1,2})\s*[/\-.]\s*(\d{1,2})", text)
+        if ymd_match:
             try:
-                return date(int(zh_match.group(1)), int(zh_match.group(2)), int(zh_match.group(3)))
+                return date(int(ymd_match.group(1)), int(ymd_match.group(2)), int(ymd_match.group(3)))
+            except ValueError:
+                pass
+
+        # Báo chí Việt Nam dùng ngày/tháng/năm (12/10/2026, 12-10-2026 08:30).
+        # Vietnamese press uses day/month/year order.
+        dmy_match = re.search(r"(?<!\d)(\d{1,2})\s*[/\-.]\s*(\d{1,2})\s*[/\-.]\s*(\d{4})(?!\d)", text)
+        if dmy_match:
+            try:
+                return date(int(dmy_match.group(3)), int(dmy_match.group(2)), int(dmy_match.group(1)))
             except ValueError:
                 pass
 
@@ -3793,7 +3088,7 @@ class SearchService:
 
         if dropped_unknown or dropped_old or dropped_future:
             logger.info(
-                "[新闻过滤] %s: provider=%s, total=%s, kept=%s, drop_unknown=%s, drop_old=%s, drop_future=%s, window=[%s,%s]",
+                "[Lọc độ mới tin tức] %s: provider=%s, total=%s, kept=%s, drop_unknown=%s, drop_old=%s, drop_future=%s, window=[%s,%s]",
                 log_scope,
                 response.provider,
                 len(response.results),
@@ -3902,6 +3197,14 @@ class SearchService:
             record_count=record_count,
         )
 
+    @staticmethod
+    def _default_topic_query(topic_text: str) -> str:
+        """Truy vấn mặc định cho tin chủ đề/ngành khi không có từ khoá trọng tâm.
+
+        Default topic/sector news query (Vietnam market) when no focus keywords are given.
+        """
+        return f'"{topic_text}" chứng khoán Việt Nam tin mới nhất'
+
     def search_topic_news(
         self,
         topic: str,
@@ -3922,8 +3225,7 @@ class SearchService:
         search_days = self._effective_news_window_days()
         provider_max_results = self._provider_request_size(max_results)
         query_terms = [str(item).strip() for item in (focus_keywords or []) if str(item).strip()]
-        query = " ".join(query_terms) if query_terms else f'"{topic_text}" A股 最新消息 催化'
-        prefer_chinese = self._contains_chinese_text(query)
+        query = " ".join(query_terms) if query_terms else self._default_topic_query(topic_text)
         cache_key = self._cache_key(f"topic_news:{topic_text}:{query}", max_results, search_days)
         cached, cache_owner, cache_event, _waited = self._get_cached_or_wait_for_reservation(cache_key)
         if cached is not None:
@@ -3938,7 +3240,7 @@ class SearchService:
                 if isinstance(provider, TavilySearchProvider):
                     search_kwargs["topic"] = "news"
                 elif isinstance(provider, BraveSearchProvider):
-                    search_kwargs.update(self._brave_search_locale("", prefer_chinese=prefer_chinese))
+                    search_kwargs.update(self._brave_search_locale(""))
 
                 started_at = time.monotonic()
                 try:
@@ -3957,7 +3259,7 @@ class SearchService:
                         error_type=type(exc).__name__,
                         error_message=exc,
                     )
-                    logger.warning("%s 题材搜索失败: %s，尝试下一个引擎", provider.name, exc)
+                    logger.warning("%s tìm tin chủ đề thất bại: %s, thử công cụ tiếp theo", provider.name, exc)
                     continue
 
                 had_provider_success = had_provider_success or bool(response.success)
@@ -3968,11 +3270,7 @@ class SearchService:
                     log_scope=f"{topic_text}:{provider.name}:topic_news",
                 )
                 if filtered.success and filtered.results:
-                    prioritized, _preferred_count = self._prioritize_news_language(
-                        filtered,
-                        prefer_chinese=prefer_chinese,
-                    )
-                    limited = self._limit_search_response(prioritized, max_results=max_results)
+                    limited = self._limit_search_response(filtered, max_results=max_results)
                     self._record_news_search_run(
                         provider=provider.name,
                         operation="search_topic_news",
@@ -4029,7 +3327,7 @@ class SearchService:
         deadline = time.monotonic() + wait_seconds
         search_days = self._effective_news_window_days()
         query_terms = [str(item).strip() for item in (focus_keywords or []) if str(item).strip()]
-        query = " ".join(query_terms) if query_terms else f'"{topic_text}" A股 最新消息 催化'
+        query = " ".join(query_terms) if query_terms else self._default_topic_query(topic_text)
         cache_key = self._cache_key(f"topic_news:{topic_text}:{query}", max_results, search_days)
         cached, cache_owner, cache_event, _waited = self._get_cached_or_wait_for_reservation(
             cache_key,
@@ -4080,81 +3378,37 @@ class SearchService:
         # all capped by NEWS_MAX_AGE_DAYS.
         search_days = self._effective_news_window_days()
         provider_max_results = self._provider_request_size(max_results)
-        prefer_chinese = self._should_prefer_chinese_news(
-            stock_code,
-            stock_name,
-            focus_keywords=focus_keywords,
-        )
 
-        # Build the search query (optimized for search quality)
-        is_foreign = self._is_foreign_stock(stock_code)
-        # Issue #2026: When STOCK_NAME_MAP maps a foreign ticker to a Chinese
-        # display name (e.g. AAPL -> 苹果), the English news search query would
-        # otherwise contain the Chinese name and miss English headlines.
-        # Resolve the canonical English alias (single source of truth:
-        # STOCK_ENGLISH_NAME_MAP in src/data/stock_mapping.py) so the foreign
-        # query path uses a real English company name.
-        english_aliases = self._foreign_english_query_terms(stock_code, stock_name)
-        effective_name = english_aliases[0] if english_aliases else stock_name
-        short_name = english_aliases[-1] if english_aliases else None
-        # Issue #2026: Foreign tickers must bypass prefer_chinese even when the
-        # display name is Chinese (e.g. AAPL -> 苹果), otherwise the foreign
-        # branch below is unreachable and English headlines are missed.
-        prefer_chinese = prefer_chinese and not (is_foreign and english_aliases)
-        is_vn = self._is_vn_symbol(stock_code, stock_name)
+        # Xây truy vấn tiếng Việt cho thị trường Việt Nam (báo chí tài chính CafeF,
+        # Vietstock, VnExpress...). Chỉ số thường có tên trùng mã (VN30/VN30) và một số
+        # lối gọi chỉ truyền tên hiển thị (code rỗng) — tránh lặp từ trong truy vấn.
+        # Build a Vietnamese query for the Vietnam market; avoid repeating the code
+        # when it equals the display name or is empty.
         if focus_keywords:
             # If keywords are provided, use them directly as the query
             query = " ".join(focus_keywords)
-        elif is_vn:
-            # Nhánh Việt Nam đặt trước prefer_chinese và is_foreign: mã VN trần khớp
-            # ``_US_STOCK_RE`` nên nếu không chặn ở đây sẽ sinh truy vấn tiếng Anh,
-            # còn chỉ số VN (code rỗng ở một số lối gọi) rơi xuống nhánh mặc định
-            # tiếng Trung ở cuối hàm.
-            if stock_code and stock_code.strip().upper() != (stock_name or "").strip().upper():
-                query = f"{stock_name} {stock_code} cổ phiếu tin tức mới nhất"
-            else:
-                query = f"{(stock_name or stock_code).strip()} tin tức mới nhất"
-        elif prefer_chinese:
-            # For index targets stock_code may be empty (the Agent tool _resolve_search_subject
-            # intentionally passes only the display name); omit an empty code to avoid a double space like "上证50  股票".
-            query = (
-                f"{stock_name} {stock_code} 股票 最新消息"
-                if stock_code
-                else f"{stock_name} 股票 最新消息"
-            )
-        elif is_foreign:
-            # HK/US stocks use English search keywords; prefer the English company name (issue #2026)
-            if english_aliases and short_name and short_name != effective_name:
-                query = (
-                    f"{effective_name} {short_name} {stock_code} stock latest news"
-                )
-            else:
-                query = f"{effective_name} {stock_code} stock latest news"
+        elif stock_code and stock_code.strip().upper() != (stock_name or "").strip().upper():
+            query = f"{stock_name} {stock_code} cổ phiếu tin tức mới nhất".strip()
         else:
-            # Default main query: stock name + core keywords
-            query = f"{stock_name} {stock_code} 股票 最新消息"
+            query = f"{(stock_name or stock_code or '').strip()} tin tức mới nhất"
 
         subject_label = f"{stock_name}({stock_code})" if stock_code else stock_name
         logger.info(
             (
-                "搜索股票新闻: %s, query='%s', 时间范围: 近%s天 "
-                "(profile=%s, NEWS_MAX_AGE_DAYS=%s, prefer_chinese=%s), 目标条数=%s, provider请求条数=%s"
+                "Tìm tin tức cổ phiếu: %s, query='%s', khoảng thời gian: %s ngày gần nhất "
+                "(profile=%s, NEWS_MAX_AGE_DAYS=%s), số kết quả mục tiêu=%s, số kết quả yêu cầu provider=%s"
             ),
             subject_label,
             query,
             search_days,
             self.news_strategy_profile,
             self.news_max_age_days,
-            prefer_chinese,
             max_results,
             provider_max_results,
         )
 
         cache_key = self._cache_key(
-            (
-                f"{query}|target={stock_code}:{stock_name}|"
-                f"news_pref={'zh' if prefer_chinese else 'default'}"
-            ),
+            f"{query}|target={stock_code}:{stock_name}",
             max_results,
             search_days,
         )
@@ -4162,7 +3416,7 @@ class SearchService:
         if cached is not None:
             logger.info(
                 "%s: %s(%s)",
-                "使用并发填充后的缓存搜索结果" if waited else "使用缓存搜索结果",
+                "Dùng kết quả cache do luồng song song điền" if waited else "Dùng kết quả tìm kiếm trong cache",
                 stock_name,
                 stock_code,
             )
@@ -4190,12 +3444,7 @@ class SearchService:
                 if isinstance(provider, TavilySearchProvider):
                     search_kwargs["topic"] = "news"
                 elif isinstance(provider, BraveSearchProvider):
-                    search_kwargs.update(
-                        self._brave_search_locale(
-                            stock_code,
-                            prefer_chinese=prefer_chinese,
-                        )
-                    )
+                    search_kwargs.update(self._brave_search_locale(stock_code))
 
                 started_at = time.monotonic()
                 try:
@@ -4224,15 +3473,10 @@ class SearchService:
                 had_provider_success = had_provider_success or bool(response.success)
 
                 if filtered_response.success and filtered_response.results:
-                    language_response, _preferred_count = self._prioritize_news_language(
-                        filtered_response,
-                        prefer_chinese=prefer_chinese,
-                    )
                     ranked_response = self._rank_news_response(
-                        language_response,
+                        filtered_response,
                         stock_code=stock_code,
                         stock_name=stock_name,
-                        prefer_chinese=prefer_chinese,
                         max_results=provider_max_results,
                         log_scope=f"{stock_code}:{provider.name}:stock_news",
                     )
@@ -4258,63 +3502,34 @@ class SearchService:
                     )
                     if not admitted_count:
                         logger.info(
-                            "%s 搜索成功但准入过滤后无有效新闻，继续尝试下一引擎",
+                            "%s tìm kiếm thành công nhưng sau bộ lọc chất lượng không còn tin hợp lệ, thử công cụ tiếp theo",
                             provider.name,
                         )
                         continue
 
-                    stats = self._news_relevance_stats(
-                        limited_response,
-                        prefer_chinese=prefer_chinese,
-                    )
+                    stats = self._news_relevance_stats(limited_response)
                     if self._is_better_ranked_news_response(
                         limited_response,
                         candidate_stats=stats,
                         best_response=best_ranked_response,
                         best_stats=best_ranked_stats,
-                        prefer_chinese=prefer_chinese,
                     ):
                         best_ranked_response = limited_response
                         best_ranked_stats = stats
 
-                    if stats["direct_count"] > 0 and (
-                        not prefer_chinese or stats["preferred_direct_count"] > 0
-                    ):
+                    if stats["direct_count"] > 0:
                         logger.info(
-                            "%s 搜索成功，识别到 %s 条直接个股新闻，优先返回",
+                            "%s tìm kiếm thành công, nhận diện %s tin trực tiếp về cổ phiếu, ưu tiên trả về",
                             provider.name,
                             stats["direct_count"],
                         )
                         self._put_cache(cache_key, limited_response)
                         return limited_response
 
-                    if prefer_chinese and stats["direct_count"] > 0:
-                        logger.info(
-                            "%s 搜索成功，识别到 %s 条直接个股新闻但缺少中文直接命中，继续尝试下一引擎",
-                            provider.name,
-                            stats["direct_count"],
-                        )
-                        continue
-
-                    if prefer_chinese and stats["preferred_count"] >= max_results:
-                        logger.info(
-                            "%s 搜索成功，中文结果已满足目标条数但缺少直接个股命中，继续尝试下一引擎",
-                            provider.name,
-                        )
-                        continue
-
-                    if prefer_chinese and stats["preferred_count"] > 0:
-                        logger.info(
-                            "%s 搜索成功，识别到 %s/%s 条中文新闻但缺少直接个股命中，继续尝试下一引擎",
-                            provider.name,
-                            stats["preferred_count"],
-                            len(limited_response.results),
-                        )
-                    else:
-                        logger.info(
-                            "%s 搜索成功但未识别直接个股新闻，继续尝试下一引擎",
-                            provider.name,
-                        )
+                    logger.info(
+                        "%s tìm kiếm thành công nhưng không nhận diện được tin trực tiếp về cổ phiếu, thử công cụ tiếp theo",
+                        provider.name,
+                    )
                 else:
                     filtered_count = len(filtered_response.results or []) if filtered_response.success else 0
                     self._record_news_search_run(
@@ -4330,12 +3545,12 @@ class SearchService:
                     )
                     if response.success and not filtered_response.results:
                         logger.info(
-                            "%s 搜索成功但过滤后无有效新闻，继续尝试下一引擎",
+                            "%s tìm kiếm thành công nhưng sau khi lọc không còn tin hợp lệ, thử công cụ tiếp theo",
                             provider.name,
                         )
                     else:
                         logger.warning(
-                            "%s 搜索失败: %s，尝试下一个引擎",
+                            "%s tìm kiếm thất bại: %s, thử công cụ tiếp theo",
                             provider.name,
                             response.error_message,
                         )
@@ -4385,20 +3600,13 @@ class SearchService:
             SearchResponse object
         """
         if event_types is None:
-            if self._is_foreign_stock(stock_code):
-                event_types = ["earnings report", "insider selling", "quarterly results"]
-            else:
-                event_types = ["年报预告", "减持公告", "业绩快报"]
-
-        # Issue #2026: foreign-ticker Chinese display name needs canonical
-        # English alias for English event query (single source of truth in
-        # src/data/stock_mapping.py).
-        english_aliases = self._foreign_english_query_terms(stock_code, stock_name)
-        effective_name = english_aliases[0] if english_aliases else stock_name
+            # Sự kiện ảnh hưởng quyết định giao dịch cổ phiếu Việt Nam.
+            # Default event types relevant to Vietnam stock trading decisions.
+            event_types = ["kết quả kinh doanh", "giao dịch cổ đông nội bộ", "báo cáo tài chính quý"]
 
         # Build targeted queries
         event_query = " OR ".join(event_types)
-        query = f"{effective_name} ({event_query})"
+        query = f"{stock_name} ({event_query})"
         cache_key = self._cache_key(
             f"stock_events:{query}|target={stock_code}:{stock_name}",
             5,
@@ -4406,10 +3614,10 @@ class SearchService:
         )
         cached = self._get_cached(cache_key)
         if cached is not None:
-            logger.info("使用缓存事件搜索结果: %s(%s)", stock_name, stock_code)
+            logger.info("Dùng kết quả tìm sự kiện trong cache: %s(%s)", stock_name, stock_code)
             return cached
         
-        logger.info(f"搜索股票事件: {stock_name}({stock_code}) - {event_types}")
+        logger.info("Tìm sự kiện cổ phiếu: %s(%s) - %s", stock_name, stock_code, event_types)
         
         # Try each search engine in turn
         for provider in self._providers:
@@ -4455,194 +3663,78 @@ class SearchService:
         results = {}
         search_count = 0
 
-        is_foreign = self._is_foreign_stock(stock_code)
         is_index_etf = self.is_index_or_etf(stock_code, stock_name)
-        is_vn = self._is_vn_symbol(stock_code, stock_name)
 
-        if is_vn:
-            # Nhánh Việt Nam phải đứng TRƯỚC nhánh is_foreign: mã Việt Nam trần
-            # (HPG/FPT) khớp ``_US_STOCK_RE`` nên nếu để rơi xuống dưới sẽ bị coi
-            # là cổ phiếu Mỹ và sinh truy vấn tiếng Anh, bỏ lỡ toàn bộ báo chí
-            # tài chính tiếng Việt (CafeF, Vietstock, VnExpress).
-            # Chỉ số thường có tên trùng mã (VN30/VN30) — tránh lặp từ trong truy vấn.
-            if stock_code and stock_code.strip().upper() != (stock_name or "").strip().upper():
-                subject = f"{stock_name} {stock_code}".strip()
-            else:
-                subject = (stock_name or stock_code or "").strip()
-            search_dimensions = [
-                {
-                    'name': 'latest_news',
-                    'query': f"{subject} tin tức mới nhất",
-                    'desc': 'Tin mới nhất',
-                    'tavily_topic': 'news',
-                    'strict_freshness': True,
-                },
-                {
-                    'name': 'market_analysis',
-                    'query': (
-                        f"{subject} nhận định thị trường xu hướng"
-                        if is_index_etf
-                        else f"{stock_name} khuyến nghị giá mục tiêu báo cáo phân tích"
-                    ),
-                    'desc': 'Phân tích tổ chức',
-                    'tavily_topic': None,
-                    'strict_freshness': False,
-                },
-                {
-                    'name': 'risk_check',
-                    'query': (
-                        f"{subject} biến động rủi ro thị trường"
-                        if is_index_etf
-                        else f"{stock_name} rủi ro vi phạm xử phạt kiện tụng bán ra"
-                    ),
-                    'desc': 'Rà soát rủi ro',
-                    'tavily_topic': None if is_index_etf else 'news',
-                    'strict_freshness': not is_index_etf,
-                },
-                {
-                    'name': 'earnings',
-                    'query': (
-                        f"{subject} thanh khoản vốn hóa diễn biến"
-                        if is_index_etf
-                        else f"{stock_name} kết quả kinh doanh doanh thu lợi nhuận"
-                    ),
-                    'desc': 'Kỳ vọng kết quả kinh doanh',
-                    'tavily_topic': None,
-                    'strict_freshness': False,
-                },
-                {
-                    'name': 'industry',
-                    'query': (
-                        f"{subject} nhóm ngành dẫn dắt"
-                        if is_index_etf
-                        else f"{stock_name} ngành đối thủ thị phần triển vọng"
-                    ),
-                    'desc': 'Phân tích ngành',
-                    'tavily_topic': None,
-                    'strict_freshness': False,
-                },
-            ]
-        elif is_foreign:
-            # Issue #2026: Foreign-ticker English alias resolution from the
-            # single source of truth (STOCK_ENGLISH_NAME_MAP in
-            # src/data/stock_mapping.py). When STOCK_NAME_MAP maps the ticker
-            # to a Chinese display name, the English news query path must use
-            # the canonical English company name; otherwise English news
-            # providers receive the Chinese name and miss English headlines.
-            english_aliases = self._foreign_english_query_terms(stock_code, stock_name)
-            effective_name = english_aliases[0] if english_aliases else stock_name
-            search_dimensions = [
-                {
-                    'name': 'latest_news',
-                    'query': f"{effective_name} {stock_code} latest news events",
-                    'desc': '最新消息',
-                    'tavily_topic': 'news',
-                    'strict_freshness': True,
-                },
-                {
-                    'name': 'market_analysis',
-                    'query': f"{effective_name} analyst rating target price report",
-                    'desc': '机构分析',
-                    'tavily_topic': None,
-                    'strict_freshness': False,
-                },
-                {
-                    'name': 'risk_check',
-                    'query': (
-                        f"{effective_name} {stock_code} index performance outlook tracking error"
-                        if is_index_etf else f"{effective_name} risk insider selling lawsuit litigation"
-                    ),
-                    'desc': '风险排查',
-                    'tavily_topic': None if is_index_etf else 'news',
-                    'strict_freshness': not is_index_etf,
-                },
-                {
-                    'name': 'earnings',
-                    'query': (
-                        f"{effective_name} {stock_code} index performance composition outlook"
-                        if is_index_etf else f"{effective_name} earnings revenue profit growth forecast"
-                    ),
-                    'desc': '业绩预期',
-                    'tavily_topic': None,
-                    'strict_freshness': False,
-                },
-                {
-                    'name': 'industry',
-                    'query': (
-                        f"{effective_name} {stock_code} index sector allocation holdings"
-                        if is_index_etf else f"{effective_name} industry competitors market share outlook"
-                    ),
-                    'desc': '行业分析',
-                    'tavily_topic': None,
-                    'strict_freshness': False,
-                },
-            ]
+        # Truy vấn tiếng Việt để không bỏ lỡ báo chí tài chính Việt Nam
+        # (CafeF, Vietstock, VnExpress). Chỉ số thường có tên trùng mã (VN30/VN30) —
+        # tránh lặp từ trong truy vấn.
+        # Vietnamese queries; avoid repeating the code when it equals the name.
+        if stock_code and stock_code.strip().upper() != (stock_name or "").strip().upper():
+            subject = f"{stock_name} {stock_code}".strip()
         else:
-            search_dimensions = [
-                {
-                    'name': 'latest_news',
-                    'query': f"{stock_name} {stock_code} 最新 新闻 重大 事件",
-                    'desc': '最新消息',
-                    'tavily_topic': 'news',
-                    'strict_freshness': True,
-                },
-                {
-                    'name': 'market_analysis',
-                    'query': f"{stock_name} 研报 目标价 评级 深度分析",
-                    'desc': '机构分析',
-                    'tavily_topic': None,
-                    'strict_freshness': False,
-                },
-                {
-                    'name': 'risk_check',
-                    'query': (
-                        f"{stock_name} 指数走势 跟踪误差 净值 表现"
-                        if is_index_etf else f"{stock_name} 减持 处罚 违规 诉讼 利空 风险"
-                    ),
-                    'desc': '风险排查',
-                    'tavily_topic': None if is_index_etf else 'news',
-                    'strict_freshness': not is_index_etf,
-                },
-                {
-                    'name': 'announcements',
-                    'query': (
-                        f"{stock_name} {stock_code} 公告 指数调整 成分变化"
-                        if is_index_etf else f"{stock_name} {stock_code} 公司公告 重要公告 上交所 深交所 cninfo"
-                    ),
-                    'desc': '公司公告',
-                    'tavily_topic': 'news',
-                    'strict_freshness': True,
-                },
-                {
-                    'name': 'earnings',
-                    'query': (
-                        f"{stock_name} 指数成分 净值 跟踪表现"
-                        if is_index_etf else f"{stock_name} 业绩预告 财报 营收 净利润 同比增长"
-                    ),
-                    'desc': '业绩预期',
-                    'tavily_topic': None,
-                    'strict_freshness': False,
-                },
-                {
-                    'name': 'industry',
-                    'query': (
-                        f"{stock_name} 指数成分股 行业配置 权重"
-                        if is_index_etf else f"{stock_name} 所在行业 竞争对手 市场份额 行业前景"
-                    ),
-                    'desc': '行业分析',
-                    'tavily_topic': None,
-                    'strict_freshness': False,
-                },
-            ]
-        
+            subject = (stock_name or stock_code or "").strip()
+        search_dimensions = [
+            {
+                'name': 'latest_news',
+                'query': f"{subject} tin tức mới nhất",
+                'desc': 'Tin mới nhất',
+                'tavily_topic': 'news',
+                'strict_freshness': True,
+            },
+            {
+                'name': 'market_analysis',
+                'query': (
+                    f"{subject} nhận định thị trường xu hướng"
+                    if is_index_etf
+                    else f"{stock_name} khuyến nghị giá mục tiêu báo cáo phân tích"
+                ),
+                'desc': 'Phân tích tổ chức',
+                'tavily_topic': None,
+                'strict_freshness': False,
+            },
+            {
+                'name': 'risk_check',
+                'query': (
+                    f"{subject} biến động rủi ro thị trường"
+                    if is_index_etf
+                    else f"{stock_name} rủi ro vi phạm xử phạt kiện tụng bán ra"
+                ),
+                'desc': 'Rà soát rủi ro',
+                'tavily_topic': None if is_index_etf else 'news',
+                'strict_freshness': not is_index_etf,
+            },
+            {
+                'name': 'earnings',
+                'query': (
+                    f"{subject} thanh khoản vốn hóa diễn biến"
+                    if is_index_etf
+                    else f"{stock_name} kết quả kinh doanh doanh thu lợi nhuận"
+                ),
+                'desc': 'Kỳ vọng kết quả kinh doanh',
+                'tavily_topic': None,
+                'strict_freshness': False,
+            },
+            {
+                'name': 'industry',
+                'query': (
+                    f"{subject} nhóm ngành dẫn dắt"
+                    if is_index_etf
+                    else f"{stock_name} ngành đối thủ thị phần triển vọng"
+                ),
+                'desc': 'Phân tích ngành',
+                'tavily_topic': None,
+                'strict_freshness': False,
+            },
+        ]
+
         search_days = self._effective_news_window_days()
         target_per_dimension = 3
         provider_max_results = self._provider_request_size(target_per_dimension)
 
         logger.info(
             (
-                "开始多维度情报搜索: %s(%s), 时间范围: 近%s天 "
-                "(profile=%s, NEWS_MAX_AGE_DAYS=%s), 目标条数=%s, provider请求条数=%s"
+                "Bắt đầu tìm kiếm thông tin đa chiều: %s(%s), khoảng thời gian: %s ngày gần nhất "
+                "(profile=%s, NEWS_MAX_AGE_DAYS=%s), số kết quả mục tiêu=%s, số kết quả yêu cầu provider=%s"
             ),
             stock_name,
             stock_code,
@@ -4675,7 +3767,7 @@ class SearchService:
             )
 
             logger.info(
-                "[情报搜索] %s: 使用 %s，请求窗口: 近%s天",
+                "[Tìm kiếm thông tin] %s: dùng %s, cửa sổ yêu cầu: %s ngày gần nhất",
                 dim['desc'],
                 provider.name,
                 request_days,
@@ -4718,7 +3810,6 @@ class SearchService:
                 filtered_response,
                 stock_code=stock_code,
                 stock_name=stock_name,
-                prefer_chinese=self._should_prefer_chinese_news(stock_code, stock_name),
                 max_results=provider_max_results,
                 log_scope=f"{stock_code}:{provider.name}:{dim['name']}:rank",
             )
@@ -4735,13 +3826,13 @@ class SearchService:
             
             if response.success:
                 logger.info(
-                    "[情报搜索] %s: 原始=%s条, 过滤后=%s条",
+                    "[Tìm kiếm thông tin] %s: ban đầu=%s, sau lọc=%s",
                     dim['desc'],
                     len(response.results),
                     len(filtered_response.results),
                 )
             else:
-                logger.warning(f"[情报搜索] {dim['desc']}: 搜索失败 - {response.error_message}")
+                logger.warning("[Tìm kiếm thông tin] %s: tìm kiếm thất bại - %s", dim['desc'], response.error_message)
             
             # Brief delay to avoid requesting too fast
             time.sleep(0.5)
@@ -4750,14 +3841,21 @@ class SearchService:
     
     @staticmethod
     def _resolve_report_language() -> str:
-        """Ngôn ngữ báo cáo đang hiệu lực; lỗi thì lùi về ``zh`` như hành vi cũ."""
+        """Ngôn ngữ báo cáo đang hiệu lực, chuẩn hoá về ``vi`` hoặc ``en``.
+
+        Hệ thống chỉ còn hai ngôn ngữ báo cáo: mọi giá trị khác ``en`` (kể cả
+        ``zh`` cũ còn sót trong cấu hình) đều coi là ``vi``; lỗi đọc cấu hình cũng lùi về ``vi``.
+        Effective report language normalized to ``vi``/``en``; anything other
+        than ``en`` (including legacy ``zh``) is treated as ``vi``.
+        """
 
         try:
             from src.config import get_config
 
-            return (get_config().report_language or "zh").strip().lower()
+            language = (get_config().report_language or "vi").strip().lower()
         except Exception:  # pragma: no cover - cấu hình chưa sẵn sàng
-            return "zh"
+            return "vi"
+        return "en" if language == "en" else "vi"
 
     def format_intel_report(self, intel_results: Dict[str, SearchResponse], stock_name: str) -> str:
         """
@@ -4771,18 +3869,17 @@ class SearchService:
             Formatted intelligence report text
         """
         # Khối văn bản này được nạp thẳng vào prompt của LLM (src/core/pipeline.py),
-        # nên nhãn phải theo ngôn ngữ báo cáo; để nguyên tiếng Trung sẽ lẫn chữ Hán
-        # vào đầu vào của báo cáo tiếng Việt.
+        # nên nhãn phải theo ngôn ngữ báo cáo (vi/en).
         #
         # LƯU Ý: hàm này luôn trả về chuỗi KHÔNG rỗng kể cả khi không có kết quả.
         # Không được dùng giá trị trả về để suy ra "có bằng chứng tin tức hay không"
         # — xem src/services/empty_news.py, ngữ nghĩa ba trạng thái None/0/>0.
         language = self._resolve_report_language()
-        is_vi = language == "vi"
+        is_vi = language != "en"
 
         lines = [
             f"【Kết quả tìm kiếm tin tức: {stock_name}】" if is_vi
-            else f"【{stock_name} 情报搜索结果】"
+            else f"【News search results: {stock_name}】"
         ]
 
         # Dimension display order
@@ -4799,12 +3896,12 @@ class SearchService:
             }
         else:
             dim_labels = {
-                'latest_news': '📰 最新消息',
-                'announcements': '📋 公司公告',
-                'market_analysis': '📈 机构分析',
-                'risk_check': '⚠️ 风险排查',
-                'earnings': '📊 业绩预期',
-                'industry': '🏭 行业分析',
+                'latest_news': '📰 Latest news',
+                'announcements': '📋 Company announcements',
+                'market_analysis': '📈 Institutional analysis',
+                'risk_check': '⚠️ Risk check',
+                'earnings': '📊 Earnings outlook',
+                'industry': '🏭 Industry analysis',
             }
 
         for dim_name in display_order:
@@ -4816,7 +3913,7 @@ class SearchService:
             # Get the dimension description
             dim_desc = dim_labels.get(dim_name, dim_name)
             
-            source_label = "nguồn" if is_vi else "来源"
+            source_label = "nguồn" if is_vi else "source"
             lines.append(f"\n{dim_desc} ({source_label}: {resp.provider}):")
             if resp.success and resp.results:
                 # Show more items
@@ -4833,16 +3930,15 @@ class SearchService:
                         if r.relevance_score is not None:
                             relevance_parts.append(f"score={r.relevance_score}")
                         if r.relevance_reasons:
-                            reason_label = "căn cứ" if is_vi else "依据"
-                            joiner = "; " if is_vi else "；"
+                            reason_label = "căn cứ" if is_vi else "basis"
                             relevance_parts.append(
-                                f"{reason_label}: {joiner.join(r.relevance_reasons[:3])}"
+                                f"{reason_label}: {'; '.join(r.relevance_reasons[:3])}"
                             )
-                        rel_label = "Mức liên quan" if is_vi else "关联度"
+                        rel_label = "Mức liên quan" if is_vi else "Relevance"
                         lines.append(f"     {rel_label}: {'; '.join(relevance_parts)}")
             else:
                 lines.append(
-                    "  Không tìm thấy thông tin liên quan" if is_vi else "  未找到相关信息"
+                    "  Không tìm thấy thông tin liên quan" if is_vi else "  No relevant information found"
                 )
         
         return "\n".join(lines)
@@ -4888,7 +3984,7 @@ class SearchService:
         """
         Enhance search when data sources fail.
         
-        When all data sources (efinance, akshare, tushare, baostock, etc.) fail to get
+        When all data sources fail to get
         stock data, use search engines to find stock trends and price info as supplemental data for AI analysis.
         
         Strategy:
@@ -4908,26 +4004,25 @@ class SearchService:
 
         if not self.is_available:
             return SearchResponse(
-                query=f"{stock_name} 股价走势",
+                query=f"{stock_name} diễn biến giá cổ phiếu",
                 results=[],
                 provider="None",
                 success=False,
                 error_message="Search is not configured"
             )
         
-        logger.info(f"[增强搜索] 数据源失败，启动增强搜索: {stock_name}({stock_code})")
+        logger.info("[Tìm kiếm tăng cường] Nguồn dữ liệu lỗi, bật tìm kiếm tăng cường: %s(%s)", stock_name, stock_code)
         
         all_results = []
         seen_urls = set()
         successful_providers = []
         
         # Search with multiple keyword templates
-        is_foreign = self._is_foreign_stock(stock_code)
-        keywords = self.ENHANCED_SEARCH_KEYWORDS_EN if is_foreign else self.ENHANCED_SEARCH_KEYWORDS
+        keywords = self.ENHANCED_SEARCH_KEYWORDS
         for i, keyword_template in enumerate(keywords[:max_attempts]):
             query = keyword_template.format(name=stock_name, code=stock_code)
             
-            logger.info(f"[增强搜索] 第 {i+1}/{max_attempts} 次搜索: {query}")
+            logger.info("[Tìm kiếm tăng cường] Lần %s/%s: %s", i + 1, max_attempts, query)
             
             # Try each search engine in turn
             for provider in self._providers:
@@ -4947,13 +4042,13 @@ class SearchService:
                         if provider.name not in successful_providers:
                             successful_providers.append(provider.name)
                         
-                        logger.info(f"[增强搜索] {provider.name} 返回 {len(response.results)} 条结果")
+                        logger.info("[Tìm kiếm tăng cường] %s trả về %s kết quả", provider.name, len(response.results))
                         break  # Move to the next keyword after success
                     else:
-                        logger.debug(f"[增强搜索] {provider.name} 无结果或失败")
+                        logger.debug("[Tìm kiếm tăng cường] %s không có kết quả hoặc thất bại", provider.name)
                         
                 except Exception as e:
-                    logger.warning(f"[增强搜索] {provider.name} 搜索异常: {e}")
+                    logger.warning("[Tìm kiếm tăng cường] %s lỗi khi tìm kiếm: %s", provider.name, e)
                     continue
             
             # Brief delay to avoid requesting too fast
@@ -4966,18 +4061,18 @@ class SearchService:
             final_results = all_results[:max_results]
             provider_str = ", ".join(successful_providers) if successful_providers else "None"
             
-            logger.info(f"[增强搜索] 完成，共获取 {len(final_results)} 条结果（来源: {provider_str}）")
+            logger.info("[Tìm kiếm tăng cường] Hoàn tất, lấy được %s kết quả (nguồn: %s)", len(final_results), provider_str)
             
             return SearchResponse(
-                query=f"{stock_name}({stock_code}) 股价走势",
+                query=f"{stock_name}({stock_code}) diễn biến giá cổ phiếu",
                 results=final_results,
                 provider=provider_str,
                 success=True,
             )
         else:
-            logger.warning(f"[增强搜索] 所有搜索均未返回结果")
+            logger.warning("[Tìm kiếm tăng cường] Không lượt tìm kiếm nào trả về kết quả")
             return SearchResponse(
-                query=f"{stock_name}({stock_code}) 股价走势",
+                query=f"{stock_name}({stock_code}) diễn biến giá cổ phiếu",
                 results=[],
                 provider="None",
                 success=False,
@@ -5037,15 +4132,25 @@ class SearchService:
         Returns:
             Formatted text, ready for AI analysis
         """
+        is_vi = self._resolve_report_language() != "en"
         if not response.success or not response.results:
-            return "【股价走势搜索】未找到相关信息，请以其他渠道数据为准。"
-        
-        lines = [
-            f"【股价走势搜索结果】（来源: {response.provider}）",
-            "⚠️ 注意：以下信息来自网络搜索，仅供参考，可能存在延迟或不准确。",
-            ""
-        ]
-        
+            if is_vi:
+                return "【Tìm kiếm diễn biến giá】Không tìm thấy thông tin liên quan, vui lòng dựa vào dữ liệu từ kênh khác."
+            return "【Price trend search】No relevant information found; rely on data from other channels."
+
+        if is_vi:
+            lines = [
+                f"【Kết quả tìm kiếm diễn biến giá】(nguồn: {response.provider})",
+                "⚠️ Lưu ý: thông tin dưới đây lấy từ tìm kiếm trên mạng, chỉ mang tính tham khảo, có thể chậm hoặc không chính xác.",
+                ""
+            ]
+        else:
+            lines = [
+                f"【Price trend search results】(source: {response.provider})",
+                "⚠️ Note: the information below comes from web search, is for reference only and may be delayed or inaccurate.",
+                ""
+            ]
+
         for i, result in enumerate(response.results, 1):
             date_str = f" [{result.published_date}]" if result.published_date else ""
             lines.append(f"{i}. 【{result.source}】{result.title}{date_str}")
@@ -5071,12 +4176,10 @@ def get_search_service() -> SearchService:
                 config = get_config()
                 
                 _search_service = SearchService(
-                    bocha_keys=config.bocha_api_keys,
                     tavily_keys=config.tavily_api_keys,
                     anspire_keys=config.anspire_api_keys,
                     brave_keys=config.brave_api_keys,
                     serpapi_keys=config.serpapi_keys,
-                    minimax_keys=config.minimax_api_keys,
                     searxng_base_urls=config.searxng_base_urls,
                     searxng_public_instances_enabled=config.searxng_public_instances_enabled,
                     searxng_timeout_seconds=getattr(config, "searxng_timeout_seconds", None),
@@ -5105,12 +4208,12 @@ if __name__ == "__main__":
     service = get_search_service()
     
     if service.is_available:
-        print("=== 测试股票新闻搜索 ===")
-        response = service.search_stock_news("300389", "艾比森")
-        print(f"搜索状态: {'成功' if response.success else '失败'}")
-        print(f"搜索引擎: {response.provider}")
-        print(f"结果数量: {len(response.results)}")
-        print(f"耗时: {response.search_time:.2f}s")
+        print("=== Thử tìm tin tức cổ phiếu ===")
+        response = service.search_stock_news("HPG", "Hòa Phát")
+        print(f"Trạng thái: {'thành công' if response.success else 'thất bại'}")
+        print(f"Công cụ tìm kiếm: {response.provider}")
+        print(f"Số kết quả: {len(response.results)}")
+        print(f"Thời gian: {response.search_time:.2f}s")
         print("\n" + response.to_context())
     else:
-        print("未配置搜索能力，跳过测试")
+        print("Chưa cấu hình công cụ tìm kiếm, bỏ qua thử nghiệm")

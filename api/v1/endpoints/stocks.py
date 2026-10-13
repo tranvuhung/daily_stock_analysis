@@ -106,7 +106,11 @@ def _validate_and_normalize_stock_code(code: str) -> str:
             status_code=400,
             detail={"error": "invalid_stock_code", "message": "Stock code must not be empty"},
         )
-    if not _STOCK_CODE_RE.match(stripped):
+    # Mã Việt Nam (HPG, HPG.VN, vnHPG, VNINDEX, HNXIndex...) luôn hợp lệ dù regex cũ không bao phủ.
+    # Vietnam codes are always accepted even where the legacy regex does not cover them.
+    from src.services.stock_code_utils import is_code_like
+
+    if not (_STOCK_CODE_RE.match(stripped) or is_code_like(stripped)):
         raise HTTPException(
             status_code=400,
             detail={
@@ -464,7 +468,7 @@ def get_stock_quote(stock_code: str) -> StockQuote:
     Get the latest quote data for the given stock
     
     Args:
-        stock_code: stock code (e.g. 600519, 00700, AAPL)
+        stock_code: stock code (e.g. HPG, FPT, VCB)
         
     Returns:
         StockQuote: real-time quote data

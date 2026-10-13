@@ -61,22 +61,12 @@ class VolumeAnalysis(BaseModel):
     volume_meaning: Optional[str] = None
 
 
-class ChipStructure(BaseModel):
-    """Chip structure."""
-
-    profit_ratio: Optional[Union[int, float, str]] = None
-    avg_cost: Optional[Union[int, float, str]] = None
-    concentration: Optional[Union[int, float, str]] = None
-    chip_health: Optional[str] = None
-
-
 class DataPerspective(BaseModel):
     """Data perspective block."""
 
     trend_status: Optional[TrendStatus] = None
     price_position: Optional[PricePosition] = None
     volume_analysis: Optional[VolumeAnalysis] = None
-    chip_structure: Optional[ChipStructure] = None
 
 
 class Intelligence(BaseModel):

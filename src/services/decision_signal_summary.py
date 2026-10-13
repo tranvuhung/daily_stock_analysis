@@ -41,18 +41,15 @@ def summarize_decision_signal(item: Any) -> Optional[Dict[str, Any]]:
     return summary or None
 
 
-def format_decision_signal_excerpt(summary: Any, report_language: str = "zh") -> str:
+def format_decision_signal_excerpt(summary: Any, report_language: str = "vi") -> str:
     """Format a compact public DecisionSignal excerpt for notification text."""
 
     if not isinstance(summary, dict) or not summary:
         return ""
+    # Chỉ còn nhãn vi/en; ngôn ngữ khác (kể cả zh/ko cũ) quy về tiếng Việt.
+    # Only vi/en labels exist; any other language (incl. legacy zh/ko) falls back to Vietnamese.
     raw_language = str(report_language or "").lower()
-    if raw_language.startswith("vi"):
-        language = "vi"
-    elif raw_language.startswith("en"):
-        language = "en"
-    else:
-        language = "zh"
+    language = "en" if raw_language.startswith("en") else "vi"
     labels = {
         "vi": {
             "heading": "Tín hiệu quyết định AI",
@@ -62,15 +59,6 @@ def format_decision_signal_excerpt(summary: Any, report_language: str = "zh") ->
             "watch_conditions": "Điều kiện theo dõi",
             "risk_summary": "Rủi ro",
             "source_report_id": "Báo cáo",
-        },
-        "zh": {
-            "heading": "AI 决策信号",
-            "action": "动作",
-            "horizon": "周期",
-            "reason": "理由",
-            "watch_conditions": "观察条件",
-            "risk_summary": "风险",
-            "source_report_id": "报告",
         },
         "en": {
             "heading": "AI decision signal",
@@ -115,9 +103,9 @@ def _public_text(value: Any, *, max_length: Optional[int]) -> str:
     if value in (None, "", [], {}):
         return ""
     if isinstance(value, (list, tuple)):
-        text = "；".join(str(item).strip() for item in value if str(item or "").strip())
+        text = "; ".join(str(item).strip() for item in value if str(item or "").strip())
     elif isinstance(value, dict):
-        text = "；".join(
+        text = "; ".join(
             f"{key}: {item}"
             for key, item in value.items()
             if str(key or "").strip() and str(item or "").strip()

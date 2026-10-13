@@ -23,58 +23,58 @@ from src.analyzer import (
 
 class AnalyzerNewsPromptTestCase(unittest.TestCase):
     def test_contains_trend_hint_treats_non_adjacent_negation_as_negated(self) -> None:
-        self.assertFalse(_contains_trend_hint("尚未形成上升趋势，继续观察。", _BULLISH_TREND_HINTS))
-        self.assertFalse(_contains_trend_hint("未形成上升趋势，继续观察。", _BULLISH_TREND_HINTS))
-        self.assertFalse(_contains_trend_hint("并未形成上升趋势，继续观察。", _BULLISH_TREND_HINTS))
-        self.assertFalse(_contains_trend_hint("没有形成多头排列，继续观察。", _BULLISH_TREND_HINTS))
-        self.assertFalse(_contains_trend_hint("当前无多头排列，仍需观察。", _BULLISH_TREND_HINTS))
-        self.assertFalse(_contains_trend_hint("尚不属于上升趋势，反弹仍待确认。", _BULLISH_TREND_HINTS))
-        self.assertFalse(_contains_trend_hint("当前非多头排列，仍需观察。", _BULLISH_TREND_HINTS))
+        self.assertFalse(_contains_trend_hint("Chưa hình thành xu hướng tăng, tiếp tục quan sát.", _BULLISH_TREND_HINTS))
+        self.assertFalse(_contains_trend_hint("Vẫn chưa hình thành xu hướng tăng, tiếp tục quan sát.", _BULLISH_TREND_HINTS))
+        self.assertFalse(_contains_trend_hint("Hoàn toàn không hình thành xu hướng tăng, tiếp tục quan sát.", _BULLISH_TREND_HINTS))
+        self.assertFalse(_contains_trend_hint("Không có MA xếp tăng, tiếp tục quan sát.", _BULLISH_TREND_HINTS))
+        self.assertFalse(_contains_trend_hint("Hiện không có MA xếp tăng, vẫn cần quan sát.", _BULLISH_TREND_HINTS))
+        self.assertFalse(_contains_trend_hint("Chưa thuộc xu hướng tăng, nhịp hồi vẫn chờ xác nhận.", _BULLISH_TREND_HINTS))
+        self.assertFalse(_contains_trend_hint("Hiện không phải MA xếp tăng, vẫn cần quan sát.", _BULLISH_TREND_HINTS))
         self.assertFalse(_contains_trend_hint("This is not a bullish trend yet.", _BULLISH_TREND_HINTS))
 
     def test_contains_trend_hint_scans_later_non_negated_occurrences(self) -> None:
         self.assertTrue(
             _contains_trend_hint(
-                "不是多头排列，后续放量后再次出现多头排列信号。",
+                "Không phải MA xếp tăng, sau khi khối lượng tăng lại xuất hiện tín hiệu MA xếp tăng.",
                 _BULLISH_TREND_HINTS,
             )
         )
 
     def test_contains_trend_hint_keeps_contrast_clause_target_hint(self) -> None:
-        self.assertTrue(_contains_trend_hint("不是空头而是多头排列，趋势修复。", _BULLISH_TREND_HINTS))
-        self.assertFalse(_contains_trend_hint("未转为上升趋势，反弹仍待确认。", _BULLISH_TREND_HINTS))
+        self.assertTrue(_contains_trend_hint("Không phải giảm mà là MA xếp tăng, xu hướng phục hồi.", _BULLISH_TREND_HINTS))
+        self.assertFalse(_contains_trend_hint("Chưa chuyển sang xu hướng tăng, nhịp hồi vẫn chờ xác nhận.", _BULLISH_TREND_HINTS))
 
-    def test_contains_trend_hint_ignores_single_character_prefixes_in_common_words(self) -> None:
-        self.assertTrue(_contains_trend_hint("非常明显的多头排列，趋势仍在延续。", _BULLISH_TREND_HINTS))
-        self.assertTrue(_contains_trend_hint("未来上升趋势若放量将进一步确认。", _BULLISH_TREND_HINTS))
+    def test_contains_trend_hint_ignores_negation_words_used_in_non_negating_phrases(self) -> None:
+        self.assertTrue(_contains_trend_hint("Không chỉ MA xếp tăng mà xu hướng còn tiếp diễn.", _BULLISH_TREND_HINTS))
+        self.assertTrue(_contains_trend_hint("Chưa kể xu hướng tăng sẽ được xác nhận thêm nếu khối lượng tăng.", _BULLISH_TREND_HINTS))
         self.assertEqual(
-            _infer_trend_direction({"trend_status": "非常明显的多头排列", "ma_alignment": "未来上升趋势逐步明确"}),
+            _infer_trend_direction({"trend_status": "Không chỉ MA xếp tăng", "ma_alignment": "Chưa kể xu hướng tăng dần rõ ràng"}),
             "bullish",
         )
 
     def test_infer_trend_direction_recognizes_weak_bullish_and_bearish_states(self) -> None:
         self.assertEqual(
-            _infer_trend_direction({"trend_status": "弱势多头", "ma_alignment": "弱势多头，MA5>MA10 但 MA10≤MA20"}),
+            _infer_trend_direction({"trend_status": "Tăng yếu", "ma_alignment": "Tăng yếu, MA5>MA10 nhưng MA10≤MA20"}),
             "bullish",
         )
         self.assertEqual(
-            _infer_trend_direction({"trend_status": "弱势空头", "ma_alignment": "弱势空头，MA5<MA10 但 MA10≥MA20"}),
+            _infer_trend_direction({"trend_status": "Giảm yếu", "ma_alignment": "Giảm yếu, MA5<MA10 nhưng MA10≥MA20"}),
             "bearish",
         )
 
     def test_infer_trend_direction_ignores_negated_bullish_hints(self) -> None:
         self.assertEqual(
-            _infer_trend_direction({"trend_status": "未形成上升趋势", "ma_alignment": "当前非多头排列"}),
+            _infer_trend_direction({"trend_status": "Chưa hình thành xu hướng tăng", "ma_alignment": "Hiện không phải MA xếp tăng"}),
             "neutral",
         )
         self.assertEqual(
-            _infer_trend_direction({"trend_status": "没有形成多头排列", "ma_alignment": "当前无上升趋势"}),
+            _infer_trend_direction({"trend_status": "Không có MA xếp tăng", "ma_alignment": "Hiện không có xu hướng tăng"}),
             "neutral",
         )
 
     def test_infer_trend_direction_keeps_contrast_clause_final_direction(self) -> None:
         self.assertEqual(
-            _infer_trend_direction({"trend_status": "不是空头而是多头排列", "ma_alignment": ""}),
+            _infer_trend_direction({"trend_status": "Không phải giảm mà là MA xếp tăng", "ma_alignment": ""}),
             "bullish",
         )
 
@@ -87,7 +87,7 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             default_skill_policy="",
         )
         with patch("src.agent.factory.resolve_skill_prompt_state", return_value=fake_state):
-            prompt = analyzer._get_analysis_system_prompt("zh", stock_code="600519")
+            prompt = analyzer._get_analysis_system_prompt("zh", stock_code="HPG")
 
         self.assertIn("### 技能 1: 波段低吸", prompt)
         self.assertNotIn("trend-trading", prompt)
@@ -99,7 +99,7 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
                 default_skill_policy="",
             )
 
-        prompt = analyzer._get_analysis_system_prompt("zh", stock_code="600519")
+        prompt = analyzer._get_analysis_system_prompt("zh", stock_code="HPG")
 
         self.assertIn("### 技能 1: 缠论", prompt)
         self.assertNotIn("trend-trading", prompt)
@@ -113,7 +113,7 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
                 use_legacy_default_prompt=True,
             )
 
-        prompt = analyzer._get_analysis_system_prompt("zh", stock_code="600519")
+        prompt = analyzer._get_analysis_system_prompt("zh", stock_code="HPG")
 
         self.assertIn("trend-trading", prompt)
         # LEGACY_DEFAULT_SYSTEM_PROMPT KHÔNG có chỗ cắm `{default_skill_policy_section}`
@@ -135,7 +135,7 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
                     use_legacy_default_prompt=legacy,
                 )
 
-            prompt = analyzer._get_analysis_system_prompt("zh", stock_code="600519")
+            prompt = analyzer._get_analysis_system_prompt("zh", stock_code="HPG")
 
             self.assertIn('"phase_decision"', prompt)
             self.assertIn('"watch_conditions"', prompt)
@@ -164,7 +164,7 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
                         use_legacy_default_prompt=legacy,
                     )
 
-                prompt = analyzer._get_analysis_system_prompt("zh", stock_code="600519")
+                prompt = analyzer._get_analysis_system_prompt("zh", stock_code="HPG")
 
                 self.assertIn("### Reduce (20-39)", prompt)
                 self.assertIn("### Sell (0-19)", prompt)
@@ -177,8 +177,8 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             analyzer = GeminiAnalyzer()
 
         context = {
-            "code": "600519",
-            "stock_name": "贵州茅台",
+            "code": "HPG",
+            "stock_name": "Hòa Phát",
             "date": "2026-03-16",
             "today": {},
             "fundamental_context": {
@@ -195,7 +195,7 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             news_strategy_profile="medium",  # 7 days
         )
         with patch("src.analyzer.get_config", return_value=fake_cfg):
-            prompt = analyzer._format_prompt(context, "贵州茅台", news_context="news")
+            prompt = analyzer._format_prompt(context, "Hòa Phát", news_context="news")
 
         self.assertIn("from the last 7 days", prompt)
         self.assertIn("must carry a concrete date (YYYY-MM-DD)", prompt)
@@ -204,48 +204,13 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
         self.assertIn("Financials and Dividends (value-investing lens)", prompt)
         self.assertIn("Never make it up", prompt)
 
-    def test_prompt_includes_capital_flow_as_operation_filter(self) -> None:
-        with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
-            analyzer = GeminiAnalyzer()
-
-        context = {
-            "code": "002812",
-            "stock_name": "恩捷股份",
-            "date": "2026-04-01",
-            "today": {"close": 32.8, "ma5": 31.2, "ma10": 30.5, "ma20": 29.8},
-            "fundamental_context": {
-                "capital_flow": {
-                    "status": "ok",
-                    "data": {
-                        "stock_flow": {
-                            "main_net_inflow": -1200000,
-                            "inflow_5d": -3600000,
-                            "inflow_10d": -5200000,
-                        },
-                        "sector_rankings": {
-                            "top": [{"name": "电池"}],
-                            "bottom": [{"name": "化工"}],
-                        },
-                    },
-                }
-            },
-        }
-
-        prompt = analyzer._format_prompt(context, "恩捷股份", news_context=None)
-
-        self.assertIn("Main-force Capital Flow (recommendation filter)", prompt)
-        self.assertIn("Main-force net inflow", prompt)
-        self.assertIn("-1200000", prompt)
-        self.assertIn("never chase near resistance while main-force capital is flowing out", prompt)
-        self.assertIn("shakeout-watch", prompt)
-
     def test_prompt_prefers_context_news_window_days(self) -> None:
         with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
             analyzer = GeminiAnalyzer()
 
         context = {
-            "code": "600519",
-            "stock_name": "贵州茅台",
+            "code": "HPG",
+            "stock_name": "Hòa Phát",
             "date": "2026-03-16",
             "today": {},
             "news_window_days": 1,
@@ -255,7 +220,7 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             news_strategy_profile="long",  # 30 days if fallback is used
         )
         with patch("src.analyzer.get_config", return_value=fake_cfg):
-            prompt = analyzer._format_prompt(context, "贵州茅台", news_context="news")
+            prompt = analyzer._format_prompt(context, "Hòa Phát", news_context="news")
 
         self.assertIn("from the last 1 days", prompt)
         self.assertIn("Ignore any news outside the last 1 days", prompt)
@@ -265,14 +230,14 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             analyzer = GeminiAnalyzer()
 
         context = {
-            "code": "600519",
-            "stock_name": "贵州茅台",
+            "code": "HPG",
+            "stock_name": "Hòa Phát",
             "date": "2026-03-27",
             "today": {},
             "market_phase_context": {
-                "market": "cn",
+                "market": "vn",
                 "phase": "premarket",
-                "market_local_time": "2026-03-27T09:00:00+08:00",
+                "market_local_time": "2026-03-27T09:00:00+07:00",
                 "effective_daily_bar_date": "2026-03-26",
                 "is_partial_bar": False,
                 "minutes_to_open": 30,
@@ -282,43 +247,43 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
 
         prompt = analyzer._format_prompt(
             context,
-            "贵州茅台",
+            "Hòa Phát",
             news_context=None,
-            analysis_context_pack_summary="\n## 分析上下文包摘要\n- 数据块状态：行情 available\n",
+            analysis_context_pack_summary="\n## Analysis Context Pack Summary\n- Block status: quote available\n",
         )
 
-        phase_index = prompt.index("市场阶段上下文")
-        pack_index = prompt.index("分析上下文包摘要")
+        phase_index = prompt.index("Market Phase Context")
+        pack_index = prompt.index("Analysis Context Pack Summary")
         technical_index = prompt.index("Technical Data")
         self.assertLess(phase_index, technical_index)
         self.assertLess(phase_index, pack_index)
         self.assertLess(pack_index, technical_index)
-        self.assertIn("盘前", prompt)
-        self.assertIn("不得描述“今日走势已经发生”", prompt)
+        self.assertIn("pre-market", prompt)
+        self.assertIn("Do not describe today's price action as already happened", prompt)
 
     def test_format_prompt_omits_market_phase_section_without_context(self) -> None:
         with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
             analyzer = GeminiAnalyzer()
 
         context = {
-            "code": "600519",
-            "stock_name": "贵州茅台",
+            "code": "HPG",
+            "stock_name": "Hòa Phát",
             "date": "2026-03-27",
             "today": {},
         }
 
-        prompt = analyzer._format_prompt(context, "贵州茅台", news_context=None)
+        prompt = analyzer._format_prompt(context, "Hòa Phát", news_context=None)
 
-        self.assertNotIn("市场阶段上下文", prompt)
-        self.assertNotIn("分析上下文包摘要", prompt)
+        self.assertNotIn("Market Phase Context", prompt)
+        self.assertNotIn("Analysis Context Pack Summary", prompt)
 
     def test_format_prompt_labels_intraday_partial_quote_as_estimated(self) -> None:
         with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
             analyzer = GeminiAnalyzer()
 
         context = {
-            "code": "600519",
-            "stock_name": "贵州茅台",
+            "code": "HPG",
+            "stock_name": "Hòa Phát",
             "date": "2026-03-27",
             "today": {"close": 1880.0},
             "market_phase_context": {
@@ -328,12 +293,12 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             },
         }
 
-        prompt = analyzer._format_prompt(context, "贵州茅台", news_context=None)
+        prompt = analyzer._format_prompt(context, "Hòa Phát", news_context=None)
 
         self.assertIn("### Latest Quote", prompt)
-        self.assertIn("| Intraday estimated price | 1880.0 CNY |", prompt)
+        self.assertIn("| Intraday estimated price | 1880.0 VND |", prompt)
         self.assertNotIn("### Today's Quote", prompt)
-        self.assertNotIn("| Close | 1880.0 CNY |", prompt)
+        self.assertNotIn("| Close | 1880.0 VND |", prompt)
 
     def test_format_prompt_uses_complete_daily_labels_for_premarket_and_non_trading(self) -> None:
         with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
@@ -341,8 +306,8 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
 
         for phase in ("premarket", "non_trading"):
             context = {
-                "code": "600519",
-                "stock_name": "贵州茅台",
+                "code": "HPG",
+                "stock_name": "Hòa Phát",
                 "date": "2026-03-27",
                 "today": {
                     "close": 1870.0,
@@ -357,15 +322,15 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
                 },
             }
 
-            prompt = analyzer._format_prompt(context, "贵州茅台", news_context=None)
+            prompt = analyzer._format_prompt(context, "Hòa Phát", news_context=None)
 
             self.assertIn("### Last Complete Trading Day", prompt)
-            self.assertIn("| Last complete session close | 1870.0 CNY |", prompt)
-            self.assertIn("| Open | 1860.0 CNY |", prompt)
-            self.assertIn("| High | 1880.0 CNY |", prompt)
-            self.assertIn("| Low | 1855.0 CNY |", prompt)
+            self.assertIn("| Last complete session close | 1870.0 VND |", prompt)
+            self.assertIn("| Open | 1860.0 VND |", prompt)
+            self.assertIn("| High | 1880.0 VND |", prompt)
+            self.assertIn("| Low | 1855.0 VND |", prompt)
             self.assertNotIn("### Today's Quote", prompt)
-            self.assertNotIn("| Close | 1870.0 CNY |", prompt)
+            self.assertNotIn("| Close | 1870.0 VND |", prompt)
 
     def test_format_prompt_does_not_label_realtime_overlay_as_previous_close(self) -> None:
         with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
@@ -373,8 +338,8 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
 
         for phase in ("premarket", "non_trading"):
             context = {
-                "code": "600519",
-                "stock_name": "贵州茅台",
+                "code": "HPG",
+                "stock_name": "Hòa Phát",
                 "date": "2026-03-27",
                 "today": {
                     "close": 1882.5,
@@ -395,29 +360,29 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
                 },
             }
 
-            prompt = analyzer._format_prompt(context, "贵州茅台", news_context=None)
+            prompt = analyzer._format_prompt(context, "Hòa Phát", news_context=None)
 
             self.assertIn("### Latest Quote", prompt)
-            self.assertIn("| Realtime estimated price | 1882.5 CNY |", prompt)
+            self.assertIn("| Realtime estimated price | 1882.5 VND |", prompt)
             self.assertNotIn("### Last Complete Trading Day", prompt)
-            self.assertNotIn("| Last complete session close | 1882.5 CNY |", prompt)
+            self.assertNotIn("| Last complete session close | 1882.5 VND |", prompt)
             self.assertNotIn("| Open |", prompt)
             self.assertNotIn("| High |", prompt)
             self.assertNotIn("| Low |", prompt)
             self.assertIn("| Realtime change | 0.42% |", prompt)
-            self.assertIn("| Realtime volume | 120.00 万股 |", prompt)
-            self.assertIn("| Realtime turnover | 2.26 亿元 |", prompt)
+            self.assertIn("| Realtime volume | 1.20 triệu cp |", prompt)
+            self.assertIn("| Realtime turnover | 226.00 triệu VND |", prompt)
             self.assertNotIn("| Change | 0.42% |", prompt)
-            self.assertNotIn("| Volume | 120.00 万股 |", prompt)
-            self.assertNotIn("| Turnover | 2.26 亿元 |", prompt)
+            self.assertNotIn("| Volume | 1.20 triệu cp |", prompt)
+            self.assertNotIn("| Turnover | 226.00 triệu VND |", prompt)
 
     def test_format_prompt_does_not_label_date_mismatch_as_previous_close(self) -> None:
         with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
             analyzer = GeminiAnalyzer()
 
         context = {
-            "code": "600519",
-            "stock_name": "贵州茅台",
+            "code": "HPG",
+            "stock_name": "Hòa Phát",
             "date": "2026-03-27",
             "today": {
                 "close": 1882.5,
@@ -434,12 +399,12 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             },
         }
 
-        prompt = analyzer._format_prompt(context, "贵州茅台", news_context=None)
+        prompt = analyzer._format_prompt(context, "Hòa Phát", news_context=None)
 
         self.assertIn("### Latest Quote", prompt)
-        self.assertIn("| Latest price | 1882.5 CNY |", prompt)
+        self.assertIn("| Latest price | 1882.5 VND |", prompt)
         self.assertNotIn("### Last Complete Trading Day", prompt)
-        self.assertNotIn("| Last complete session close | 1882.5 CNY |", prompt)
+        self.assertNotIn("| Last complete session close | 1882.5 VND |", prompt)
         self.assertNotIn("| Open |", prompt)
         self.assertNotIn("| High |", prompt)
         self.assertNotIn("| Low |", prompt)
@@ -456,18 +421,18 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             None,
         ):
             context = {
-                "code": "600519",
-                "stock_name": "贵州茅台",
+                "code": "HPG",
+                "stock_name": "Hòa Phát",
                 "date": "2026-03-27",
                 "today": {"close": 1880.0},
             }
             if phase_context is not None:
                 context["market_phase_context"] = phase_context
 
-            prompt = analyzer._format_prompt(context, "贵州茅台", news_context=None)
+            prompt = analyzer._format_prompt(context, "Hòa Phát", news_context=None)
 
             self.assertIn("### Today's Quote", prompt)
-            self.assertIn("| Close | 1880.0 CNY |", prompt)
+            self.assertIn("| Close | 1880.0 VND |", prompt)
 
     def test_format_prompt_omits_legacy_trend_checks_for_nondefault_skill_mode(self) -> None:
         with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
@@ -478,8 +443,8 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             )
 
         context = {
-            "code": "600519",
-            "stock_name": "贵州茅台",
+            "code": "HPG",
+            "stock_name": "Hòa Phát",
             "date": "2026-03-16",
             "today": {"close": 100, "ma5": 99, "ma10": 98, "ma20": 97},
             "trend_analysis": {
@@ -496,7 +461,7 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
                 "risk_factors": ["无背驰确认"],
             },
         }
-        prompt = analyzer._format_prompt(context, "贵州茅台", news_context=None)
+        prompt = analyzer._format_prompt(context, "Hòa Phát", news_context=None)
 
         self.assertIn("Does the current structure meet the activated skill's key trigger conditions", prompt)
         self.assertNotIn("Is the bullish alignment MA5>MA10>MA20 satisfied", prompt)
@@ -519,8 +484,8 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             "yesterday": {"close": 57.8},
             "volume_change_ratio": 12.4,
             "trend_analysis": {
-                "trend_status": "空头排列",
-                "ma_alignment": "空头排列 MA5<MA10<MA20",
+                "trend_status": "MA xếp giảm",
+                "ma_alignment": "MA xếp giảm MA5<MA10<MA20",
                 "trend_strength": 34,
                 "bias_ma5": 2.1,
                 "bias_ma10": -0.8,
@@ -528,7 +493,7 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
                 "volume_trend": "放量震荡",
                 "buy_signal": "观察",
                 "signal_score": 41,
-                "signal_reasons": ["多头排列，持续上涨", "事件催化存在但技术待确认"],
+                "signal_reasons": ["MA xếp tăng, tăng liên tục", "事件催化存在但技术待确认"],
                 "risk_factors": ["跌破MA20，趋势承压"],
             },
         }
@@ -539,8 +504,8 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             news_context="2026-04-27 一季报超预期，订单增长。",
         )
 
-        self.assertIn("空头排列 MA5<MA10<MA20", prompt)
-        self.assertNotIn("多头排列，持续上涨", prompt)
+        self.assertIn("MA xếp giảm MA5<MA10<MA20", prompt)
+        self.assertNotIn("MA xếp tăng, tăng liên tục", prompt)
         self.assertIn("事件催化存在但技术待确认", prompt)
         self.assertIn("event first, technicals yet to confirm", prompt)
         self.assertIn("Volume anomaly", prompt)
@@ -555,13 +520,13 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             )
 
         context = {
-            "code": "600519",
-            "stock_name": "贵州茅台",
+            "code": "HPG",
+            "stock_name": "Hòa Phát",
             "date": "2026-04-28",
             "today": {"close": 1688.0, "ma5": 1675.0, "ma10": 1660.0, "ma20": 1640.0},
             "trend_analysis": {
-                "trend_status": "多头排列",
-                "ma_alignment": "多头排列 MA5>MA10>MA20",
+                "trend_status": "MA xếp tăng",
+                "ma_alignment": "MA xếp tăng MA5>MA10>MA20",
                 "trend_strength": 78,
                 "bias_ma5": 1.8,
                 "bias_ma10": 3.2,
@@ -569,19 +534,19 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
                 "volume_trend": "量价配合",
                 "buy_signal": "偏强",
                 "signal_score": 73,
-                "signal_reasons": ["多头排列，持续上涨", "空头排列，持续下跌"],
-                "risk_factors": ["空头排列，持续下跌", "财报披露前波动可能放大"],
+                "signal_reasons": ["MA xếp tăng, tăng liên tục", "MA xếp giảm, giảm liên tục"],
+                "risk_factors": ["MA xếp giảm, giảm liên tục", "财报披露前波动可能放大"],
             },
         }
 
-        prompt = analyzer._format_prompt(context, "贵州茅台", news_context=None)
+        prompt = analyzer._format_prompt(context, "Hòa Phát", news_context=None)
 
-        self.assertIn("多头排列 MA5>MA10>MA20", prompt)
+        self.assertIn("MA xếp tăng MA5>MA10>MA20", prompt)
         self.assertIn("财报披露前波动可能放大", prompt)
-        self.assertNotIn("空头排列，持续下跌\n", prompt)
-        self.assertNotIn("空头排列，持续下跌", prompt)
-        self.assertIn("已剔除与多头主判断直接冲突的空头结构理由", prompt)
-        self.assertIn("已剔除与多头主判断直接冲突的空头结构风险表述", prompt)
+        self.assertNotIn("MA xếp giảm, giảm liên tục\n", prompt)
+        self.assertNotIn("MA xếp giảm, giảm liên tục", prompt)
+        self.assertIn("bearish-structure reasons that directly conflict with the bullish view were removed", prompt)
+        self.assertIn("bearish-structure risk statements that directly conflict with the bullish view were removed", prompt)
 
     def test_format_prompt_removes_bullish_reasons_when_final_trend_is_weak_bearish(self) -> None:
         with patch.object(GeminiAnalyzer, "_init_litellm", return_value=None):
@@ -597,8 +562,8 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             "date": "2026-04-28",
             "today": {"close": 178.5, "ma5": 176.0, "ma10": 180.2, "ma20": 179.9},
             "trend_analysis": {
-                "trend_status": "弱势空头",
-                "ma_alignment": "弱势空头，MA5<MA10 但 MA10≥MA20",
+                "trend_status": "Giảm yếu",
+                "ma_alignment": "Giảm yếu, MA5<MA10 nhưng MA10≥MA20",
                 "trend_strength": 43,
                 "bias_ma5": 1.4,
                 "bias_ma10": -0.9,
@@ -606,7 +571,7 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
                 "volume_trend": "量能一般",
                 "buy_signal": "观察",
                 "signal_score": 45,
-                "signal_reasons": ["弱势多头修复", "多头排列，持续上涨", "事件催化存在但技术待确认"],
+                "signal_reasons": ["Tăng yếu đang phục hồi", "MA xếp tăng, tăng liên tục", "事件催化存在但技术待确认"],
                 "risk_factors": ["MA10 压制仍在"],
             },
         }
@@ -617,17 +582,17 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
             news_context="2026-04-27 新产品发布，市场情绪回暖。",
         )
 
-        self.assertIn("弱势空头，MA5<MA10 但 MA10≥MA20", prompt)
-        self.assertNotIn("弱势多头修复", prompt)
-        self.assertNotIn("多头排列，持续上涨", prompt)
+        self.assertIn("Giảm yếu, MA5<MA10 nhưng MA10≥MA20", prompt)
+        self.assertNotIn("Tăng yếu đang phục hồi", prompt)
+        self.assertNotIn("MA xếp tăng, tăng liên tục", prompt)
         self.assertIn("事件催化存在但技术待确认", prompt)
-        self.assertIn("已剔除与空头主判断直接冲突的看多结构理由", prompt)
+        self.assertIn("bullish-structure reasons that directly conflict with the bearish view were removed", prompt)
 
     def test_sanitize_trend_analysis_for_prompt_returns_derived_copy_only(self) -> None:
         original = {
-            "trend_status": "空头排列",
-            "ma_alignment": "空头排列 MA5<MA10<MA20",
-            "signal_reasons": ["多头排列，持续上涨", "事件催化存在但技术待确认"],
+            "trend_status": "MA xếp giảm",
+            "ma_alignment": "MA xếp giảm MA5<MA10<MA20",
+            "signal_reasons": ["MA xếp tăng, tăng liên tục", "事件催化存在但技术待确认"],
             "risk_factors": ["跌破MA20，趋势承压"],
         }
 
@@ -635,11 +600,11 @@ class AnalyzerNewsPromptTestCase(unittest.TestCase):
 
         self.assertEqual(
             original["signal_reasons"],
-            ["多头排列，持续上涨", "事件催化存在但技术待确认"],
+            ["MA xếp tăng, tăng liên tục", "事件催化存在但技术待确认"],
         )
         self.assertNotIn("prompt_consistency_notes", original)
         self.assertNotIn("prompt_trend_direction", original)
-        self.assertNotIn("多头排列，持续上涨", sanitized["signal_reasons"])
+        self.assertNotIn("MA xếp tăng, tăng liên tục", sanitized["signal_reasons"])
         self.assertEqual(sanitized["prompt_trend_direction"], "bearish")
 
 

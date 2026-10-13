@@ -10,6 +10,13 @@ from typing import Any, Dict, Optional
 
 SNIPER_KEYS = ("ideal_buy", "secondary_buy", "stop_loss", "take_profit")
 
+# Đơn vị tiền tệ VND đứng riêng (không dính vào chữ khác, vd. "đến").
+# Standalone VND currency marker (not part of another word such as "đến").
+_CURRENCY_MARKER_RE = re.compile(
+    r"(?<![^\W\d_])(?:đồng|vnđ|vnd|đ)(?![^\W\d_])",
+    re.IGNORECASE,
+)
+
 
 def parse_sniper_value(value: Any) -> Optional[float]:
     """Parse a sniper point value from report text into a positive price."""
@@ -31,10 +38,13 @@ def parse_sniper_value(value: Any) -> Optional[float]:
         pass
 
     colon_pos = max(text.rfind("："), text.rfind(":"))
-    yuan_pos = text.find("元", colon_pos + 1 if colon_pos != -1 else 0)
-    if yuan_pos != -1:
+    # Tìm đơn vị tiền tệ VND (đ / VND / VNĐ / đồng) đứng sau dấu hai chấm.
+    # Locate a VND currency marker (đ / VND / VNĐ / đồng) after the colon.
+    currency_match = _CURRENCY_MARKER_RE.search(text, colon_pos + 1 if colon_pos != -1 else 0)
+    currency_pos = currency_match.start() if currency_match else -1
+    if currency_pos != -1:
         segment_start = colon_pos + 1 if colon_pos != -1 else 0
-        segment = text[segment_start:yuan_pos]
+        segment = text[segment_start:currency_pos]
         valid_numbers = []
         for match in re.finditer(r"-?\d+(?:\.\d+)?", segment):
             start_idx = match.start()

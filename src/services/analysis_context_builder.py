@@ -25,9 +25,10 @@ _QUALITY_BLOCK_WEIGHTS: Dict[str, int] = {
     "quote": 25,
     "daily_bars": 25,
     "technical": 25,
+    # Tổng trọng số phải bằng 100 (điểm tổng = tổng có trọng số / 100).
+    # Weights must sum to 100.
     "news": 10,
-    "fundamentals": 10,
-    "chip": 5,
+    "fundamentals": 15,
 }
 _STATUS_SCORES: Dict[ContextFieldStatus, int] = {
     ContextFieldStatus.AVAILABLE: 100,
@@ -66,7 +67,6 @@ class PipelineAnalysisArtifacts:
     enhanced_context: Dict[str, Any]
     realtime_quote: Optional[Any]
     trend_result: Optional[Any]
-    chip_data: Optional[Any]
     fundamental_context: Optional[Dict[str, Any]]
     news_context: Optional[str]
     news_result_count: Optional[int]
@@ -91,7 +91,6 @@ class AnalysisContextBuilder:
         technical_block, technical_warnings = _build_technical_block(artifacts)
         blocks["technical"] = technical_block
         data_quality_warnings.extend(technical_warnings)
-        blocks["chip"] = _build_chip_block(artifacts)
         blocks["fundamentals"] = _build_fundamentals_block(artifacts)
         blocks["news"] = _build_news_block(artifacts)
         portfolio_block = _build_portfolio_block(artifacts)
@@ -314,46 +313,6 @@ def _build_technical_block(
     )
 
 
-def _build_chip_block(artifacts: PipelineAnalysisArtifacts) -> AnalysisContextBlock:
-    chip = _to_dict(artifacts.chip_data)
-    if not chip:
-        not_supported = bool((artifacts.metadata or {}).get("chip_not_supported"))
-        status = (
-            ContextFieldStatus.NOT_SUPPORTED
-            if not_supported
-            else ContextFieldStatus.MISSING
-        )
-        return AnalysisContextBlock(
-            status=status,
-            items={
-                "chip_distribution": AnalysisContextItem(
-                    status=status,
-                    missing_reason=(
-                        "chip_not_supported"
-                        if not_supported
-                        else "chip_distribution_missing"
-                    ),
-                )
-            },
-        )
-
-    source = _source_text(chip.get("source"))
-    return AnalysisContextBlock(
-        status=ContextFieldStatus.AVAILABLE,
-        items={
-            key: AnalysisContextItem(
-                status=ContextFieldStatus.AVAILABLE,
-                value=value,
-                source=source,
-            )
-            for key, value in chip.items()
-            if value is not None
-        },
-        source=source,
-        metadata={"date": chip.get("date")} if chip.get("date") else {},
-    )
-
-
 def _build_fundamentals_block(artifacts: PipelineAnalysisArtifacts) -> AnalysisContextBlock:
     context = artifacts.fundamental_context if isinstance(artifacts.fundamental_context, dict) else None
     if not context:
@@ -557,7 +516,7 @@ def _quality_limitations(blocks: Dict[str, AnalysisContextBlock]) -> List[str]:
         if status in _CORE_LIMITATION_STATUSES:
             limitations.append(f"{key}: {status.value}")
 
-    for key in ("news", "fundamentals", "chip"):
+    for key in ("news", "fundamentals"):
         status = _quality_block_status(blocks, key)
         if status in _AUX_LIMITATION_STATUSES:
             limitations.append(f"{key}: {status.value}")

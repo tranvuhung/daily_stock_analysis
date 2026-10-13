@@ -11,7 +11,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Literal, Optional, Tuple, get_args
 
 from data_provider.base import canonical_stock_code, normalize_stock_code
-from src.services.stock_list_parser import ParseStatus, parse_analysis_target
 from src.core.trading_calendar import MarketPhase
 from src.repositories.decision_signal_repo import (
     DecisionSignalCreateResult,
@@ -61,10 +60,10 @@ INTRADAY_PHASES = frozenset({
     MarketPhase.LUNCH_BREAK.value,
     MarketPhase.CLOSING_AUCTION.value,
 })
+# Thời gian sống mặc định của tín hiệu trong phiên (giờ): phiên VN 9:00-14:45 ≈ 4,5 giờ giao dịch.
+# Default intraday signal TTL (hours) for the Vietnam session.
 DEFAULT_INTRADAY_TTL_HOURS = {
-    "cn": 4.0,
-    "hk": 5.5,
-    "us": 6.5,
+    "vn": 4.5,
 }
 
 logger = logging.getLogger(__name__)
@@ -479,7 +478,7 @@ class DecisionSignalService:
                 trend_prediction=raw.get("trend_prediction") or getattr(record, "trend_prediction", None) or "",
                 operation_advice=raw.get("operation_advice") or getattr(record, "operation_advice", None) or "",
                 decision_type=raw.get("decision_type") or "",
-                confidence_level=raw.get("confidence_level") or "中",
+                confidence_level=raw.get("confidence_level") or "Trung bình",
                 report_language=normalize_report_language(raw.get("report_language")),
                 action=history_action,
                 action_label=history_action_label,
@@ -497,11 +496,6 @@ class DecisionSignalService:
                 change_pct=self._history_float(raw.get("change_pct")),
                 model_used=raw.get("model_used"),
                 query_id=getattr(record, "query_id", None),
-                market_structure_context=(
-                    raw.get("market_structure_context")
-                    if isinstance(raw.get("market_structure_context"), dict)
-                    else None
-                ),
             )
             payload = build_decision_signal_payload_from_report(
                 result,
@@ -609,19 +603,19 @@ class DecisionSignalService:
                     ]
                 )
             hints = (
-                "等待",
-                "待",
-                "需要确认",
-                "缺少确认",
-                "未确认",
-                "回踩",
-                "支撑",
-                "压力",
-                "风险",
-                "资金",
-                "突破",
-                "不追",
-                "不宜",
+                "chờ",
+                "đợi",
+                "cần xác nhận",
+                "thiếu xác nhận",
+                "chưa xác nhận",
+                "điều chỉnh về",
+                "hỗ trợ",
+                "kháng cự",
+                "rủi ro",
+                "dòng tiền",
+                "bứt phá",
+                "không đuổi",
+                "không nên",
             )
             for candidate in candidates:
                 text = str(candidate or "").strip()
@@ -926,7 +920,7 @@ class DecisionSignalService:
 
     @staticmethod
     def _intraday_fallback_hours(market: str) -> float:
-        return DEFAULT_INTRADAY_TTL_HOURS.get(market, 4.0)
+        return DEFAULT_INTRADAY_TTL_HOURS.get(market, 4.5)
 
     @staticmethod
     def _horizon_days(horizon: Optional[str]) -> Optional[int]:
@@ -1093,12 +1087,7 @@ class DecisionSignalService:
     ) -> Optional[List[str]]:
         if not stock_code:
             return None
-        normalized = cls._normalize_stock_code(stock_code, market=market)
-        if market is not None:
-            return [normalized]
-
-        hk_normalized = cls._normalize_hk_stock_code(str(stock_code).strip())
-        return list(dict.fromkeys([normalized, hk_normalized]))
+        return [cls._normalize_stock_code(stock_code, market=market)]
 
     @classmethod
     def normalize_stock_code_for_signal(cls, value: Any, *, market: Optional[str] = None) -> str:
@@ -1109,36 +1098,16 @@ class DecisionSignalService:
     @classmethod
     def _normalize_stock_code(cls, value: Any, *, market: Optional[str] = None) -> str:
         raw = str(value or "").strip()
-        target = parse_analysis_target(raw)
-        if target.asset_type == ParseStatus.INDEX and target.canonical_id:
-            return target.canonical_id
-        if market == "us":
-            code = canonical_stock_code(raw)
-        elif market == "hk":
-            code = cls._normalize_hk_stock_code(raw)
-        else:
-            code = canonical_stock_code(normalize_stock_code(raw))
+        code = canonical_stock_code(normalize_stock_code(raw))
         if not code:
             raise ValueError("stock_code is required")
         return code
 
     @staticmethod
-    def _normalize_hk_stock_code(value: str) -> str:
-        normalized = canonical_stock_code(normalize_stock_code(value))
-        digits = ""
-        if normalized.startswith("HK"):
-            digits = normalized[2:]
-        elif normalized.isdigit():
-            digits = normalized
-        if digits.isdigit() and 1 <= len(digits) <= 5:
-            return f"HK{digits.zfill(5)}"
-        return normalized
-
-    @staticmethod
     def _normalize_market(value: Any) -> str:
         market = str(value or "").strip().lower()
         if market not in VALID_MARKETS:
-            raise ValueError("market must be one of cn, hk, us, jp, kr, tw")
+            raise ValueError("market must be: vn")
         return market
 
     @classmethod

@@ -12,10 +12,8 @@ from src.formatters import (
     chunk_content_by_max_words,
     chunk_content_by_max_bytes,
     chunk_markdown_preserving_blocks,
-    format_feishu_markdown,
     format_slack_mrkdwn,
     format_telegram_markdown,
-    format_wechat_markdown,
     markdown_tables_to_key_value_rows,
     slice_at_max_bytes,
     TRUNCATION_SUFFIX,
@@ -407,29 +405,6 @@ class TestNotificationMarkdownFormatters(unittest.TestCase):
         self.assertIn("• 600519：买入", result)
         self.assertNotIn("@@DSA_FENCED_CODE_BLOCK_", result)
 
-    def test_feishu_formatter_keeps_legacy_structure_and_converts_table(self):
-        text = "# 日报\n\n> 风险提示\n\n| 股票 | 信号 |\n| --- | --- |\n| 600519 | 强势 |\n\n- 关注量能"
-
-        result = format_feishu_markdown(text)
-
-        self.assertIn("**日报**", result)
-        self.assertIn("💬 风险提示", result)
-        self.assertIn("• 股票：600519 | 信号：强势", result)
-        self.assertIn("• 关注量能", result)
-
-    def test_feishu_formatter_preserves_empty_table_cells(self):
-        text = (
-            "| Header1 | Header2 | Header3 |\n"
-            "|---------|---------|---------|\n"
-            "| Value1  |         | Value3  |"
-        )
-        colon = "\uff1a"
-
-        result = format_feishu_markdown(text)
-
-        self.assertIn(f"Header1{colon}Value1 | Header2{colon} | Header3{colon}Value3", result)
-        self.assertNotIn(f"Header2{colon}Value3", result)
-
     def test_telegram_formatter_uses_supported_markdown(self):
         text = "## 日报\n\n| 股票 | 信号 |\n| --- | --- |\n| 600519 | 强势 |\n\n[详情](https://example.com/report)"
 
@@ -463,15 +438,6 @@ class TestNotificationMarkdownFormatters(unittest.TestCase):
         self.assertIn("• 600519：强势", result)
         self.assertIn("<https://example.com/report|详情>", result)
 
-    def test_wechat_formatter_keeps_markdown_but_converts_tables(self):
-        text = "## 日报\n\n| 股票 | 信号 |\n| --- | --- |\n| 600519 | 强势 |"
-
-        result = format_wechat_markdown(text)
-
-        self.assertIn("## 日报", result)
-        self.assertIn("• 600519：强势", result)
-        self.assertNotIn("| --- |", result)
-
     def test_platform_formatters_do_not_rewrite_fenced_code_blocks(self):
         text = (
             "## 日报\n\n"
@@ -489,7 +455,6 @@ class TestNotificationMarkdownFormatters(unittest.TestCase):
 
         for formatter in (
             format_telegram_markdown,
-            format_wechat_markdown,
             format_slack_mrkdwn,
         ):
             with self.subTest(formatter=formatter.__name__):

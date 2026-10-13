@@ -162,7 +162,7 @@ class AnalysisService:
             )
             
             if result is None:
-                logger.warning(f"分析股票 {stock_code} 返回空结果")
+                logger.warning(f"Phân tích cổ phiếu {stock_code} trả về kết quả rỗng")
                 self.last_error = self.last_error or get_analysis_error_text(
                     "empty_result", report_language, code=stock_code
                 )
@@ -172,7 +172,7 @@ class AnalysisService:
                 self.last_error = getattr(result, "error_message", None) or get_analysis_error_text(
                     "failed", report_language, code=stock_code
                 )
-                logger.warning(f"分析股票 {stock_code} 未成功完成: {self.last_error}")
+                logger.warning(f"Phân tích cổ phiếu {stock_code} không hoàn tất thành công: {self.last_error}")
                 return None
             
             # Build the response
@@ -180,7 +180,7 @@ class AnalysisService:
             
         except Exception as e:
             self.last_error = str(e)
-            logger.error(f"分析股票 {stock_code} 失败: {e}", exc_info=True)
+            logger.error(f"Phân tích cổ phiếu {stock_code} thất bại: {e}", exc_info=True)
             return None
         finally:
             reset_run_diagnostic_context(locals().get("diag_token"))

@@ -18,14 +18,11 @@ from src.storage import AnalysisHistory, DatabaseManager
 
 logger = logging.getLogger(__name__)
 
-MARKET_LIGHT_REGIONS = frozenset({"vn", "cn", "hk", "us", "jp", "kr"})
-MARKET_LIGHT_ALERT_REGIONS = frozenset({"vn", "cn", "hk", "us"})
+# Chỉ còn thị trường Việt Nam. / Only the Vietnam market remains.
+MARKET_LIGHT_REGIONS = frozenset({"vn"})
+MARKET_LIGHT_ALERT_REGIONS = frozenset({"vn"})
 MARKET_LIGHT_HISTORY_BATCH_SIZE = 100
-
-
-# Thứ tự hiển thị region: vn đứng đầu (mặc định), sau đó giữ thứ tự lịch sử cn/hk/us/jp/kr.
-# Display order for regions: vn first (the default), then the historical cn/hk/us/jp/kr order.
-MARKET_LIGHT_REGION_ORDER: Tuple[str, ...] = ("vn", "cn", "hk", "us", "jp", "kr")
+MARKET_LIGHT_REGION_ORDER: Tuple[str, ...] = ("vn",)
 
 
 def _ordered_regions(regions: Iterable[str]) -> Tuple[str, ...]:

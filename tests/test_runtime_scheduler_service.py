@@ -937,7 +937,7 @@ class RuntimeSchedulerServiceTestCase(unittest.TestCase):
         ), patch("api.app.RuntimeSchedulerService", FakeRuntimeSchedulerService), patch(
             "api.app.SystemConfigService",
             FakeSystemConfigService,
-        ), patch("api.app._schedule_stock_index_background_refresh"):
+        ):
             app = create_app(static_dir=Path(temp_dir))
             with TestClient(app):
                 pass
@@ -984,7 +984,7 @@ class RuntimeSchedulerServiceTestCase(unittest.TestCase):
         ), patch("api.app.RuntimeSchedulerService", FakeRuntimeSchedulerService), patch(
             "api.app.SystemConfigService",
             FakeSystemConfigService,
-        ), patch("api.app._schedule_stock_index_background_refresh"):
+        ):
             app = create_app(static_dir=Path(temp_dir))
             with TestClient(app):
                 pass
@@ -1033,7 +1033,7 @@ class RuntimeSchedulerServiceTestCase(unittest.TestCase):
         ), patch("api.app.RuntimeSchedulerService", FakeRuntimeSchedulerService), patch(
             "api.app.SystemConfigService",
             FakeSystemConfigService,
-        ), patch("api.app._schedule_stock_index_background_refresh"):
+        ):
             app = create_app(static_dir=Path(temp_dir))
             with TestClient(app):
                 pass
@@ -1089,7 +1089,7 @@ class RuntimeSchedulerServiceTestCase(unittest.TestCase):
         ), patch("api.app.RuntimeSchedulerService", FakeRuntimeSchedulerService), patch(
             "api.app.SystemConfigService",
             FakeSystemConfigService,
-        ), patch("api.app._schedule_stock_index_background_refresh"):
+        ):
             app = create_app(static_dir=Path(temp_dir))
             with TestClient(app):
                 pass
@@ -1129,7 +1129,7 @@ class RuntimeSchedulerServiceTestCase(unittest.TestCase):
         ), patch("api.app.RuntimeSchedulerService", FakeRuntimeSchedulerService), patch(
             "api.app.SystemConfigService",
             FakeSystemConfigService,
-        ), patch("api.app._schedule_stock_index_background_refresh"):
+        ):
             os.environ.pop(CLI_SCHEDULER_OWNER_ENV, None)
             os.environ.pop(RUNTIME_SCHEDULER_FORCE_ENABLED_ENV, None)
             os.environ.pop(RUNTIME_SCHEDULER_RUN_IMMEDIATELY_ENV, None)

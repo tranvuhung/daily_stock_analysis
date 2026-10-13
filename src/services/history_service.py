@@ -25,10 +25,7 @@ from src.report_language import (
     get_localized_stock_name,
     get_report_labels,
     get_signal_level,
-    get_chip_unavailable_reason,
-    is_chip_structure_unavailable,
     localize_bias_status,
-    localize_chip_health,
     localize_conflict_severity,
     localize_consensus_level,
     localize_strategy_signal,
@@ -136,58 +133,7 @@ class HistoryService:
             return candidates
 
         try:
-            from data_provider.base import (
-                canonical_stock_code,
-                is_bse_code,
-                normalize_stock_code,
-            )
-            from src.services.stock_list_parser import ParseStatus, parse_analysis_target
-
-            # PR #2312: parser-aware index branch. ``parse_analysis_target``
-            # (with the index registry) is the single asset-type authority. When
-            # the query token is a registered INDEX, the persisted-read candidate
-            # set must be exactly:
-            #   1. the lowercase parser canonical (``sh000016`` / ``csi930955`` —
-            #      the current storage form),
-            #   2. the legacy uppercase canonical (``SH000016`` / ``CSI930955`` —
-            #      how pre-fix records were saved), and
-            #   3. every explicit alias/display form (``000016.SH`` /
-            #      ``930955.CSI`` — ``IndexEntry.aliases``).
-            # The bare same-code stock (``000016`` / ``930955``) is deliberately
-            # excluded so an index record is never reachable through a stock
-            # query and vice versa. This unifies the previous CSI-only convergence
-            # (PR #2267) with the SH/SZ index identity so all three namespaces
-            # share one branch.
-            target = parse_analysis_target(raw_code)
-            if target.asset_type == ParseStatus.INDEX:
-                index_keys = [target.canonical_id]
-                legacy_upper = (
-                    canonical_stock_code(target.canonical_id)
-                    or target.canonical_id.upper()
-                )
-                if legacy_upper and legacy_upper not in index_keys:
-                    index_keys.append(legacy_upper)
-                entry = target.matched_index
-                if entry is not None:
-                    for alias in entry.aliases:
-                        alias = str(alias or "").strip()
-                        if not alias:
-                            continue
-                        if alias not in index_keys:
-                            index_keys.append(alias)
-                        # sqlite ``IN`` comparison is case-sensitive: a legacy
-                        # record may have been persisted under the uppercase
-                        # alias form (``SZ399300`` for registry alias
-                        # ``sz399300``), so the persisted-read candidate set must
-                        # carry both the raw alias and its uppercase form. The
-                        # bare same-code stock (``000300``) is still never added.
-                        alias_upper = alias.upper()
-                        if alias_upper and alias_upper not in index_keys:
-                            index_keys.append(alias_upper)
-                for key in index_keys:
-                    if key and key not in candidates:
-                        candidates.append(key)
-                return candidates
+            from data_provider.base import canonical_stock_code, normalize_stock_code
 
             raw_canonical = canonical_stock_code(raw_code)
             normalized = canonical_stock_code(normalize_stock_code(raw_canonical))
@@ -195,53 +141,15 @@ class HistoryService:
             add(raw_code)
             return candidates
 
-        def add_hk_variants(digits: str) -> None:
-            if not digits or not digits.isdigit():
-                return
-
-            normalized_digits = digits.zfill(5)
-            add(f"HK{normalized_digits}")
-            add(f"{normalized_digits}.HK")
-
-            unpadded_digits = digits.lstrip("0")
-            if unpadded_digits:
-                add(f"{unpadded_digits}.HK")
-
         resolved = resolve_index_stock_code(raw_canonical) or resolve_index_stock_code(normalized)
-        resolved_normalized = ""
         if resolved:
-            try:
-                resolved_normalized = canonical_stock_code(normalize_stock_code(resolved))
-            except Exception:
-                resolved_normalized = resolved
             add(resolved)
-            add(resolved_normalized)
-            resolved_base = str(resolved_normalized or resolved).split(".", 1)[0]
-            if resolved_base and resolved_base.isdigit():
-                add(resolved_base)
 
         add(raw_canonical)
         add(normalized)
-
-        if normalized.startswith("HK") and normalized[2:].isdigit():
-            add_hk_variants(normalized[2:])
-        elif normalized.isdigit() and len(normalized) == 5:
-            add_hk_variants(normalized)
-        elif normalized.isdigit() and len(normalized) == 6:
-            exchange = None
-            if is_bse_code(normalized):
-                exchange = "BJ"
-            elif normalized.startswith(("5", "6", "9")):
-                exchange = "SH"
-            elif normalized.startswith(("0", "1", "2", "3")):
-                exchange = "SZ"
-
-            if exchange:
-                add(f"{normalized}.{exchange}")
-                add(f"{exchange}{normalized}")
-                if exchange == "SH":
-                    add(f"{normalized}.SS")
-                    add(f"SS{normalized}")
+        # Bản ghi cũ có thể lưu dạng hậu tố ``HPG.VN``. / Legacy rows may use the ``.VN`` suffix form.
+        if normalized:
+            add(f"{normalized}.VN")
 
         return candidates
     
@@ -293,13 +201,13 @@ class HistoryService:
                 try:
                     start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
                 except ValueError:
-                    logger.warning(f"无效的 start_date 格式: {start_date}")
+                    logger.warning(f"Định dạng start_date không hợp lệ: {start_date}")
             
             if end_date:
                 try:
                     end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
                 except ValueError:
-                    logger.warning(f"无效的 end_date 格式: {end_date}")
+                    logger.warning(f"Định dạng end_date không hợp lệ: {end_date}")
             
             # Calculate offset
             offset = (page - 1) * limit
@@ -325,7 +233,7 @@ class HistoryService:
             }
             
         except Exception as e:
-            logger.error(f"查询历史列表失败: {e}", exc_info=True)
+            logger.error(f"Truy vấn danh sách lịch sử thất bại: {e}", exc_info=True)
             raise
 
     @staticmethod
@@ -387,21 +295,6 @@ class HistoryService:
         code = str(raw_code or "").strip()
         if not code:
             return code
-        from src.services.stock_list_parser import ParseStatus, parse_analysis_target
-
-        try:
-            target = parse_analysis_target(code)
-        except Exception:
-            return resolve_index_stock_code(code) or code
-        if target.asset_type == ParseStatus.INDEX:
-            # PR #2312: registered index records always surface the parser
-            # canonical (lowercase ``sh000300`` / ``csi930955``), even when the
-            # persisted row was saved under a legacy uppercase canonical or an
-            # explicit alias (``SH000016`` / ``000016.SH`` / ``sz399300`` /
-            # ``000300.CSI``). Web identity keys therefore only need a simple
-            # case fold for API/task/report codes — they must never guess a
-            # canonical from prefixes/suffixes.
-            return target.canonical_id
         return resolve_index_stock_code(code) or code
 
     def _display_market_phase_summary(self, stock_code: str, context_snapshot: Any) -> Any:
@@ -645,7 +538,7 @@ class HistoryService:
                 return None
             return self._record_to_detail_dict(record)
         except Exception as e:
-            logger.error(f"根据 ID 查询历史详情失败: {e}", exc_info=True)
+            logger.error(f"Truy vấn chi tiết lịch sử theo ID thất bại: {e}", exc_info=True)
             return None
 
     def get_latest_fundamental_snapshot(
@@ -862,7 +755,7 @@ class HistoryService:
             return items
 
         except Exception as e:
-            logger.error(f"查询新闻情报失败: {e}", exc_info=True)
+            logger.error(f"Truy vấn tin tức tình báo thất bại: {e}", exc_info=True)
             return []
 
     def get_news_intel_by_record_id(self, record_id: int, limit: int = 20) -> List[Dict[str, str]]:
@@ -889,7 +782,7 @@ class HistoryService:
             return self.get_news_intel(query_id=record.query_id, limit=limit)
 
         except Exception as e:
-            logger.error(f"根据 record_id 查询新闻情报失败: {e}", exc_info=True)
+            logger.error(f"Truy vấn tin tức tình báo theo record_id thất bại: {e}", exc_info=True)
             return []
 
     def _fallback_news_by_analysis_context(self, query_id: str, limit: int) -> List[Any]:
@@ -956,15 +849,15 @@ class HistoryService:
             Sentiment label
         """
         if score >= 80:
-            return "极度乐观"
+            return "Rất lạc quan"
         elif score >= 60:
-            return "乐观"
+            return "Lạc quan"
         elif score >= 40:
-            return "中性"
+            return "Trung lập"
         elif score >= 20:
-            return "悲观"
+            return "Bi quan"
         else:
-            return "极度悲观"
+            return "Rất bi quan"
 
     def get_markdown_report(self, record_id: str) -> Optional[str]:
         """
@@ -1065,7 +958,7 @@ class HistoryService:
                 trend_prediction=raw_result.get("trend_prediction", record.trend_prediction or ""),
                 operation_advice=raw_result.get("operation_advice", record.operation_advice or ""),
                 decision_type=raw_result.get("decision_type", "hold"),
-                confidence_level=raw_result.get("confidence_level", "中"),
+                confidence_level=raw_result.get("confidence_level", "Trung bình"),
                 report_language=normalize_report_language(raw_result.get("report_language")),
                 action=raw_result.get("action"),
                 action_label=raw_result.get("action_label"),
@@ -1129,28 +1022,24 @@ class HistoryService:
         """
         report_date = record.created_at.strftime("%Y-%m-%d") if record.created_at else datetime.now().strftime("%Y-%m-%d")
         report_time = record.created_at.strftime("%H:%M:%S") if record.created_at else datetime.now().strftime("%H:%M:%S")
-        report_language = normalize_report_language(getattr(result, "report_language", "zh"))
+        report_language = normalize_report_language(getattr(result, "report_language", "vi"))
         labels = get_report_labels(report_language)
 
-        def _label(en: str, zh: str, ko: str, vi: str = "") -> str:
-            # When vi is missing, fall back to English rather than Chinese: this deployment only produces Vietnamese reports,
-            # and English is more usable than Chinese when a translation is missing.
-            if report_language == "vi":
-                return vi or en
+        def _label(en: str, vi: str) -> str:
+            # Chỉ còn hai ngôn ngữ: 'en' dùng tiếng Anh, còn lại dùng tiếng Việt.
+            # Only two languages remain: 'en' uses English, everything else Vietnamese.
             if report_language == "en":
                 return en
-            if report_language == "ko":
-                return ko
-            return zh
+            return vi or en
 
-        analysis_date_label = _label("Analysis Date", "分析日期", "분석일", "Ngày phân tích")
-        report_time_label = _label("Report Time", "报告生成时间", "생성 시각", "Thời điểm tạo báo cáo")
-        reason_label = _label("Rationale", "操作理由", "판단 근거", "Lý do khuyến nghị")
-        risk_warning_label = _label("Risk Warning", "风险提示", "리스크 경고", "Cảnh báo rủi ro")
-        technical_heading = _label("Technicals", "技术面", "기술적 분석", "Phân tích kỹ thuật")
-        ma_label = _label("Moving Averages", "均线", "이동평균", "Đường trung bình")
-        volume_analysis_label = _label("Volume", "量能", "거래량", "Khối lượng")
-        news_heading = _label("News Flow", "消息面", "뉴스 흐름", "Dòng tin tức")
+        analysis_date_label = _label("Analysis Date", "Ngày phân tích")
+        report_time_label = _label("Report Time", "Thời điểm tạo báo cáo")
+        reason_label = _label("Rationale", "Lý do khuyến nghị")
+        risk_warning_label = _label("Risk Warning", "Cảnh báo rủi ro")
+        technical_heading = _label("Technicals", "Phân tích kỹ thuật")
+        ma_label = _label("Moving Averages", "Đường trung bình")
+        volume_analysis_label = _label("Volume", "Khối lượng")
+        news_heading = _label("News Flow", "Dòng tin tức")
 
         # Escape markdown special characters in stock name
         name_escaped = self._escape_md(
@@ -1242,7 +1131,6 @@ class HistoryService:
             trend_data = data_persp.get('trend_status', {})
             price_data = data_persp.get('price_position', {})
             vol_data = data_persp.get('volume_analysis', {})
-            chip_data = data_persp.get('chip_structure', {})
 
             report_lines.extend([
                 f"### 📊 {labels['data_perspective_heading']}",
@@ -1286,35 +1174,6 @@ class HistoryService:
                     f"💡 *{vol_data.get('volume_meaning', '')}*",
                     "",
                 ])
-            # Chip distribution
-            if chip_data:
-                if is_chip_structure_unavailable(chip_data):
-                    report_lines.extend([
-                        f"**{labels['chip_label']}**: {get_chip_unavailable_reason(chip_data, report_language)}",
-                        "",
-                    ])
-                else:
-                    raw_chip_health = chip_data.get('chip_health', 'N/A')
-                    chip_health = localize_chip_health(raw_chip_health, report_language)
-                    normalized_chip_health = str(raw_chip_health or "").strip().lower()
-                    if normalized_chip_health in {"健康", "healthy"}:
-                        chip_emoji = "✅"
-                    elif normalized_chip_health in {"一般", "average"}:
-                        chip_emoji = "⚠️"
-                    else:
-                        chip_emoji = "🚨"
-                    report_lines.extend([
-                        f"**{labels['chip_label']}**: {chip_data.get('profit_ratio', 'N/A')} | {chip_data.get('avg_cost', 'N/A')} | "
-                        f"{chip_data.get('concentration', 'N/A')} {chip_emoji}{chip_health}",
-                        "",
-                    ])
-            else:
-                chip_unavailable_reason = get_chip_unavailable_reason(data_persp, report_language)
-                if chip_unavailable_reason:
-                    report_lines.extend([
-                        f"**{labels['chip_label']}**: {chip_unavailable_reason}",
-                        "",
-                    ])
 
         # ========== Battle plan ==========
         battle = dashboard.get('battle_plan', {}) if dashboard else {}
@@ -1361,17 +1220,17 @@ class HistoryService:
         signal_attr = dashboard.get('signal_attribution', {}) if dashboard else {}
         if signal_attribution_has_content(signal_attr):
             report_lines.extend([
-                f"### 🎯 {labels.get('signal_attribution_heading', '信号归因分析')}",
+                f"### 🎯 {labels.get('signal_attribution_heading', 'Signal Attribution')}",
                 "",
             ])
             weight_items = signal_attribution_weight_items(signal_attr)
             if weight_items:
-                report_lines.append(f"**{labels.get('attribution_weights_label', '归因权重')}**:")
+                report_lines.append(f"**{labels.get('attribution_weights_label', 'Attribution Weights')}**:")
                 weight_labels = {
-                    "technical_indicators": ("📈", labels.get('technical_indicators_label', '技术指标')),
-                    "news_sentiment": ("📰", labels.get('news_sentiment_label', '新闻舆情')),
-                    "fundamentals": ("📊", labels.get('fundamentals_label', '基本面')),
-                    "market_conditions": ("🌐", labels.get('market_conditions_label', '市场环境')),
+                    "technical_indicators": ("📈", labels.get('technical_indicators_label', 'Technical Indicators')),
+                    "news_sentiment": ("📰", labels.get('news_sentiment_label', 'News Sentiment')),
+                    "fundamentals": ("📊", labels.get('fundamentals_label', 'Fundamentals')),
+                    "market_conditions": ("🌐", labels.get('market_conditions_label', 'Market Conditions')),
                 }
                 for key, value in weight_items:
                     icon, label = weight_labels[key]
@@ -1380,9 +1239,9 @@ class HistoryService:
             bullish = signal_attr.get('strongest_bullish_signal')
             bearish = signal_attr.get('strongest_bearish_signal')
             if bullish:
-                report_lines.append(f"**🐂 {labels.get('strongest_bullish_signal_label', '最强看多信号')}**: {bullish}")
+                report_lines.append(f"**🐂 {labels.get('strongest_bullish_signal_label', 'Strongest Bullish Signal')}**: {bullish}")
             if bearish:
-                report_lines.append(f"**🐻 {labels.get('strongest_bearish_signal_label', '最强看空信号')}**: {bearish}")
+                report_lines.append(f"**🐻 {labels.get('strongest_bearish_signal_label', 'Strongest Bearish Signal')}**: {bearish}")
             report_lines.append("")
 
         # ========== Multi-strategy synthesis ==========
@@ -1393,35 +1252,35 @@ class HistoryService:
             confidence = strategy_synthesis.get('confidence')
             confidence_text = f"{confidence:.0%}" if isinstance(confidence, (int, float)) else "N/A"
             report_lines.extend([
-                f"### 🧩 {labels.get('strategy_synthesis_heading', '多策略综合')}",
+                f"### 🧩 {labels.get('strategy_synthesis_heading', 'Strategy Synthesis')}",
                 "",
                 (
-                    f"- {labels.get('strategy_final_signal_label', '综合信号')}: "
+                    f"- {labels.get('strategy_final_signal_label', 'Final Signal')}: "
                     f"{localize_strategy_signal(strategy_synthesis.get('final_signal', 'N/A'), report_language)} | "
-                    f"{labels.get('strategy_consensus_level_label', '共识度')}: "
+                    f"{labels.get('strategy_consensus_level_label', 'Consensus')}: "
                     f"{localize_consensus_level(strategy_synthesis.get('consensus_level', 'N/A'), report_language)} | "
-                    f"{labels.get('strategy_conflict_label', '冲突')}: "
+                    f"{labels.get('strategy_conflict_label', 'Conflict')}: "
                     f"{localize_conflict_severity(strategy_synthesis.get('conflict_severity', 'none'), report_language)} "
                     f"({strategy_synthesis.get('conflict_count', 0)}) | "
-                    f"{labels.get('strategy_confidence_label', '置信度')}: {confidence_text}"
+                    f"{labels.get('strategy_confidence_label', 'Confidence')}: {confidence_text}"
                 ),
             ])
             summary = localize_strategy_synthesis_summary(strategy_synthesis, report_language)
             if summary:
-                report_lines.append(f"- {labels.get('strategy_summary_label', '综合说明')}: {summary}")
+                report_lines.append(f"- {labels.get('strategy_summary_label', 'Summary')}: {summary}")
             report_lines.append(
-                f"- {labels.get('strategy_supporting_skills_label', '支持策略')}: "
+                f"- {labels.get('strategy_supporting_skills_label', 'Supporting Strategies')}: "
                 f"{self._format_strategy_skill_items(strategy_synthesis.get('supporting_skills'), report_language)}"
             )
             report_lines.append(
-                f"- {labels.get('strategy_opposing_skills_label', '反方策略')}: "
+                f"- {labels.get('strategy_opposing_skills_label', 'Opposing Strategies')}: "
                 f"{self._format_strategy_skill_items(strategy_synthesis.get('opposing_skills'), report_language)}"
             )
             invalid_count = strategy_invalid_opinion_count(strategy_synthesis)
             if invalid_count:
                 invalid_label_template = labels.get(
                     "strategy_invalid_opinions_label",
-                    "另有 {count} 个策略解析失败",
+                    "{count} additional strategies failed to produce valid signals",
                 )
                 try:
                     invalid_text = invalid_label_template.format(count=invalid_count)
@@ -1490,7 +1349,7 @@ class HistoryService:
             if isinstance(confidence, (int, float)):
                 suffix += f"/{confidence:.0%}"
             formatted.append(f"{localize_strategy_skill(skill_id, report_language)}{suffix}")
-        return "、".join(formatted) if formatted else none_text
+        return ", ".join(formatted) if formatted else none_text
 
     @staticmethod
     def _escape_md(text: Optional[str]) -> str:

@@ -25,24 +25,23 @@ import markdown2
 
 PROJECT_URL = "https://github.com/ZhuLinsen/daily_stock_analysis"
 PROJECT_REPOSITORY = "ZhuLinsen/daily_stock_analysis"
-PROJECT_DISPLAY_NAME = "股票智能分析系统"
+# Tên hiển thị trên poster (tiếng Việt). / Poster display name (Vietnamese).
+PROJECT_DISPLAY_NAME = "Hệ thống phân tích cổ phiếu thông minh"
 DEFAULT_XIAOHONGSHU_QR_PATH = "src/assets/share_image/xiaohongshu_qr.jpg"
 DEFAULT_XIAOHONGSHU_HANDLE = "@霸天土小豆"
+# Chỉ còn tiêu đề điểm lại thị trường Việt Nam (vi/en).
+# Only Vietnam market recap titles remain (vi/en).
 _MARKET_RE = re.compile(
-    r"(?:大盘复盘|市场复盘|market\s+(?:review|recap)|시황\s*리뷰|điểm\s+lại\s+thị\s+trường)", re.IGNORECASE
+    r"(?:market\s+(?:review|recap)|điểm\s+lại\s+thị\s+trường)", re.IGNORECASE
 )
-_MARKET_SCOPE_RE = re.compile(
-    r"(?:A股|港股|美股|日股|韩股|越南|中国\s*A주|미국|홍콩|일본|한국|베트남|\b(?:cn|hk|us|jp|kr|vn)\b|a[-\s]?share|hong\s+kong|japan|korea|vietnam|việt\s*nam|u\.?s\.?)",
-    re.IGNORECASE,
+# Tiêu đề bảng điều khiển: báo cáo tiếng Việt dùng "Bảng điều khiển quyết định".
+# Dashboard titles; Vietnamese reports use "Bảng điều khiển quyết định".
+_DASHBOARD_RE = re.compile(
+    r"(?:决策仪表盘|decision\s+dashboard|bảng\s+điều\s+khiển\s+quyết\s+định)", re.IGNORECASE
 )
-_DASHBOARD_RE = re.compile(r"(?:决策仪表盘|decision\s+dashboard)", re.IGNORECASE)
 _HEADING_RE = re.compile(r"^(#{1,4})\s+(.+?)\s*$", re.MULTILINE)
 _QUOTE_RE = re.compile(r"^\s*>\s+(.+?)\s*$", re.MULTILINE)
 _DATE_RE = re.compile(r"\b(20\d{2}-\d{2}-\d{2})(?:[ T]\d{2}:\d{2}(?::\d{2})?)?\b")
-_MARKET_REGION_REF_RE = re.compile(
-    r"^\[dsa-market-region\]:\s+#\s+\(\s*([a-z,]+)\s*\)\s*$",
-    re.IGNORECASE | re.MULTILINE,
-)
 _SUFFIXED_NUMERIC_CODE_PATTERN = (
     r"(?:\d{6}\.(?:SH|SZ|SS|BJ|KS|KQ)|\d{1,5}\.HK|\d{4,6}\.(?:TWO|TW)|\d{4,5}\.T)"
 )
@@ -53,76 +52,48 @@ _NUMERIC_CODE_RE = re.compile(
     rf"(?:{_SUFFIXED_NUMERIC_CODE_PATTERN}|(?:(?i:sh|sz|bj|hk))?\d{{5,6}}(?:\.[A-Z]{{2}})?)"
 )
 _NA_VALUES = {"", "-", "--", "n/a", "na", "none", "null", "暂无", "暂无数据"}
+# Chữ hiển thị trên poster: chỉ còn tiếng Việt và tiếng Anh.
+# Poster chrome text: only Vietnamese and English remain.
 _POSTER_TEXT = {
     "vi": {
         "brand": "Phân tích cổ phiếu bằng AI", "stock_subtitle": "Thẻ quyết định cổ phiếu · kết luận, vùng giá và rủi ro",
-        "market_subtitle": "Tổng kết phiên: chỉ số, độ rộng, dòng dẫn dắt và rủi ro", "multi_title": "Tổng kết đa thị trường",
-        "multi_subtitle": "Chỉ số, dòng dẫn dắt và ranh giới rủi ro theo từng thị trường", "dashboard_subtitle": "Tóm tắt quyết định nhiều mã",
+        "market_subtitle": "Tổng kết phiên: chỉ số, độ rộng thị trường và rủi ro",
+        "market_title": "Điểm lại thị trường Việt Nam", "dashboard_subtitle": "Tóm tắt quyết định nhiều mã",
+        "stock_fallback_title": "Phân tích cổ phiếu", "report_fallback_title": "Báo cáo phân tích cổ phiếu",
         "score": "Điểm", "confidence": "Độ tin cậy", "trend": "Xu hướng", "core": "Kết luận cốt lõi",
         "snapshot": "Ảnh chụp thị trường", "execution": "Kế hoạch thực thi", "technical": "Tham chiếu kỹ thuật",
         "next_watch": "Theo dõi tiếp theo", "positive_catalysts": "Yếu tố hỗ trợ", "risk_alerts": "Cảnh báo rủi ro",
         "catalysts_risks": "Yếu tố hỗ trợ và rủi ro", "no_position": "Chưa nắm giữ", "holding": "Đang nắm giữ",
         "position": "Tỷ trọng", "entry": "Vào lệnh", "risk_control": "Quản trị rủi ro", "position_advice": "Khuyến nghị nắm giữ",
         "market_signal": "Tín hiệu thị trường", "today_conclusion": "Kết luận hôm nay", "breadth": "Độ rộng thị trường",
-        "dimensions": "Phân rã tín hiệu", "leaders": "Nhóm dẫn dắt", "laggards": "Nhóm tụt lại",
-        "focus_tag": "Theo dõi", "avoid_tag": "Tránh", "focus": "Trọng tâm theo dõi", "funds": "Theo dõi dòng tiền",
+        "dimensions": "Phân rã tín hiệu",
+        "focus_tag": "Theo dõi", "avoid_tag": "Tránh", "focus": "Trọng tâm theo dõi",
         "strategy": "Chiến lược phiên tới", "risks": "Cảnh báo rủi ro", "tagline": "Nghiên cứu cổ phiếu đơn giản và hiệu quả hơn",
         "open_source": "Dự án mã nguồn mở · GitHub", "xiaohongshu": "Xiaohongshu",
         "disclaimer": "Nội dung do AI tạo, chỉ phục vụ nghiên cứu, không phải khuyến nghị đầu tư. Thị trường luôn có rủi ro.",
-        "source": "Nguồn dữ liệu",
-    },
-    "zh": {
-        "brand": "AI 股票分析", "stock_subtitle": "个股决策卡 · 结论、点位与风险一图读懂",
-        "market_subtitle": "指数、宽度、主线与风险的收盘复盘", "multi_title": "多市场复盘",
-        "multi_subtitle": "按市场分段展示指数、主线与风险边界", "dashboard_subtitle": "多股决策摘要",
-        "score": "评分", "confidence": "置信度", "trend": "趋势", "core": "核心结论",
-        "snapshot": "市场快照", "execution": "执行计划", "technical": "技术参考",
-        "next_watch": "下一步观察", "positive_catalysts": "利好催化", "risk_alerts": "风险警报",
-        "catalysts_risks": "催化与风险", "no_position": "未持仓", "holding": "已持仓",
-        "position": "仓位", "entry": "建仓", "risk_control": "风控", "position_advice": "持仓建议",
-        "market_signal": "市场信号", "today_conclusion": "今日结论", "breadth": "市场宽度",
-        "dimensions": "信号拆解", "leaders": "强势板块", "laggards": "弱势板块",
-        "focus_tag": "关注", "avoid_tag": "回避", "focus": "重点跟踪", "funds": "资金观察",
-        "strategy": "明日策略", "risks": "风险提示", "tagline": "让股票研究更简单、更高效",
-        "open_source": "开源项目 · GitHub", "xiaohongshu": "小红书",
-        "disclaimer": "AI 生成，仅供研究交流，不构成投资建议。市场有风险，决策需谨慎。",
-        "source": "数据源",
+        "source": "Nguồn dữ liệu", "watch_prefix": "Theo dõi",
     },
     "en": {
         "brand": "AI Stock Analysis", "stock_subtitle": "Stock decision card · thesis, levels, and risks",
-        "market_subtitle": "Closing review of indices, breadth, themes, and risks", "multi_title": "Multi-market Recap",
-        "multi_subtitle": "Indices, themes, and risk boundaries by market", "dashboard_subtitle": "Multi-stock Decision Summary",
+        "market_subtitle": "Closing review of indices, breadth, and risks",
+        "market_title": "Vietnam Market Recap", "dashboard_subtitle": "Multi-stock Decision Summary",
+        "stock_fallback_title": "Stock Analysis", "report_fallback_title": "Stock Analysis Report",
         "score": "Score", "confidence": "Confidence", "trend": "Trend", "core": "Core Conclusion",
         "snapshot": "Market Snapshot", "execution": "Execution Plan", "technical": "Technical Reference",
         "next_watch": "Next Watch", "positive_catalysts": "Positive Catalysts", "risk_alerts": "Risk Alerts",
         "catalysts_risks": "Catalysts & Risks", "no_position": "No Position", "holding": "Holding",
         "position": "Position", "entry": "Entry", "risk_control": "Risk Control", "position_advice": "Position Advice",
         "market_signal": "Market Signal", "today_conclusion": "Conclusion", "breadth": "Market Breadth",
-        "dimensions": "Signal Breakdown", "leaders": "Leading Sectors", "laggards": "Lagging Sectors",
-        "focus_tag": "Watch", "avoid_tag": "Avoid", "focus": "Key Watchlist", "funds": "Fund Flow Watch",
+        "dimensions": "Signal Breakdown",
+        "focus_tag": "Watch", "avoid_tag": "Avoid", "focus": "Key Watchlist",
         "strategy": "Next-session Plan", "risks": "Risk Alerts", "tagline": "Make stock research simpler and more efficient",
         "open_source": "Open Source · GitHub", "xiaohongshu": "Xiaohongshu",
         "disclaimer": "AI-generated for research only; not investment advice. Markets involve risk.",
-        "source": "Source",
-    },
-    "ko": {
-        "brand": "AI 주식 분석", "stock_subtitle": "종목 의사결정 카드 · 결론, 가격대, 리스크",
-        "market_subtitle": "지수, 시장 폭, 주도주와 리스크 마감 리뷰", "multi_title": "다중 시장 리뷰",
-        "multi_subtitle": "시장별 지수, 주도주와 리스크 경계", "dashboard_subtitle": "다중 종목 의사결정 요약",
-        "score": "점수", "confidence": "신뢰도", "trend": "추세", "core": "핵심 결론",
-        "snapshot": "시세 스냅샷", "execution": "실행 계획", "technical": "기술 참고",
-        "next_watch": "다음 관찰", "positive_catalysts": "긍정 촉매", "risk_alerts": "리스크 경보",
-        "catalysts_risks": "촉매와 리스크", "no_position": "미보유", "holding": "보유 중",
-        "position": "포지션", "entry": "진입", "risk_control": "리스크 관리", "position_advice": "포지션 제안",
-        "market_signal": "시장 신호", "today_conclusion": "오늘의 결론", "breadth": "시장 폭",
-        "dimensions": "신호 분석", "leaders": "강세 섹터", "laggards": "약세 섹터",
-        "focus_tag": "관찰", "avoid_tag": "회피", "focus": "주요 관찰", "funds": "자금 흐름",
-        "strategy": "다음 거래일 전략", "risks": "리스크 경고", "tagline": "주식 리서치를 더 쉽고 효율적으로",
-        "open_source": "오픈소스 · GitHub", "xiaohongshu": "샤오홍슈",
-        "disclaimer": "AI 생성 연구 자료이며 투자 조언이 아닙니다. 투자에는 위험이 따릅니다.",
-        "source": "데이터 소스",
+        "source": "Source", "watch_prefix": "Watch",
     },
 }
+# Nhãn chỉ số: khóa nội bộ (giữ nguyên để tương thích parser) -> chữ hiển thị vi/en.
+# Metric labels: internal keys (kept for parser compatibility) -> vi/en display text.
 _POSTER_LABELS = {
     "vi": {
         "当前/收盘": "Hiện tại/Đóng cửa", "现价": "Giá hiện tại", "涨跌幅": "Biến động", "涨跌": "Biến động",
@@ -142,42 +113,7 @@ _POSTER_LABELS = {
         "涨停": "Limit-up", "跌停": "Limit-down", "成交额": "Turnover", "赚钱效应": "Breadth Score",
         "指数强度": "Index Strength", "涨停结构": "Limit Structure",
     },
-    "ko": {
-        "当前/收盘": "현재/종가", "现价": "현재가", "涨跌幅": "등락률", "涨跌": "등락",
-        "量比": "거래량 비율", "换手率": "회전율", "换手": "회전율", "理想买入": "이상적 진입",
-        "确认买入": "확인 진입", "止损": "손절", "目标": "목표", "均线": "이동평균",
-        "量能": "거래량", "趋势分": "추세 점수", "MA5乖离": "MA5 이격", "支撑": "지지", "压力": "저항",
-        "行动窗口": "행동 구간", "下次检查": "다음 점검", "上涨": "상승", "下跌": "하락",
-        "涨停": "상한가", "跌停": "하한가", "成交额": "거래대금", "赚钱效应": "시장 폭 점수",
-        "指数强度": "지수 강도", "涨停结构": "상한가 구조",
-    },
 }
-_MARKET_LABEL_PATTERNS = (
-    (
-        "A股",
-        re.compile(
-            r"(?:A\s*股|a[-\s]?share|\bcn\s+market\s+(?:review|recap)\b|\bchina\b|중국\s*A주)",
-            re.IGNORECASE,
-        ),
-    ),
-    (
-        "港股",
-        re.compile(
-            r"(?:港\s*股|\bhk\s+market\s+(?:review|recap)\b|hong\s+kong|홍콩)",
-            re.IGNORECASE,
-        ),
-    ),
-    (
-        "美股",
-        re.compile(
-            r"(?:美\s*股|\b(?:u\.?s\.?|us)\s+market\s+(?:review|recap)\b|united\s+states|미국)",
-            re.IGNORECASE,
-        ),
-    ),
-    ("日股", re.compile(r"(?:日\s*股|japan|일본)", re.IGNORECASE)),
-    ("韩股", re.compile(r"(?:韩\s*股|korea|한국)", re.IGNORECASE)),
-    ("越南股市", re.compile(r"(?:越\s*南|vietnam|việt\s*nam|베트남)", re.IGNORECASE)),
-)
 
 
 @dataclass
@@ -230,7 +166,7 @@ def share_image_branding_from_config(config: object) -> ShareImageBranding:
 @dataclass
 class StockPoster:
     title: str
-    language: str = "zh"
+    language: str = "vi"
     code: str = ""
     report_date: str = ""
     action: str = ""
@@ -255,7 +191,7 @@ class StockPoster:
 @dataclass
 class MarketPoster:
     title: str
-    language: str = "zh"
+    language: str = "vi"
     report_date: str = ""
     summary: str = ""
     score: str = ""
@@ -266,20 +202,11 @@ class MarketPoster:
     indices: list[tuple[str, str, str, str]] = field(default_factory=list)
     breadth: list[tuple[str, str, str]] = field(default_factory=list)
     dimensions: list[tuple[str, str, str]] = field(default_factory=list)
-    sectors: list[tuple[str, str, str]] = field(default_factory=list)
-    laggards: list[tuple[str, str, str]] = field(default_factory=list)
-    funds: list[tuple[str, str, str]] = field(default_factory=list)
     focus: list[str] = field(default_factory=list)
     avoid: list[str] = field(default_factory=list)
     catalysts: list[str] = field(default_factory=list)
     plan: list[str] = field(default_factory=list)
     risks: list[str] = field(default_factory=list)
-
-
-@dataclass
-class MarketSegment:
-    title: str
-    markdown: str
 
 
 def _asset_path(path_value: str) -> Optional[Path]:
@@ -366,31 +293,29 @@ def _poster_language(
     markdown_text: str,
     payload: Optional[Mapping[str, Any]] = None,
 ) -> str:
-    """Resolve poster chrome language from the persisted contract or report."""
+    """Xác định ngôn ngữ khung poster: 'en' hoặc 'vi' (mặc định).
+
+    Resolve poster chrome language: 'en' or 'vi' (default).
+    """
 
     if isinstance(payload, Mapping):
         raw_language = payload.get("report_language") or payload.get("language")
         normalized = str(raw_language or "").strip().lower().replace("_", "-")
         if normalized.startswith("en"):
             return "en"
-        if normalized.startswith("ko"):
-            return "ko"
-        if normalized.startswith("zh"):
-            return "zh"
-    if re.search(r"[\uac00-\ud7af]", markdown_text or ""):
-        return "ko"
+        if normalized:
+            return "vi"
     if re.search(
         r"(?:core conclusion|market snapshot|action levels|market (?:review|recap)|major indices)",
         markdown_text or "",
         re.IGNORECASE,
     ):
         return "en"
-    return "zh"
+    return "vi"
 
 
 def _poster_text(language: str, key: str) -> str:
-    # Fallback chain now targets Vietnamese: this deployment only produces Vietnamese reports, and falling back to Chinese
-    # for unregistered languages would mix Chinese text into the share image.
+    # Ngôn ngữ không hỗ trợ quay về tiếng Việt. / Unsupported languages fall back to Vietnamese.
     default_text = _POSTER_TEXT["vi"]
     return _POSTER_TEXT.get(language, default_text).get(key, default_text.get(key, key))
 
@@ -398,17 +323,15 @@ def _poster_text(language: str, key: str) -> str:
 def _poster_html_language(language: str) -> str:
     """Map the supported report language, not the market region, to HTML lang."""
 
-    return {"vi": "vi", "zh": "zh-CN", "en": "en", "ko": "ko"}.get(language, "vi")
+    return "en" if language == "en" else "vi"
 
 
 def _poster_label(language: str, label: str) -> str:
-    translated = _POSTER_LABELS.get(language, {}).get(label)
+    translated = _POSTER_LABELS.get(language, _POSTER_LABELS["vi"]).get(label)
     if translated:
         return translated
-    if language in ("en", "vi") and label.startswith("观察 "):
-        return label.replace("观察 ", "Watch ", 1)
-    if language == "ko" and label.startswith("观察 "):
-        return label.replace("观察 ", "관찰 ", 1)
+    if label.startswith("观察 "):
+        return label.replace("观察 ", f"{_poster_text(language, 'watch_prefix')} ", 1)
     return label
 
 
@@ -481,10 +404,6 @@ def _normalize_index_name(value: object) -> str:
     return _plain(_clean_value(value, limit=28)).strip().lower()
 
 
-def _normalize_ranking_name(value: object) -> str:
-    return _plain(_clean_value(value, limit=28)).strip().lower()
-
-
 def _merge_index_cards(
     existing: Iterable[tuple[str, str, str, str]],
     overlay: Iterable[Mapping[str, Any]],
@@ -540,65 +459,6 @@ def _merge_index_cards(
     return merged[:4]
 
 
-def _merge_sector_rankings(
-    existing: Iterable[tuple[str, str, str]],
-    overlay: Iterable[Mapping[str, Any]],
-    *,
-    positive_tone: str,
-    negative_tone: str,
-    default_tone: str,
-) -> list[tuple[str, str, str]]:
-    """Merge structured sector rows into Markdown rankings without dropping fallbacks."""
-
-    merged = list(existing)
-    positions = {
-        key: index
-        for index, (name, _change, _tone) in enumerate(merged)
-        if (key := _normalize_ranking_name(name))
-    }
-    for offset, item in enumerate(overlay):
-        name = _clean_value(item.get("name"), limit=18)
-        change = _signed_percent(item.get("change_pct"))
-        if not name:
-            continue
-        key = _normalize_ranking_name(name)
-        target_index = positions.get(key) if key else None
-        if target_index is None and change and offset < len(merged):
-            target_index = offset
-        if target_index is not None:
-            current_name, current_change, current_tone = merged[target_index]
-            current_key = _normalize_ranking_name(current_name)
-            merged_change = change or current_change
-            if merged_change.startswith("+"):
-                tone = positive_tone
-            elif merged_change.startswith("-"):
-                tone = negative_tone
-            else:
-                tone = current_tone or default_tone
-            merged[target_index] = (
-                name or current_name,
-                merged_change,
-                tone,
-            )
-            if current_key and current_key != key and positions.get(current_key) == target_index:
-                positions.pop(current_key, None)
-            if key:
-                positions[key] = target_index
-            continue
-        if len(merged) >= 3:
-            continue
-        merged.append(
-            (
-                name,
-                change,
-                positive_tone if change.startswith("+") else negative_tone if change.startswith("-") else default_tone,
-            )
-        )
-        if key:
-            positions[key] = len(merged) - 1
-    return merged[:3]
-
-
 def _number_text(value: object, *, suffix: str = "") -> str:
     if value is None or isinstance(value, bool):
         return ""
@@ -611,17 +471,17 @@ def _number_text(value: object, *, suffix: str = "") -> str:
 
 
 def _compact_turnover(value: object, unit: object) -> str:
-    """Render large CNY turnover figures without forcing narrow cards to wrap."""
+    """Hiển thị giá trị giao dịch (tỷ đồng) gọn trên thẻ. / Render turnover (VND bn) compactly."""
 
     unit_text = _clean_value(unit, limit=8)
     try:
         number = float(value)
     except (TypeError, ValueError):
         amount = _number_text(value)
-        return f"{amount}{unit_text}" if amount else ""
-    if unit_text in {"亿", "亿元"} and abs(number) >= 10000:
-        return f"{number / 10000:.2f}".rstrip("0").rstrip(".") + "万亿"
-    return f"{_number_text(number)}{unit_text}"
+        return f"{amount} {unit_text}".strip() if amount else ""
+    # Tỷ đồng: số nguyên có phân tách hàng nghìn, ví dụ "21,345 VND bn".
+    # VND bn: integer with thousands separators, e.g. "21,345 VND bn".
+    return f"{number:,.0f} {unit_text}".strip()
 
 
 def _signed_percent(value: object) -> str:
@@ -785,15 +645,6 @@ def _positive_color_from_change(raw_change: str, change: str) -> str:
     return _opposite_color(marker_color) if normalized_change.startswith("-") else marker_color
 
 
-def _ranking_change_tone(change: str, *, positive_tone: str, negative_tone: str, default_tone: str) -> str:
-    normalized_change = (change or "").strip()
-    if normalized_change.startswith("+"):
-        return positive_tone
-    if normalized_change.startswith("-"):
-        return negative_tone
-    return default_tone
-
-
 def _has_meaningful_section(markdown_text: str, *terms: str) -> bool:
     section = _section(markdown_text, *terms)
     if not section:
@@ -883,30 +734,6 @@ def _extract_date(markdown_text: str, fallback: date) -> str:
     return match.group(1) if match else fallback.isoformat()
 
 
-def _market_label(text: str) -> str:
-    scope = _plain(text)
-    for label, pattern in _MARKET_LABEL_PATTERNS:
-        if pattern.search(scope):
-            return label
-    return ""
-
-
-def _market_region_hint(markdown_text: str) -> str:
-    match = _MARKET_REGION_REF_RE.search(markdown_text or "")
-    return match.group(1).strip().lower() if match else ""
-
-
-def _market_label_for_region(region: str) -> str:
-    return {
-        "cn": "A股",
-        "hk": "港股",
-        "us": "美股",
-        "jp": "日股",
-        "kr": "韩股",
-        "vn": "越南股市",
-    }.get((region or "").strip().lower(), "")
-
-
 def _stock_heading_entry(raw_title: str) -> Optional[tuple[str, str]]:
     def _heading_name(fragment: str) -> str:
         name = _plain(fragment).strip(" -—()（）")
@@ -949,44 +776,14 @@ def _is_market_review_title(title: str) -> bool:
     return bool(_MARKET_RE.search(_plain(title)))
 
 
-def _has_market_scope(title: str) -> bool:
-    return bool(_MARKET_SCOPE_RE.search(_plain(title)))
-
-
-def _market_segments(markdown_text: str) -> list[MarketSegment]:
-    top_level_matches = [
-        match
-        for match in _HEADING_RE.finditer(markdown_text or "")
-        if len(match.group(1)) == 1
-    ]
-    matches = [match for match in top_level_matches if _is_market_review_title(match.group(2))]
-    if len(matches) < 2:
-        return []
-    if top_level_matches and matches[0].start() == top_level_matches[0].start():
-        first_title = matches[0].group(2)
-        if not _has_market_scope(first_title):
-            scoped_matches = [match for match in top_level_matches if _has_market_scope(match.group(2))]
-            if len(scoped_matches) >= 2:
-                matches = scoped_matches
-
-    segments: list[MarketSegment] = []
-    for index, match in enumerate(matches):
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(markdown_text)
-        segments.append(
-            MarketSegment(
-                title=_plain(match.group(2)),
-                markdown=markdown_text[match.start() : end].strip(),
-            )
-        )
-    return segments
-
-
 def _stock_data(markdown_text: str, generated_on: date) -> StockPoster:
+    language = _poster_language(markdown_text)
+    fallback_title = _poster_text(language, "stock_fallback_title")
     headings = _stock_headings(markdown_text)
     if headings:
         name, code = headings[0]
     else:
-        first_title = next((title for title, _body, _level in _extract_sections(markdown_text)), "个股分析")
+        first_title = next((title for title, _body, _level in _extract_sections(markdown_text)), fallback_title)
         entry = _stock_heading_entry(first_title)
         if entry:
             name, code = entry
@@ -1024,7 +821,7 @@ def _stock_data(markdown_text: str, generated_on: date) -> StockPoster:
         "",
     )
     quote_trend_match = re.search(
-        r"^\s*>\s+.*?(?:评分|score)\s*[:：]?\s*\*{0,2}\d{1,3}\*{0,2}\s*\|\s*([^\n|]+)",
+        r"^\s*>\s+.*?(?:评分|score|điểm)\s*[:：]?\s*\*{0,2}\d{1,3}\*{0,2}\s*\|\s*([^\n|]+)",
         markdown_text,
         re.IGNORECASE | re.MULTILINE,
     )
@@ -1035,8 +832,8 @@ def _stock_data(markdown_text: str, generated_on: date) -> StockPoster:
         conclusion = _clean_value(match.group(1), limit=110) if match else ""
 
     poster = StockPoster(
-        title=name or "个股分析",
-        language=_poster_language(markdown_text),
+        title=name or fallback_title,
+        language=language,
         code=code,
         report_date=_extract_date(markdown_text, generated_on),
         action=action_value,
@@ -1073,17 +870,24 @@ def _stock_data(markdown_text: str, generated_on: date) -> StockPoster:
             poster.snapshot.append((label, value, tone))
     poster.data_source = _mapped_value(snapshot_map, "数据源", "行情来源", "source")
 
-    data_section = _section(markdown_text, "数据透视", "data view", "技术面", "technicals")
+    data_section = _section(
+        markdown_text, "数据透视", "data view", "技术面", "technicals", "phân tích dữ liệu"
+    )
     data_map: dict[str, str] = {}
     for table in _parse_tables(data_section):
         data_map.update(_table_map(table))
-    ma = _labeled_value(data_section, "均线排列", "MA Alignment", limit=42)
-    ma = next((label for label in ("多头排列", "空头排列") if label in ma), _compact_text(ma, limit=16))
-    volume_ratio = _labeled_line(data_section, "量能", "成交量", "Volume", limit=64)
-    support = _mapped_value(data_map, "支撑位", "support")
-    resistance = _mapped_value(data_map, "压力位", "resistance")
+    ma = _labeled_value(data_section, "均线排列", "MA Alignment", "Sắp xếp đường MA", limit=42)
+    ma = next(
+        (label for label in ("MA xếp tăng", "MA xếp giảm", "多头排列", "空头排列") if label in ma),
+        _compact_text(ma, limit=16),
+    )
+    # Nhãn tiếng Việt dài hơn nên nới giới hạn để không cắt mất tỷ lệ chuyển nhượng.
+    # Vietnamese labels are longer; a wider limit keeps the turnover rate visible.
+    volume_ratio = _labeled_line(data_section, "量能", "成交量", "Volume", "Khối lượng", limit=80)
+    support = _mapped_value(data_map, "支撑位", "support", "hỗ trợ")
+    resistance = _mapped_value(data_map, "压力位", "resistance", "kháng cự")
     for label, value, tone in (
-        ("均线", ma, "positive" if "多头" in ma.lower() or "bull" in ma.lower() else "neutral"),
+        ("均线", ma, "positive" if any(k in ma.lower() for k in ("xếp tăng", "多头", "bull")) else "neutral"),
         ("量能", volume_ratio, "neutral"),
         ("支撑", support, "positive"),
         ("压力", resistance, "negative"),
@@ -1091,7 +895,10 @@ def _stock_data(markdown_text: str, generated_on: date) -> StockPoster:
         if value:
             poster.technical.append((label, value, tone))
 
-    battle = _section(markdown_text, "作战计划", "battle plan", "操作计划", "操作点位", "action levels")
+    battle = _section(
+        markdown_text, "作战计划", "battle plan", "操作计划", "操作点位", "action levels",
+        "kế hoạch giao dịch", "vùng giá hành động",
+    )
     sniper_table = _find_table(battle, "理想") or _find_table(battle, "ideal")
     sniper_values: dict[str, str] = {}
     if sniper_table:
@@ -1227,7 +1034,7 @@ def _stock_data_from_payload(
 
     ma_alignment = _clean_value(trend.get("ma_alignment"), limit=60)
     ma_summary = next(
-        (label for label in ("多头排列", "空头排列") if label in ma_alignment),
+        (label for label in ("MA xếp tăng", "MA xếp giảm", "多头排列", "空头排列") if label in ma_alignment),
         _compact_text(ma_alignment, limit=16),
     )
     support = _number_text(price.get("support_level"))
@@ -1236,7 +1043,13 @@ def _stock_data_from_payload(
     bias_ma5 = _signed_percent(price.get("bias_ma5"))
     payload_technical = [
         item for item in (
-            ("均线", ma_summary, "positive" if "多头" in ma_summary else "negative" if "空头" in ma_summary else "neutral"),
+            (
+                "均线",
+                ma_summary,
+                "positive" if any(k in ma_summary for k in ("xếp tăng", "多头"))
+                else "negative" if any(k in ma_summary for k in ("xếp giảm", "空头"))
+                else "neutral",
+            ),
             ("趋势分", trend_score, _tone_for_score(_number_text(trend.get("trend_score")))),
             ("MA5乖离", bias_ma5, "positive" if not bias_ma5.startswith("-") else "negative"),
             ("支撑", support, "positive"),
@@ -1305,22 +1118,12 @@ def _stock_data_from_payload(
 
 
 def _market_title(markdown_text: str) -> str:
+    """Tiêu đề poster thị trường (chỉ Việt Nam). / Market poster title (Vietnam only)."""
+
     first_title = next((title for title, _body, _level in _extract_sections(markdown_text)), "")
-    language = _poster_language(markdown_text)
-    if language in {"en", "ko", "vi"} and _is_market_review_title(first_title):
-        return first_title
-    market = _market_label(first_title)
-    if market:
-        return f"{market}市场复盘"
-    hinted_market = _market_label_for_region(_market_region_hint(markdown_text))
-    if hinted_market:
-        return f"{hinted_market}市场复盘"
-    market = _market_label(markdown_text[:600])
-    if market:
-        return f"{market}市场复盘"
     if _is_market_review_title(first_title):
         return first_title
-    return "A股市场复盘"
+    return _poster_text(_poster_language(markdown_text), "market_title")
 
 
 def _parsed_breadth_metrics(overview: str) -> list[tuple[str, str]]:
@@ -1385,27 +1188,15 @@ def _parse_index_bullets(index_section: str) -> list[tuple[str, str, str, str]]:
 
 
 def _direction_items(value: object, *, limit: int = 2) -> list[str]:
-    """Extract short sector/theme labels from a verbose plan sentence."""
+    """Tách nhãn ngắn từ câu kế hoạch dài. / Extract short labels from a verbose plan sentence."""
 
     text = _clean_value(value, limit=220)
     if not text:
         return []
-    text = re.sub(r"其[一二三四][、，,:：]?", "", text)
-    clauses = [part.strip(" ，,；;") for part in re.split(r"[；;]", text) if part.strip()]
+    clauses = [part.strip(" ,;") for part in re.split(r"[;]", text) if part.strip()]
     items: list[str] = []
     for clause in clauses:
-        qualified = re.findall(r"的([^，,；;等]{2,20})等", clause)
-        candidates = re.findall(
-            r"(?:^|[，,])([A-Za-z0-9一-鿿]+(?:、[A-Za-z0-9一-鿿]+)*)等",
-            clause,
-        )
-        if qualified:
-            label = qualified[-1]
-        elif candidates:
-            label = candidates[-1]
-        else:
-            label = re.split(r"[，,。]", clause, maxsplit=1)[0]
-        label = re.sub(r"^(?:关注方向|回避方向)[:：]?", "", label).strip()
+        label = re.split(r"[,.]", clause, maxsplit=1)[0]
         label = _compact_text(label, limit=24)
         if label and label not in items:
             items.append(label)
@@ -1414,31 +1205,19 @@ def _direction_items(value: object, *, limit: int = 2) -> list[str]:
     return items
 
 
-def _market_fund_metrics(markdown_text: str) -> list[tuple[str, str, str]]:
-    section = _section(markdown_text, "资金与情绪", "fund flows", "liquidity & sentiment")
-    if not section:
-        return []
-    metrics: list[tuple[str, str, str]] = []
-    ratio = re.search(r"涨跌比(?:接近|约为|约)?\s*([\d.]+\s*:\s*[\d.]+)", section)
-    if ratio:
-        metrics.append(("涨跌比", ratio.group(1).replace(" ", ""), "positive"))
-    increment = re.search(
-        r"较前(?:一交易日|日).*?放量(?:超|逾)?\s*([\d.]+)\s*亿元",
-        section,
-    )
-    if increment:
-        metrics.append(("增量成交", f"+{increment.group(1)}亿", "primary"))
-    if any(term in section for term in ("科技", "科创", "半导体")) and any(
-        term in section for term in ("分歧", "冲高回落", "兑现")
-    ):
-        metrics.append(("资金风格", "科技主导·高位分歧", "warning"))
-    return metrics[:3]
+# Thuật ngữ tiêu đề mục của báo cáo thị trường (en/vi).
+# Section heading terms for market reports (en/vi).
+_MARKET_SUMMARY_TERMS = ("market summary", "breadth & liquidity", "tóm tắt thị trường", "tổng quan thị trường")
+_MARKET_INDEX_TERMS = ("major indices", "index commentary", "chỉ số chính", "diễn biến chỉ số")
+_MARKET_CATALYST_TERMS = ("news catalysts", "tin tức", "chất xúc tác")
+_MARKET_PLAN_TERMS = ("strategy plan", "outlook", "kế hoạch", "triển vọng")
+_MARKET_RISK_TERMS = ("risk alerts", "cảnh báo rủi ro")
 
 
 def _market_data(markdown_text: str, generated_on: date) -> MarketPoster:
-    overview = _section(markdown_text, "盘面总览", "market summary", "breadth & liquidity", "시장 요약")
+    overview = _section(markdown_text, *_MARKET_SUMMARY_TERMS)
     score_match = re.search(
-        r"(?:盘面信号|市场信号|market signal|시장 신호)\*{0,2}\s*[:：]\s*(\d{1,3})/100(?:\s*[（(]([^，,)]+)[，,]\s*([^）)]+)[）)])?",
+        r"(?:market signal|tín hiệu thị trường)\*{0,2}\s*[:：]\s*(\d{1,3})/100(?:\s*[（(]([^，,)]+)[，,]\s*([^）)]+)[）)])?",
         markdown_text,
         re.IGNORECASE,
     )
@@ -1452,11 +1231,11 @@ def _market_data(markdown_text: str, generated_on: date) -> MarketPoster:
         temperature=_clean_value(score_match.group(2), limit=12) if score_match and score_match.group(2) else "",
         signal=_clean_value(score_match.group(3), limit=12) if score_match and score_match.group(3) else "",
         guidance=_compact_text(
-            _labeled_value(overview, "操作建议", "Guidance", "운용 제안", "가이던스", limit=100),
+            _labeled_value(overview, "Guidance", "Khuyến nghị", limit=100),
             limit=52,
         ),
     )
-    reason_text = _labeled_value(overview, "信号依据", "Drivers", "신호 근거", "동인", limit=220)
+    reason_text = _labeled_value(overview, "Drivers", "Động lực", limit=220)
     poster.reasons = [
         _compact_text(item, limit=34)
         for item in re.split(r"[；;]", reason_text)
@@ -1465,18 +1244,14 @@ def _market_data(markdown_text: str, generated_on: date) -> MarketPoster:
     if not poster.reasons and poster.summary:
         poster.reasons = _sentences(poster.summary, limit=2)
 
-    index_section = _section(markdown_text, "指数结构", "major indices", "index commentary", "주요 지수", "지수 구조")
-    index_table = (
-        _find_table(index_section, "指数", "涨跌幅")
-        or _find_table(index_section, "index", "change")
-        or _find_table(index_section, "지수", "등락률")
-    )
+    index_section = _section(markdown_text, *_MARKET_INDEX_TERMS)
+    index_table = _find_table(index_section, "index", "change")
     positive_color = "green"
     if index_table:
         headers = [header.lower() for header in index_table.headers]
-        name_i = next((i for i, value in enumerate(headers) if "指数" in value or "index" in value or "지수" in value), 0)
-        current_i = next((i for i, value in enumerate(headers) if "最新" in value or "last" in value or "최신" in value), 1)
-        change_i = next((i for i, value in enumerate(headers) if "涨跌幅" in value or "change" in value or "등락률" in value), 2)
+        name_i = next((i for i, value in enumerate(headers) if "index" in value), 0)
+        current_i = next((i for i, value in enumerate(headers) if "last" in value), 1)
+        change_i = next((i for i, value in enumerate(headers) if "change" in value), 2)
         for row_index, row in enumerate(index_table.rows[:4]):
             if len(row) > max(name_i, current_i, change_i):
                 raw_change = (
@@ -1498,118 +1273,36 @@ def _market_data(markdown_text: str, generated_on: date) -> MarketPoster:
             if inferred_positive_color:
                 positive_color = inferred_positive_color
 
-    breadth_table = (
-        _find_table(overview, "上涨", "成交额")
-        or _find_table(overview, "breadth")
-        or _find_table(overview, "상승", "거래대금")
-    )
-    if breadth_table:
-        mapping = _table_map(breadth_table)
-        advance = _mapped_value(mapping, "上涨/下跌", "advancers", "상승/하락")
-        limits = _mapped_value(mapping, "涨停/跌停", "limit-up", "상한가/하한가")
-        amount = _mapped_value(mapping, "成交额", "turnover", "거래대금")
-        if advance:
-            parts = [part.strip() for part in advance.split("/")]
-            if parts:
-                poster.breadth.append(("上涨", parts[0], positive_color))
-            if len(parts) > 1:
-                negative_color = "red" if positive_color == "green" else "green"
-                poster.breadth.append(("下跌", parts[1], negative_color))
-        if limits:
-            parts = [part.strip() for part in limits.split("/")]
-            if parts:
-                poster.breadth.append(("涨停", parts[0], positive_color))
-            if len(parts) > 1:
-                negative_color = "red" if positive_color == "green" else "green"
-                poster.breadth.append(("跌停", parts[1], negative_color))
-        if amount:
-            poster.breadth.append(("成交额", amount, "primary"))
-    if not poster.breadth:
-        for label, value in _parsed_breadth_metrics(overview):
-            if label == "上涨":
-                tone = positive_color
-            elif label in {"下跌", "跌停"}:
-                tone = "red" if positive_color == "green" else "green"
-            elif label == "涨停":
-                tone = positive_color
-            else:
-                tone = "primary"
-            poster.breadth.append((label, value, tone))
+    for label, value in _parsed_breadth_metrics(overview):
+        if label == "上涨":
+            tone = positive_color
+        elif label in {"下跌", "跌停"}:
+            tone = "red" if positive_color == "green" else "green"
+        elif label == "涨停":
+            tone = positive_color
+        else:
+            tone = "primary"
+        poster.breadth.append((label, value, tone))
 
-    sector_section = _section(markdown_text, "板块主线", "sector highlights", "섹터 하이라이트", "주도 섹터")
-    sector_table = (
-        _find_table(sector_section, "板块", "涨跌幅")
-        or _find_table(sector_section, "sector", "change")
-        or _find_table(sector_section, "섹터", "등락률")
-    )
-    if sector_table:
-        for row in sector_table.rows[:3]:
-            if len(row) >= 3:
-                change = _clean_value(row[-1], limit=12)
-                poster.sectors.append(
-                    (
-                        _clean_value(row[-2], limit=20),
-                        change,
-                        _ranking_change_tone(
-                            change,
-                            positive_tone=positive_color,
-                            negative_tone=_opposite_color(positive_color),
-                            default_tone=positive_color,
-                        ),
-                    )
-                )
-    sector_tables = [
-        table
-        for table in _parse_tables(sector_section)
-        if any(term in " ".join(table.headers).lower() for term in ("板块", "sector", "섹터"))
-    ]
-    if len(sector_tables) > 1:
-        for row in sector_tables[1].rows[:3]:
-            if len(row) >= 3:
-                change = _clean_value(row[-1], limit=12)
-                poster.laggards.append(
-                    (
-                        _clean_value(row[-2], limit=20),
-                        change,
-                        _ranking_change_tone(
-                            change,
-                            positive_tone=positive_color,
-                            negative_tone=_opposite_color(positive_color),
-                            default_tone=_opposite_color(positive_color),
-                        ),
-                    )
-                )
-
-    catalyst_section = _section(markdown_text, "消息催化", "news catalysts", "뉴스 촉매")
+    catalyst_section = _section(markdown_text, *_MARKET_CATALYST_TERMS)
     poster.catalysts = [
         _compact_text(item, limit=34)
         for item in (_section_items(catalyst_section, limit=2) or _sentences(catalyst_section, limit=2))
     ]
-    plan_section = _section(markdown_text, "明日交易计划", "strategy plan", "outlook", "내일 거래 계획", "내일 계획")
+    plan_section = _section(markdown_text, *_MARKET_PLAN_TERMS)
     poster.focus = _direction_items(
-        _labeled_value(plan_section, "关注方向", "focus", "관심 방향", limit=220)
+        _labeled_value(plan_section, "focus", "theo dõi", limit=220)
     )
     poster.avoid = _direction_items(
-        _labeled_value(plan_section, "回避方向", "avoid", "회피 방향", limit=220)
+        _labeled_value(plan_section, "avoid", "tránh", limit=220)
     )
-    poster.funds = _market_fund_metrics(markdown_text)
-    for label in ("结论", "仓位区间", "触发失效条件", "결론", "비중 구간", "무효화 조건"):
-        value = _labeled_value(plan_section, label, limit=86)
-        if value:
-            poster.plan.append(_compact_text(f"{label}：{value}", limit=32))
-        if len(poster.plan) >= 3:
-            break
-    if not poster.plan:
-        poster.plan = [
-            _compact_text(item, limit=32)
-            for item in (_section_items(plan_section, limit=3) or _sentences(plan_section, limit=3))
-        ]
+    poster.plan = [
+        _compact_text(item, limit=32)
+        for item in (_section_items(plan_section, limit=3) or _sentences(plan_section, limit=3))
+    ]
     poster.risks = [
         _compact_text(item, limit=34)
-        for item in _section_items(
-            _section(markdown_text, "风险提示", "risk alerts", "리스크 경보", "리스크 경고"),
-            limit=2,
-        )
+        for item in _section_items(_section(markdown_text, *_MARKET_RISK_TERMS), limit=2)
     ]
     return poster
 
@@ -1703,56 +1396,29 @@ def _market_data_from_payload(
         if exact_breadth:
             poster.breadth = _merge_metrics(poster.breadth, exact_breadth)
 
-    sectors = payload.get("sectors")
-    top_sectors = sectors.get("top") if isinstance(sectors, Mapping) else None
-    if isinstance(top_sectors, list):
-        structured_top = [item for item in top_sectors[:3] if isinstance(item, Mapping)]
-        if structured_top:
-            poster.sectors = _merge_sector_rankings(
-                poster.sectors,
-                structured_top,
-                positive_tone=positive_tone,
-                negative_tone=negative_tone,
-                default_tone=positive_tone,
-            )
-    bottom_sectors = sectors.get("bottom") if isinstance(sectors, Mapping) else None
-    if isinstance(bottom_sectors, list):
-        structured_bottom = [item for item in bottom_sectors[:3] if isinstance(item, Mapping)]
-        if structured_bottom:
-            poster.laggards = _merge_sector_rankings(
-                poster.laggards,
-                structured_bottom,
-                positive_tone=positive_tone,
-                negative_tone=negative_tone,
-                default_tone=negative_tone,
-            )
     return poster
 
 
 def _should_keep_market_fallback(markdown_text: str, data: MarketPoster) -> bool:
     expected_sections = (
         (
-            _has_meaningful_section(markdown_text, "盘面总览", "market summary", "breadth & liquidity", "시장 요약"),
+            _has_meaningful_section(markdown_text, *_MARKET_SUMMARY_TERMS),
             any((data.score, data.guidance, data.reasons, data.summary, data.breadth)),
         ),
         (
-            _has_meaningful_section(markdown_text, "指数结构", "major indices", "index commentary", "주요 지수", "지수 구조"),
+            _has_meaningful_section(markdown_text, *_MARKET_INDEX_TERMS),
             bool(data.indices),
         ),
         (
-            _has_meaningful_section(markdown_text, "板块主线", "sector highlights", "섹터 하이라이트", "주도 섹터"),
-            bool(data.sectors),
-        ),
-        (
-            _has_meaningful_section(markdown_text, "消息催化", "news catalysts", "뉴스 촉매"),
+            _has_meaningful_section(markdown_text, *_MARKET_CATALYST_TERMS),
             bool(data.catalysts),
         ),
         (
-            _has_meaningful_section(markdown_text, "明日交易计划", "strategy plan", "outlook", "내일 거래 계획", "내일 계획"),
+            _has_meaningful_section(markdown_text, *_MARKET_PLAN_TERMS),
             bool(data.plan),
         ),
         (
-            _has_meaningful_section(markdown_text, "风险提示", "risk alerts", "리스크 경보", "리스크 경고"),
+            _has_meaningful_section(markdown_text, *_MARKET_RISK_TERMS),
             bool(data.risks),
         ),
     )
@@ -1791,10 +1457,11 @@ def _tone_for_score(score: str) -> str:
 
 
 def _tone_for_trend(trend: str) -> str:
+    # Báo cáo tiếng Việt dùng "Tăng"/"Giảm" cho xu hướng. / Vietnamese reports use "Tăng"/"Giảm".
     normalized = (trend or "").lower()
-    if any(term in normalized for term in ("看多", "bull", "uptrend")):
+    if any(term in normalized for term in ("看多", "bull", "uptrend", "tăng")):
         return "positive"
-    if any(term in normalized for term in ("看空", "bear", "downtrend")):
+    if any(term in normalized for term in ("看空", "bear", "downtrend", "giảm")):
         return "negative"
     return "primary"
 
@@ -1927,21 +1594,6 @@ def _market_body(data: MarketPoster, fallback_html: str, markdown_text: str) -> 
         "◫",
         f'<div class="metric-grid dimension-grid">{_metric_cards(data.dimensions, language=language)}</div>',
     ) if data.dimensions else ""
-    sector_rows = "".join(
-        f'<div class="ranking-row"><b>{index:02d}</b><span>{_escape(name)}</span><strong class="{_escape(tone)}">{_escape(change)}</strong></div>'
-        for index, (name, change, tone) in enumerate(data.sectors, 1)
-    )
-    laggard_rows = "".join(
-        f'<div class="ranking-row lagging"><b>{index:02d}</b><span>{_escape(name)}</span><strong class="{_escape(tone)}">{_escape(change)}</strong></div>'
-        for index, (name, change, tone) in enumerate(data.laggards, 1)
-    )
-    sectors = _section_html(_poster_text(language, "leaders"), "◆", f'<div class="ranking">{sector_rows}</div>') if sector_rows else ""
-    laggards = _section_html(_poster_text(language, "laggards"), "◇", f'<div class="ranking">{laggard_rows}</div>') if laggard_rows else ""
-    sector_dual = (
-        f'<div class="market-two-column"><div class="market-left">{sectors}</div>'
-        f'<div class="market-right">{laggards}</div></div>'
-        if sectors or laggards else ""
-    )
     focus_rows = "".join(
         f'<div class="focus-row"><b>{_escape(_poster_text(language, "focus_tag"))}</b><span>{_escape(value)}</span></div>'
         for value in data.focus
@@ -1949,17 +1601,7 @@ def _market_body(data: MarketPoster, fallback_html: str, markdown_text: str) -> 
         f'<div class="focus-row avoid"><b>{_escape(_poster_text(language, "avoid_tag"))}</b><span>{_escape(value)}</span></div>'
         for value in data.avoid
     )
-    fund_rows = "".join(
-        f'<div class="fund-row {_escape(tone)}"><span>{_escape(_poster_label(language, label))}</span><strong>{_escape(value)}</strong></div>'
-        for label, value, tone in data.funds
-    )
     focus = _section_html(_poster_text(language, "focus"), "◎", f'<div class="focus-list">{focus_rows}</div>') if focus_rows else ""
-    funds = _section_html(_poster_text(language, "funds"), "↗", f'<div class="fund-list">{fund_rows}</div>') if fund_rows else ""
-    detail_dual = (
-        f'<div class="market-two-column market-details"><div class="market-left">{focus}</div>'
-        f'<div class="market-right">{funds}</div></div>'
-        if focus or funds else ""
-    )
     catalysts = _section_html(
         _poster_text(language, "positive_catalysts"),
         "✦",
@@ -1967,61 +1609,14 @@ def _market_body(data: MarketPoster, fallback_html: str, markdown_text: str) -> 
     ) if data.catalysts else ""
     plan = _section_html(_poster_text(language, "strategy"), "✓", _list_html(data.plan), "strategy-strip") if data.plan else ""
     risks = _section_html(_poster_text(language, "risks"), "!", _list_html(data.risks), "risk-strip") if data.risks else ""
-    structured = any((signal, indices, breadth, dimensions, sector_dual, detail_dual, catalysts, plan, risks))
+    structured = any((signal, indices, breadth, dimensions, focus, catalysts, plan, risks))
     keep_fallback = not structured or _should_keep_market_fallback(markdown_text, data)
     fallback = f'<section class="report-fallback"><article class="report-content">{fallback_html}</article></section>' if keep_fallback else ""
-    return f"{signal}{indices}{breadth}{dimensions}{sector_dual}{detail_dual}{catalysts}{plan}{risks}{fallback}"
+    return f"{signal}{indices}{breadth}{dimensions}{focus}{catalysts}{plan}{risks}{fallback}"
 
 
 def _generic_body(report_html: str) -> str:
     return f'<section class="report-fallback"><article class="report-content">{report_html}</article></section>'
-
-
-def _market_region_for_segment(segment: MarketSegment) -> str:
-    label = _market_label(segment.title) or _market_label(segment.markdown[:500])
-    return {
-        "A股": "cn",
-        "港股": "hk",
-        "美股": "us",
-        "日股": "jp",
-        "韩股": "kr",
-        "越南股市": "vn",
-    }.get(label, "")
-
-
-def _multi_market_body(
-    segments: list[MarketSegment],
-    generated_on: date,
-    structured_payload: Optional[Mapping[str, Any]] = None,
-) -> str:
-    blocks: list[str] = []
-    markets = structured_payload.get("markets") if isinstance(structured_payload, Mapping) else None
-    market_payloads = markets if isinstance(markets, Mapping) else {}
-    unused_regions = [
-        region for region in ("cn", "hk", "us", "jp", "kr", "vn")
-        if isinstance(market_payloads.get(region), Mapping)
-    ]
-    for segment in segments:
-        body_markdown = _HEADING_RE.sub("", segment.markdown, count=1).strip()
-        fallback_html = _render_markdown_fragment(body_markdown)
-        region = _market_region_for_segment(segment)
-        payload = market_payloads.get(region) if region else None
-        if not isinstance(payload, Mapping) and unused_regions:
-            payload = market_payloads.get(unused_regions[0])
-            region = unused_regions[0]
-        if region in unused_regions:
-            unused_regions.remove(region)
-        data = (
-            _market_data_from_payload(payload, segment.markdown, generated_on)
-            if isinstance(payload, Mapping)
-            else _market_data(segment.markdown, generated_on)
-        )
-        title = data.title or segment.title
-        blocks.append(
-            f'<section class="poster-section market-region-title"><h2><b>◎</b>{_escape(title)}</h2></section>'
-            f"{_market_body(data, fallback_html, segment.markdown)}"
-        )
-    return "".join(blocks)
 
 
 def _safe_web_url(value: str) -> str:
@@ -2037,7 +1632,7 @@ def _xiaohongshu_card(branding: ShareImageBranding, language: str) -> str:
     handle = branding.xiaohongshu_handle.strip()
     account = handle or branding.xiaohongshu_url.strip()
     qr_data_uri = _asset_data_uri(branding.xiaohongshu_qr_path)
-    qr_alt = f"{label}二维码" if language == "zh" else f"{label} QR"
+    qr_alt = f"{label} QR"
     image = (
         f'<div class="qr-frame"><img src="{qr_data_uri}" alt="{_escape(qr_alt)}"></div>'
         if qr_data_uri else ""
@@ -2091,9 +1686,8 @@ def build_share_image_html(
     generated = generated_on or date.today()
     language = _poster_language(markdown_text, structured_payload)
     headings = _extract_sections(markdown_text)
-    first_title = headings[0][0] if headings else "股票智能分析报告"
+    first_title = headings[0][0] if headings else _poster_text(language, "report_fallback_title")
     stock_headings = _stock_headings(markdown_text)
-    market_segments = _market_segments(markdown_text)
     candidate_market_titles = headings[:2]
     is_market = any(
         level <= 2 and _is_market_review_title(title)
@@ -2107,24 +1701,15 @@ def build_share_image_html(
     stamp = _extract_date(markdown_text, generated)
     source_line = ""
     if report_kind == "market":
-        if market_segments:
-            title = _poster_text(language, "multi_title")
-            subtitle = _poster_text(language, "multi_subtitle")
-            content = _multi_market_body(
-                market_segments,
-                generated,
-                structured_payload=structured_payload,
-            )
-        else:
-            data = (
-                _market_data_from_payload(structured_payload, markdown_text, generated)
-                if isinstance(structured_payload, Mapping)
-                else _market_data(markdown_text, generated)
-            )
-            title = data.title
-            language = data.language
-            subtitle = data.summary or _poster_text(language, "market_subtitle")
-            content = _market_body(data, fallback_html, markdown_text)
+        data = (
+            _market_data_from_payload(structured_payload, markdown_text, generated)
+            if isinstance(structured_payload, Mapping)
+            else _market_data(markdown_text, generated)
+        )
+        title = data.title
+        language = data.language
+        subtitle = data.summary or _poster_text(language, "market_subtitle")
+        content = _market_body(data, fallback_html, markdown_text)
     elif report_kind == "stock":
         data = (
             _stock_data_from_payload(structured_payload, markdown_text, generated)
@@ -2136,11 +1721,7 @@ def build_share_image_html(
         subtitle = _poster_text(language, "stock_subtitle")
         content = _stock_body(data, fallback_html)
         if data.data_source:
-            source_line = (
-                f" 数据源：{data.data_source}。"
-                if language == "zh"
-                else f" {_poster_text(language, 'source')}: {data.data_source}."
-            )
+            source_line = f" {_poster_text(language, 'source')}: {data.data_source}."
     else:
         title = first_title
         subtitle = _poster_text(language, "dashboard_subtitle")
@@ -2158,8 +1739,6 @@ def build_share_image_html(
     * {{ box-sizing: border-box; }}
     html, body {{ margin: 0; width: 1080px; background: #eef4fd; }}
     body {{ color: #081b40; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "Noto Sans CJK SC", "Noto Sans CJK KR", Arial, sans-serif; font-size: 22px; line-height: 1.5; -webkit-font-smoothing: antialiased; }}
-    html[lang="zh-CN"] body {{ font-family: "Noto Sans CJK SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }}
-    html[lang="ko"] body {{ font-family: "Noto Sans CJK KR", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }}
     .poster {{ width: 1080px; padding: 38px 34px 24px; border: 1px solid #aebdd4; border-radius: 28px; background: radial-gradient(circle at 92% 6%, rgba(48,123,255,.15), transparent 260px), linear-gradient(180deg,#fff 0%,#fbfdff 78%,#eef5ff 100%); }}
     .poster-header {{ display: table; width: 100%; margin-bottom: 28px; }}
     .brand, .meta {{ display: table-cell; vertical-align: middle; }}
