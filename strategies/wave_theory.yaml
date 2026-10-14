@@ -2,7 +2,7 @@
 # 5-wave impulse + 3-wave corrective pattern analysis for trend and position sizing.
 
 name: wave_theory
-display_name: 波浪理论
+display_name: "Lý thuyết sóng Elliott"
 display_name_en: "Elliott Wave Theory"
 description: Uses the Elliott Wave impulse and corrective wave structure to determine the current wave position and potential price targets.
 category: framework
@@ -11,7 +11,7 @@ required_tools:
   - get_daily_history
   - analyze_trend
   - get_realtime_quote
-aliases: [波浪, 波浪理论, 艾略特]
+aliases: ["lý thuyết sóng", "sóng elliott", "elliott wave", "elliott"]
 default_priority: 80
 market_regimes: [volatile]
 

@@ -1,7 +1,7 @@
 # Event Driven Strategy
 
 name: event_driven
-display_name: 事件驱动
+display_name: "Theo sự kiện"
 display_name_en: "Event Driven"
 description: Evaluates catalyst strength, probability of realization, and risk boundaries around events such as earnings, policy, M&A, orders, and product launches.
 category: framework
@@ -10,7 +10,7 @@ required_tools:
   - search_stock_news
   - get_realtime_quote
   - analyze_trend
-aliases: [事件驱动, 催化, 催化事件]
+aliases: ["theo sự kiện", "chất xúc tác", "sự kiện", "event driven"]
 default_priority: 45
 market_regimes: [sector_hot, volatile]
 

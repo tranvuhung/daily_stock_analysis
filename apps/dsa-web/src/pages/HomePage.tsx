@@ -25,6 +25,7 @@ import {
 import { useDashboardLifecycle, useHomeDashboardState } from '../hooks';
 import { useWatchlist } from '../hooks/useWatchlist';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
+import { localizeChatSkill } from '../locales/chatText';
 import type { SetupStatusResponse } from '../types/systemConfig';
 import { normalizeReportLanguage } from '../utils/reportLanguage';
 import type {
@@ -35,7 +36,7 @@ import type {
   TaskInfo,
 } from '../types/analysis';
 import type { RunFlowSnapshotSource } from '../types/runFlow';
-import { getTodayInShanghai } from '../utils/format';
+import { getTodayInVietnam } from '../utils/format';
 import { useStockIndex } from '../hooks/useStockIndex';
 import { resolveRegisteredIndexCanonical, toAssetAwareCodeKey, type AssetAwareAssetType } from '../utils/stockCode';
 
@@ -114,22 +115,22 @@ async function lookupWatchlistHistory(
   return results.filter((entry): entry is WatchlistHistoryLookupResult => entry !== undefined);
 }
 
-function getShanghaiDateKey(value?: string | null): string {
+function getVietnamDateKey(value?: string | null): string {
   if (!value) return '';
   const trimmed = value.trim();
   const normalized = SERVER_LOCAL_DATE_TIME_PATTERN.test(trimmed)
-    ? `${trimmed.replace(' ', 'T')}+08:00`
+    ? `${trimmed.replace(' ', 'T')}+07:00`
     : trimmed;
   const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(date);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(date);
 }
 
-function getShanghaiTimeValue(value?: string | null): number {
+function getVietnamTimeValue(value?: string | null): number {
   if (!value) return 0;
   const trimmed = value.trim();
   const normalized = SERVER_LOCAL_DATE_TIME_PATTERN.test(trimmed)
-    ? `${trimmed.replace(' ', 'T')}+08:00`
+    ? `${trimmed.replace(' ', 'T')}+07:00`
     : trimmed;
   const date = new Date(normalized);
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
@@ -217,7 +218,7 @@ async function getTodayAnalysisItems(dateKey: string): Promise<StockBarItem[]> {
   while (true) {
     const response = await historyApi.getList({
       // History dates are filtered in the server's local timezone. Query the
-      // adjacent dates too, then apply the exact Shanghai-day filter below.
+      // adjacent dates too, then apply the exact Vietnam-day filter below.
       startDate: shiftDateKey(dateKey, -1),
       endDate: shiftDateKey(dateKey, 1),
       page,
@@ -249,7 +250,7 @@ async function getTodayAnalysisItems(dateKey: string): Promise<StockBarItem[]> {
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { t } = useUiLanguage();
+  const { t, language } = useUiLanguage();
   const {
     index: stockIndexItems,
     fallback: isStockIndexFallback,
@@ -521,9 +522,15 @@ const HomePage: React.FC = () => {
     closeHistoryTrend();
   }, [closeHistoryTrend, isHistoryTrendOpen, isHistoryTrendUnavailable]);
 
+  // Tên/mô tả chiến lược theo ngôn ngữ UI (vi/en), dùng chung bảng dịch với trang Chat.
+  // Localize strategy names/descriptions by UI language, sharing the Chat page catalog.
+  const localizedAnalysisSkills = useMemo(
+    () => analysisSkills.map((skill) => localizeChatSkill(skill, language)),
+    [analysisSkills, language],
+  );
   const selectedStrategy = useMemo(
-    () => analysisSkills.find((skill) => skill.id === selectedStrategyId),
-    [analysisSkills, selectedStrategyId],
+    () => localizedAnalysisSkills.find((skill) => skill.id === selectedStrategyId),
+    [localizedAnalysisSkills, selectedStrategyId],
   );
   const selectedAnalysisSkills = useMemo(
     () => (selectedStrategyId ? [selectedStrategyId] : undefined),
@@ -532,13 +539,13 @@ const HomePage: React.FC = () => {
   const strategyOptions = useMemo(
     () => [
       { id: '', name: t('home.defaultStrategyName'), description: t('home.defaultStrategyDescription') },
-      ...analysisSkills.map((skill) => ({
+      ...localizedAnalysisSkills.map((skill) => ({
         id: skill.id,
         name: skill.name,
         description: skill.description,
       })),
     ],
-    [analysisSkills, t],
+    [localizedAnalysisSkills, t],
   );
   const closeStrategyMenu = useCallback((restoreFocus = false) => {
     setStrategyMenuOpen(false);
@@ -1101,7 +1108,7 @@ const HomePage: React.FC = () => {
     }
   }, [notify, pollMarketReviewStatus, scrollMarketReviewFeedbackIntoView, t]);
 
-  const todayDateKey = getTodayInShanghai();
+  const todayDateKey = getTodayInVietnam();
   useEffect(() => {
     if (sidebarWorkspaceTab !== 'today') {
       return undefined;
@@ -1194,7 +1201,7 @@ const HomePage: React.FC = () => {
         // (e.g. `VN30` -> identityKey `vn30`) without re-parsing.
         identityKey: identity.key,
         latestItem,
-        analyzedToday: !isTodayStatusLoading && !isTodayStatusUnknown && getShanghaiDateKey(latestItem?.lastAnalysisTime) === todayDateKey,
+        analyzedToday: !isTodayStatusLoading && !isTodayStatusUnknown && getVietnamDateKey(latestItem?.lastAnalysisTime) === todayDateKey,
         isTodayStatusLoading,
         isTodayStatusUnknown,
         activeTask: key ? activeTaskByCode.get(key) : undefined,
@@ -1238,7 +1245,7 @@ const HomePage: React.FC = () => {
       if (item.stockCode === 'MARKET' || item.reportType === 'market_review') {
         return;
       }
-      if (getShanghaiDateKey(item.lastAnalysisTime) !== todayDateKey) {
+      if (getVietnamDateKey(item.lastAnalysisTime) !== todayDateKey) {
         return;
       }
       itemsById.set(item.id, item);
@@ -1255,8 +1262,8 @@ const HomePage: React.FC = () => {
         if (rightScore !== leftScore) {
           return rightScore - leftScore;
         }
-        const leftTime = getShanghaiTimeValue(left.lastAnalysisTime);
-        const rightTime = getShanghaiTimeValue(right.lastAnalysisTime);
+        const leftTime = getVietnamTimeValue(left.lastAnalysisTime);
+        const rightTime = getVietnamTimeValue(right.lastAnalysisTime);
         return rightTime - leftTime;
       });
   }, [todayDateKey, todayHistoryItems]);

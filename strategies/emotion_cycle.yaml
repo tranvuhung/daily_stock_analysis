@@ -2,7 +2,7 @@
 # Uses market sentiment, turnover rate and volume pattern to time entries against crowd behavior.
 
 name: emotion_cycle
-display_name: 情绪周期
+display_name: "Chu kỳ tâm lý"
 display_name_en: "Sentiment Cycle"
 description: Uses market sentiment, turnover rate, and price-volume structure to identify sentiment lows (panic bottoms) and sentiment highs (euphoric tops), positioning against crowd sentiment.
 category: framework
@@ -12,7 +12,7 @@ required_tools:
   - get_realtime_quote
   - analyze_trend
   - search_stock_news
-aliases: [情绪, 情绪周期]
+aliases: ["chu kỳ tâm lý", "tâm lý", "sentiment cycle"]
 default_priority: 100
 market_regimes: [sector_hot]
 

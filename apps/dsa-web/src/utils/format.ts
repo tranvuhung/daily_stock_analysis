@@ -32,22 +32,22 @@ export const toDateInputValue = (date: Date): string => {
 };
 
 /**
- * Returns the date N days ago as YYYY-MM-DD in Asia/Shanghai timezone.
- * Consistent with getTodayInShanghai() so both ends of the date range
+ * Returns the date N days ago as YYYY-MM-DD in Asia/Ho_Chi_Minh timezone.
+ * Consistent with getTodayInVietnam() so both ends of the date range
  * are expressed in the same timezone as the backend.
  */
 export const getRecentStartDate = (days: number): string => {
   const date = new Date();
   date.setDate(date.getDate() - days);
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(date);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(date);
 };
 
 /**
- * Returns today's date as YYYY-MM-DD in Asia/Shanghai timezone.
+ * Returns today's date as YYYY-MM-DD in Asia/Ho_Chi_Minh timezone.
  * Use this instead of the browser-local date for market-day UI semantics.
  */
-export const getTodayInShanghai = (): string =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+export const getTodayInVietnam = (): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
 
 export const formatReportType = (value?: string): string => {
   if (!value) return '—';

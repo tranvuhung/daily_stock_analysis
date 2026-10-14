@@ -93,7 +93,7 @@ describe('HomeStockWorkspace', () => {
           sentimentScore: 88,
           operationAdvice: 'Buy',
           analysisCount: 1,
-          lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+          lastAnalysisTime: '2026-03-19T09:00:00+07:00',
         },
       }],
       selectedRecordId: 21,
@@ -165,7 +165,7 @@ describe('HomeStockWorkspace', () => {
       sentimentScore: 68,
       operationAdvice: 'neutral',
       analysisCount: 1,
-      lastAnalysisTime: '2026-03-18T09:20:00+08:00',
+      lastAnalysisTime: '2026-03-18T09:20:00+07:00',
     };
     const { onHistoryItemClick, rerenderWatchlistRows } = renderWorkspace({
       watchlistRows: [{
@@ -216,7 +216,7 @@ describe('HomeStockWorkspace', () => {
         sentimentScore: 72,
         operationAdvice: 'neutral',
         analysisCount: 1,
-        lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+        lastAnalysisTime: '2026-03-19T09:00:00+07:00',
       },
     }]);
 
@@ -245,7 +245,7 @@ describe('HomeStockWorkspace', () => {
         sentimentScore: 80,
         operationAdvice: 'buy',
         analysisCount: 1,
-        lastAnalysisTime: '2026-03-19T10:00:00+08:00',
+        lastAnalysisTime: '2026-03-19T10:00:00+07:00',
       },
     }]);
 
@@ -296,7 +296,7 @@ describe('HomeStockWorkspace', () => {
           sentimentScore: 88,
           operationAdvice: 'Buy',
           analysisCount: 1,
-          lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+          lastAnalysisTime: '2026-03-19T09:00:00+07:00',
         },
       }],
     });
@@ -319,7 +319,7 @@ describe('HomeStockWorkspace', () => {
           sentimentScore: 91,
           operationAdvice: 'Buy',
           analysisCount: 1,
-          lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+          lastAnalysisTime: '2026-03-19T09:00:00+07:00',
         },
       }],
       selectedStockCode: 'vnHPG',
@@ -342,7 +342,7 @@ describe('HomeStockWorkspace', () => {
             sentimentScore: 66,
             operationAdvice: 'Watch',
             analysisCount: 1,
-            lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+            lastAnalysisTime: '2026-03-19T09:00:00+07:00',
             assetType: 'index',
           },
         },
@@ -357,7 +357,7 @@ describe('HomeStockWorkspace', () => {
             sentimentScore: 71,
             operationAdvice: 'Buy',
             analysisCount: 1,
-            lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+            lastAnalysisTime: '2026-03-19T09:00:00+07:00',
             assetType: 'stock',
           },
         },
@@ -387,7 +387,7 @@ describe('HomeStockWorkspace', () => {
             sentimentScore: 66,
             operationAdvice: 'Watch',
             analysisCount: 2,
-            lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+            lastAnalysisTime: '2026-03-19T09:00:00+07:00',
             assetType: 'index',
           },
         },
@@ -402,7 +402,7 @@ describe('HomeStockWorkspace', () => {
             sentimentScore: 71,
             operationAdvice: 'Buy',
             analysisCount: 1,
-            lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+            lastAnalysisTime: '2026-03-19T09:00:00+07:00',
             assetType: 'stock',
           },
         },
@@ -461,7 +461,7 @@ describe('HomeStockWorkspace', () => {
             sentimentScore: 70,
             operationAdvice: 'Buy',
             analysisCount: 1,
-            lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+            lastAnalysisTime: '2026-03-19T09:00:00+07:00',
             assetType: 'stock',
           },
         },

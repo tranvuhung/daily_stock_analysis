@@ -2,7 +2,7 @@
 # MA5 crosses above MA10 (or MA10 above MA20) with volume confirmation.
 
 name: ma_golden_cross
-display_name: 均线金叉
+display_name: "Giao cắt vàng MA"
 display_name_en: "MA Golden Cross"
 description: Detects moving-average golden crosses confirmed by volume, a classic trend-reversal / trend-continuation signal.
 category: trend
@@ -10,7 +10,7 @@ core_rules: [1, 2, 3]
 required_tools:
   - get_daily_history
   - analyze_trend
-aliases: [均线金叉, 金叉]
+aliases: ["giao cắt vàng ma", "giao cắt vàng", "golden cross"]
 default_priority: 20
 market_regimes: [trending_up]
 

@@ -1,7 +1,7 @@
 # Growth Quality Strategy
 
 name: growth_quality
-display_name: 成长质量
+display_name: "Chất lượng tăng trưởng"
 display_name_en: "Growth Quality"
 description: Combines revenue and profit growth, ROE, cash flow, and industry runway to identify high-quality growth stocks and the risk of growth stalling.
 category: framework
@@ -11,7 +11,7 @@ required_tools:
   - get_realtime_quote
   - search_stock_news
   - analyze_trend
-aliases: [成长, 成长股, 成长质量]
+aliases: ["chất lượng tăng trưởng", "cổ phiếu tăng trưởng", "tăng trưởng", "growth quality"]
 default_priority: 55
 market_regimes: [trending_up]
 

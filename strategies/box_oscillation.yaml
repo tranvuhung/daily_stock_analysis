@@ -2,7 +2,7 @@
 # Buy at box support, sell at box resistance, profit from range-bound oscillation.
 
 name: box_oscillation
-display_name: 箱体震荡
+display_name: "Dao động hộp giá"
 display_name_en: "Box-Range Oscillation"
 description: Identifies the price box (trading range), buying near the box bottom and reducing near the box top; suited to sideways, range-bound markets.
 category: framework
@@ -11,7 +11,7 @@ required_tools:
   - get_daily_history
   - analyze_trend
   - get_realtime_quote
-aliases: [箱体, 箱体震荡]
+aliases: ["hộp giá", "dao động hộp giá", "đi ngang", "box range"]
 default_priority: 50
 market_regimes: [sideways]
 

@@ -4,7 +4,7 @@ import type { ParsedApiError } from '../api/error';
 import { getParsedApiError } from '../api/error';
 import { historyApi } from '../api/history';
 import type { AnalysisReport, HistoryItem, HistoryListResponse, ReportLanguage, StockBarItem, StockHistoryFilters, StockHistoryRange, TaskInfo } from '../types/analysis';
-import { getRecentStartDate, getTodayInShanghai } from '../utils/format';
+import { getRecentStartDate, getTodayInVietnam } from '../utils/format';
 import { toAssetAwareCodeKey, type AssetAwareAssetType } from '../utils/stockCode';
 import { isObviouslyInvalidStockQuery, looksLikeStockCode, validateStockCode } from '../utils/validation';
 
@@ -172,7 +172,7 @@ const initialState = {
 function buildHistoryParams(page: number) {
   return {
     startDate: getRecentStartDate(30),
-    endDate: getTodayInShanghai(),
+    endDate: getTodayInVietnam(),
     page,
     limit: PAGE_SIZE,
   };
@@ -207,10 +207,10 @@ function buildStockHistoryParams(stockCode: string, page: number, filters: Stock
 
   if (filters.range === '30d') {
     params.startDate = getRecentStartDate(30);
-    params.endDate = getTodayInShanghai();
+    params.endDate = getTodayInVietnam();
   } else if (filters.range === '90d') {
     params.startDate = getRecentStartDate(90);
-    params.endDate = getTodayInShanghai();
+    params.endDate = getTodayInVietnam();
   }
 
   return params;
@@ -353,7 +353,7 @@ function isDateInHistoryRange(createdAt: string | undefined, range: StockHistory
 
   const reportDate = createdAt.slice(0, 10);
   const startDate = range === '30d' ? getRecentStartDate(30) : getRecentStartDate(90);
-  const endDate = getTodayInShanghai();
+  const endDate = getTodayInVietnam();
 
   return reportDate >= startDate && reportDate <= endDate;
 }
@@ -1073,7 +1073,7 @@ export const useStockPoolStore = create<StockPoolState>((set, get) => ({
     try {
       const response = await historyApi.getStockBarList({
         startDate: getRecentStartDate(90),
-        endDate: getTodayInShanghai(),
+        endDate: getTodayInVietnam(),
       });
       if (requestSeq !== stockBarRequestSeq) {
         return;
@@ -1097,7 +1097,7 @@ export const useStockPoolStore = create<StockPoolState>((set, get) => ({
     try {
       const response = await historyApi.getStockBarList({
         startDate: getRecentStartDate(90),
-        endDate: getTodayInShanghai(),
+        endDate: getTodayInVietnam(),
       });
       if (requestSeq !== stockBarRequestSeq) {
         return;

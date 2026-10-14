@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] Bộ chọn "Chiến lược" ở trang phân tích hiển thị tên/mô tả chiến lược theo ngôn ngữ giao diện (vi/en) thay vì tên tiếng Trung; `display_name`/`aliases` của các chiến lược dựng sẵn trong `strategies/*.yaml` chuyển sang tiếng Việt (bot `/ask` nhận bí danh tiếng Việt/Anh), `strategies/README.md` dịch sang tiếng Việt.
+- [修复] Web tính "hôm nay" và giờ máy chủ không kèm múi giờ theo giờ Việt Nam (`Asia/Ho_Chi_Minh`, UTC+7) thay vì `Asia/Shanghai`.
 - [改进] Chỉ còn hỗ trợ thị trường Việt Nam (HOSE / HNX / UPCoM): gỡ toàn bộ A-share, Hồng Kông, Mỹ, Nhật, Hàn, Đài Loan khỏi code, cấu hình, Web và tài liệu; `SUPPORTED_MARKETS` chỉ còn đọc để tương thích, giá trị khác `vn` bị bỏ qua kèm cảnh báo. Xem `docs/market-support.md`.
 - [改进] Nguồn dữ liệu chỉ còn VCI, SSI, vnstock (tuỳ chọn) và Yahoo (dự phòng nến ngày HOSE); xoá fetcher akshare, efinance, tushare, pytdx, baostock, tencent, tickflow, longbridge, futu, finnhub, alphavantage và gỡ các dependency tương ứng khỏi `requirements.txt` (kèm `futu-api`, `fake-useragent`, `pypinyin`, `exchange-calendars`, `lark-oapi`, `dingtalk-stream`).
 - [改进] Gỡ các tính năng chỉ dành cho A-share: lọc cổ phiếu (screening), phân bố chip, cấu trúc thị trường / điểm nóng, dòng tiền và bảng ngành / concept, tâm lý mạng xã hội cổ phiếu Mỹ, dòng tiền ba nhóm tổ chức Đài Loan, làm mới chỉ mục cổ phiếu từ xa (kèm script `fetch_tushare_stock_list.py`, `generate_index_from_csv.py`, `refresh_stock_index.py`, `generate_stock_index.py`, `generate_longbridge_oauth_token.py`, `scripts/test.sh`, `scripts/stock_index_seeds/`).

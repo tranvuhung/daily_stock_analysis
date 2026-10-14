@@ -8,7 +8,7 @@ import type {
   TaskInfo,
   TaskListResponse,
 } from '../../types/analysis';
-import { getRecentStartDate, getTodayInShanghai } from '../../utils/format';
+import { getRecentStartDate, getTodayInVietnam } from '../../utils/format';
 import { useStockPoolStore } from '../stockPoolStore';
 
 vi.mock('../../api/history', () => ({
@@ -272,7 +272,7 @@ describe('stockPoolStore', () => {
     expect(historyApi.getList).toHaveBeenCalledWith({
       stockCode: 'HPG',
       startDate: getRecentStartDate(30),
-      endDate: getTodayInShanghai(),
+      endDate: getTodayInVietnam(),
       page: 1,
       limit: 20,
     });

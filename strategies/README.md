@@ -1,101 +1,101 @@
-# 交易策略目录 / Trading Strategies
+# Thư mục chiến lược giao dịch / Trading Strategies
 
-本目录存放 **自然语言交易策略文件**（YAML 格式）。系统启动时自动加载此目录下所有 `.yaml` 文件。
+Thư mục này chứa các **file chiến lược giao dịch viết bằng ngôn ngữ tự nhiên** (định dạng YAML). Khi khởi động, hệ thống tự nạp mọi file `.yaml` trong thư mục này.
 
-对用户和文档，我们继续把这些能力称为“策略”；在代码、配置和 API 字段里，它们统一命名为 `skill`，你可以把它理解为“可复用的策略能力包”。
+Với người dùng và tài liệu, ta gọi các năng lực này là "chiến lược". Trong code, cấu hình và trường API, chúng được đặt tên thống nhất là `skill` — có thể hiểu là "gói năng lực chiến lược tái sử dụng được".
 
-## 如何编写自定义策略（Strategy Skill）
+## Cách viết chiến lược tuỳ chỉnh (Strategy Skill)
 
-只需创建一个 `.yaml` 文件，用中文（或任意语言）描述你的交易策略即可，**无需编写任何代码**。
+Chỉ cần tạo một file `.yaml` mô tả chiến lược giao dịch bằng tiếng Việt hoặc tiếng Anh, **không cần viết code**.
 
-### 最简模板
+### Mẫu tối giản
 
 ```yaml
-name: my_strategy          # 唯一标识（英文，下划线连接）
-display_name: 我的策略      # 显示名称（中文）
-description: 简短描述策略用途
+name: my_strategy          # Định danh duy nhất (chữ Latin, nối bằng gạch dưới)
+display_name: Chiến lược của tôi   # Tên hiển thị trên Web/Bot/báo cáo
+description: Mô tả ngắn công dụng của chiến lược
 
 instructions: |
-  你的策略描述...
-  用自然语言写出判断标准、入场条件、出场条件等。
-  可以引用工具名称（如 get_daily_history、analyze_trend）来指导 AI 使用哪些数据。
+  Mô tả chiến lược của bạn...
+  Viết bằng ngôn ngữ tự nhiên: tiêu chí đánh giá, điều kiện vào lệnh, điều kiện thoát lệnh...
+  Có thể nhắc tên công cụ (như get_daily_history, analyze_trend) để hướng dẫn AI dùng dữ liệu nào.
 ```
 
-### 完整模板
+### Mẫu đầy đủ
 
 ```yaml
 name: my_strategy
-display_name: 我的策略
-# 可选：写入 LLM prompt 的英文名（未填写时使用 display_name）。
-# display_name / aliases 仍用于 Web、Bot 与报告的名称匹配，内置策略的这两项保持中文。
-# Tùy chọn: tên tiếng Anh đưa vào prompt; display_name/aliases vẫn dùng để đối chiếu trên Web/Bot/báo cáo.
+display_name: Chiến lược của tôi
+# Tuỳ chọn: tên tiếng Anh đưa vào prompt LLM (không điền thì dùng display_name).
+# display_name / aliases vẫn dùng để hiển thị và đối chiếu tên trên Web, Bot và báo cáo.
+# Optional: English name used inside LLM prompts; display_name/aliases stay for UI matching.
 display_name_en: My Strategy
-description: 简短描述策略适用的市场场景
+description: Mô tả ngắn bối cảnh thị trường phù hợp với chiến lược
 
-# 策略分类：trend（趋势）、pattern（形态）、reversal（反转）、framework（框架）
+# Phân loại: trend (xu hướng), pattern (mô hình), reversal (đảo chiều), framework (khung phân tích)
 category: trend
 
-# 关联的核心交易理念编号（1-7），可选
+# Số thứ tự các nguyên tắc giao dịch cốt lõi liên quan (1-7), tuỳ chọn
 core_rules: [1, 2]
 
-# 策略需要使用的工具列表，可选
-# 可用工具：get_daily_history, analyze_trend, get_realtime_quote,
-#           search_stock_news, get_stock_info
+# Danh sách công cụ chiến lược cần dùng, tuỳ chọn
+# Công cụ có sẵn: get_daily_history, analyze_trend, get_realtime_quote,
+#                 search_stock_news, get_stock_info
 required_tools:
   - get_daily_history
   - analyze_trend
 
-# 可选别名（用于 /ask 等自然语言技能选择）
-aliases: [我的战法, 我的模型]
+# Bí danh tuỳ chọn (dùng cho /ask và chọn chiến lược bằng ngôn ngữ tự nhiên)
+aliases: ["chiến lược của tôi", "mô hình của tôi"]
 
-# 以下元数据用于驱动默认行为（可选）
-# default_active: 是否属于默认激活技能集
-# default_router: 是否属于路由 fallback 技能集
-# default_priority: 默认展示/排序优先级，数值越小越靠前
-# market_regimes: 该技能优先适配的市场状态标签
+# Metadata điều khiển hành vi mặc định (tuỳ chọn)
+# default_active: có thuộc tập chiến lược kích hoạt mặc định không
+# default_router: có thuộc tập fallback của router không
+# default_priority: thứ tự hiển thị/ưu tiên mặc định, số càng nhỏ càng đứng trước
+# market_regimes: nhãn trạng thái thị trường mà chiến lược ưu tiên
 default_active: true
 default_router: false
 default_priority: 100
 market_regimes: [trending_up]
 
-# 策略详细说明（自然语言，支持 Markdown 格式）
+# Hướng dẫn chi tiết (ngôn ngữ tự nhiên, hỗ trợ Markdown)
 instructions: |
-  **我的策略名称**
+  **Tên chiến lược của tôi**
 
-  判断标准：
+  Tiêu chí đánh giá:
 
-  1. **条件一**：
-     - 使用 `analyze_trend` 检查均线排列。
-     - 描述你期望看到的趋势特征...
+  1. **Điều kiện 1**:
+     - Dùng `analyze_trend` kiểm tra cách sắp xếp các đường MA.
+     - Mô tả đặc điểm xu hướng bạn mong muốn...
 
-  2. **条件二**：
-     - 描述量能要求...
+  2. **Điều kiện 2**:
+     - Mô tả yêu cầu về khối lượng...
 
-  评分调整：
-  - 满足条件时建议的 sentiment_score 调整
-  - 在 `buy_reason` 中注明策略名称
+  Điều chỉnh điểm:
+  - Mức điều chỉnh sentiment_score đề xuất khi thoả điều kiện
+  - Ghi tên chiến lược trong `buy_reason`
 ```
 
-### 核心交易理念参考
+### Tham chiếu nguyên tắc giao dịch cốt lõi
 
-| 编号 | 理念 |
-|------|------|
-| 1 | 严进策略：乖离率 < 5% 才考虑入场 |
-| 2 | 趋势交易：MA5 > MA10 > MA20 多头排列 |
-| 3 | 效率优先：量能确认趋势有效性 |
-| 4 | 买点偏好：优先回踩均线支撑 |
-| 5 | 风险排查：利空新闻一票否决 |
-| 6 | 量价配合：成交量验证价格运动 |
-| 7 | 强势趋势股放宽：龙头股可适当放宽标准 |
+| Số | Nguyên tắc |
+|----|------------|
+| 1 | Vào lệnh chặt chẽ: chỉ cân nhắc khi độ lệch so với MA < 5% |
+| 2 | Giao dịch theo xu hướng: MA5 > MA10 > MA20 xếp tăng |
+| 3 | Hiệu quả trước: khối lượng xác nhận xu hướng |
+| 4 | Ưu tiên điểm mua: điều chỉnh về hỗ trợ của đường MA |
+| 5 | Rà soát rủi ro: tin xấu là phủ quyết |
+| 6 | Giá – khối lượng đồng thuận: khối lượng xác nhận biến động giá |
+| 7 | Nới lỏng cho cổ phiếu xu hướng mạnh: cổ phiếu dẫn dắt có thể nới tiêu chí |
 
-## 自定义策略目录
+## Thư mục chiến lược tuỳ chỉnh
 
-除了本目录（内置策略），你还可以通过环境变量指定额外的自定义策略目录：
+Ngoài thư mục này (chiến lược dựng sẵn), bạn có thể chỉ định thêm thư mục chiến lược tuỳ chỉnh qua biến môi trường:
 
 ```env
 AGENT_SKILL_DIR=./my_skills
 ```
 
-系统会同时加载内置策略和自定义策略。如果名称冲突，自定义策略覆盖内置策略。
+Hệ thống nạp cả chiến lược dựng sẵn lẫn chiến lược tuỳ chỉnh. Nếu trùng tên, chiến lược tuỳ chỉnh ghi đè chiến lược dựng sẵn.
 
-环境变量名仍然是 `AGENT_SKILL_DIR`，这是内部统一命名后的配置入口；在产品语义上，它依然表示“自定义策略目录”。
+Tên biến môi trường vẫn là `AGENT_SKILL_DIR` (tên cấu hình nội bộ đã thống nhất); về mặt sản phẩm, nó vẫn có nghĩa là "thư mục chiến lược tuỳ chỉnh".

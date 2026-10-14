@@ -54,11 +54,14 @@ def test_codex_chat_prompt_has_no_han() -> None:
 
 
 @pytest.mark.parametrize("filename", sorted(f for f in os.listdir(_STRATEGY_DIR) if f.endswith(".yaml")))
-def test_builtin_strategy_yaml_is_english_except_ui_names(filename: str) -> None:
+def test_builtin_strategy_yaml_has_no_han(filename: str) -> None:
     path = os.path.join(_STRATEGY_DIR, filename)
     data = yaml.safe_load(open(path, encoding="utf-8"))
 
-    # display_name / aliases giữ tiếng Trung: Web, bot và báo cáo dùng làm khoá đối chiếu.
+    # display_name / aliases hiển thị trên Web/Bot nên cũng không được chứa chữ Hán.
+    # display_name / aliases are user-facing, so they must be Han-free as well.
+    assert data["display_name"] and not _HAN.search(data["display_name"])
+    assert not any(_HAN.search(str(alias)) for alias in data.get("aliases") or [])
     assert data["display_name_en"] and not _HAN.search(data["display_name_en"])
     assert not _HAN.search(data["description"])
     assert not _HAN.search(data["instructions"])

@@ -2,7 +2,7 @@
 # K-line pattern: bullish → 3 small bearish → bullish. Consolidation end signal.
 
 name: one_yang_three_yin
-display_name: 一阳夹三阴
+display_name: "Một nến tăng kẹp ba nến giảm"
 display_name_en: "One Yang Three Yin"
 description: Detects the One Yang Three Yin candlestick consolidation pattern, a trend-continuation entry signal.
 category: pattern
@@ -10,7 +10,7 @@ core_rules: [2, 4]
 required_tools:
   - get_daily_history
   - analyze_trend
-aliases: [一阳穿三阴, 一阳夹三阴]
+aliases: ["một tăng ba giảm", "một nến tăng kẹp ba nến giảm", "one yang three yin"]
 default_priority: 110
 
 instructions: |

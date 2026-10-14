@@ -1,7 +1,7 @@
 # Expectation Repricing Strategy
 
 name: expectation_repricing
-display_name: 预期重估
+display_name: "Định giá lại kỳ vọng"
 display_name_en: "Expectation Repricing"
 description: Analyzes shifts in earnings, policy, and valuation expectations to find expectation-gap repair opportunities or pullback risk after expectations overheat.
 category: framework
@@ -11,7 +11,7 @@ required_tools:
   - get_stock_info
   - get_realtime_quote
   - analyze_trend
-aliases: [预期, 预期差, 预期重估]
+aliases: ["định giá lại kỳ vọng", "chênh lệch kỳ vọng", "kỳ vọng", "expectation repricing"]
 default_priority: 65
 market_regimes: [volatile, sector_hot]
 

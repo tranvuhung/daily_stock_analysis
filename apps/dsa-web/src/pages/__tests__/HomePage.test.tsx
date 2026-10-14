@@ -130,7 +130,7 @@ function configureWatchlistBatch(count: number): string[] {
       sentimentScore: 60,
       operationAdvice: 'Watch',
       analysisCount: 1,
-      lastAnalysisTime: '2026-01-01T09:00:00+08:00',
+      lastAnalysisTime: '2026-01-01T09:00:00+07:00',
     })),
   });
   vi.mocked(historyApi.getList).mockResolvedValue({
@@ -469,8 +469,8 @@ describe('HomePage', () => {
     expect(await screen.findByText('Market recap summary')).toBeInTheDocument();
   });
 
-  it('treats timezone-less stock-bar timestamps as Shanghai local time for watchlist pending state', async () => {
-    const todayInShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+  it('treats timezone-less stock-bar timestamps as Vietnam local time for watchlist pending state', async () => {
+    const todayInVietnam = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
     vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['HPG']);
     vi.mocked(historyApi.getStockBarList).mockResolvedValue({
       total: 1,
@@ -482,7 +482,7 @@ describe('HomePage', () => {
         sentimentScore: 72,
         operationAdvice: 'Watch',
         analysisCount: 2,
-        lastAnalysisTime: `${todayInShanghai}T23:30:00`,
+        lastAnalysisTime: `${todayInVietnam}T23:30:00`,
       }],
     });
     vi.mocked(historyApi.getList).mockResolvedValue({
@@ -517,7 +517,7 @@ describe('HomePage', () => {
         sentimentScore: 88,
         operationAdvice: 'Buy',
         analysisCount: 1,
-        lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+        lastAnalysisTime: '2026-03-19T09:00:00+07:00',
       }],
     });
     vi.mocked(historyApi.getList).mockResolvedValue({
@@ -576,7 +576,7 @@ describe('HomePage', () => {
           sentimentScore: 70,
           operationAdvice: 'Watch',
           analysisCount: 3,
-          lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+          lastAnalysisTime: '2026-03-19T09:00:00+07:00',
           assetType: 'index',
         },
         {
@@ -587,7 +587,7 @@ describe('HomePage', () => {
           sentimentScore: 75,
           operationAdvice: 'Buy',
           analysisCount: 1,
-          lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+          lastAnalysisTime: '2026-03-19T09:00:00+07:00',
           assetType: 'stock',
         },
       ],
@@ -722,7 +722,7 @@ describe('HomePage', () => {
         sentimentScore: 75,
         operationAdvice: 'Buy',
         analysisCount: 1,
-        lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+        lastAnalysisTime: '2026-03-19T09:00:00+07:00',
         assetType: 'stock',
       }],
     });
@@ -758,7 +758,7 @@ describe('HomePage', () => {
         sentimentScore: 88,
         operationAdvice: 'Buy',
         analysisCount: 1,
-        lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+        lastAnalysisTime: '2026-03-19T09:00:00+07:00',
       }],
     });
     vi.mocked(historyApi.getList).mockResolvedValue({
@@ -823,7 +823,7 @@ describe('HomePage', () => {
   });
 
   it('blocks pending watchlist submission when the stock-bar refresh after completion fails', async () => {
-    const todayInShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+    const todayInVietnam = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
     vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['HPG']);
     vi.mocked(historyApi.getStockBarList)
       .mockResolvedValueOnce({
@@ -836,7 +836,7 @@ describe('HomePage', () => {
           sentimentScore: 72,
           operationAdvice: 'Watch',
           analysisCount: 1,
-          lastAnalysisTime: '2026-01-01T09:00:00+08:00',
+          lastAnalysisTime: '2026-01-01T09:00:00+07:00',
         }],
       })
       .mockRejectedValueOnce(new Error('temporary stock-bar failure'))
@@ -850,7 +850,7 @@ describe('HomePage', () => {
           sentimentScore: 80,
           operationAdvice: 'Watch',
           analysisCount: 2,
-          lastAnalysisTime: `${todayInShanghai}T10:00:00+08:00`,
+          lastAnalysisTime: `${todayInVietnam}T10:00:00+07:00`,
         }],
       });
     vi.mocked(historyApi.getList).mockResolvedValue({
@@ -912,7 +912,7 @@ describe('HomePage', () => {
           sentimentScore: 72,
           operationAdvice: 'Watch',
           analysisCount: 1,
-          lastAnalysisTime: '2026-01-01T09:00:00+08:00',
+          lastAnalysisTime: '2026-01-01T09:00:00+07:00',
         }],
       })
       .mockReturnValueOnce(completionStockBarPromise);
@@ -930,7 +930,7 @@ describe('HomePage', () => {
             reportType: 'detailed' as const,
             sentimentScore: 68,
             operationAdvice: 'Trung tính',
-            createdAt: '2026-01-01T09:20:00+08:00',
+            createdAt: '2026-01-01T09:20:00+07:00',
           }],
         });
       }
@@ -1001,7 +1001,7 @@ describe('HomePage', () => {
       sentimentScore: 72,
       operationAdvice: 'Watch',
       analysisCount: 1,
-      lastAnalysisTime: '2026-01-01T09:00:00+08:00',
+      lastAnalysisTime: '2026-01-01T09:00:00+07:00',
     };
     vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['HPG']);
     vi.mocked(historyApi.getStockBarList)
@@ -1057,7 +1057,7 @@ describe('HomePage', () => {
       reportType: 'detailed' as const,
       sentimentScore: 68,
       operationAdvice: 'Trung tính',
-      createdAt: '2026-01-01T09:20:00+08:00',
+      createdAt: '2026-01-01T09:20:00+07:00',
     };
     vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['FPT']);
     vi.mocked(historyApi.getStockBarList)
@@ -1118,7 +1118,7 @@ describe('HomePage', () => {
           sentimentScore: 80,
           operationAdvice: 'Watch',
           analysisCount: 2,
-          lastAnalysisTime: '2026-03-18T10:00:00+08:00',
+          lastAnalysisTime: '2026-03-18T10:00:00+07:00',
         }],
       });
       await manualRefreshPromise;
@@ -1128,7 +1128,7 @@ describe('HomePage', () => {
   });
 
   it('falls back to watchlist history lookup when watchlist code is outside stock-bar window', async () => {
-    const todayInShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+    const todayInVietnam = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
     vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['FPT']);
     vi.mocked(historyApi.getStockBarList).mockResolvedValue({
       total: 1,
@@ -1140,7 +1140,7 @@ describe('HomePage', () => {
         sentimentScore: 72,
         operationAdvice: 'Watch',
         analysisCount: 2,
-        lastAnalysisTime: `${todayInShanghai}T22:00:00`,
+        lastAnalysisTime: `${todayInVietnam}T22:00:00`,
       }],
     });
     vi.mocked(historyApi.getList).mockImplementation((params: { stockCode?: string } = {}) => {
@@ -1157,7 +1157,7 @@ describe('HomePage', () => {
             reportType: 'detailed' as const,
             sentimentScore: 68,
             operationAdvice: 'Trung tính',
-            createdAt: `${todayInShanghai}T09:20:00`,
+            createdAt: `${todayInVietnam}T09:20:00`,
           }],
         });
       }
@@ -1182,7 +1182,7 @@ describe('HomePage', () => {
             reportType: 'detailed' as const,
             sentimentScore: 68,
             operationAdvice: 'Trung tính',
-            createdAt: `${todayInShanghai}T09:20:00`,
+            createdAt: `${todayInVietnam}T09:20:00`,
           }],
         });
       }
@@ -1287,7 +1287,7 @@ describe('HomePage', () => {
   });
 
   it('keeps pending watchlist submission disabled while fallback history lookup is unresolved', async () => {
-    const todayInShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+    const todayInVietnam = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
     let resolveAaplHistory!: (response: Awaited<ReturnType<typeof historyApi.getList>>) => void;
     const aaplHistoryPromise = new Promise<Awaited<ReturnType<typeof historyApi.getList>>>((resolve) => {
       resolveAaplHistory = resolve;
@@ -1304,7 +1304,7 @@ describe('HomePage', () => {
         sentimentScore: 72,
         operationAdvice: 'Watch',
         analysisCount: 2,
-        lastAnalysisTime: `${todayInShanghai}T22:00:00`,
+        lastAnalysisTime: `${todayInVietnam}T22:00:00`,
       }],
     });
     vi.mocked(historyApi.getList).mockImplementation((params: { stockCode?: string; limit?: number } = {}) => {
@@ -1354,7 +1354,7 @@ describe('HomePage', () => {
           reportType: 'detailed',
           sentimentScore: 68,
           operationAdvice: 'Trung tính',
-          createdAt: `${todayInShanghai}T09:20:00`,
+          createdAt: `${todayInVietnam}T09:20:00`,
         }],
       });
       await aaplHistoryPromise;
@@ -1363,7 +1363,7 @@ describe('HomePage', () => {
   });
 
   it('does not show no-detail feedback while watchlist fallback history lookup is still pending', async () => {
-    const todayInShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+    const todayInVietnam = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
     let resolveAaplHistory!: (response: Awaited<ReturnType<typeof historyApi.getList>>) => void;
     const aaplHistoryPromise = new Promise<Awaited<ReturnType<typeof historyApi.getList>>>((resolve) => {
       resolveAaplHistory = resolve;
@@ -1380,7 +1380,7 @@ describe('HomePage', () => {
         sentimentScore: 72,
         operationAdvice: 'Watch',
         analysisCount: 2,
-        lastAnalysisTime: `${todayInShanghai}T22:00:00`,
+        lastAnalysisTime: `${todayInVietnam}T22:00:00`,
       }],
     });
     vi.mocked(historyApi.getList).mockImplementation((params: { stockCode?: string; limit?: number } = {}) => {
@@ -1403,7 +1403,7 @@ describe('HomePage', () => {
         stockName: 'Apple',
         reportType: 'detailed',
         reportLanguage: 'vi',
-        createdAt: `${todayInShanghai}T09:20:00`,
+        createdAt: `${todayInVietnam}T09:20:00`,
       },
       summary: {
         analysisSummary: 'FPT analysis summary',
@@ -1447,7 +1447,7 @@ describe('HomePage', () => {
           reportType: 'detailed',
           sentimentScore: 68,
           operationAdvice: 'Trung tính',
-          createdAt: `${todayInShanghai}T09:20:00`,
+          createdAt: `${todayInVietnam}T09:20:00`,
         }],
       });
       await aaplHistoryPromise;
@@ -1518,7 +1518,7 @@ describe('HomePage', () => {
   });
 
   it('does not show no-detail feedback while a failed stock-bar refresh still has a pending fallback detail lookup', async () => {
-    const todayInShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+    const todayInVietnam = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
     let resolveAaplHistory!: (response: Awaited<ReturnType<typeof historyApi.getList>>) => void;
     const aaplHistoryPromise = new Promise<Awaited<ReturnType<typeof historyApi.getList>>>((resolve) => {
       resolveAaplHistory = resolve;
@@ -1546,7 +1546,7 @@ describe('HomePage', () => {
         stockName: 'Apple',
         reportType: 'detailed',
         reportLanguage: 'vi',
-        createdAt: `${todayInShanghai}T09:20:00`,
+        createdAt: `${todayInVietnam}T09:20:00`,
       },
       summary: {
         analysisSummary: 'FPT analysis summary',
@@ -1589,7 +1589,7 @@ describe('HomePage', () => {
           reportType: 'detailed',
           sentimentScore: 68,
           operationAdvice: 'Trung tính',
-          createdAt: `${todayInShanghai}T09:20:00`,
+          createdAt: `${todayInVietnam}T09:20:00`,
         }],
       });
       await aaplHistoryPromise;
@@ -1627,7 +1627,7 @@ describe('HomePage', () => {
             reportType: 'detailed' as const,
             sentimentScore: 68,
             operationAdvice: 'neutral',
-            createdAt: '2026-03-18T09:20:00+08:00',
+            createdAt: '2026-03-18T09:20:00+07:00',
           }],
         });
       }
@@ -1745,10 +1745,10 @@ describe('HomePage', () => {
   });
 
   it('loads the Today ranking from paginated history instead of the capped stock bar', async () => {
-    const todayInShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
-    const rangeStart = new Date(`${todayInShanghai}T12:00:00Z`);
+    const todayInVietnam = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+    const rangeStart = new Date(`${todayInVietnam}T12:00:00Z`);
     rangeStart.setUTCDate(rangeStart.getUTCDate() - 1);
-    const rangeEnd = new Date(`${todayInShanghai}T12:00:00Z`);
+    const rangeEnd = new Date(`${todayInVietnam}T12:00:00Z`);
     rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 1);
     const startDate = rangeStart.toISOString().slice(0, 10);
     const endDate = rangeEnd.toISOString().slice(0, 10);
@@ -1762,7 +1762,7 @@ describe('HomePage', () => {
         sentimentScore: 72,
         operationAdvice: 'Watch',
         analysisCount: 2,
-        lastAnalysisTime: `${todayInShanghai}T10:00:00`,
+        lastAnalysisTime: `${todayInVietnam}T10:00:00`,
       }],
     });
     vi.mocked(historyApi.getList).mockImplementation((params: {
@@ -1786,7 +1786,7 @@ describe('HomePage', () => {
               reportType: 'detailed' as const,
               sentimentScore: index === 0 ? 61 : 50,
               operationAdvice: 'Watch',
-              createdAt: `${todayInShanghai}T09:${String(index % 60).padStart(2, '0')}:00`,
+              createdAt: `${todayInVietnam}T09:${String(index % 60).padStart(2, '0')}:00`,
             })),
           });
         }
@@ -1803,7 +1803,7 @@ describe('HomePage', () => {
             reportType: 'detailed' as const,
             sentimentScore: 93,
             operationAdvice: 'Buy',
-            createdAt: `${todayInShanghai}T11:00:00`,
+            createdAt: `${todayInVietnam}T11:00:00`,
           }],
         });
       }
@@ -1977,11 +1977,11 @@ describe('HomePage', () => {
     }
   });
 
-  it('keeps Shanghai-day records that fall on the previous server date', async () => {
-    const todayInShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
-    const rangeStart = new Date(`${todayInShanghai}T12:00:00Z`);
+  it('keeps Vietnam-day records that fall on the previous server date', async () => {
+    const todayInVietnam = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+    const rangeStart = new Date(`${todayInVietnam}T12:00:00Z`);
     rangeStart.setUTCDate(rangeStart.getUTCDate() - 1);
-    const rangeEnd = new Date(`${todayInShanghai}T12:00:00Z`);
+    const rangeEnd = new Date(`${todayInVietnam}T12:00:00Z`);
     rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 1);
     const startDate = rangeStart.toISOString().slice(0, 10);
     const endDate = rangeEnd.toISOString().slice(0, 10);
@@ -2000,13 +2000,14 @@ describe('HomePage', () => {
           limit: 100,
           items: [{
             id: 71,
-            queryId: 'q-shanghai-boundary',
+            queryId: 'q-vietnam-boundary',
             stockCode: 'FPT',
             stockName: 'Apple',
             reportType: 'detailed' as const,
             sentimentScore: 88,
             operationAdvice: 'Buy',
-            createdAt: `${startDate}T16:30:00Z`,
+            // 17:30Z = 00:30 hôm sau theo giờ VN (UTC+7). / 00:30 next day in Vietnam time.
+            createdAt: `${startDate}T17:30:00Z`,
           }],
         });
       }
@@ -2031,10 +2032,10 @@ describe('HomePage', () => {
   });
 
   it('shows an error instead of capped stock-bar fallback when Today ranking load fails', async () => {
-    const todayInShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
-    const rangeStart = new Date(`${todayInShanghai}T12:00:00Z`);
+    const todayInVietnam = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+    const rangeStart = new Date(`${todayInVietnam}T12:00:00Z`);
     rangeStart.setUTCDate(rangeStart.getUTCDate() - 1);
-    const rangeEnd = new Date(`${todayInShanghai}T12:00:00Z`);
+    const rangeEnd = new Date(`${todayInVietnam}T12:00:00Z`);
     rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 1);
     const startDate = rangeStart.toISOString().slice(0, 10);
     const endDate = rangeEnd.toISOString().slice(0, 10);
@@ -2048,7 +2049,7 @@ describe('HomePage', () => {
         sentimentScore: 72,
         operationAdvice: 'Watch',
         analysisCount: 2,
-        lastAnalysisTime: `${todayInShanghai}T10:00:00`,
+        lastAnalysisTime: `${todayInVietnam}T10:00:00`,
       }],
     });
     vi.mocked(historyApi.getList).mockImplementation((params: { startDate?: string; endDate?: string } = {}) => {
@@ -2077,10 +2078,10 @@ describe('HomePage', () => {
   });
 
   it('refreshes the Today ranking after a stock analysis task completes', async () => {
-    const todayInShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
-    const rangeStart = new Date(`${todayInShanghai}T12:00:00Z`);
+    const todayInVietnam = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+    const rangeStart = new Date(`${todayInVietnam}T12:00:00Z`);
     rangeStart.setUTCDate(rangeStart.getUTCDate() - 1);
-    const rangeEnd = new Date(`${todayInShanghai}T12:00:00Z`);
+    const rangeEnd = new Date(`${todayInVietnam}T12:00:00Z`);
     rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 1);
     const startDate = rangeStart.toISOString().slice(0, 10);
     const endDate = rangeEnd.toISOString().slice(0, 10);
@@ -2095,7 +2096,7 @@ describe('HomePage', () => {
         sentimentScore: taskCompleted ? 93 : 72,
         operationAdvice: taskCompleted ? 'Buy' : 'Watch',
         analysisCount: 1,
-        lastAnalysisTime: `${todayInShanghai}T${taskCompleted ? '11' : '10'}:00:00`,
+        lastAnalysisTime: `${todayInVietnam}T${taskCompleted ? '11' : '10'}:00:00`,
       }],
     }));
     vi.mocked(historyApi.getList).mockImplementation((params: {
@@ -2117,7 +2118,7 @@ describe('HomePage', () => {
             reportType: 'detailed' as const,
             sentimentScore: taskCompleted ? 93 : 72,
             operationAdvice: taskCompleted ? 'Buy' : 'Watch',
-            createdAt: `${todayInShanghai}T${taskCompleted ? '11' : '10'}:00:00`,
+            createdAt: `${todayInVietnam}T${taskCompleted ? '11' : '10'}:00:00`,
           }],
         });
       }
@@ -2150,8 +2151,8 @@ describe('HomePage', () => {
         status: 'completed',
         progress: 100,
         reportType: 'detailed',
-        createdAt: `${todayInShanghai}T10:59:00`,
-        completedAt: `${todayInShanghai}T11:00:00`,
+        createdAt: `${todayInVietnam}T10:59:00`,
+        completedAt: `${todayInVietnam}T11:00:00`,
       });
     });
 
@@ -2160,7 +2161,7 @@ describe('HomePage', () => {
   });
 
   it('refreshes the Today ranking when the dashboard becomes visible', async () => {
-    const todayInShanghai = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+    const todayInVietnam = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
     let refreshed = false;
     vi.mocked(historyApi.getList).mockImplementation((params: { startDate?: string } = {}) => {
       if (params.startDate) {
@@ -2176,7 +2177,7 @@ describe('HomePage', () => {
             reportType: 'detailed' as const,
             sentimentScore: refreshed ? 93 : 72,
             operationAdvice: refreshed ? 'Buy' : 'Watch',
-            createdAt: `${todayInShanghai}T10:00:00`,
+            createdAt: `${todayInVietnam}T10:00:00`,
           }],
         });
       }
@@ -2251,7 +2252,7 @@ describe('HomePage', () => {
           sentimentScore: 70,
           operationAdvice: 'Watch',
           analysisCount: 1,
-          lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+          lastAnalysisTime: '2026-03-19T09:00:00+07:00',
           assetType: 'index',
         },
         {
@@ -2262,7 +2263,7 @@ describe('HomePage', () => {
           sentimentScore: 75,
           operationAdvice: 'Buy',
           analysisCount: 1,
-          lastAnalysisTime: '2026-03-19T09:00:00+08:00',
+          lastAnalysisTime: '2026-03-19T09:00:00+07:00',
           assetType: 'stock',
         },
       ],
@@ -3242,7 +3243,10 @@ describe('HomePage', () => {
 
     const menu = screen.getByRole('menu');
     fireEvent.keyDown(menu, { key: 'ArrowDown' });
-    expect(screen.getByRole('menuitemradio', { name: /Default bull trend/ })).toHaveFocus();
+    // Tên chiến lược dựng sẵn được dịch theo skill id, không dùng tên thô từ backend.
+    // Built-in strategy names are localized by skill id instead of the raw backend name.
+    expect(screen.getByRole('menuitemradio', { name: /Bullish trend \(default\)/ })).toHaveFocus();
+    expect(screen.queryByRole('menuitemradio', { name: /Default bull trend/ })).not.toBeInTheDocument();
 
     fireEvent.keyDown(menu, { key: 'End' });
     expect(screen.getByRole('menuitemradio', { name: /Growth quality/ })).toHaveFocus();

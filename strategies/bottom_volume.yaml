@@ -2,7 +2,7 @@
 # After extended decline, price stabilizes and volume spikes. Potential reversal.
 
 name: bottom_volume
-display_name: 底部放量
+display_name: "Khối lượng tăng tại đáy"
 display_name_en: "Bottom Volume Surge"
 description: Detects a heavy-volume surge at the bottom after a prolonged decline, a potential trend-reversal signal.
 category: reversal
@@ -10,7 +10,7 @@ core_rules: [2, 5]
 required_tools:
   - get_daily_history
   - analyze_trend
-aliases: [地量见底, 底部放量]
+aliases: ["khối lượng tăng tại đáy", "tạo đáy", "bottom volume"]
 default_priority: 60
 market_regimes: [trending_down]
 
