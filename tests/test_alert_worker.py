@@ -397,6 +397,60 @@ class AlertWorkerTestCase(unittest.TestCase):
         self.assertIn("Thủng hỗ trợ then chốt", alert_text)
         self.assertIn("Theo dõi khả năng lấy lại đường trung bình", alert_text)
 
+    def test_p6_alert_text_lists_every_risk_and_plan_field_after_db_round_trip(self) -> None:
+        # Extractor tạo risk_summary dạng list; DB lưu thành chuỗi JSON. Tin gửi phải liệt kê đủ.
+        # The extractor emits list risk_summary; the DB stores it as JSON text. The alert must list all of it.
+        self._create_rule(target="HPG")
+        signal_service = DecisionSignalService()
+        risks = [
+            "Áp lực bán ròng của khối ngoại kéo dài nhiều phiên liên tiếp trên nhóm thép",
+            "Giá thép xây dựng trong nước giảm do nhu cầu yếu",
+            "Rủi ro thị trường chung ở mức cao, VN-Index thủng hỗ trợ",
+        ]
+        signal_service.create_signal({
+            "stock_code": "HPG",
+            "market": "vn",
+            "source_type": "analysis",
+            "source_report_id": 1391,
+            "trace_id": "analysis-1391",
+            "trigger_source": "api",
+            "action": "buy",
+            "confidence": 0.7,
+            "entry_low": 25000,
+            "entry_high": 26000,
+            "stop_loss": 24000,
+            "target_price": 29000,
+            "reason": "Tích luỹ nền giá",
+            "invalidation": "Đóng cửa dưới 24.000",
+            "risk_summary": risks,
+            "catalyst_summary": ["Kết quả kinh doanh quý"],
+        })
+        notifier = self._notifier()
+        worker = AlertWorker(
+            config_provider=lambda: self._config(),
+            service=self.service,
+            decision_signal_service=signal_service,
+            notifier=notifier,
+        )
+
+        with patch(
+            "src.agent.events.EventMonitor._get_realtime_quote",
+            new=AsyncMock(return_value=SimpleNamespace(price=1810.0)),
+        ):
+            stats = worker.run_once()
+
+        self.assertEqual(stats["triggered"], 1)
+        alert_text = notifier.send_with_results.call_args.args[0]
+        self.assertIn("- Rủi ro:", alert_text)
+        for risk in risks:
+            self.assertIn(f"  • {risk}", alert_text)
+        self.assertNotIn('["', alert_text)
+        self.assertIn("Độ tin cậy: 70%", alert_text)
+        self.assertIn("Vùng mua: 25.000–26.000 | Cắt lỗ: 24.000 | Mục tiêu: 29.000", alert_text)
+        self.assertIn("- Điều kiện vô hiệu: Đóng cửa dưới 24.000", alert_text)
+        self.assertIn("- Chất xúc tác: Kết quả kinh doanh quý", alert_text)
+        self.assertIn("không phải khuyến nghị đầu tư", alert_text)
+
     def test_p6_triggered_stock_alert_creates_alert_signal_when_no_active_signal(self) -> None:
         self._create_rule(target="HPG")
         signal_service = DecisionSignalService()

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] Tin cảnh báo kèm "Tín hiệu quyết định AI" không còn cắt phần Rủi ro / Điều kiện theo dõi ở 120 ký tự và không còn hiện chuỗi JSON thô (`["..."]`): danh sách rủi ro lưu trong DB được giải mã lại và liệt kê đủ từng mục.
+- [改进] Khối "Tín hiệu quyết định AI" trong tin cảnh báo bổ sung độ tin cậy/điểm, vùng mua/cắt lỗ/mục tiêu, điều kiện vô hiệu, chất xúc tác, hạn hiệu lực (giờ Việt Nam) và câu miễn trừ "không phải khuyến nghị đầu tư"; `decision_signal_summary` trong lịch sử trigger API có thêm các trường tương ứng (chỉ cộng thêm).
 - [修复] Bộ chọn "Chiến lược" ở trang phân tích hiển thị tên/mô tả chiến lược theo ngôn ngữ giao diện (vi/en) thay vì tên tiếng Trung; `display_name`/`aliases` của các chiến lược dựng sẵn trong `strategies/*.yaml` chuyển sang tiếng Việt (bot `/ask` nhận bí danh tiếng Việt/Anh), `strategies/README.md` dịch sang tiếng Việt.
 - [修复] Web tính "hôm nay" và giờ máy chủ không kèm múi giờ theo giờ Việt Nam (`Asia/Ho_Chi_Minh`, UTC+7) thay vì `Asia/Shanghai`.
 - [改进] Chỉ còn hỗ trợ thị trường Việt Nam (HOSE / HNX / UPCoM): gỡ toàn bộ A-share, Hồng Kông, Mỹ, Nhật, Hàn, Đài Loan khỏi code, cấu hình, Web và tài liệu; `SUPPORTED_MARKETS` chỉ còn đọc để tương thích, giá trị khác `vn` bị bỏ qua kèm cảnh báo. Xem `docs/market-support.md`.
