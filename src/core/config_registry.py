@@ -1005,7 +1005,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     },
     "REALTIME_SOURCE_PRIORITY": {
         "title": "Realtime Source Priority",
-        "description": "Comma-separated priority for Vietnam realtime quote providers (supported tokens: ssi, vci).",
+        "description": "Comma-separated priority for Vietnam realtime quote providers (supported tokens: fiintrade, ssi, vci). fiintrade only takes effect when FiinTrade is active (FIINTRADE_ORIGIN set, FIINTRADE_ENABLED not false) and goes first when not listed.",
         "category": "data_source",
         "data_type": "string",
         "ui_control": "text",

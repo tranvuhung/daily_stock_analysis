@@ -150,7 +150,25 @@ class UnifiedRealtimeQuote:
     change_60d: Optional[float] = None      # 60-day change percent (%)
     high_52w: Optional[float] = None        # 52-week high
     low_52w: Optional[float] = None         # 52-week low
-    
+
+    # === Trường riêng thị trường Việt Nam (chỉ nguồn đầy đủ như FiinTrade điền) ===
+    # === Vietnam-specific fields (only full sources such as FiinTrade fill these) ===
+    ref_price: Optional[float] = None               # Giá tham chiếu của sở / Exchange reference price
+    ceiling: Optional[float] = None                 # Giá trần / Ceiling price
+    floor: Optional[float] = None                   # Giá sàn / Floor price
+    eps_ttm: Optional[float] = None                 # EPS 4 quý gần nhất (VND) / Trailing EPS
+    roe: Optional[float] = None                     # ROE (%)
+    beta: Optional[float] = None                    # Beta so với thị trường / Market beta
+    foreign_buy_value: Optional[float] = None       # Khối ngoại mua trong phiên (VND)
+    foreign_sell_value: Optional[float] = None      # Khối ngoại bán trong phiên (VND)
+    foreign_net_value: Optional[float] = None       # Khối ngoại mua ròng (VND, âm = bán ròng)
+    foreign_room_remaining: Optional[float] = None  # Room ngoại còn lại (cổ phiếu)
+    foreign_ownership_pct: Optional[float] = None   # Tỷ lệ sở hữu nước ngoài (%)
+    put_through_volume: Optional[float] = None      # KL giao dịch thoả thuận / Put-through volume
+    put_through_value: Optional[float] = None       # Giá trị thoả thuận (VND) / Put-through value
+    bid_ask_imbalance: Optional[float] = None       # KL 3 bước mua / (mua + bán), 0-1
+    avg_volume_1m: Optional[int] = None             # KL khớp bình quân 1 tháng / 1-month avg volume
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to a dict (None values filtered out)"""
         result = {
@@ -166,7 +184,11 @@ class UnifiedRealtimeQuote:
             'volume_ratio', 'turnover_rate', 'amplitude',
             'open_price', 'high', 'low', 'pre_close',
             'pe_ratio', 'pb_ratio', 'total_mv', 'circ_mv',
-            'change_60d', 'high_52w', 'low_52w'
+            'change_60d', 'high_52w', 'low_52w',
+            'ref_price', 'ceiling', 'floor', 'eps_ttm', 'roe', 'beta',
+            'foreign_buy_value', 'foreign_sell_value', 'foreign_net_value',
+            'foreign_room_remaining', 'foreign_ownership_pct',
+            'put_through_volume', 'put_through_value', 'bid_ask_imbalance', 'avg_volume_1m',
         ]
         for f in optional_fields:
             val = getattr(self, f, None)

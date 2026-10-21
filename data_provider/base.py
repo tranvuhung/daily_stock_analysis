@@ -9,6 +9,8 @@ Mẫu thiết kế: Strategy Pattern
 - DataFetcherManager: quản lý chiến lược, tự động chuyển nguồn
 
 Repo chỉ phục vụ thị trường Việt Nam (HOSE/HNX/UPCoM). Các nguồn dữ liệu:
+- FiinTradeFetcher: nến ngày HOSE/HNX/chỉ số trước VCI, mặc định bật khi có
+  ``FIINTRADE_ORIGIN`` (tắt bằng ``FIINTRADE_ENABLED=false``)
 - VciFetcher: nến ngày (nguồn chính), chỉ số, bảng mã
 - SsiFetcher: snapshot realtime toàn thị trường, nến ngày dự phòng, độ rộng thị trường
 - VnstockFetcher: tuỳ chọn, chỉ bật khi ``VNSTOCK_ENABLED=true``
@@ -27,7 +29,7 @@ import random
 import time
 from threading import BoundedSemaphore, RLock, Thread
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Callable, Optional, List, Tuple, Dict, Any
 
 import pandas as pd
@@ -503,12 +505,22 @@ class BaseFetcher(ABC):
         time.sleep(sleep_time)
 
 
-# Các khối dữ liệu cơ bản giữ trong fundamental_context. Thị trường Việt Nam hiện chỉ
-# có định giá (PE/PB/vốn hoá) từ snapshot giá; tăng trưởng / kết quả kinh doanh /
-# sở hữu tổ chức chưa có nguồn nên luôn là ``not_supported``.
+# Các khối dữ liệu cơ bản giữ trong fundamental_context. Thị trường Việt Nam có định
+# giá (PE/PB/vốn hoá) từ snapshot giá; khi FiinTrade được bật thì có thêm cổ tức / sự
+# kiện (earnings) và giao dịch nội bộ / sở hữu nước ngoài (institution). Tăng trưởng
+# chưa có nguồn nên luôn là ``not_supported``.
 # Fundamental blocks kept in fundamental_context.
 FUNDAMENTAL_BLOCKS: Tuple[str, ...] = ("valuation", "growth", "earnings", "institution")
 _VN_UNSUPPORTED_FUNDAMENTAL_BLOCKS: Tuple[str, ...] = ("growth", "earnings", "institution")
+# Khối chỉ có nguồn khi FiinTrade được bật / Blocks served only when FiinTrade is enabled
+_VN_FIINTRADE_FUNDAMENTAL_BLOCKS: Tuple[str, ...] = ("earnings", "institution")
+_FIINTRADE_FETCHER_NAME = "FiinTradeFetcher"
+# Cửa sổ thời gian của các mục sự kiện đưa vào fundamentals (ngày lịch).
+_DIVIDEND_TTM_DAYS = 365
+_ISSUANCE_WINDOW_DAYS = 365
+_INSIDER_WINDOW_DAYS = 90
+_INSIDER_MAX_ITEMS = 10
+_EARNINGS_RELEASE_MAX_ITEMS = 4
 _VN_FUNDAMENTAL_UNSUPPORTED_REASON = "no Vietnam fundamental provider for this block"
 
 
@@ -578,6 +590,14 @@ class DataFetcherManager:
     def _refresh_fetcher_indexes_locked(self) -> None:
         self._fetchers_by_name = {fetcher.name: fetcher for fetcher in self._fetchers}
 
+    def _has_fetcher(self, fetcher_name: str) -> bool:
+        """Nguồn có được đăng ký trong manager hay không (không xét khả dụng)."""
+        self._ensure_concurrency_guards()
+        with self._fetchers_lock:
+            if fetcher_name in self._fetchers_by_name:
+                return True
+            return any(getattr(f, "name", None) == fetcher_name for f in self._fetchers)
+
     def _get_fetcher_by_name(self, fetcher_name: str, capability: str = "") -> Optional[BaseFetcher]:
         self._ensure_concurrency_guards()
         with self._fetchers_lock:
@@ -640,12 +660,19 @@ class DataFetcherManager:
         """Thứ tự nguồn dữ liệu cho giá realtime Việt Nam.
 
         Mặc định là ``SsiFetcher`` rồi ``VciFetcher``; nếu ``REALTIME_SOURCE_PRIORITY``
-        ghi tường minh token (``ssi`` / ``vci``) thì chạy theo thứ tự người dùng cấu hình.
+        ghi tường minh token (``fiintrade`` / ``ssi`` / ``vci``) thì chạy theo thứ tự
+        người dùng cấu hình. FiinTrade khi được bật mà không được nhắc tới thì đứng
+        đầu, nhất quán với nến ngày.
+        FiinTrade, when registered but not listed, goes first (same as daily bars).
         """
 
         from src.config import get_config
 
-        token_to_fetcher = {"ssi": "SsiFetcher", "vci": "VciFetcher"}
+        token_to_fetcher = {
+            "fiintrade": _FIINTRADE_FETCHER_NAME,
+            "ssi": "SsiFetcher",
+            "vci": "VciFetcher",
+        }
         configured = str(
             getattr(get_config(), "realtime_source_priority", "") or ""
         ).lower()
@@ -654,6 +681,8 @@ class DataFetcherManager:
             for token in configured.split(",")
             if token.strip() in token_to_fetcher
         ]
+        if _FIINTRADE_FETCHER_NAME not in ordered and self._has_fetcher(_FIINTRADE_FETCHER_NAME):
+            ordered.insert(0, _FIINTRADE_FETCHER_NAME)
         # Snapshot toàn thị trường của SSI chỉ có cổ phiếu thành phần, còn VCI phụ
         # trách các chỉ số đã đăng ký (suy ra từ nến ngày mới nhất). Vì vậy cả hai đều
         # phải nằm trong chuỗi nguồn.
@@ -869,16 +898,29 @@ class DataFetcherManager:
         """
         Khởi tạo danh sách nguồn dữ liệu mặc định của Việt Nam
 
+        - FiinTradeFetcher: nến ngày trước VCI, mặc định bật khi có ``FIINTRADE_ORIGIN``
+          (tắt bằng ``FIINTRADE_ENABLED=false``)
         - VciFetcher: nến ngày (nguồn chính), chỉ số, bảng mã
         - SsiFetcher: snapshot realtime toàn thị trường, nến ngày dự phòng
         - VnstockFetcher: tuỳ chọn, chỉ khi ``VNSTOCK_ENABLED=true`` và đã cài vnstock
         - YfinanceFetcher: dự phòng cấp 3 cho nến ngày (chỉ HOSE, không ghi vào DB)
         """
+        from .fiintrade_fetcher import FiinTradeFetcher, is_fiintrade_enabled
         from .vci_fetcher import VciFetcher
         from .ssi_fetcher import SsiFetcher
         from .yfinance_fetcher import YfinanceFetcher
 
-        candidates: List[BaseFetcher] = [VciFetcher(), SsiFetcher()]
+        candidates: List[BaseFetcher] = []
+
+        # FiinTrade chỉ trả dữ liệu cho origin trong whitelist của đối tác: mặc định
+        # bật nhưng chỉ chạy khi người triển khai điền origin được cấp.
+        # FiinTrade only serves whitelisted origins: on by default once an origin is set.
+        if is_fiintrade_enabled():
+            candidates.append(FiinTradeFetcher())
+        else:
+            logger.debug("[Khởi tạo nguồn] Bỏ qua FiinTradeFetcher (thiếu FIINTRADE_ORIGIN hoặc FIINTRADE_ENABLED=false)")
+
+        candidates.extend([VciFetcher(), SsiFetcher()])
 
         # vnstock là phụ thuộc tuỳ chọn: giấy phép của nó là "Custom (Personal Use)"
         # và kéo theo vnai - gói gửi dữ liệu sử dụng về phía tác giả. Vì vậy không
@@ -1153,6 +1195,7 @@ class DataFetcherManager:
     @staticmethod
     def _realtime_fetcher_token(fetcher_name: str, **kw) -> str:
         mapping = {
+            "FiinTradeFetcher": "fiintrade",
             "VciFetcher": "vci",
             "SsiFetcher": "ssi",
             "VnstockFetcher": "vnstock",
@@ -1755,6 +1798,133 @@ class DataFetcherManager:
         """Build a consistent not-supported payload without calling providers."""
         return self._build_market_not_supported(_market_tag(stock_code), reason)
 
+    def _get_valuation_quote(self, stock_code: str, fiintrade: Optional[BaseFetcher]):
+        """Snapshot dùng cho khối định giá: FiinTrade trước (có PE/PB/vốn hoá), rồi
+        chuỗi realtime thường. Tick MQTT và snapshot SSI không có định giá.
+
+        Valuation snapshot: FiinTrade first (it carries PE/PB/market cap), then the
+        regular realtime chain.
+        """
+        if fiintrade is not None:
+            quote = self._call_fetcher_method(fiintrade, "get_realtime_quote", stock_code)
+            if quote is not None and quote.has_basic_data():
+                return quote
+        return self.get_realtime_quote(stock_code)
+
+    def _build_vn_event_blocks(
+        self,
+        events: Optional[Dict[str, Any]],
+        events_err: Optional[str],
+        events_ms: int,
+        quote: Any,
+        today: Optional[date] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Dựng khối ``earnings`` và ``institution`` từ sự kiện FiinTrade.
+
+        Build the ``earnings`` / ``institution`` blocks from FiinTrade events.
+        """
+        errors = [events_err] if events_err else []
+        # FiinTrade không phủ UPCOM và trả danh sách rỗng: rỗng hoàn toàn nghĩa là
+        # "không có dữ liệu", không phải "không có sự kiện" (mã niêm yết luôn có ít
+        # nhất ngày công bố KQKD trong 2 năm). Không được báo cổ tức = 0.
+        # An all-empty payload means "not covered" (e.g. UPCOM), never "no events".
+        if isinstance(events, dict) and not any(events.get(key) for key in events):
+            events = None
+            errors = errors or ["no FiinTrade events for this symbol"]
+        if not isinstance(events, dict):
+            status = "failed" if events_err else "not_supported"
+            chain = [{"provider": "fiintrade_events", "result": status, "duration_ms": events_ms}]
+            return {
+                block: self._build_fundamental_block(status, {}, chain, errors)
+                for block in _VN_FIINTRADE_FUNDAMENTAL_BLOCKS
+            }
+
+        today = today or datetime.now().date()
+        price = getattr(quote, "price", None) if quote is not None else None
+
+        def _within(day_text: Optional[str], days: int) -> bool:
+            if not day_text:
+                return False
+            try:
+                day = datetime.strptime(day_text, "%Y-%m-%d").date()
+            except ValueError:
+                return False
+            return today - timedelta(days=days) < day <= today
+
+        # Cổ tức tiền mặt 12 tháng tính theo ngày GDKHQ, trước thuế.
+        # TTM cash dividends by ex-date, pre-tax.
+        ttm_events = [
+            {
+                "ex_dividend_date": row.get("ex_date"),
+                "record_date": row.get("record_date"),
+                "cash_per_share": row.get("cash_per_share"),
+            }
+            for row in events.get("dividends") or []
+            if _within(row.get("ex_date"), _DIVIDEND_TTM_DAYS) and row.get("cash_per_share")
+        ]
+        earnings_payload: Dict[str, Any] = {}
+        if ttm_events:
+            ttm_cash = round(sum(float(row["cash_per_share"]) for row in ttm_events), 2)
+            ttm_yield = (
+                round(ttm_cash / float(price) * 100, 2)
+                if isinstance(price, (int, float)) and price > 0
+                else None
+            )
+            earnings_payload["dividend"] = {
+                "ttm_cash_dividend_per_share": ttm_cash,
+                "ttm_dividend_yield_pct": ttm_yield,
+                "ttm_event_count": len(ttm_events),
+                "currency": "VND",
+                "events": ttm_events,
+            }
+        else:
+            earnings_payload["dividend"] = {
+                "ttm_cash_dividend_per_share": 0.0,
+                "ttm_dividend_yield_pct": 0.0 if isinstance(price, (int, float)) and price > 0 else None,
+                "ttm_event_count": 0,
+                "currency": "VND",
+                "events": [],
+            }
+        issuances = [
+            row for row in events.get("share_issuances") or []
+            if _within(row.get("ex_date") or row.get("public_date"), _ISSUANCE_WINDOW_DAYS)
+        ]
+        if issuances:
+            earnings_payload["share_issuances"] = issuances
+        releases = list(events.get("earnings_releases") or [])[:_EARNINGS_RELEASE_MAX_ITEMS]
+        if releases:
+            earnings_payload["earnings_releases"] = releases
+
+        insiders = [
+            row for row in events.get("insider_transactions") or []
+            if _within(row.get("public_date"), _INSIDER_WINDOW_DAYS)
+        ]
+        net_shares = 0.0
+        for row in insiders:
+            shares = row.get("shares_executed") or 0.0
+            if row.get("action") == "buy":
+                net_shares += float(shares)
+            elif row.get("action") == "sell":
+                net_shares -= float(shares)
+        institution_payload: Dict[str, Any] = {
+            "insider_window_days": _INSIDER_WINDOW_DAYS,
+            "insider_transaction_count": len(insiders),
+            "insider_net_shares": net_shares,
+            "insider_transactions": insiders[:_INSIDER_MAX_ITEMS],
+        }
+        for field in ("foreign_ownership_pct", "foreign_room_remaining"):
+            value = getattr(quote, field, None) if quote is not None else None
+            if value is not None:
+                institution_payload[field] = value
+
+        chain = [{"provider": "fiintrade_events", "result": "ok", "duration_ms": events_ms}]
+        # Chưa có báo cáo tài chính (financial_report) nên khối earnings là "partial".
+        # No financial_report yet, so the earnings block is "partial".
+        return {
+            "earnings": self._build_fundamental_block("partial", earnings_payload, chain, errors),
+            "institution": self._build_fundamental_block("ok", institution_payload, chain, errors),
+        }
+
     def get_fundamental_context(
         self,
         stock_code: str,
@@ -1763,12 +1933,15 @@ class DataFetcherManager:
         """
         Tổng hợp dữ liệu cơ bản theo ngữ nghĩa fail-open.
 
-        Việt Nam hiện chỉ có khối định giá (PE/PB/vốn hoá) lấy từ snapshot giá
-        realtime; các khối tăng trưởng / kết quả kinh doanh / sở hữu tổ chức chưa có
-        nguồn nên trả ``not_supported`` mà không gọi provider nào.
+        Việt Nam có khối định giá (PE/PB/vốn hoá) lấy từ snapshot giá realtime (ưu
+        tiên FiinTrade vì SSI không có định giá). Khi FiinTrade được bật thì có thêm
+        khối ``earnings`` (cổ tức TTM, phát hành, ngày công bố KQKD) và
+        ``institution`` (giao dịch nội bộ, sở hữu nước ngoài). Các khối còn lại trả
+        ``not_supported`` mà không gọi provider nào.
 
-        Aggregate fundamentals fail-open. Vietnam only has the valuation block (from
-        the realtime snapshot); other blocks are ``not_supported`` without provider calls.
+        Aggregate fundamentals fail-open. Valuation comes from the realtime snapshot
+        (FiinTrade first); earnings/institution come from FiinTrade events when it is
+        enabled; other blocks are ``not_supported`` without provider calls.
         """
         from src.config import get_config
 
@@ -1806,10 +1979,11 @@ class DataFetcherManager:
                         return cache_item.get("context", {})
 
         start_ts = time.time()
+        fiintrade = self._get_fetcher_by_name(_FIINTRADE_FETCHER_NAME, capability="fundamental")
         valuation_timeout = min(fetch_timeout, stage_timeout)
         if valuation_timeout > 0:
             quote_payload, valuation_err, valuation_ms = self._run_with_retry(
-                lambda: self.get_realtime_quote(stock_code),
+                lambda: self._get_valuation_quote(stock_code, fiintrade),
                 valuation_timeout,
                 "fundamental_valuation",
             )
@@ -1822,6 +1996,12 @@ class DataFetcherManager:
             "total_mv": getattr(quote_payload, "total_mv", None) if quote_payload else None,
             "circ_mv": getattr(quote_payload, "circ_mv", None) if quote_payload else None,
         }
+        # Trường bổ sung chỉ FiinTrade có; thêm vào khi có giá trị để payload SSI giữ
+        # nguyên như cũ. / Extra FiinTrade-only fields, added only when present.
+        for extra_field in ("eps_ttm", "roe", "beta", "foreign_ownership_pct"):
+            extra_value = getattr(quote_payload, extra_field, None) if quote_payload else None
+            if extra_value is not None:
+                valuation_payload[extra_field] = extra_value
         valuation_status = self._infer_block_status(
             valuation_payload,
             "partial" if quote_payload is not None else "not_supported",
@@ -1838,7 +2018,23 @@ class DataFetcherManager:
                 [valuation_err] if valuation_err else [],
             ),
         }
-        for block in _VN_UNSUPPORTED_FUNDAMENTAL_BLOCKS:
+        unsupported_blocks = list(_VN_UNSUPPORTED_FUNDAMENTAL_BLOCKS)
+        if fiintrade is not None:
+            unsupported_blocks = [b for b in unsupported_blocks if b not in _VN_FIINTRADE_FUNDAMENTAL_BLOCKS]
+            remaining = max(0.0, stage_timeout - (time.time() - start_ts))
+            events_timeout = min(fetch_timeout, remaining)
+            if events_timeout > 0:
+                events_payload, events_err, events_ms = self._run_with_retry(
+                    lambda: self._call_fetcher_method(fiintrade, "get_corporate_events", stock_code),
+                    events_timeout,
+                    "fundamental_events",
+                )
+            else:
+                events_payload, events_err, events_ms = None, "fundamental stage timeout", 0
+            result_ctx.update(
+                self._build_vn_event_blocks(events_payload, events_err, events_ms, quote_payload)
+            )
+        for block in unsupported_blocks:
             result_ctx[block] = self._not_supported_block(_VN_FUNDAMENTAL_UNSUPPORTED_REASON)
 
         block_statuses = {block: result_ctx[block].get("status", "not_supported") for block in FUNDAMENTAL_BLOCKS}
@@ -1851,9 +2047,11 @@ class DataFetcherManager:
 
         if all(value == "not_supported" for value in block_statuses.values()):
             result_ctx["status"] = "not_supported"
+        elif all(value == "ok" for value in block_statuses.values()):
+            result_ctx["status"] = "ok"
         else:
-            # Chỉ có khối định giá nên kết quả tốt nhất là "partial".
-            # Only valuation is available, so the best overall status is "partial".
+            # Khối tăng trưởng chưa có nguồn nên thực tế kết quả tốt nhất là "partial".
+            # Growth has no Vietnam source yet, so in practice the best is "partial".
             result_ctx["status"] = "partial"
 
         result_ctx["elapsed_ms"] = int((time.time() - start_ts) * 1000)

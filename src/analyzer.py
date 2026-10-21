@@ -3763,6 +3763,14 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
 | Free-float cap | {self._format_amount(rt.get('circ_mv'), report_language)} | |
 | 60-day change | {rt.get('change_60d', 'N/A')}% | Medium-term performance |
 """
+            vn_rows = self._build_vn_quote_rows(rt, price_unit, report_language)
+            if vn_rows:
+                prompt += f"""
+### Vietnam Session Data (exchange, foreign flow, order book)
+| Metric | Value | Reading |
+|------|------|------|
+{vn_rows}
+"""
 
         # Bổ sung báo cáo tài chính và cổ tức (góc nhìn đầu tư giá trị).
         # Add financial results and dividends (value-investing lens).
@@ -3809,6 +3817,10 @@ Follow the JSON structure below exactly. It is one complete [Decision Dashboard]
 
 > If any field above is N/A or missing, state plainly that the data is missing and no judgement can be made. Never make it up.
 """
+
+        corporate_events = self._build_corporate_events_section(fundamental_context)
+        if corporate_events:
+            prompt += corporate_events
 
         # Bổ sung kết quả phân tích xu hướng (chỉ nhánh bull_trend mặc định ngầm
         # mới giữ cách diễn đạt cũ).
@@ -4089,6 +4101,124 @@ Output the complete Decision Dashboard in JSON."""
         if amount >= 1e6:
             return f"{amount / 1e6:.2f}M VND"
         return f"{amount:.0f} VND"
+
+    def _format_signed_amount(self, amount: Optional[float], language: Optional[str] = None) -> str:
+        """Giá trị có dấu (mua/bán ròng). / Signed amount (net buy/sell)."""
+        if amount is None:
+            return 'N/A'
+        sign = "-" if amount < 0 else "+"
+        return f"{sign}{self._format_amount(abs(amount), language)}"
+
+    def _build_vn_quote_rows(
+        self, rt: Dict[str, Any], price_unit: str, language: Optional[str]
+    ) -> str:
+        """Các dòng dữ liệu phiên đặc thù Việt Nam; chỉ in dòng có giá trị.
+
+        Vietnam-specific session rows; only rows with values are emitted so sources
+        without these fields (SSI) do not add N/A noise to the prompt.
+        """
+        rows: List[str] = []
+        price = rt.get('price')
+        ref_price, ceiling, floor = rt.get('ref_price'), rt.get('ceiling'), rt.get('floor')
+        if ref_price is not None:
+            rows.append(f"| Reference price | {ref_price}{price_unit} | Exchange reference for today's change |")
+        if ceiling is not None and floor is not None:
+            reading = ""
+            if isinstance(price, (int, float)) and price > 0:
+                reading = (
+                    f"{(ceiling - price) / price * 100:.2f}% to ceiling, "
+                    f"{(price - floor) / price * 100:.2f}% above floor"
+                )
+            rows.append(f"| Ceiling / Floor | {ceiling} / {floor}{price_unit} | {reading} |")
+        if rt.get('eps_ttm') is not None:
+            rows.append(f"| EPS (TTM) | {rt['eps_ttm']:.0f}{price_unit} | Basis of the trailing PE |")
+        if rt.get('roe') is not None:
+            rows.append(f"| ROE | {rt['roe']}% | |")
+        if rt.get('beta') is not None:
+            rows.append(f"| Beta | {rt['beta']:.2f} | Sensitivity to the market (provider estimate) |")
+        if rt.get('foreign_net_value') is not None:
+            rows.append(
+                f"| Foreign net (session) | {self._format_signed_amount(rt['foreign_net_value'], language)} | "
+                f"Buy {self._format_amount(rt.get('foreign_buy_value'), language)} / "
+                f"Sell {self._format_amount(rt.get('foreign_sell_value'), language)} |"
+            )
+        if rt.get('foreign_ownership_pct') is not None:
+            room = rt.get('foreign_room_remaining')
+            room_text = f"room left {room:,.0f} shares" if isinstance(room, (int, float)) else ""
+            rows.append(f"| Foreign ownership | {rt['foreign_ownership_pct']}% | {room_text} |")
+        if rt.get('put_through_value'):
+            volume = rt.get('put_through_volume')
+            volume_text = f"{volume:,.0f} shares" if isinstance(volume, (int, float)) else ""
+            rows.append(
+                f"| Put-through (negotiated) | {self._format_amount(rt['put_through_value'], language)} | "
+                f"{volume_text}; excluded from matched volume |"
+            )
+        if rt.get('bid_ask_imbalance') is not None:
+            rows.append(
+                f"| Top-3 bid share | {rt['bid_ask_imbalance'] * 100:.1f}% | "
+                f"Bid volume / (bid + ask) on the best 3 levels; > 50% = bids dominate |"
+            )
+        if rt.get('avg_volume_1m') is not None:
+            rows.append(f"| Avg volume (1 month) | {rt['avg_volume_1m']:,} shares | Compare with today's volume |")
+        return "\n".join(rows)
+
+    @staticmethod
+    def _build_corporate_events_section(fundamental_context: Any) -> str:
+        """Mục sự kiện doanh nghiệp (giao dịch nội bộ, phát hành, KQKD) cho prompt.
+
+        Corporate events section; empty when the blocks carry no event data.
+        """
+        if not isinstance(fundamental_context, dict):
+            return ""
+
+        def _block_data(name: str) -> Dict[str, Any]:
+            block = fundamental_context.get(name)
+            data = block.get("data") if isinstance(block, dict) else None
+            return data if isinstance(data, dict) else {}
+
+        earnings = _block_data("earnings")
+        institution = _block_data("institution")
+        if "insider_transaction_count" not in institution and not earnings.get("share_issuances") \
+                and not earnings.get("earnings_releases"):
+            return ""
+
+        lines = ["", "### Corporate Events (exchange disclosures)"]
+        if "insider_transaction_count" in institution:
+            window = institution.get("insider_window_days", 90)
+            count = institution.get("insider_transaction_count", 0)
+            net = institution.get("insider_net_shares") or 0
+            lines.append(
+                f"- Insider trades, last {window} days: {count} disclosure(s); "
+                f"net executed shares {net:+,.0f}"
+            )
+            for row in (institution.get("insider_transactions") or [])[:5]:
+                executed = row.get("shares_executed")
+                registered = row.get("shares_registered")
+                lines.append(
+                    f"  - {row.get('public_date')}: {row.get('name')} {row.get('action')} "
+                    f"executed {executed or 0:,.0f} / registered {registered or 0:,.0f} shares"
+                )
+        for row in earnings.get("share_issuances") or []:
+            ratio = row.get("ratio")
+            ratio_text = f", ratio {ratio * 100:.2f}%" if isinstance(ratio, (int, float)) else ""
+            volume = row.get("volume")
+            volume_text = f"{volume:,.0f} shares" if isinstance(volume, (int, float)) else "volume N/A"
+            lines.append(
+                f"- Share issuance: {row.get('method_en') or row.get('method')} "
+                f"(ex-date {row.get('ex_date')}, {volume_text}{ratio_text})"
+            )
+        releases = earnings.get("earnings_releases") or []
+        if releases:
+            latest = releases[0]
+            lines.append(
+                f"- Latest earnings release: Q{latest.get('quarter')}/{latest.get('year')} "
+                f"published {latest.get('public_date')}"
+            )
+        lines.append(
+            "> Ex-dates are derived as the trading day before the record date. "
+            "Use these disclosures as context only; if a section is absent, say the data is missing."
+        )
+        return "\n".join(lines) + "\n"
 
     def _format_percent(self, value: Optional[float]) -> str:
         """Định dạng phần trăm. / Format a percentage."""

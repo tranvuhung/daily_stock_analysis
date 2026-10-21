@@ -52,6 +52,22 @@ class _ProviderDefinition:
 
 _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
     _ProviderDefinition(
+        name="fiintrade",
+        label="FiinTrade (optional)",
+        fetcher_name="FiinTradeFetcher",
+        dataset_markets={
+            # Mặc định bật khi có FIINTRADE_ORIGIN (tắt bằng FIINTRADE_ENABLED=false); phủ HOSE,
+            # HNX và chỉ số trừ UPCoM (UPCOM để VCI), giá cùng cơ sở điều chỉnh với VCI.
+            # On by default once FIINTRADE_ORIGIN is set (FIINTRADE_ENABLED=false disables);
+            # covers HOSE, HNX and non-UPCoM indices, same adjustment basis as VCI.
+            # PriceDepth: giá trong phiên + định giá + khối ngoại (cổ phiếu HOSE/HNX)
+            # PriceDepth: intraday quote + valuation + foreign flow (HOSE/HNX stocks)
+            "quote.realtime": (_VN,),
+            "kline.daily": (_VN,),
+            "index.daily": (_VN,),
+        },
+    ),
+    _ProviderDefinition(
         name="vci",
         label="VCI (Vietcap)",
         fetcher_name="VciFetcher",
@@ -127,6 +143,9 @@ _FETCHER_TO_PROVIDER = {
 # Realtime tokens that DataFetcherManager actually handles, in default order
 # (mirrors ``DataFetcherManager._vn_realtime_source_order``).
 _VN_REALTIME_SOURCES: Sequence[str] = ("ssi", "vci")
+# Token tuỳ chọn: chỉ có hiệu lực khi FiinTrade đang chạy; khi chạy mà không ghi trong
+# cấu hình thì đứng đầu. / Optional token, effective only when FiinTrade is enabled.
+_VN_OPTIONAL_REALTIME_SOURCES: Sequence[str] = ("fiintrade",)
 
 
 def _truthy(value: Any) -> bool:
@@ -289,6 +308,12 @@ class DataCapabilityService:
     def _is_provider_configured(definition: _ProviderDefinition) -> bool:
         if definition.builtin:
             return True
+        if definition.name == "fiintrade":
+            # Khớp điều kiện khởi tạo trong DataFetcherManager._init_default_fetchers
+            # Mirrors the opt-in check in DataFetcherManager._init_default_fetchers
+            from data_provider.fiintrade_fetcher import is_fiintrade_enabled
+
+            return is_fiintrade_enabled()
         if definition.name == "vnstock":
             # Khớp điều kiện khởi tạo trong DataFetcherManager._init_default_fetchers
             # Mirrors the opt-in check in DataFetcherManager._init_default_fetchers
@@ -342,7 +367,7 @@ class DataCapabilityService:
             "vn.realtime",
             realtime_providers,
             "Config.realtime_source_priority",
-            known_sources=_VN_REALTIME_SOURCES,
+            known_sources=(*_VN_OPTIONAL_REALTIME_SOURCES, *_VN_REALTIME_SOURCES),
         )
         realtime_view["warnings"].extend(realtime_warnings)
 
@@ -384,15 +409,20 @@ class DataCapabilityService:
         tokens are ignored at runtime (surfaced as warnings), missing defaults are appended.
         """
 
+        from data_provider.fiintrade_fetcher import is_fiintrade_enabled
+
+        fiintrade_enabled = is_fiintrade_enabled()
         configured = _split_priority(getattr(self.config, "realtime_source_priority", ""))
         ordered: List[str] = []
         warnings: List[str] = []
         for token in configured:
-            if token in _VN_REALTIME_SOURCES:
+            if token in _VN_REALTIME_SOURCES or (token == "fiintrade" and fiintrade_enabled):
                 if token not in ordered:
                     ordered.append(token)
             else:
                 warnings.append(f"ignored_source:{token}")
+        if fiintrade_enabled and "fiintrade" not in ordered:
+            ordered.insert(0, "fiintrade")
         for token in _VN_REALTIME_SOURCES:
             if token not in ordered:
                 ordered.append(token)

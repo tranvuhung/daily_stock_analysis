@@ -96,6 +96,8 @@ def _reset_daily_health(monkeypatch):
     from data_provider.base import DataFetcherManager
 
     monkeypatch.delenv("VNSTOCK_ENABLED", raising=False)
+    monkeypatch.delenv("FIINTRADE_ENABLED", raising=False)
+    monkeypatch.delenv("FIINTRADE_ORIGIN", raising=False)
     DataFetcherManager.reset_daily_source_health()
     yield
     DataFetcherManager.reset_daily_source_health()
@@ -107,7 +109,7 @@ def test_provider_matrix_is_vietnam_only() -> None:
         fetcher_manager=_default_manager(),
     ).get_overview()
 
-    assert [item["name"] for item in overview["providers"]] == ["vci", "ssi", "vnstock", "yfinance"]
+    assert [item["name"] for item in overview["providers"]] == ["fiintrade", "vci", "ssi", "vnstock", "yfinance"]
     for provider in overview["providers"]:
         assert provider["markets"] == ["vn"]
         for markets in provider["dataset_markets"].values():
@@ -123,6 +125,11 @@ def test_provider_matrix_is_vietnam_only() -> None:
         "quote.realtime",
         "kline.daily",
         "market.overview",
+    }
+    assert set(_provider(overview, "fiintrade")["datasets"]) == {
+        "quote.realtime",
+        "kline.daily",
+        "index.daily",
     }
     assert _provider(overview, "vnstock")["datasets"] == ["kline.daily"]
     # Yahoo chỉ là dự phòng nến ngày / Yahoo is a daily-only fallback
@@ -218,6 +225,39 @@ def test_vnstock_is_unconfigured_unless_opted_in(monkeypatch) -> None:
     assert vnstock["enabled"] is True
     assert vnstock["status"] == "ok"
     assert vnstock["priority"] == 2
+
+
+def test_fiintrade_requires_origin(monkeypatch) -> None:
+    # FiinTrade mặc định bật nhưng chỉ được coi là đã cấu hình khi có origin.
+    # FiinTrade is on by default but counts as configured only with an origin.
+    overview = DataCapabilityService(
+        config=_config(),
+        fetcher_manager=_default_manager(),
+    ).get_overview()
+    assert _provider(overview, "fiintrade")["status"] == "unconfigured"
+
+    monkeypatch.setenv("FIINTRADE_ORIGIN", "https://partner.example")
+    overview = DataCapabilityService(
+        config=_config(),
+        fetcher_manager=_FetcherManager([_Fetcher("FiinTradeFetcher", -1, available=True)]),
+    ).get_overview()
+    fiintrade = _provider(overview, "fiintrade")
+    assert fiintrade["configured"] is True
+    assert fiintrade["status"] == "ok"
+    assert fiintrade["priority"] == -1
+
+
+def test_realtime_priority_puts_fiintrade_first_only_when_enabled(monkeypatch) -> None:
+    # Khớp DataFetcherManager._vn_realtime_source_order: FiinTrade bật mà không ghi
+    # trong cấu hình thì đứng đầu; tắt thì token bị bỏ qua kèm cảnh báo.
+    service = DataCapabilityService(config=_config(), fetcher_manager=_default_manager())
+    providers, warnings = service._vn_realtime_priority()
+    assert providers == ["ssi", "vci"]
+
+    monkeypatch.setenv("FIINTRADE_ORIGIN", "https://partner.example")
+    providers, warnings = service._vn_realtime_priority()
+    assert providers == ["fiintrade", "ssi", "vci"]
+    assert warnings == []
 
 
 def test_market_disabled_marks_providers_unconfigured() -> None:

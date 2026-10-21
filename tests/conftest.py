@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import os
 import time
 import threading
 from collections.abc import Awaitable, Callable
@@ -18,6 +19,12 @@ import fastapi.testclient
 import httpx
 import starlette.testclient
 from anyio._backends import _asyncio
+
+# FiinTrade mặc định bật khi có FIINTRADE_ORIGIN; nếu .env của máy dev có origin thì
+# DataFetcherManager() trong test sẽ gọi mạng thật. Tắt cứng ở đây (load_dotenv không
+# ghi đè biến có sẵn); test nào cần thì tự bật bằng patch.dict / monkeypatch.
+# FiinTrade is on by default when an origin is set; force it off so tests stay offline.
+os.environ["FIINTRADE_ENABLED"] = "false"
 
 T = TypeVar("T")
 

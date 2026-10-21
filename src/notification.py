@@ -1585,6 +1585,7 @@ class NotificationService(
         "vci": {"vi": "VCI (Vietcap)", "zh": "VCI (Vietcap)", "en": "VCI (Vietcap)"},
         "ssi": {"vi": "SSI iBoard", "zh": "SSI iBoard", "en": "SSI iBoard"},
         "vnstock": {"vi": "vnstock", "zh": "vnstock", "en": "vnstock"},
+        "fiintrade": {"vi": "FiinTrade", "zh": "FiinTrade", "en": "FiinTrade"},
         "tencent": {"zh": "腾讯财经", "en": "Tencent Finance"},
         "akshare_em": {"zh": "东方财富", "en": "Eastmoney"},
         "akshare_sina": {"zh": "新浪财经", "en": "Sina Finance"},

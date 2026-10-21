@@ -256,7 +256,7 @@ class DataCapabilityOverviewTestCase(unittest.TestCase):
         self.assertIn("quote.realtime", providers["ssi"]["datasets"])
 
     def test_only_vn_providers_are_listed(self):
-        self.assertEqual(set(self._providers()), {"vci", "ssi", "vnstock", "yfinance"})
+        self.assertEqual(set(self._providers()), {"fiintrade", "vci", "ssi", "vnstock", "yfinance"})
 
     def test_yfinance_serves_vn_daily_only(self):
         """Yahoo là dự phòng cấp 3 cho nến ngày VN, không được khai gì thêm.

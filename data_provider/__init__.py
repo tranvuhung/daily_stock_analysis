@@ -11,6 +11,8 @@ Việt Nam, cung cấp:
 3. Chiến lược điều tiết tần suất để tránh bị chặn
 
 Các nguồn dữ liệu (số ưu tiên càng nhỏ càng được chọn trước):
+0. FiinTradeFetcher (Priority -1) - nến ngày HOSE/HNX/chỉ số; mặc định bật khi có
+   ``FIINTRADE_ORIGIN`` (tắt bằng ``FIINTRADE_ENABLED=false``)
 1. VciFetcher (Priority 0)  - Vietcap, dữ liệu công khai: nến ngày + bảng mã đầy đủ
 2. SsiFetcher (Priority 1)  - SSI iBoard, snapshot realtime toàn thị trường + nến ngày dự phòng
 3. VnstockFetcher (Priority 2) - tuỳ chọn, cần ``VNSTOCK_ENABLED=true`` và đã cài vnstock

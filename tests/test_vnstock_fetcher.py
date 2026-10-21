@@ -117,7 +117,7 @@ class VnstockRegistrationTestCase(unittest.TestCase):
         # vnstock is optional and only registered when VNSTOCK_ENABLED=true.
         from data_provider.base import DataFetcherManager
 
-        with patch.dict(os.environ, {"VNSTOCK_ENABLED": "false"}):
+        with patch.dict(os.environ, {"VNSTOCK_ENABLED": "false", "FIINTRADE_ENABLED": "false"}):
             manager = DataFetcherManager()
         names = [f.name for f in manager._get_fetchers_snapshot()]
         self.assertNotIn("VnstockFetcher", names)

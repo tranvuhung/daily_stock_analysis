@@ -30,7 +30,9 @@ Mã không thuộc Việt Nam (ví dụ `600519`, `hk00700`, `AAPL`) bị từ c
 
 | Tình huống | Nguồn | Ghi chú |
 | --- | --- | --- |
+| Nến ngày / nến ngày chỉ số | `FiinTradeFetcher` (ưu tiên -1) | Mặc định bật nhưng chỉ chạy khi có `FIINTRADE_ORIGIN` (origin trong whitelist của FiinTrade); tắt bằng `FIINTRADE_ENABLED=false`. Phủ HOSE / HNX / ETF / chỉ số trừ UPCoM; mã UPCOM và chỉ số UPCoM tự chuyển sang VCI. Giá cùng cơ sở điều chỉnh với VCI. |
 | Nến ngày / nến ngày chỉ số | `VciFetcher` (ưu tiên 0) | `POST trading.vietcap.com.vn/api/chart/OHLCChart/gap-chart`, không cần API key. **Mỗi lần chỉ hỏi một mã**, nên không có prefetch nến ngày hàng loạt. |
+| Giá realtime + định giá | `FiinTradeFetcher` | Khi chạy (có origin) thì đứng đầu chuỗi giá realtime (token `fiintrade`). `PriceDepth`: giá, tham chiếu/trần/sàn, khối ngoại, thoả thuận, P/E, P/B, vốn hoá, EPS, ROE. `GetStockEvents`: cổ tức TTM, phát hành, giao dịch nội bộ. Chỉ cổ phiếu HOSE/HNX; chỉ số và UPCOM rơi sang VCI/SSI. |
 | Giá realtime | `SsiFetcher` (ưu tiên 1) | `GET iboard-query.ssi.com.vn/stock/exchange/{hose,hnx,upcom}`, **một request phủ cả sàn**; `prefetch_realtime_quotes` chỉ cần ba request cho toàn thị trường. |
 | Nến ngày dự phòng | `SsiFetcher` | `GET iboard-api.ssi.com.vn/statistics/charts/history` (định dạng TradingView UDF). |
 | Bổ sung tuỳ chọn | `VnstockFetcher` (ưu tiên 2) | Cần `VNSTOCK_ENABLED=true` và đã cài `requirements-vn-optional.txt`; mặc định tắt vì giấy phép vnstock là "Personal Use" và có telemetry. |

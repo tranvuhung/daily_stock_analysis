@@ -277,8 +277,8 @@ const settingsHelpViVN: SettingsHelpMap = {
   'settings.data_source.REALTIME_SOURCE_PRIORITY': {
     title: 'Thứ tự ưu tiên nguồn thời gian thực',
     summary: 'Cấu hình thứ tự nhà cung cấp cho giá thời gian thực.',
-    usage: 'Dùng tên nhà cung cấp phân tách bằng dấu phẩy (ssi, vci); hệ thống sẽ thử lần lượt theo thứ tự đó.',
-    valueNotes: ['Nhà cung cấp đứng trước được ưu tiên; khi thất bại sẽ chuyển sang nhà cung cấp phía sau.', 'Chỉ hỗ trợ các nguồn giá Việt Nam: ssi, vci.'],
+    usage: 'Dùng tên nhà cung cấp phân tách bằng dấu phẩy (fiintrade, ssi, vci); hệ thống sẽ thử lần lượt theo thứ tự đó.',
+    valueNotes: ['Nhà cung cấp đứng trước được ưu tiên; khi thất bại sẽ chuyển sang nhà cung cấp phía sau.', 'Chỉ hỗ trợ các nguồn giá Việt Nam: fiintrade, ssi, vci.', 'fiintrade chỉ có hiệu lực khi FiinTrade đang chạy (đã đặt FIINTRADE_ORIGIN); khi đó nếu không ghi trong danh sách thì tự đứng đầu.'],
     impact: ['Ảnh hưởng tới giá hiện tại, phân tích trong phiên và các trường báo cáo phụ thuộc giá thời gian thực.'],
     notes: ['Một nhà cung cấp lỗi thì phải chuyển được sang nguồn kế tiếp.'],
   },
@@ -1313,8 +1313,8 @@ const settingsHelpEnUS: SettingsHelpMap = {
   'settings.data_source.REALTIME_SOURCE_PRIORITY': {
     title: 'Realtime Source Priority',
     summary: 'Configures the provider order for realtime quotes.',
-    usage: 'Use comma-separated provider names (ssi, vci); the system tries them in order.',
-    valueNotes: ['Earlier providers are preferred; failures fall back to later providers.', 'Only Vietnam quote providers are supported: ssi, vci.'],
+    usage: 'Use comma-separated provider names (fiintrade, ssi, vci); the system tries them in order.',
+    valueNotes: ['Earlier providers are preferred; failures fall back to later providers.', 'Only Vietnam quote providers are supported: fiintrade, ssi, vci.', 'fiintrade only takes effect when FiinTrade is active (FIINTRADE_ORIGIN set) and goes first when it is not listed.'],
     impact: ['Affects current price, intraday analysis, and report fields that depend on realtime prices.'],
     notes: ['A single provider failure should fall back to the next source.'],
   },

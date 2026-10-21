@@ -300,7 +300,7 @@ For the notification baseline, diagnostics, and deployment notes, see [Notificat
 |--------|------|--------|:----:|
 | `ENABLE_REALTIME_QUOTE` | Enable real-time quotes (if disabled, uses historical closing prices for analysis) | `true` | Optional |
 | `ENABLE_REALTIME_TECHNICAL_INDICATORS` | Intraday real-time technicals: Calculate MA5/MA10/MA20 and bull trends using real-time prices when enabled (Issue #234); uses yesterday's close if disabled. | `true` | Optional |
-| `REALTIME_SOURCE_PRIORITY` | Vietnam realtime quote source order (comma-separated tokens `ssi` / `vci`) | See .env.example | Optional |
+| `REALTIME_SOURCE_PRIORITY` | Vietnam realtime quote source order (comma-separated tokens `fiintrade` / `ssi` / `vci`; `fiintrade` only applies when FiinTrade is active and goes first when not listed) | See .env.example | Optional |
 | `ENABLE_FUNDAMENTAL_PIPELINE` | Master switch for fundamental aggregation; when disabled, returns `not_supported` block only, without altering the original analysis pipeline. | `true` | Optional |
 | `FUNDAMENTAL_STAGE_TIMEOUT_SECONDS` | Total latency budget for the fundamental stage (seconds) | `8.0` | Optional |
 | `FUNDAMENTAL_FETCH_TIMEOUT_SECONDS` | Timeout for a single capability source call; market-structure industry/concept rankings share this budget | `8.0` | Optional |
@@ -994,12 +994,13 @@ Vietnam market data needs no API key. Default chain (by priority):
 
 | Source | Role | Notes |
 | --- | --- | --- |
+| FiinTrade | Optional daily/index bars ahead of VCI; first realtime source with valuation (PE/PB/market cap/EPS/ROE), foreign flow, put-through and ceiling/floor; TTM cash dividends, share issuances and insider trades for the fundamentals blocks | On by default, active once `FIINTRADE_ORIGIN` (an origin whitelisted by FiinTrade) is set; `FIINTRADE_ENABLED=false` disables it; HOSE / HNX stocks and non-UPCoM indices, same adjusted basis as VCI; UPCOM symbols and the UPCoM index fall through to SSI/VCI |
 | VCI (Vietcap) | Daily bars, index bars, market-review indices | Public API, one symbol per request |
 | SSI iBoard | Realtime snapshot (whole exchange per request), daily fallback, market breadth | Public API |
 | vnstock | Optional supplement | `VNSTOCK_ENABLED=true` plus `pip install -r requirements-vn-optional.txt`; personal-use licence and telemetry |
 | YFinance | Third fallback for HOSE daily bars only | No HNX / UPCoM / index coverage; bars are not persisted |
 
-Tunables (`VCI_PRIORITY`, `SSI_PRIORITY`, `REALTIME_SOURCE_PRIORITY=ssi`, `VNSTOCK_*`, optional `TVSI_MQTT_*` realtime feed) are documented in `.env.example`. The removed providers (AkShare, Efinance, Tushare, Pytdx, Baostock, Tencent, TickFlow, Longbridge, Futu, Finnhub, Alpha Vantage) and their environment variables are ignored. See [Data-source stability](data-source-stability.md) (Vietnamese).
+Tunables (`VCI_PRIORITY`, `SSI_PRIORITY`, `REALTIME_SOURCE_PRIORITY=ssi`, `FIINTRADE_*`, `VNSTOCK_*`, optional `TVSI_MQTT_*` realtime feed) are documented in `.env.example`. The removed providers (AkShare, Efinance, Tushare, Pytdx, Baostock, Tencent, TickFlow, Longbridge, Futu, Finnhub, Alpha Vantage) and their environment variables are ignored. See [Data-source stability](data-source-stability.md) (Vietnamese).
 
 ---
 

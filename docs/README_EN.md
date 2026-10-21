@@ -124,10 +124,11 @@ More search providers and fallback behavior are in [Search Configuration](./full
 
 **Market data sources (optional)**
 
-> VCI and SSI are public and need no key. The only optional data-source switch is:
+> VCI and SSI are public and need no key. Optional data-source switches:
 
 | Secret Name | Market | Description |
 |-------------|:------:|-------------|
+| `FIINTRADE_ORIGIN` | Vietnam | Activates FiinTrade (on by default) ahead of VCI for daily bars, realtime quotes, valuation and corporate events; must be an origin whitelisted by FiinTrade. Set `FIINTRADE_ENABLED=false` to turn it off |
 | `VNSTOCK_ENABLED` | Vietnam | Enables the optional `vnstock` source (requires `requirements-vn-optional.txt`; vnstock is licensed for personal use and ships telemetry) |
 
 > See [Data-source stability](data-source-stability.md).

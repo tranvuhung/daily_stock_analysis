@@ -2,14 +2,16 @@
 """
 Kiểm thử fundamental context có cấu trúc (thị trường Việt Nam).
 
-Việt Nam chỉ có khối định giá lấy từ snapshot realtime; các khối tăng trưởng /
-kết quả kinh doanh / sở hữu tổ chức luôn ``not_supported``.
+Việt Nam có khối định giá lấy từ snapshot realtime; khi FiinTrade được bật thì có
+thêm earnings (cổ tức, phát hành, ngày KQKD) và institution (giao dịch nội bộ, sở
+hữu nước ngoài). Khối tăng trưởng luôn ``not_supported``.
 
 Tests for the structured fundamental context (Vietnam only).
 """
 
 import time
 import unittest
+from datetime import date, timedelta
 from threading import BoundedSemaphore, Event
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -175,6 +177,120 @@ class TestFundamentalContext(unittest.TestCase):
         self.assertNotEqual(key_default, key_low)
         self.assertNotEqual(key_low, key_high)
         self.assertIn("budget=", key_low)
+
+
+
+class _FiinTradeStub:
+    """Nguồn FiinTrade giả cho fundamentals / FiinTrade stub for fundamentals."""
+
+    name = "FiinTradeFetcher"
+    priority = -1
+
+    def __init__(self, quote=None, events=None, events_error=None):
+        self._quote = quote
+        self._events = events
+        self._events_error = events_error
+
+    def get_realtime_quote(self, stock_code, **_):
+        return self._quote
+
+    def get_corporate_events(self, stock_code):
+        if self._events_error:
+            raise RuntimeError(self._events_error)
+        return self._events
+
+
+def _days_ago(days: int) -> str:
+    return (date.today() - timedelta(days=days)).isoformat()
+
+
+class TestFundamentalContextWithFiinTrade(unittest.TestCase):
+    def _quote(self):
+        from data_provider.realtime_types import UnifiedRealtimeQuote
+
+        return UnifiedRealtimeQuote(
+            code="FPT", price=50000.0, pe_ratio=10.8, pb_ratio=2.7, total_mv=1.08e14,
+            eps_ttm=5323.8, roe=26.47, foreign_ownership_pct=27.92, foreign_room_remaining=3.6e8,
+        )
+
+    def _events(self):
+        return {
+            "dividends": [
+                {"ex_date": _days_ago(30), "record_date": _days_ago(29), "cash_per_share": 1000.0},
+                {"ex_date": _days_ago(200), "record_date": _days_ago(199), "cash_per_share": 1000.0},
+                # Ngoài 12 tháng: không tính vào TTM / Outside the TTM window
+                {"ex_date": _days_ago(400), "record_date": _days_ago(399), "cash_per_share": 1000.0},
+            ],
+            "share_issuances": [
+                {"method_en": "Bonus Issue", "ex_date": _days_ago(20), "volume": 1.7e8, "ratio": 0.1},
+            ],
+            "insider_transactions": [
+                {"name": "A", "action": "buy", "shares_executed": 8700.0, "public_date": _days_ago(10)},
+                {"name": "B", "action": "sell", "shares_executed": 2000.0, "public_date": _days_ago(40)},
+                # Ngoài 90 ngày / Outside the 90-day window
+                {"name": "C", "action": "buy", "shares_executed": 99999.0, "public_date": _days_ago(120)},
+            ],
+            "earnings_releases": [{"year": 2026, "quarter": 2, "public_date": _days_ago(60)}],
+        }
+
+    def test_fiintrade_fills_valuation_earnings_and_institution(self) -> None:
+        stub = _FiinTradeStub(quote=self._quote(), events=self._events())
+        manager = DataFetcherManager(fetchers=[stub])
+        with patch("src.config.get_config", return_value=_cfg()), \
+                patch.object(manager, "get_realtime_quote") as regular_quote:
+            ctx = manager.get_fundamental_context("FPT")
+
+        # Định giá lấy thẳng từ FiinTrade, không qua chuỗi realtime thường.
+        regular_quote.assert_not_called()
+        self.assertEqual(ctx["coverage"]["valuation"], "ok")
+        self.assertEqual(ctx["valuation"]["data"]["eps_ttm"], 5323.8)
+
+        dividend = ctx["earnings"]["data"]["dividend"]
+        self.assertEqual(dividend["ttm_cash_dividend_per_share"], 2000.0)
+        self.assertEqual(dividend["ttm_event_count"], 2)
+        self.assertEqual(dividend["ttm_dividend_yield_pct"], 4.0)
+        self.assertEqual(dividend["events"][0]["ex_dividend_date"], _days_ago(30))
+        self.assertEqual(ctx["earnings"]["data"]["earnings_releases"][0]["quarter"], 2)
+        # Chưa có báo cáo tài chính nên earnings chỉ "partial".
+        self.assertEqual(ctx["coverage"]["earnings"], "partial")
+
+        institution = ctx["institution"]["data"]
+        self.assertEqual(ctx["coverage"]["institution"], "ok")
+        self.assertEqual(institution["insider_transaction_count"], 2)
+        self.assertEqual(institution["insider_net_shares"], 6700.0)
+        self.assertEqual(institution["foreign_ownership_pct"], 27.92)
+
+        self.assertEqual(ctx["coverage"]["growth"], "not_supported")
+        self.assertEqual(ctx["status"], "partial")
+
+    def test_events_failure_is_fail_open(self) -> None:
+        stub = _FiinTradeStub(quote=self._quote(), events_error="boom")
+        manager = DataFetcherManager(fetchers=[stub])
+        with patch("src.config.get_config", return_value=_cfg()):
+            ctx = manager.get_fundamental_context("FPT")
+
+        self.assertEqual(ctx["coverage"]["valuation"], "ok")
+        self.assertEqual(ctx["coverage"]["earnings"], "failed")
+        self.assertEqual(ctx["coverage"]["institution"], "failed")
+        self.assertEqual(ctx["status"], "partial")
+
+    def test_upcom_quote_falls_back_to_regular_chain(self) -> None:
+        stub = _FiinTradeStub(
+            quote=None,
+            events={"dividends": [], "share_issuances": [], "insider_transactions": [], "earnings_releases": []},
+        )
+        manager = DataFetcherManager(fetchers=[stub])
+        fallback = _quote(pe_ratio=None)
+        with patch("src.config.get_config", return_value=_cfg()), \
+                patch.object(manager, "get_realtime_quote", return_value=fallback) as regular_quote:
+            ctx = manager.get_fundamental_context("ACV")
+
+        regular_quote.assert_called_once_with("ACV")
+        # Sự kiện rỗng hoàn toàn (UPCOM không được phủ) không được báo thành "cổ tức = 0".
+        # All-empty events (UPCOM not covered) must not be reported as "zero dividends".
+        self.assertEqual(ctx["coverage"]["earnings"], "not_supported")
+        self.assertEqual(ctx["coverage"]["institution"], "not_supported")
+        self.assertEqual(ctx["earnings"]["data"], {})
 
 
 if __name__ == "__main__":
