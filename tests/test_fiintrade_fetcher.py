@@ -431,5 +431,190 @@ class FiinTradeRealtimeOrderTestCase(unittest.TestCase):
         self.assertEqual(fiin.calls, 1)
 
 
+def _index_item(code, value, ref, chg, up, down, flat, ceil, floor, matched, deal, fbuy, fsell):
+    return {
+        "comGroupCode": code, "indexValue": value, "referenceIndex": ref, "indexChange": round(value - ref, 2),
+        "percentIndexChange": chg, "openIndex": ref, "highestIndex": value, "lowestIndex": ref,
+        "totalMatchVolume": 1000.0, "totalMatchValue": matched, "totalDealVolume": 100.0,
+        "totalDealValue": deal, "totalStockUpPrice": up, "totalStockDownPrice": down,
+        "totalStockNoChangePrice": flat, "totalStockOverCeiling": ceil, "totalStockUnderFloor": floor,
+        "foreignBuyValueTotal": fbuy, "foreignSellValueTotal": fsell,
+    }
+
+
+# Rút gọn từ response GetLatestIndices thật (2026-10-21).
+_LATEST_INDICES_PAYLOAD = {
+    "items": [
+        _index_item("VNINDEX", 1738.67, 1691.97, 0.0276, 246, 78, 54, 16.0, 3.0,
+                    17071097794490.0, 3219491891180.0, 2502403869400.0, 2308257158450.0),
+        _index_item("VN30", 1880.57, 1845.51, 0.019, 25, 1, 4, 3.0, 0.0,
+                    8684820556650.0, 1666029569780.0, 1.0e12, 0.8e12),
+        _index_item("HNXIndex", 261.67, 257.96, 0.0144, 86, 57, 51, 9.0, 7.0,
+                    1076103307700.0, 38435860000.0, 1.0e10, 4.1405935e10),
+        _index_item("UpcomIndex", 126.24, 125.22, 0.0081, 126, 90, 82, 18.0, 16.0,
+                    548361902500.0, 44067108800.0, 1.0e9, 2.8126374e9),
+        _index_item("VNREAL", 3056.31, 2875.29, 0.063, 34, 5, 6, 6.0, 1.0, 1.0e12, 0.0, 0.0, 0.0),
+    ],
+    "status": "Success",
+}
+
+_FOREIGN_FLOW_PAYLOAD = {
+    "items": [{
+        "comGroupCode": "VNINDEX",
+        "today": {
+            "fromDate": "2026-10-21T00:00:00+07:00", "toDate": "2026-10-21T00:00:00+07:00",
+            "foreignBuyValue": 2502403869400.0, "foreignSellValue": 2308257158450.0,
+            # Tổng các mã mua ròng, KHÔNG phải ròng thị trường.
+            "foreignNetBuyValue": 1090061167000.0, "foreignNetSellValue": 900206448900.0,
+            "netBuy": [{"ticker": "TCB", "foreignNetBuyValue": 289795860550.0, "percentPriceChange": 0.0133}],
+            "netSell": [{"ticker": "FPT", "foreignNetBuyValue": -173161592100.0, "percentPriceChange": 0.0}],
+        },
+        "oneWeek": {
+            "fromDate": "2026-10-14T00:00:00", "toDate": "2026-10-20T00:00:00",
+            "foreignBuyValue": 7695445476380.0, "foreignSellValue": 10710462741840.0,
+            "netBuy": [], "netSell": [],
+        },
+    }],
+    "status": "Success",
+}
+
+_PROPRIETARY_FLOW_PAYLOAD = {
+    "items": [{
+        "comGroupCode": "VNINDEX",
+        "today": {
+            "fromDate": "2026-10-20T00:00:00", "toDate": "2026-10-21T00:00:00",
+            "totalBuyTradeValue": 1957660000000.0, "totalSellTradeValue": 2133530000000.0,
+            "netBuy": [
+                # Chứng quyền phải bị lọc khỏi top / Covered warrants are filtered out
+                {"ticker": "CMSN2624", "totalNetBuyTradeValue": 9.0e11, "percentPriceChange": 0.11},
+                {"ticker": "VJC", "totalNetBuyTradeValue": 285240000000.0, "percentPriceChange": 0.0047},
+            ],
+            "netSell": [{"ticker": "VCB", "totalNetBuyTradeValue": -104440000000.0, "percentPriceChange": 0.01}],
+        },
+    }],
+    "status": "Success",
+}
+
+
+class FiinTradeMarketTestCase(unittest.TestCase):
+    def setUp(self):
+        module.reset_market_cache()
+        self.fetcher = FiinTradeFetcher(min_interval=0.0, origin="https://partner.example")
+
+    def tearDown(self):
+        module.reset_market_cache()
+
+    def test_main_indices_keep_vci_codes_and_include_put_through(self):
+        with patch.object(
+            self.fetcher._session, "get", return_value=_response(_LATEST_INDICES_PAYLOAD)
+        ) as mocked:
+            indices = self.fetcher.get_main_indices("vn")
+
+        self.assertIn("wlgw-market", mocked.call_args.args[0])
+        self.assertEqual(
+            [(i["code"], i["name"]) for i in indices],
+            [("VNINDEX", "VN-Index"), ("VN30", "VN30"), ("HNXIndex", "HNX-Index"),
+             ("HNXUpcomIndex", "UPCoM-Index")],
+        )
+        vnindex = indices[0]
+        self.assertEqual(vnindex["change_pct"], 2.76)
+        self.assertEqual(vnindex["prev_close"], 1691.97)
+        # Khớp + thoả thuận, cùng ngữ nghĩa amount của VCI (20.290 tỷ).
+        self.assertEqual(vnindex["amount"], 17071097794490.0 + 3219491891180.0)
+        self.assertEqual(vnindex["put_through_amount"], 3219491891180.0)
+        self.assertAlmostEqual(vnindex["foreign_net_amount"], 194146710950.0)
+
+    def test_market_stats_sum_three_exchanges_and_keep_old_keys(self):
+        with patch.object(self.fetcher._session, "get", return_value=_response(_LATEST_INDICES_PAYLOAD)):
+            stats = self.fetcher.get_region_market_stats("vn")
+
+        self.assertEqual(
+            {k: stats[k] for k in ("up_count", "down_count", "flat_count", "limit_up_count", "limit_down_count")},
+            {"up_count": 458, "down_count": 225, "flat_count": 187, "limit_up_count": 43, "limit_down_count": 26},
+        )
+        # total_amount chỉ gồm khớp lệnh (tỷ đồng), như SSI.
+        self.assertEqual(stats["total_amount"], 18695.56)
+        self.assertEqual(stats["put_through_amount"], 3301.99)
+        self.assertEqual(stats["foreign_net_amount"], 160.93)
+        self.assertEqual(stats["by_exchange"]["hnx"]["up_count"], 86)
+
+    def test_indices_snapshot_is_shared_between_calls(self):
+        with patch.object(
+            self.fetcher._session, "get", return_value=_response(_LATEST_INDICES_PAYLOAD)
+        ) as mocked:
+            self.fetcher.get_main_indices("vn")
+            self.fetcher.get_region_market_stats("vn")
+        self.assertEqual(mocked.call_count, 1)
+
+    def _flow_get(self, foreign=_FOREIGN_FLOW_PAYLOAD, proprietary=_PROPRIETARY_FLOW_PAYLOAD):
+        def _get(url, params=None, timeout=None):
+            if url.endswith("/MoneyFlow/GetForeign"):
+                if isinstance(foreign, Exception):
+                    raise foreign
+                return _response(foreign)
+            return _response(proprietary)
+        return _get
+
+    def test_money_flow_uses_buy_minus_sell_and_filters_warrants(self):
+        with patch.object(self.fetcher._session, "get", side_effect=self._flow_get()):
+            flow = self.fetcher.get_market_money_flow("vn")
+
+        self.assertEqual(flow["scope"], "HOSE")
+        today = flow["foreign"]["today"]
+        # Ròng = mua − bán (194 tỷ), không phải foreignNetBuyValue của khối tổng (1.090 tỷ).
+        self.assertEqual(today["net"], 194.15)
+        self.assertEqual(today["top_net_buy"][0]["ticker"], "TCB")
+        self.assertEqual(today["top_net_sell"][0]["net"], -173.16)
+        self.assertEqual(flow["foreign"]["one_week"]["net"], -3015.02)
+
+        prop = flow["proprietary"]["today"]
+        # Giữ nguyên khoảng ngày API báo (có thể gộp hai phiên).
+        self.assertEqual((prop["from"], prop["to"]), ("2026-10-20", "2026-10-21"))
+        self.assertEqual([row["ticker"] for row in prop["top_net_buy"]], ["VJC"])
+
+    def test_money_flow_branch_failure_is_fail_open(self):
+        with patch.object(
+            self.fetcher._session, "get",
+            side_effect=self._flow_get(foreign=DataFetchError("boom")),
+        ):
+            flow = self.fetcher.get_market_money_flow("vn")
+
+        self.assertNotIn("foreign", flow)
+        self.assertIn("proprietary", flow)
+
+
+class _MarketStub:
+    def __init__(self, name, indices=None, stats=None, error=None):
+        self.name = name
+        self.priority = 0
+        self._indices, self._stats, self._error = indices, stats, error
+
+    def get_main_indices(self, region="vn"):
+        if self._error:
+            raise self._error
+        return self._indices
+
+    def get_region_market_stats(self, region):
+        if self._error:
+            raise self._error
+        return self._stats
+
+    def get_market_money_flow(self, region="vn"):
+        if self._error:
+            raise self._error
+        return None
+
+
+class FiinTradeMarketFallbackTestCase(unittest.TestCase):
+    def test_manager_falls_back_when_fiintrade_market_fails(self):
+        fiin = _MarketStub("FiinTradeFetcher", error=DataFetchError("403"))
+        ssi = _MarketStub("SsiFetcher", indices=[{"code": "VNINDEX"}], stats={"up_count": 1})
+        manager = DataFetcherManager(fetchers=[fiin, ssi])
+
+        self.assertEqual(manager.get_main_indices("vn"), [{"code": "VNINDEX"}])
+        self.assertEqual(manager.get_market_stats(region="vn"), {"up_count": 1})
+        self.assertEqual(manager.get_market_money_flow("vn"), {})
+
+
 if __name__ == "__main__":
     unittest.main()

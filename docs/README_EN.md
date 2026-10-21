@@ -128,7 +128,7 @@ More search providers and fallback behavior are in [Search Configuration](./full
 
 | Secret Name | Market | Description |
 |-------------|:------:|-------------|
-| `FIINTRADE_ORIGIN` | Vietnam | Activates FiinTrade (on by default) ahead of VCI for daily bars, realtime quotes, valuation and corporate events; must be an origin whitelisted by FiinTrade. Set `FIINTRADE_ENABLED=false` to turn it off |
+| `FIINTRADE_ORIGIN` | Vietnam | Activates FiinTrade (on by default) ahead of VCI for daily bars, realtime quotes, valuation, corporate events and market-review indices/breadth/fund flows; must be an origin whitelisted by FiinTrade. Set `FIINTRADE_ENABLED=false` to turn it off |
 | `VNSTOCK_ENABLED` | Vietnam | Enables the optional `vnstock` source (requires `requirements-vn-optional.txt`; vnstock is licensed for personal use and ships telemetry) |
 
 > See [Data-source stability](data-source-stability.md).

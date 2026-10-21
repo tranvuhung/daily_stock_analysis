@@ -45,15 +45,17 @@ Các nguồn A-share / quốc tế đã bị xoá: akshare, efinance, tushare, p
 
 | Thành phần | Nguồn | Ghi chú |
 | --- | --- | --- |
-| Chỉ số chính | `VciFetcher.get_main_indices(region="vn")` | VN-Index, VN30, HNX-Index, UPCoM-Index, dựng từ nến ngày mới nhất. Một chỉ số lỗi thì chỉ bỏ qua chỉ số đó. |
-| Độ rộng thị trường | `SsiFetcher.get_region_market_stats("vn")` | Tính từ snapshot ba sàn: số mã tăng/giảm/đứng giá, trần/sàn, giá trị giao dịch (tỷ đồng). |
+| Chỉ số chính | `FiinTradeFetcher.get_main_indices` khi có `FIINTRADE_ORIGIN`, nếu không thì `VciFetcher.get_main_indices(region="vn")` | VN-Index, VN30, HNX-Index, UPCoM-Index. FiinTrade lấy cả 4 trong một request (`GetLatestIndices`), giá trị giao dịch = khớp lệnh + thoả thuận (cùng ngữ nghĩa VCI). VCI dựng từ nến ngày mới nhất; một chỉ số lỗi thì chỉ bỏ qua chỉ số đó. |
+| Độ rộng thị trường | `FiinTradeFetcher.get_region_market_stats("vn")` khi có origin, nếu không thì `SsiFetcher` | Số mã tăng/giảm/đứng giá, trần/sàn, giá trị khớp lệnh (tỷ đồng). FiinTrade cộng ba chỉ số sàn và có thêm giá trị thoả thuận, khối ngoại ròng 3 sàn. |
+| Dòng tiền khối ngoại / tự doanh | `FiinTradeFetcher.get_market_money_flow("vn")` (chỉ khi có origin) | Sàn HOSE: ròng hôm nay / 1 tuần / 1 tháng / YTD kèm top 5 mã mua/bán ròng. Tự doanh công bố sau phiên, kỳ mới nhất có thể là phiên trước hoặc gộp hai phiên, nên prompt luôn ghi khoảng ngày. |
 | Tin tức | `SearchService` | Truy vấn tiếng Việt theo `VN_PROFILE.news_queries`, ngữ cảnh `VNINDEX`. |
 
 Giới hạn:
 
 - Chỉ tính cổ phiếu/ETF đã có giá khớp; loại chứng quyền, phái sinh, trái phiếu và mã chưa giao dịch.
-- Giá trị giao dịch là giá trị **khớp lệnh** (`nmTotalTradedValue`), không gồm thoả thuận.
-- Không có xếp hạng ngành hay dòng tiền khối ngoại. Prompt khai báo rõ giới hạn dữ liệu để model không tự bịa.
+- Giá trị giao dịch ở độ rộng là giá trị **khớp lệnh**, không gồm thoả thuận (FiinTrade báo thoả thuận ở dòng riêng).
+- Không có xếp hạng ngành. Dòng tiền khối ngoại / tự doanh chỉ có khi FiinTrade chạy; khi không có, prompt vẫn cấm model tự bịa số liệu dòng tiền.
+- UPCoM-Index từ FiinTrade có giá tham chiếu khác SSI/VCI (125,22 so với 125,51 ngày 21/10/2026), nên % thay đổi trong ngày có thể lệch nhỏ.
 - Market Light và cảnh báo thị trường (`target_scope=market`, `target=vn`) chỉ hỗ trợ `vn`. Xem [alerts.md](alerts.md).
 
 ## Ngôn ngữ báo cáo

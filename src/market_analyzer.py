@@ -88,6 +88,11 @@ class MarketOverview:
     limit_up_count: int = 0             # Number of limit-up stocks
     limit_down_count: int = 0           # Number of limit-down stocks
     total_amount: float = 0.0           # Tổng giá trị giao dịch (tỷ đồng) / Total turnover (VND bn)
+    put_through_amount: float = 0.0     # Giá trị thoả thuận (tỷ đồng) / Put-through value (VND bn)
+    foreign_net_amount: Optional[float] = None  # Khối ngoại mua ròng 3 sàn (tỷ) / Foreign net (VND bn)
+    # Dòng tiền khối ngoại / tự doanh theo kỳ (xem FiinTradeFetcher.get_market_money_flow)
+    # Foreign / proprietary flows by period (see FiinTradeFetcher.get_market_money_flow)
+    money_flow: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -352,8 +357,26 @@ class MarketAnalyzer:
         # 2. Lấy độ rộng thị trường (tăng/giảm/trần/sàn) / Fetch advance/decline statistics
         if self.profile.has_market_stats:
             self._get_market_statistics(overview)
+            # 3. Dòng tiền khối ngoại / tự doanh / Foreign and proprietary flows
+            self._get_money_flow(overview)
 
         return overview
+
+    def _get_money_flow(self, overview: MarketOverview) -> None:
+        """Lấy dòng tiền toàn thị trường; lỗi chỉ log, không chặn điểm lại thị trường."""
+        getter = getattr(self.data_manager, "get_market_money_flow", None)
+        if not callable(getter):
+            return
+        try:
+            flow = getter(region=self.region)
+        except Exception as e:
+            logger.error("[Thị trường] %s action=get_money_flow status=failed error=%s", self._log_context(), e)
+            return
+        if isinstance(flow, dict) and (flow.get("foreign") or flow.get("proprietary")):
+            overview.money_flow = flow
+            logger.info("[Thị trường] %s action=get_money_flow status=success", self._log_context())
+        else:
+            logger.info("[Thị trường] %s action=get_money_flow status=empty", self._log_context())
 
     
     def _get_main_indices(self) -> List[MarketIndex]:
@@ -415,6 +438,8 @@ class MarketAnalyzer:
                 overview.limit_up_count = stats.get('limit_up_count', 0)
                 overview.limit_down_count = stats.get('limit_down_count', 0)
                 overview.total_amount = stats.get('total_amount', 0.0)
+                overview.put_through_amount = stats.get('put_through_amount') or 0.0
+                overview.foreign_net_amount = stats.get('foreign_net_amount')
 
                 logger.info(
                     "[Thị trường] %s action=get_market_stats status=success up=%s down=%s flat=%s "
@@ -765,6 +790,14 @@ class MarketAnalyzer:
                 "total_amount": overview.total_amount,
                 "turnover_unit": self._get_turnover_unit_label(),
             }
+            # Trường bổ sung (chỉ thêm, giao diện chưa đọc) / Additive fields
+            if overview.put_through_amount:
+                payload["breadth"]["put_through_amount"] = overview.put_through_amount
+            if overview.foreign_net_amount is not None:
+                payload["breadth"]["foreign_net_amount"] = overview.foreign_net_amount
+
+        if overview.money_flow:
+            payload["money_flow"] = overview.money_flow
 
         return payload
 
@@ -1135,7 +1168,15 @@ class MarketAnalyzer:
         indices_text = ""
         for idx in overview.indices:
             direction = "↑" if idx.change_pct > 0 else "↓" if idx.change_pct < 0 else "-"
-            indices_text += f"- {idx.name}: {idx.current:.2f} ({direction}{abs(idx.change_pct):.2f}%)\n"
+            # Giá trị GD (khớp + thoả thuận) khi nguồn có / Turnover when the source has it
+            turnover = (
+                f", turnover {idx.amount / 1e9:,.0f} VND bn"
+                if isinstance(idx.amount, (int, float)) and idx.amount > 0
+                else ""
+            )
+            indices_text += (
+                f"- {idx.name}: {idx.current:.2f} ({direction}{abs(idx.change_pct):.2f}%{turnover})\n"
+            )
 
         # News info - supports SearchResult objects or dicts
         news_text = ""
@@ -1157,6 +1198,18 @@ class MarketAnalyzer:
 - Advancers: {overview.up_count} | Decliners: {overview.down_count} | Flat: {overview.flat_count}
 - Limit-up: {overview.limit_up_count} | Limit-down: {overview.limit_down_count}
 - Turnover: {overview.total_amount:.0f} ({self._get_turnover_unit_label()})"""
+            if overview.put_through_amount:
+                stats_block += (
+                    f"\n- Put-through (negotiated, excluded from turnover above): "
+                    f"{overview.put_through_amount:,.0f} ({self._get_turnover_unit_label()})"
+                )
+            if overview.foreign_net_amount is not None:
+                stats_block += (
+                    f"\n- Foreign net, all exchanges today: {overview.foreign_net_amount:+,.0f} "
+                    f"({self._get_turnover_unit_label()})"
+                )
+
+        flow_block = self._build_money_flow_prompt_block(overview.money_flow)
 
         # Chưa có dữ liệu xếp hạng ngành cho Việt Nam. / No sector ranking data for Vietnam.
         data_limit_lines = []
@@ -1174,9 +1227,15 @@ class MarketAnalyzer:
         )
         indices_placeholder = indices_text if indices_text else "No index data (API error)"
         news_placeholder = news_text if news_text else "No relevant news"
-        data_boundary_requirement = (
-            "- Respect Data Limits: do not invent or over-interpret unsupported breadth, fund-flow, turnover, participation, or sector-ranking data.\n"
-        )
+        if flow_block:
+            data_boundary_requirement = (
+                "- Respect Data Limits: use only the fund-flow figures given in Fund Flows (quote their date ranges); "
+                "do not invent other flow, turnover, participation, or sector-ranking data.\n"
+            )
+        else:
+            data_boundary_requirement = (
+                "- Respect Data Limits: do not invent or over-interpret unsupported breadth, fund-flow, turnover, participation, or sector-ranking data.\n"
+            )
         market_summary_hint = (
             "2-3 sentences summarizing overall market tone, index moves, and liquidity."
             if self.profile.has_market_stats
@@ -1207,6 +1266,8 @@ class MarketAnalyzer:
 
 {stats_block}
 
+{flow_block}
+
 {data_limits_block}
 
 ## Market News
@@ -1234,6 +1295,58 @@ class MarketAnalyzer:
 
 Output the report content directly, no extra commentary.
 """
+
+    @staticmethod
+    def _build_money_flow_prompt_block(flow: Optional[Dict[str, Any]]) -> str:
+        """Mục "Fund Flows" cho prompt; rỗng khi không có dữ liệu.
+
+        Mỗi kỳ ghi rõ khoảng ngày nguồn báo: tự doanh công bố sau phiên và khối
+        "today" có thể gộp hai phiên, nên không được gán cho "hôm nay".
+        Each period carries the provider's own date range.
+        """
+        if not isinstance(flow, dict):
+            return ""
+        labels = (("today", "Latest"), ("one_week", "1 week"), ("one_month", "1 month"), ("ytd", "Year to date"))
+
+        def _period_lines(side: Dict[str, Any], with_top: tuple) -> List[str]:
+            lines: List[str] = []
+            for key, label in labels:
+                period = side.get(key)
+                if not isinstance(period, dict) or period.get("net") is None:
+                    continue
+                lines.append(
+                    f"- {label} ({period.get('from')} → {period.get('to')}): net {period['net']:+,.0f} "
+                    f"(buy {period.get('buy') or 0:,.0f} / sell {period.get('sell') or 0:,.0f})"
+                )
+                if key in with_top:
+                    for title, top_key in (("top net buy", "top_net_buy"), ("top net sell", "top_net_sell")):
+                        top = period.get(top_key) or []
+                        if top:
+                            items = ", ".join(f"{row['ticker']} {row['net']:+,.0f}" for row in top)
+                            lines.append(f"  - {title}: {items}")
+            return lines
+
+        scope = flow.get("scope") or "market"
+        unit = flow.get("unit") or "VND bn"
+        parts: List[str] = []
+        foreign = flow.get("foreign")
+        if isinstance(foreign, dict):
+            lines = _period_lines(foreign, ("today", "one_week"))
+            if lines:
+                parts.append("### Foreign investors\n" + "\n".join(lines))
+        proprietary = flow.get("proprietary")
+        if isinstance(proprietary, dict):
+            lines = _period_lines(proprietary, ("today", "one_week"))
+            if lines:
+                parts.append(
+                    "### Proprietary trading (securities firms)\n"
+                    "Published after the session; the latest period may cover the previous "
+                    "session or two sessions, so cite its date range instead of calling it today.\n"
+                    + "\n".join(lines)
+                )
+        if not parts:
+            return ""
+        return f"## Fund Flows ({scope}, {unit})\n" + "\n\n".join(parts)
 
     def _generate_template_review(self, overview: MarketOverview, news: List) -> str:
         """Generate the review report from a template (fallback when no LLM is available)"""

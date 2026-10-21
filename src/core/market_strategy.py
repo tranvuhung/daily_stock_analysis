@@ -58,7 +58,7 @@ VN_BLUEPRINT = MarketStrategyBlueprint(
     principles=[
         "Xem hướng đi của VN-Index và VN30 trước, sau đó đối chiếu HNX-Index, UPCoM-Index để đánh giá mức độ đồng thuận.",
         "Thanh khoản và độ rộng (số mã tăng/giảm, trần/sàn) quyết định chất lượng của nhịp tăng hoặc giảm.",
-        "Chỉ dựa trên dữ liệu chỉ số, độ rộng, tin tức có sẵn; không tự bịa số liệu ngành hay dòng tiền khối ngoại.",
+        "Chỉ dựa trên dữ liệu chỉ số, độ rộng, dòng tiền khối ngoại/tự doanh (khi được cung cấp) và tin tức có sẵn; không tự bịa số liệu ngành hay dòng tiền không có trong dữ liệu.",
     ],
     dimensions=[
         StrategyDimension(
@@ -76,7 +76,7 @@ VN_BLUEPRINT = MarketStrategyBlueprint(
             checkpoints=[
                 "Giá trị giao dịch so với các phiên gần đây",
                 "Tương quan số mã tăng/giảm và số mã trần/sàn",
-                "Tin tức về khối ngoại, tự doanh, chính sách tiền tệ",
+                "Khối ngoại, tự doanh mua/bán ròng (nếu có số liệu) và tin tức chính sách tiền tệ",
             ],
         ),
         StrategyDimension(

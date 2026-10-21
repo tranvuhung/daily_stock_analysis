@@ -65,6 +65,9 @@ _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
             "quote.realtime": (_VN,),
             "kline.daily": (_VN,),
             "index.daily": (_VN,),
+            # GetLatestIndices + MoneyFlow: chỉ số, độ rộng, dòng tiền cho điểm lại thị trường
+            # GetLatestIndices + MoneyFlow: indices, breadth and flows for the market review
+            "market.overview": (_VN,),
         },
     ),
     _ProviderDefinition(

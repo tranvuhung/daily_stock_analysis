@@ -352,6 +352,13 @@ class BaseFetcher(ABC):
         """
         return None
 
+    def get_market_money_flow(self, region: str = "vn") -> Optional[Dict[str, Any]]:
+        """Dòng tiền khối ngoại / tự doanh toàn thị trường theo kỳ; mặc định không hỗ trợ.
+
+        Market-level foreign / proprietary flows by period; unsupported by default.
+        """
+        return None
+
     def get_daily_data(
         self,
         stock_code: str,
@@ -1594,6 +1601,35 @@ class DataFetcherManager:
             purpose,
             region,
         )
+        return {}
+
+    def get_market_money_flow(self, region: str = "vn") -> Dict[str, Any]:
+        """Dòng tiền khối ngoại / tự doanh toàn thị trường (nguồn đầu tiên có dữ liệu).
+
+        Lỗi của một nguồn chỉ được log, không làm hỏng luồng điểm lại thị trường.
+        Market-level money flow from the first provider with data; fail-open.
+        """
+        for fetcher in self._get_fetchers_snapshot():
+            started_at = time.monotonic()
+            try:
+                data = fetcher.get_market_money_flow(region)
+            except Exception as e:
+                logger.warning(
+                    "[MoneyFlow] action=provider_failed region=%s provider=%s elapsed=%.2fs error=%s",
+                    region,
+                    fetcher.name,
+                    time.monotonic() - started_at,
+                    e,
+                )
+                continue
+            if data:
+                logger.info(
+                    "[MoneyFlow] action=provider_success region=%s provider=%s elapsed=%.2fs",
+                    region,
+                    fetcher.name,
+                    time.monotonic() - started_at,
+                )
+                return data
         return {}
 
     def _run_with_timeout(

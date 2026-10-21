@@ -12,6 +12,13 @@ Endpoint (máy chủ ``wlgw-technical``):
 - ``GET /TradingView/GetStockEvents``: cổ tức, phát hành, giao dịch nội bộ, ngày
   công bố KQKD
 
+Máy chủ ``wlgw-market`` (điểm lại thị trường):
+
+- ``GET /MarketInDepth/GetLatestIndices``: 29 chỉ số trong một request, kèm độ
+  rộng (tăng/giảm/đứng/trần/sàn), khớp lệnh, thoả thuận, khối ngoại
+- ``GET /MoneyFlow/GetForeign``: khối ngoại theo kỳ (hôm nay/1 tuần/1 tháng/YTD)
+- ``GET /MoneyFlow/GetProprietaryV2``: tự doanh theo kỳ (công bố sau phiên)
+
 Mặc định bật, nhưng chỉ chạy khi có ``FIINTRADE_ORIGIN``: server chỉ trả dữ liệu
 khi header ``Origin`` nằm trong whitelist của đối tác (thiếu thì 403). Repo không
 hardcode origin; người triển khai tự điền giá trị được cấp. Tắt hẳn bằng
@@ -58,6 +65,20 @@ GetStockEvents (kiểm chứng 2026-10-21):
 12. Không trả sự kiện tương lai; mã UPCOM trả danh sách rỗng. Số liệu
     ``revenue``/``profit`` của sự kiện ``Earning`` chưa rõ loại lợi nhuận nên
     không được dùng, chỉ lấy kỳ báo cáo và ngày công bố.
+
+Thị trường (kiểm chứng 2026-10-21):
+
+13. Giá trị giao dịch chỉ số của VCI = khớp lệnh + thoả thuận của FiinTrade
+    (VNINDEX 20.290 = 17.071 + 3.219 tỷ), nên ``amount`` chỉ số dùng tổng này.
+14. UPCoM-Index: close trùng SSI nhưng ``referenceIndex`` khác SSI/VCI (125,22 vs
+    125,51), nên % thay đổi trong ngày có thể lệch nhỏ. Chỉ dùng cho snapshot.
+15. ``foreignNetBuyValue``/``foreignNetSellValue`` của khối tổng là tổng các mã
+    mua ròng / bán ròng, **không** phải ròng thị trường: ròng = mua − bán.
+16. Tự doanh được công bố sau phiên và khoảng ngày của khối ``today`` thay đổi
+    theo thời điểm gọi: trong phiên là phiên trước (``20/10 → 20/10``), sau khi
+    công bố lại gộp hai phiên (``20/10 → 21/10``). Vì vậy luôn giữ nguyên
+    ``fromDate``/``toDate`` của API và để tầng prompt nêu rõ khoảng ngày, không
+    gán là "hôm nay". Danh sách top lẫn chứng quyền nên phải lọc.
 """
 
 import logging
@@ -72,7 +93,13 @@ import pandas as pd
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from .base import BaseFetcher, DataFetchError, STANDARD_COLUMNS, is_vn_index_code
+from .base import (
+    BaseFetcher,
+    DataFetchError,
+    STANDARD_COLUMNS,
+    is_vn_index_code,
+    is_vn_security_code,
+)
 from .realtime_types import RealtimeSource, UnifiedRealtimeQuote
 
 logger = logging.getLogger(__name__)
@@ -80,6 +107,12 @@ logger = logging.getLogger(__name__)
 FIINTRADE_BASE_URL = os.getenv(
     "FIINTRADE_BASE_URL", "https://wlgw-technical.fiintrade.vn"
 ).rstrip("/")
+FIINTRADE_MARKET_BASE_URL = os.getenv(
+    "FIINTRADE_MARKET_BASE_URL", "https://wlgw-market.fiintrade.vn"
+).rstrip("/")
+_LATEST_INDICES_PATH = "/MarketInDepth/GetLatestIndices"
+_FOREIGN_FLOW_PATH = "/MoneyFlow/GetForeign"
+_PROPRIETARY_FLOW_PATH = "/MoneyFlow/GetProprietaryV2"
 _CHART_PATH = "/TradingView/GetStockChartData"
 _PRICE_DEPTH_PATH = "/PriceDepth/GetPriceDepth"
 _EVENTS_PATH = "/TradingView/GetStockEvents"
@@ -116,10 +149,31 @@ _EVENTS_LOOKBACK_DAYS = 730
 # Sàn niêm yết theo ``comGroupCode`` của PriceDepth (khớp ``vn_exchange`` của SSI).
 _EXCHANGE_BY_GROUP = {"VNINDEX": "hose", "HNXINDEX": "hnx"}
 
+# Chỉ số chính của điểm lại thị trường: (mã FiinTrade, mã/tên hiển thị như VCI).
+# Giữ đúng mã/tên của VciFetcher để báo cáo không đổi khi nguồn đổi.
+# Main review indices: (FiinTrade code, VCI-compatible code, display name).
+_MAIN_INDEX_CODES = (
+    ("VNINDEX", "VNINDEX", "VN-Index"),
+    ("VN30", "VN30", "VN30"),
+    ("HNXIndex", "HNXIndex", "HNX-Index"),
+    ("UpcomIndex", "HNXUpcomIndex", "UPCoM-Index"),
+)
+# Ba chỉ số sàn dùng để cộng độ rộng toàn thị trường / Exchange-wide indices
+_EXCHANGE_INDEX_CODES = (("hose", "VNINDEX"), ("hnx", "HNXIndex"), ("upcom", "UpcomIndex"))
+# Dòng tiền lấy theo HOSE (~90% giá trị giao dịch toàn thị trường).
+_FLOW_SCOPE_CODE = "VNINDEX"
+_FLOW_PERIODS = (("today", "today"), ("oneWeek", "one_week"), ("oneMonth", "one_month"), ("yearToDate", "ytd"))
+_FLOW_TOP_N = 5
+# Snapshot chỉ số dùng chung cho chỉ số + độ rộng trong một lượt review.
+_INDICES_CACHE_TTL = 30.0
+_MONEY_FLOW_CACHE_TTL = 300.0
+
 _last_request_at = 0.0
 _request_lock = RLock()
 _events_cache: Dict[str, Dict[str, Any]] = {}
 _events_lock = RLock()
+_market_cache: Dict[str, Dict[str, Any]] = {}
+_market_lock = RLock()
 
 
 def reset_events_cache() -> None:
@@ -127,6 +181,17 @@ def reset_events_cache() -> None:
 
     with _events_lock:
         _events_cache.clear()
+
+
+def reset_market_cache() -> None:
+    """Xoá cache dữ liệu thị trường (dùng cho test). / Clear market caches (for tests)."""
+
+    with _market_lock:
+        _market_cache.clear()
+
+
+def _to_billion(value: Optional[float]) -> Optional[float]:
+    return round(value / 1e9, 2) if value is not None else None
 
 
 def _to_float(value: Any) -> Optional[float]:
@@ -270,10 +335,12 @@ class FiinTradeFetcher(BaseFetcher):
         retry=retry_if_exception_type((requests.RequestException, ConnectionError, TimeoutError)),
         reraise=True,
     )
-    def _get_json(self, path: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_json(
+        self, path: str, params: Dict[str, Any], base_url: Optional[str] = None
+    ) -> Dict[str, Any]:
         self._enforce_rate_limit()
         response = self._session.get(
-            f"{FIINTRADE_BASE_URL}{path}", params=params, timeout=self.timeout
+            f"{base_url or FIINTRADE_BASE_URL}{path}", params=params, timeout=self.timeout
         )
         response.raise_for_status()
         data = response.json()
@@ -589,6 +656,238 @@ class FiinTradeFetcher(BaseFetcher):
             "insider_transactions": _newest_first(insiders, "public_date"),
             "earnings_releases": _newest_first(earnings, "public_date"),
         }
+
+    # ------------------------------------------------------------------
+    # Điểm lại thị trường: chỉ số, độ rộng, dòng tiền
+    # ------------------------------------------------------------------
+    def _cached_market(self, key: str, ttl: float, loader) -> Any:
+        with _market_lock:
+            cached = _market_cache.get(key)
+            if cached and (time.time() - float(cached.get("ts") or 0)) < ttl:
+                return cached["data"]
+        data = loader()
+        if data:
+            with _market_lock:
+                _market_cache[key] = {"ts": time.time(), "data": data}
+        return data
+
+    def _load_latest_indices(self) -> Dict[str, Dict[str, Any]]:
+        """Snapshot mọi chỉ số, khoá theo ``comGroupCode``; cache 30 giây."""
+
+        def _load() -> Dict[str, Dict[str, Any]]:
+            data = self._get_json(
+                _LATEST_INDICES_PATH,
+                {"language": "vi", "pageSize": 999999, "status": 1},
+                base_url=FIINTRADE_MARKET_BASE_URL,
+            )
+            if str(data.get("status") or "").lower() == "failed":
+                raise DataFetchError(f"[{self.name}] FiinTrade trả về lỗi: {data.get('errors') or data}")
+            return {
+                str(item.get("comGroupCode")): item
+                for item in data.get("items") or []
+                if isinstance(item, dict) and item.get("comGroupCode")
+            }
+
+        return self._cached_market("latest_indices", _INDICES_CACHE_TTL, _load) or {}
+
+    def get_main_indices(self, region: str = "vn") -> Optional[List[Dict[str, Any]]]:
+        if region != "vn":
+            return None
+        indices = self._load_latest_indices()
+        results: List[Dict[str, Any]] = []
+        for fiin_code, code, name in _MAIN_INDEX_CODES:
+            item = indices.get(fiin_code)
+            current = _to_float(item.get("indexValue")) if item else None
+            if current is None:
+                continue
+            ref = _to_float(item.get("referenceIndex"))
+            high = _to_float(item.get("highestIndex")) or current
+            low = _to_float(item.get("lowestIndex")) or current
+            ratio = _to_float(item.get("percentIndexChange"))
+            matched = _to_float(item.get("totalMatchValue")) or 0.0
+            deal = _to_float(item.get("totalDealValue")) or 0.0
+            foreign_buy = _to_float(item.get("foreignBuyValueTotal"))
+            foreign_sell = _to_float(item.get("foreignSellValueTotal"))
+            results.append({
+                "code": code,
+                "name": name,
+                "current": current,
+                "change": _to_float(item.get("indexChange")) or 0.0,
+                "change_pct": round(ratio * 100, 2) if ratio is not None else 0.0,
+                "open": _to_float(item.get("openIndex")) or current,
+                "high": high,
+                "low": low,
+                "prev_close": ref or 0.0,
+                "volume": (_to_float(item.get("totalMatchVolume")) or 0.0)
+                + (_to_float(item.get("totalDealVolume")) or 0.0),
+                # Khớp lệnh + thoả thuận (VND), cùng ngữ nghĩa amount của VCI.
+                # Matched + put-through (VND), same meaning as VCI's amount.
+                "amount": matched + deal,
+                "amplitude": round((high - low) / ref * 100, 2) if ref else 0.0,
+                "matched_amount": matched,
+                "put_through_amount": deal,
+                "foreign_net_amount": (
+                    foreign_buy - foreign_sell
+                    if foreign_buy is not None and foreign_sell is not None
+                    else None
+                ),
+                "up_count": item.get("totalStockUpPrice"),
+                "down_count": item.get("totalStockDownPrice"),
+            })
+        return results or None
+
+    def get_region_market_stats(self, region: str) -> Optional[Dict[str, Any]]:
+        """Độ rộng toàn thị trường = cộng ba chỉ số sàn (HOSE + HNX + UPCoM).
+
+        ``total_amount`` (tỷ đồng) chỉ gồm **khớp lệnh**, giữ đúng ngữ nghĩa của
+        SsiFetcher; thoả thuận và khối ngoại ròng nằm ở key riêng.
+        Market breadth summed over the three exchange indices; ``total_amount`` is
+        matched value only (same as SSI), put-through and foreign net are separate.
+        """
+
+        if region != "vn":
+            return None
+        indices = self._load_latest_indices()
+        totals = {
+            "up_count": 0, "down_count": 0, "flat_count": 0,
+            "limit_up_count": 0, "limit_down_count": 0,
+        }
+        matched = deal = foreign_net = 0.0
+        by_exchange: Dict[str, Dict[str, Any]] = {}
+        for exchange, fiin_code in _EXCHANGE_INDEX_CODES:
+            item = indices.get(fiin_code)
+            if not item:
+                continue
+            row = {
+                "up_count": int(item.get("totalStockUpPrice") or 0),
+                "down_count": int(item.get("totalStockDownPrice") or 0),
+                "flat_count": int(item.get("totalStockNoChangePrice") or 0),
+                "limit_up_count": int(_to_float(item.get("totalStockOverCeiling")) or 0),
+                "limit_down_count": int(_to_float(item.get("totalStockUnderFloor")) or 0),
+                "total_amount": _to_billion(_to_float(item.get("totalMatchValue")) or 0.0),
+                "put_through_amount": _to_billion(_to_float(item.get("totalDealValue")) or 0.0),
+                "foreign_net_amount": _to_billion(
+                    (_to_float(item.get("foreignBuyValueTotal")) or 0.0)
+                    - (_to_float(item.get("foreignSellValueTotal")) or 0.0)
+                ),
+            }
+            by_exchange[exchange] = row
+            for key in totals:
+                totals[key] += row[key]
+            matched += _to_float(item.get("totalMatchValue")) or 0.0
+            deal += _to_float(item.get("totalDealValue")) or 0.0
+            foreign_net += (_to_float(item.get("foreignBuyValueTotal")) or 0.0) - (
+                _to_float(item.get("foreignSellValueTotal")) or 0.0
+            )
+
+        if not by_exchange or totals["up_count"] + totals["down_count"] + totals["flat_count"] == 0:
+            return None
+        return {
+            **totals,
+            "total_amount": _to_billion(matched),
+            "put_through_amount": _to_billion(deal),
+            "foreign_net_amount": _to_billion(foreign_net),
+            "by_exchange": by_exchange,
+        }
+
+    @staticmethod
+    def _flow_top(rows: Any, net_key: str, limit: int = _FLOW_TOP_N) -> List[Dict[str, Any]]:
+        """Top mã theo giá trị ròng; bỏ chứng quyền/trái phiếu (chỉ giữ CP/ETF)."""
+
+        top: List[Dict[str, Any]] = []
+        for row in rows or []:
+            if not isinstance(row, dict):
+                continue
+            ticker = str(row.get("ticker") or "").strip().upper()
+            if not is_vn_security_code(ticker):
+                continue
+            net = _to_float(row.get(net_key))
+            if net is None:
+                continue
+            change = _to_float(row.get("percentPriceChange"))
+            top.append({
+                "ticker": ticker,
+                "net": _to_billion(net),
+                "change_pct": round(change * 100, 2) if change is not None else None,
+            })
+            if len(top) >= limit:
+                break
+        return top
+
+    def _parse_flow(
+        self, block: Any, buy_key: str, sell_key: str, net_key: str
+    ) -> Optional[Dict[str, Any]]:
+        if not isinstance(block, dict):
+            return None
+        buy = _to_float(block.get(buy_key))
+        sell = _to_float(block.get(sell_key))
+        if buy is None or sell is None:
+            return None
+        return {
+            "from": _date_part(block.get("fromDate")),
+            "to": _date_part(block.get("toDate")),
+            "buy": _to_billion(buy),
+            "sell": _to_billion(sell),
+            # Ròng thị trường = mua − bán (không dùng foreignNetBuyValue của khối tổng).
+            "net": _to_billion(buy - sell),
+            "top_net_buy": self._flow_top(block.get("netBuy"), net_key),
+            "top_net_sell": self._flow_top(block.get("netSell"), net_key),
+        }
+
+    def _load_flow(
+        self, path: str, buy_key: str, sell_key: str, net_key: str
+    ) -> Optional[Dict[str, Any]]:
+        data = self._get_json(
+            path,
+            {"language": "vi", "ComGroupCode": _FLOW_SCOPE_CODE},
+            base_url=FIINTRADE_MARKET_BASE_URL,
+        )
+        if str(data.get("status") or "").lower() == "failed":
+            raise DataFetchError(f"[{self.name}] FiinTrade trả về lỗi: {data.get('errors') or data}")
+        items = data.get("items") or []
+        record = items[0] if items and isinstance(items[0], dict) else {}
+        periods: Dict[str, Any] = {}
+        for api_key, out_key in _FLOW_PERIODS:
+            parsed = self._parse_flow(record.get(api_key), buy_key, sell_key, net_key)
+            if parsed:
+                periods[out_key] = parsed
+        return periods or None
+
+    def get_market_money_flow(self, region: str = "vn") -> Optional[Dict[str, Any]]:
+        """Dòng tiền khối ngoại và tự doanh sàn HOSE theo kỳ (tỷ đồng).
+
+        Mỗi nhánh fail-open: một nhánh lỗi thì nhánh kia vẫn được trả. Khoảng ngày
+        của từng kỳ giữ nguyên ``from``/``to`` của API (tự doanh có thể gộp hai phiên).
+        Foreign and proprietary (dealer) flows on HOSE; each branch is fail-open.
+        """
+
+        if region != "vn":
+            return None
+
+        def _load() -> Optional[Dict[str, Any]]:
+            result: Dict[str, Any] = {"scope": "HOSE", "unit": "VND bn"}
+            try:
+                foreign = self._load_flow(
+                    _FOREIGN_FLOW_PATH, "foreignBuyValue", "foreignSellValue", "foreignNetBuyValue"
+                )
+                if foreign:
+                    result["foreign"] = foreign
+            except Exception as exc:
+                logger.warning("[%s] Lấy dòng tiền khối ngoại thất bại: %s", self.name, exc)
+            try:
+                proprietary = self._load_flow(
+                    _PROPRIETARY_FLOW_PATH,
+                    "totalBuyTradeValue",
+                    "totalSellTradeValue",
+                    "totalNetBuyTradeValue",
+                )
+                if proprietary:
+                    result["proprietary"] = proprietary
+            except Exception as exc:
+                logger.warning("[%s] Lấy dòng tiền tự doanh thất bại: %s", self.name, exc)
+            return result if ("foreign" in result or "proprietary" in result) else None
+
+        return self._cached_market("money_flow", _MONEY_FLOW_CACHE_TTL, _load)
 
     def close(self) -> None:
         try:

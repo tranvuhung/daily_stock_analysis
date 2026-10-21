@@ -15,7 +15,7 @@ Hệ thống chỉ hỗ trợ thị trường Việt Nam (xem [Phạm vi thị t
 | Nến ngày cổ phiếu / kỹ thuật | FiinTrade (tuỳ chọn), VCI (Vietcap), SSI iBoard, vnstock (tuỳ chọn), Yahoo (chỉ HOSE) | `DataFetcherManager` thử theo priority: FiinTrade(P-1, nếu bật) → VCI(P0) → SSI(P1) → vnstock(P2, nếu bật) → Yahoo(P4) | Lỗi thì sang nguồn kế; lỗi liên tiếp sẽ ngắt mạch nguồn đó một thời gian ngắn; tất cả đều lỗi thì ném ngoại lệ tổng hợp |
 | Giá realtime | FiinTrade PriceDepth (tuỳ chọn, đứng đầu khi bật), SSI iBoard (VCI là lựa chọn thứ hai qua `REALTIME_SOURCE_PRIORITY`), TVSI MQTT (tuỳ chọn) | Snapshot toàn thị trường (HOSE/HNX/UPCoM mỗi sàn một request), tra từng mã trúng cache trong tiến trình | Snapshot lỗi thì trả `None` và hạ cấp về giá đóng cửa lịch sử; một sàn lỗi không ảnh hưởng hai sàn còn lại |
 | Nến ngày chỉ số | VCI (Vietcap) | `VNINDEX` / `VN30` / `VN100` / `HNXIndex` / `HNX30` / `HNXUpcomIndex`, dùng cùng API nến ngày với cổ phiếu | Lỗi thì sang SSI. **Yahoo không tham gia** vì không có lịch sử chỉ số Việt Nam |
-| Điểm lại thị trường | VCI (chỉ số), SSI (độ rộng thị trường) | `MARKET_REVIEW_REGION=vn` | Một chỉ số lỗi chỉ bỏ qua chỉ số đó; độ rộng lỗi thì báo cáo thiếu khối độ rộng |
+| Điểm lại thị trường | FiinTrade (chỉ số, độ rộng, dòng tiền khối ngoại/tự doanh; khi có origin), VCI (chỉ số), SSI (độ rộng thị trường) | `MARKET_REVIEW_REGION=vn` | FiinTrade lỗi thì chuyển sang VCI/SSI; một chỉ số lỗi chỉ bỏ qua chỉ số đó; độ rộng lỗi thì báo cáo thiếu khối độ rộng; dòng tiền lỗi thì bỏ mục Fund Flows |
 
 ## Chuỗi hạ cấp
 
@@ -87,6 +87,24 @@ Ngoài giá/OHLC/khối lượng/giá trị khớp, nguồn này điền thêm: 
 - Khối `institution`: giao dịch nội bộ 90 ngày (tối đa 10 dòng, cộng KL ròng đã thực hiện), tỷ lệ sở hữu và room ngoại.
 - Mã UPCOM trả danh sách rỗng vì không được phủ: hai khối trên thành `not_supported` thay vì báo "cổ tức = 0".
 - Sự kiện được cache theo mã 6 giờ. Lỗi API chỉ làm hai khối này `failed`, khối định giá không bị ảnh hưởng.
+
+#### Điểm lại thị trường (máy chủ `wlgw-market.fiintrade.vn`)
+
+| Endpoint | Dùng cho | Ghi chú |
+| --- | --- | --- |
+| `MarketInDepth/GetLatestIndices` | Chỉ số chính + độ rộng | 29 chỉ số trong một request (~0,3s), cache 30 giây để chỉ số và độ rộng dùng chung |
+| `MoneyFlow/GetForeign?ComGroupCode=VNINDEX` | Khối ngoại HOSE theo kỳ | ~3s; cache 5 phút |
+| `MoneyFlow/GetProprietaryV2?ComGroupCode=VNINDEX` | Tự doanh HOSE theo kỳ | ~1,5s; cache 5 phút; top list lọc bỏ chứng quyền |
+
+Đối chiếu ngày 21/10/2026:
+- VNINDEX/VN30/HNX-Index trùng SSI và VCI.
+- Giá trị chỉ số của VCI đúng bằng khớp lệnh + thoả thuận của FiinTrade (VNINDEX 20.290 = 17.071 + 3.219 tỷ), nên `amount` chỉ số giữ đúng ngữ nghĩa cũ.
+- Độ rộng 3 sàn: FiinTrade 458 tăng / 225 giảm / 187 đứng, trần 43 / sàn 26, khớp lệnh 18.696 tỷ; SSI 478 / 232 / 190, 45 / 27, 18.767 tỷ (SSI đếm cả ETF).
+
+Lưu ý ngữ nghĩa:
+- Khối ngoại ròng = mua − bán. Trường `foreignNetBuyValue` ở khối tổng là **tổng các mã mua ròng**, không phải ròng thị trường.
+- Tự doanh công bố sau phiên. Khoảng ngày của kỳ mới nhất đổi theo thời điểm gọi: trong phiên là phiên trước (20/10 → 20/10), sau khi công bố lại gộp hai phiên (20/10 → 21/10). Vì vậy prompt luôn kèm khoảng ngày và dặn model không gọi đó là "hôm nay".
+- Kỳ "1 tuần" của khối ngoại kết thúc ở phiên trước, không gồm hôm nay.
 
 ### Vai trò của Yahoo Finance (dự phòng thứ ba)
 

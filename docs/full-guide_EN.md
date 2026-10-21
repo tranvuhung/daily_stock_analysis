@@ -994,7 +994,7 @@ Vietnam market data needs no API key. Default chain (by priority):
 
 | Source | Role | Notes |
 | --- | --- | --- |
-| FiinTrade | Optional daily/index bars ahead of VCI; first realtime source with valuation (PE/PB/market cap/EPS/ROE), foreign flow, put-through and ceiling/floor; TTM cash dividends, share issuances and insider trades for the fundamentals blocks | On by default, active once `FIINTRADE_ORIGIN` (an origin whitelisted by FiinTrade) is set; `FIINTRADE_ENABLED=false` disables it; HOSE / HNX stocks and non-UPCoM indices, same adjusted basis as VCI; UPCOM symbols and the UPCoM index fall through to SSI/VCI |
+| FiinTrade | Optional daily/index bars ahead of VCI; first realtime source with valuation (PE/PB/market cap/EPS/ROE), foreign flow, put-through and ceiling/floor; TTM cash dividends, share issuances and insider trades for the fundamentals blocks; market review indices (turnover incl. put-through), breadth and HOSE foreign/proprietary flows | On by default, active once `FIINTRADE_ORIGIN` (an origin whitelisted by FiinTrade) is set; `FIINTRADE_ENABLED=false` disables it; HOSE / HNX stocks and non-UPCoM indices, same adjusted basis as VCI; UPCOM symbols and the UPCoM index fall through to SSI/VCI |
 | VCI (Vietcap) | Daily bars, index bars, market-review indices | Public API, one symbol per request |
 | SSI iBoard | Realtime snapshot (whole exchange per request), daily fallback, market breadth | Public API |
 | vnstock | Optional supplement | `VNSTOCK_ENABLED=true` plus `pip install -r requirements-vn-optional.txt`; personal-use licence and telemetry |

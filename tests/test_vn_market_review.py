@@ -503,5 +503,101 @@ class VnTradingCalendarTestCase(unittest.TestCase):
         self.assertTrue(trading_calendar.is_market_open("atlantis", date(2026, 9, 26)))
 
 
+_MONEY_FLOW = {
+    "scope": "HOSE",
+    "unit": "VND bn",
+    "foreign": {
+        "today": {
+            "from": "2026-10-21", "to": "2026-10-21", "buy": 2502.4, "sell": 2308.26, "net": 194.15,
+            "top_net_buy": [{"ticker": "TCB", "net": 289.8, "change_pct": 1.33}],
+            "top_net_sell": [{"ticker": "FPT", "net": -173.16, "change_pct": 0.0}],
+        },
+        "ytd": {"from": "2026-01-05", "to": "2026-10-20", "buy": 543970.69, "sell": 663235.22,
+                "net": -119264.53, "top_net_buy": [], "top_net_sell": []},
+    },
+    "proprietary": {
+        "today": {"from": "2026-10-20", "to": "2026-10-21", "buy": 1957.66, "sell": 2133.53, "net": -175.87,
+                  "top_net_buy": [{"ticker": "VJC", "net": 285.24, "change_pct": 0.47}], "top_net_sell": []},
+    },
+}
+
+
+class VnMarketReviewMoneyFlowTestCase(unittest.TestCase):
+    def test_prompt_includes_fund_flows_with_date_ranges(self):
+        analyzer = _make_vn_analyzer("vi")
+        overview = MarketOverview(
+            date="2026-10-21", up_count=458, down_count=225, total_amount=18695.0,
+            put_through_amount=3302.0, foreign_net_amount=160.9, money_flow=_MONEY_FLOW,
+        )
+
+        prompt = analyzer._build_review_prompt(overview, [])
+
+        self.assertIn("## Fund Flows (HOSE, VND bn)", prompt)
+        self.assertIn("- Latest (2026-10-21 → 2026-10-21): net +194 (buy 2,502 / sell 2,308)", prompt)
+        self.assertIn("top net buy: TCB +290", prompt)
+        self.assertIn("- Year to date (2026-01-05 → 2026-10-20): net -119,265", prompt)
+        # Tự doanh phải kèm khoảng ngày, không được gán cho "hôm nay".
+        self.assertIn("Proprietary trading", prompt)
+        self.assertIn("cite its date range instead of calling it today", prompt)
+        self.assertIn("- Latest (2026-10-20 → 2026-10-21): net -176", prompt)
+        self.assertIn("Put-through (negotiated, excluded from turnover above): 3,302", prompt)
+        self.assertIn("Foreign net, all exchanges today: +161", prompt)
+        self.assertIn("use only the fund-flow figures given in Fund Flows", prompt)
+        self.assertNotIn("do not invent or over-interpret unsupported breadth, fund-flow", prompt)
+
+    def test_prompt_without_flows_keeps_old_restriction(self):
+        analyzer = _make_vn_analyzer("vi")
+        prompt = analyzer._build_review_prompt(MarketOverview(date="2026-10-21", up_count=1), [])
+
+        self.assertNotIn("## Fund Flows", prompt)
+        self.assertNotIn("Put-through", prompt)
+        self.assertIn("do not invent or over-interpret unsupported breadth, fund-flow", prompt)
+
+    def test_index_line_shows_turnover_when_available(self):
+        from src.market_analyzer import MarketIndex
+
+        analyzer = _make_vn_analyzer("vi")
+        overview = MarketOverview(date="2026-10-21")
+        overview.indices = [
+            MarketIndex(code="VNINDEX", name="VN-Index", current=1738.67, change_pct=2.76, amount=20290.59e9),
+            MarketIndex(code="VN30", name="VN30", current=1880.57, change_pct=1.9, amount=0.0),
+        ]
+        prompt = analyzer._build_review_prompt(overview, [])
+
+        self.assertIn("- VN-Index: 1738.67 (↑2.76%, turnover 20,291 VND bn)", prompt)
+        self.assertIn("- VN30: 1880.57 (↑1.90%)", prompt)
+
+    def test_overview_collects_flows_and_extra_breadth(self):
+        analyzer = _make_vn_analyzer("vi")
+        analyzer.data_manager.get_main_indices.return_value = []
+        analyzer.data_manager.get_market_stats.return_value = {
+            "up_count": 458, "down_count": 225, "flat_count": 187, "limit_up_count": 43,
+            "limit_down_count": 26, "total_amount": 18695.56, "put_through_amount": 3301.99,
+            "foreign_net_amount": 160.93,
+        }
+        analyzer.data_manager.get_market_money_flow.return_value = _MONEY_FLOW
+
+        overview = analyzer.get_market_overview()
+
+        self.assertEqual(overview.put_through_amount, 3301.99)
+        self.assertEqual(overview.foreign_net_amount, 160.93)
+        self.assertEqual(overview.money_flow["scope"], "HOSE")
+        payload = analyzer.build_market_review_payload(overview, [], "report")
+        self.assertEqual(payload["money_flow"]["scope"], "HOSE")
+        self.assertEqual(payload["breadth"]["put_through_amount"], 3301.99)
+        self.assertEqual(payload["breadth"]["foreign_net_amount"], 160.93)
+
+    def test_money_flow_failure_is_fail_open(self):
+        analyzer = _make_vn_analyzer("vi")
+        analyzer.data_manager.get_main_indices.return_value = []
+        analyzer.data_manager.get_market_stats.return_value = {"up_count": 1}
+        analyzer.data_manager.get_market_money_flow.side_effect = RuntimeError("boom")
+
+        overview = analyzer.get_market_overview()
+
+        self.assertIsNone(overview.money_flow)
+        self.assertEqual(overview.up_count, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

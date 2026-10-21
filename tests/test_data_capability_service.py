@@ -130,6 +130,7 @@ def test_provider_matrix_is_vietnam_only() -> None:
         "quote.realtime",
         "kline.daily",
         "index.daily",
+        "market.overview",
     }
     assert _provider(overview, "vnstock")["datasets"] == ["kline.daily"]
     # Yahoo chỉ là dự phòng nến ngày / Yahoo is a daily-only fallback
