@@ -542,7 +542,7 @@ class VnMarketReviewMoneyFlowTestCase(unittest.TestCase):
         self.assertIn("- Latest (2026-10-20 → 2026-10-21): net -176", prompt)
         self.assertIn("Put-through (negotiated, excluded from turnover above): 3,302", prompt)
         self.assertIn("Foreign net, all exchanges today: +161", prompt)
-        self.assertIn("use only the fund-flow figures given in Fund Flows", prompt)
+        self.assertIn("use only the figures given in Fund Flows (quote their date ranges);", prompt)
         self.assertNotIn("do not invent or over-interpret unsupported breadth, fund-flow", prompt)
 
     def test_prompt_without_flows_keeps_old_restriction(self):
@@ -597,6 +597,92 @@ class VnMarketReviewMoneyFlowTestCase(unittest.TestCase):
 
         self.assertIsNone(overview.money_flow)
         self.assertEqual(overview.up_count, 1)
+
+
+_MARKET_DRIVERS = {
+    "index_contribution": {
+        "index": "VNINDEX",
+        "index_change": 21.96,
+        "periods": {
+            "1d": {
+                "top_gainers": [{"ticker": "VIC", "points": 14.88, "change_pct": 4.16}],
+                "top_losers": [{"ticker": "BID", "points": -0.48, "change_pct": -0.88}],
+            },
+            "5d": {"top_gainers": [{"ticker": "VIC", "points": 23.84}], "top_losers": []},
+        },
+    },
+    "volume_breakouts": {
+        "min_ratio": 1.5,
+        "baseline": "1-week average volume",
+        "items": [{"ticker": "FPT", "sector": "Phần mềm", "change_pct": 0.0, "volume_ratio": 2.0, "value": 582.19}],
+    },
+    "intraday": {
+        "index": "VNINDEX", "date": "2026-10-22",
+        "first": {"time": "09:15", "value": 1751.62},
+        "morning_close": {"time": "11:30", "value": 1759.83},
+        "high": {"time": "10:42", "value": 1763.25},
+        "low": {"time": "09:20", "value": 1748.1},
+        "last": {"time": "15:00", "value": 1760.63},
+        "closing_window_value_share": 7.2,
+    },
+}
+
+
+class VnMarketReviewDriversTestCase(unittest.TestCase):
+    def test_prompt_includes_market_drivers(self):
+        analyzer = _make_vn_analyzer("vi")
+        overview = MarketOverview(date="2026-10-22", up_count=1, market_drivers=_MARKET_DRIVERS)
+
+        prompt = analyzer._build_review_prompt(overview, [])
+
+        self.assertIn("## Market Drivers\n", prompt)
+        self.assertIn("VN-Index change today: +21.96 points.", prompt)
+        self.assertIn("- Today, lifting: VIC +14.88 (+4.16%)", prompt)
+        self.assertIn("- Today, dragging: BID -0.48 (-0.88%)", prompt)
+        # Kỳ 5 phiên không kèm % giá / no price change for multi-session periods
+        self.assertIn("- Last 5 sessions, lifting: VIC +23.84\n", prompt)
+        self.assertIn("- FPT [Phần mềm]: +0.00%, volume 2.00x, value 582 VND bn", prompt)
+        self.assertIn("- Intraday high: 1,763.25 at 10:42", prompt)
+        self.assertIn("from 14:30 to the close (incl. ATC): 7.2% of the session", prompt)
+        self.assertIn("use only the figures given in Market Drivers", prompt)
+        self.assertNotIn("do not invent or over-interpret unsupported breadth", prompt)
+
+    def test_prompt_with_flows_and_drivers_names_both(self):
+        analyzer = _make_vn_analyzer("vi")
+        overview = MarketOverview(
+            date="2026-10-22", up_count=1, money_flow=_MONEY_FLOW, market_drivers=_MARKET_DRIVERS,
+        )
+        prompt = analyzer._build_review_prompt(overview, [])
+        self.assertIn(
+            "use only the figures given in Fund Flows (quote their date ranges) and Market Drivers", prompt
+        )
+
+    def test_overview_collects_drivers_into_payload(self):
+        analyzer = _make_vn_analyzer("vi")
+        analyzer.data_manager.get_main_indices.return_value = []
+        analyzer.data_manager.get_market_stats.return_value = {"up_count": 1}
+        analyzer.data_manager.get_market_money_flow.return_value = {}
+        analyzer.data_manager.get_market_drivers.return_value = _MARKET_DRIVERS
+
+        overview = analyzer.get_market_overview()
+
+        self.assertEqual(overview.market_drivers, _MARKET_DRIVERS)
+        payload = analyzer.build_market_review_payload(overview, [], "report")
+        self.assertEqual(payload["market_drivers"], _MARKET_DRIVERS)
+
+    def test_drivers_failure_is_fail_open(self):
+        analyzer = _make_vn_analyzer("vi")
+        analyzer.data_manager.get_main_indices.return_value = []
+        analyzer.data_manager.get_market_stats.return_value = {"up_count": 1}
+        analyzer.data_manager.get_market_money_flow.return_value = {}
+        analyzer.data_manager.get_market_drivers.side_effect = RuntimeError("boom")
+
+        overview = analyzer.get_market_overview()
+
+        self.assertIsNone(overview.market_drivers)
+        self.assertEqual(overview.up_count, 1)
+        prompt = analyzer._build_review_prompt(overview, [])
+        self.assertNotIn("## Market Drivers", prompt)
 
 
 if __name__ == "__main__":

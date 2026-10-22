@@ -93,6 +93,9 @@ class MarketOverview:
     # Dòng tiền khối ngoại / tự doanh theo kỳ (xem FiinTradeFetcher.get_market_money_flow)
     # Foreign / proprietary flows by period (see FiinTradeFetcher.get_market_money_flow)
     money_flow: Optional[Dict[str, Any]] = None
+    # Mã dẫn dắt chỉ số, đột biến KL, diễn biến trong phiên (FiinTradeFetcher.get_market_drivers)
+    # Index contributors, volume breakouts, intraday path (see FiinTradeFetcher.get_market_drivers)
+    market_drivers: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -359,8 +362,28 @@ class MarketAnalyzer:
             self._get_market_statistics(overview)
             # 3. Dòng tiền khối ngoại / tự doanh / Foreign and proprietary flows
             self._get_money_flow(overview)
+            # 4. Mã dẫn dắt, đột biến KL, diễn biến trong phiên / Market drivers
+            self._get_market_drivers(overview)
 
         return overview
+
+    def _get_market_drivers(self, overview: MarketOverview) -> None:
+        """Lấy động lực thị trường; lỗi chỉ log, không chặn điểm lại thị trường."""
+        getter = getattr(self.data_manager, "get_market_drivers", None)
+        if not callable(getter):
+            return
+        try:
+            drivers = getter(region=self.region)
+        except Exception as e:
+            logger.error("[Thị trường] %s action=get_market_drivers status=failed error=%s", self._log_context(), e)
+            return
+        if isinstance(drivers, dict) and any(
+            drivers.get(key) for key in ("index_contribution", "volume_breakouts", "intraday")
+        ):
+            overview.market_drivers = drivers
+            logger.info("[Thị trường] %s action=get_market_drivers status=success", self._log_context())
+        else:
+            logger.info("[Thị trường] %s action=get_market_drivers status=empty", self._log_context())
 
     def _get_money_flow(self, overview: MarketOverview) -> None:
         """Lấy dòng tiền toàn thị trường; lỗi chỉ log, không chặn điểm lại thị trường."""
@@ -798,6 +821,8 @@ class MarketAnalyzer:
 
         if overview.money_flow:
             payload["money_flow"] = overview.money_flow
+        if overview.market_drivers:
+            payload["market_drivers"] = overview.market_drivers
 
         return payload
 
@@ -1210,6 +1235,7 @@ class MarketAnalyzer:
                 )
 
         flow_block = self._build_money_flow_prompt_block(overview.money_flow)
+        drivers_block = self._build_market_drivers_prompt_block(overview.market_drivers)
 
         # Chưa có dữ liệu xếp hạng ngành cho Việt Nam. / No sector ranking data for Vietnam.
         data_limit_lines = []
@@ -1227,10 +1253,15 @@ class MarketAnalyzer:
         )
         indices_placeholder = indices_text if indices_text else "No index data (API error)"
         news_placeholder = news_text if news_text else "No relevant news"
-        if flow_block:
+        if flow_block or drivers_block:
+            provided = [
+                name
+                for name, block in (("Fund Flows (quote their date ranges)", flow_block), ("Market Drivers", drivers_block))
+                if block
+            ]
             data_boundary_requirement = (
-                "- Respect Data Limits: use only the fund-flow figures given in Fund Flows (quote their date ranges); "
-                "do not invent other flow, turnover, participation, or sector-ranking data.\n"
+                f"- Respect Data Limits: use only the figures given in {' and '.join(provided)}; "
+                "do not invent other flow, turnover, participation, contributor, or sector-ranking data.\n"
             )
         else:
             data_boundary_requirement = (
@@ -1267,6 +1298,8 @@ class MarketAnalyzer:
 {stats_block}
 
 {flow_block}
+
+{drivers_block}
 
 {data_limits_block}
 
@@ -1347,6 +1380,72 @@ Output the report content directly, no extra commentary.
         if not parts:
             return ""
         return f"## Fund Flows ({scope}, {unit})\n" + "\n\n".join(parts)
+
+    @staticmethod
+    def _build_market_drivers_prompt_block(drivers: Optional[Dict[str, Any]]) -> str:
+        """Mục "Market Drivers" cho prompt; rỗng khi không có dữ liệu.
+
+        Gồm mã kéo/đè điểm VN-Index, mã đột biến khối lượng và diễn biến trong phiên.
+        Index point contributors, volume breakouts and the intraday path.
+        """
+        if not isinstance(drivers, dict):
+            return ""
+        parts: List[str] = []
+
+        contribution = drivers.get("index_contribution")
+        if isinstance(contribution, dict) and isinstance(contribution.get("periods"), dict):
+            lines: List[str] = []
+            index_change = contribution.get("index_change")
+            for key, label in (("1d", "Today"), ("5d", "Last 5 sessions"), ("20d", "Last 20 sessions")):
+                period = contribution["periods"].get(key)
+                if not isinstance(period, dict):
+                    continue
+                for title, top_key in (("lifting", "top_gainers"), ("dragging", "top_losers")):
+                    rows = period.get(top_key) or []
+                    if not rows:
+                        continue
+                    items = ", ".join(
+                        f"{row['ticker']} {row['points']:+.2f}"
+                        + (f" ({row['change_pct']:+.2f}%)" if row.get("change_pct") is not None else "")
+                        for row in rows
+                    )
+                    lines.append(f"- {label}, {title}: {items}")
+            if lines:
+                header = "### VN-Index point contributors (index points)"
+                if isinstance(index_change, (int, float)):
+                    header += f"\nVN-Index change today: {index_change:+.2f} points."
+                parts.append(header + "\n" + "\n".join(lines))
+
+        breakouts = drivers.get("volume_breakouts")
+        if isinstance(breakouts, dict) and breakouts.get("items"):
+            lines = []
+            for row in breakouts["items"]:
+                change = f"{row['change_pct']:+.2f}%, " if row.get("change_pct") is not None else ""
+                sector = f" [{row['sector']}]" if row.get("sector") else ""
+                value = f", value {row['value']:,.0f} VND bn" if row.get("value") is not None else ""
+                lines.append(f"- {row['ticker']}{sector}: {change}volume {row['volume_ratio']:.2f}x{value}")
+            parts.append(
+                f"### Volume breakouts (session volume >= {breakouts.get('min_ratio', 1.5)}x the "
+                f"{breakouts.get('baseline') or '1-week average volume'}, by traded value)\n"
+                + "\n".join(lines)
+            )
+
+        intraday = drivers.get("intraday")
+        if isinstance(intraday, dict) and intraday.get("last"):
+            lines = []
+            for key, label in (("first", "First print"), ("morning_close", "Morning close"),
+                               ("high", "Intraday high"), ("low", "Intraday low"), ("last", "Latest")):
+                point = intraday.get(key)
+                if isinstance(point, dict) and point.get("value") is not None:
+                    lines.append(f"- {label}: {point['value']:,.2f} at {point.get('time')}")
+            share = intraday.get("closing_window_value_share")
+            if isinstance(share, (int, float)):
+                lines.append(f"- Matched value from 14:30 to the close (incl. ATC): {share:.1f}% of the session")
+            parts.append(f"### VN-Index intraday path ({intraday.get('date')}, per-minute)\n" + "\n".join(lines))
+
+        if not parts:
+            return ""
+        return "## Market Drivers\n" + "\n\n".join(parts)
 
     def _generate_template_review(self, overview: MarketOverview, news: List) -> str:
         """Generate the review report from a template (fallback when no LLM is available)"""

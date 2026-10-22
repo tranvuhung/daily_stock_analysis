@@ -15,7 +15,7 @@ Hệ thống chỉ hỗ trợ thị trường Việt Nam (xem [Phạm vi thị t
 | Nến ngày cổ phiếu / kỹ thuật | FiinTrade (tuỳ chọn), VCI (Vietcap), SSI iBoard, vnstock (tuỳ chọn), Yahoo (chỉ HOSE) | `DataFetcherManager` thử theo priority: FiinTrade(P-1, nếu bật) → VCI(P0) → SSI(P1) → vnstock(P2, nếu bật) → Yahoo(P4) | Lỗi thì sang nguồn kế; lỗi liên tiếp sẽ ngắt mạch nguồn đó một thời gian ngắn; tất cả đều lỗi thì ném ngoại lệ tổng hợp |
 | Giá realtime | FiinTrade PriceDepth (tuỳ chọn, đứng đầu khi bật), SSI iBoard (VCI là lựa chọn thứ hai qua `REALTIME_SOURCE_PRIORITY`), TVSI MQTT (tuỳ chọn) | Snapshot toàn thị trường (HOSE/HNX/UPCoM mỗi sàn một request), tra từng mã trúng cache trong tiến trình | Snapshot lỗi thì trả `None` và hạ cấp về giá đóng cửa lịch sử; một sàn lỗi không ảnh hưởng hai sàn còn lại |
 | Nến ngày chỉ số | FiinTrade (khi có origin), VCI (Vietcap) | `VNINDEX` / `VN30` / `VN100` / `HNXIndex` / `HNX30` / `UPCOMINDEX` (VCI gọi là `HNXUpcomIndex`, SSI là `HNXUPCOMINDEX`, FiinTrade là `UpcomIndex`), dùng cùng API nến ngày với cổ phiếu | FiinTrade lỗi thì sang VCI, rồi SSI. **Yahoo không tham gia** vì không có lịch sử chỉ số Việt Nam |
-| Điểm lại thị trường | FiinTrade (chỉ số, độ rộng, dòng tiền khối ngoại/tự doanh; khi có origin), VCI (chỉ số), SSI (độ rộng thị trường) | `MARKET_REVIEW_REGION=vn` | FiinTrade lỗi thì chuyển sang VCI/SSI; một chỉ số lỗi chỉ bỏ qua chỉ số đó; độ rộng lỗi thì báo cáo thiếu khối độ rộng; dòng tiền lỗi thì bỏ mục Fund Flows |
+| Điểm lại thị trường | FiinTrade (chỉ số, độ rộng, dòng tiền khối ngoại/tự doanh; khi có origin), VCI (chỉ số), SSI (độ rộng thị trường) | `MARKET_REVIEW_REGION=vn` | FiinTrade lỗi thì chuyển sang VCI/SSI; một chỉ số lỗi chỉ bỏ qua chỉ số đó; độ rộng lỗi thì báo cáo thiếu khối độ rộng; dòng tiền lỗi thì bỏ mục Fund Flows; mã dẫn dắt / đột biến KL / diễn biến trong phiên lỗi thì bỏ phần tương ứng của mục Market Drivers |
 
 ## Chuỗi hạ cấp
 
@@ -101,6 +101,11 @@ Ngoài giá/OHLC/khối lượng/giá trị khớp, nguồn này điền thêm: 
 | `MarketInDepth/GetLatestIndices` | Chỉ số chính + độ rộng | 29 chỉ số trong một request (~0,3s), cache 30 giây để chỉ số và độ rộng dùng chung |
 | `MoneyFlow/GetForeign?ComGroupCode=VNINDEX` | Khối ngoại HOSE theo kỳ | ~3s; cache 5 phút |
 | `MoneyFlow/GetProprietaryV2?ComGroupCode=VNINDEX` | Tự doanh HOSE theo kỳ | ~1,5s; cache 5 phút; top list lọc bỏ chứng quyền |
+| `MoneyFlow/GetContribution?ComGroupCode=VNINDEX&Type=Total` | Mã kéo/đè điểm VN-Index 1 / 5 / 20 phiên | Top 15 mỗi chiều, repo giữ 5; dùng `ticker` (organCode là mã nội bộ, `NHN` = VHM) |
+| `TopMover/GetTopBreakout?ComGroupCode=All&TimeRange=OneWeek&Rate=OnePointFive` | Mã có KL phiên ≥ 1,5 lần bình quân 1 tuần, cả 3 sàn | Tối đa 30 mã; repo lọc chứng quyền, xếp theo giá trị giao dịch, giữ 10. `TimeRange=OneDay` không được hỗ trợ |
+| `MarketInDepth/GetIndexSeries?ComGroupCode=VNINDEX&TimeRange=OneDay` | Diễn biến VN-Index theo phút | Có giá trị khớp lũy kế, không có OHLC; repo chỉ rút mốc mở / hết phiên sáng / cao / thấp / cuối và tỷ trọng giá trị từ 14:30 |
+
+Ba endpoint cuối dùng chung cache 2 phút (`get_market_drivers`), mỗi endpoint fail-open riêng.
 
 Đối chiếu ngày 21/10/2026:
 - VNINDEX/VN30/HNX-Index trùng SSI và VCI.
@@ -111,6 +116,8 @@ Lưu ý ngữ nghĩa:
 - Khối ngoại ròng = mua − bán. Trường `foreignNetBuyValue` ở khối tổng là **tổng các mã mua ròng**, không phải ròng thị trường.
 - Tự doanh công bố sau phiên. Khoảng ngày của kỳ mới nhất đổi theo thời điểm gọi: trong phiên là phiên trước (20/10 → 20/10), sau khi công bố lại gộp hai phiên (20/10 → 21/10). Vì vậy prompt luôn kèm khoảng ngày và dặn model không gọi đó là "hôm nay".
 - Kỳ "1 tuần" của khối ngoại kết thúc ở phiên trước, không gồm hôm nay.
+- `GetContribution`: `percentPriceChange` ở khối 5/20 phiên vẫn là % của phiên hiện tại (TCB −0,73% nhưng đóng góp +1,83 điểm trong 5 phiên), nên repo chỉ giữ % giá cho kỳ 1 phiên.
+- Cao/thấp từ `GetIndexSeries` lấy theo mẫu từng phút nên có thể lệch nhẹ so với OHLC chính thức (22/10/2026: 1.763,25 so với 1.763,55).
 
 ### Vai trò của Yahoo Finance (dự phòng thứ ba)
 

@@ -119,6 +119,9 @@ FIINTRADE_MARKET_BASE_URL = os.getenv(
 _LATEST_INDICES_PATH = "/MarketInDepth/GetLatestIndices"
 _FOREIGN_FLOW_PATH = "/MoneyFlow/GetForeign"
 _PROPRIETARY_FLOW_PATH = "/MoneyFlow/GetProprietaryV2"
+_CONTRIBUTION_PATH = "/MoneyFlow/GetContribution"
+_TOP_BREAKOUT_PATH = "/TopMover/GetTopBreakout"
+_INDEX_SERIES_PATH = "/MarketInDepth/GetIndexSeries"
 FIINTRADE_CORE_BASE_URL = os.getenv(
     "FIINTRADE_CORE_BASE_URL", "https://wlgw-core.fiintrade.vn"
 ).rstrip("/")
@@ -179,6 +182,19 @@ _FLOW_TOP_N = 5
 # Snapshot chỉ số dùng chung cho chỉ số + độ rộng trong một lượt review.
 _INDICES_CACHE_TTL = 30.0
 _MONEY_FLOW_CACHE_TTL = 300.0
+# Động lực thị trường (mã dẫn dắt chỉ số, đột biến KL, diễn biến trong ngày).
+# Market drivers: index contributors, volume breakouts, intraday path.
+_DRIVERS_CACHE_TTL = 120.0
+_CONTRIBUTION_PERIODS = (("contrib1Day", "1d"), ("contrib5Day", "5d"), ("contrib20Day", "20d"))
+_CONTRIBUTION_TOP_N = 5
+# Đột biến KL: KL phiên ≥ 1,5 lần bình quân 1 tuần, cả 3 sàn (API trả tối đa 30 mã).
+# Volume breakouts: session volume >= 1.5x the 1-week average, all exchanges.
+_BREAKOUT_PARAMS = {"ComGroupCode": "All", "TimeRange": "OneWeek", "Rate": "OnePointFive"}
+_BREAKOUT_TOP_N = 10
+# Mốc trong ngày (giờ VN): hết phiên sáng và bắt đầu 15 phút cuối + ATC của HOSE.
+# Intraday checkpoints (VN time): morning close and start of the closing window.
+_MORNING_CLOSE_TIME = "11:30"
+_CLOSING_WINDOW_START = "14:30"
 
 _last_request_at = 0.0
 _request_lock = RLock()
@@ -961,6 +977,164 @@ class FiinTradeFetcher(BaseFetcher):
             return result if ("foreign" in result or "proprietary" in result) else None
 
         return self._cached_market("money_flow", _MONEY_FLOW_CACHE_TTL, _load)
+
+    # ------------------------------------------------------------------
+    # Động lực thị trường: mã dẫn dắt chỉ số, đột biến KL, diễn biến trong ngày
+    # ------------------------------------------------------------------
+    def _market_items(self, path: str, params: Dict[str, Any]) -> List[Any]:
+        data = self._get_json(path, {"language": "vi", **params}, base_url=FIINTRADE_MARKET_BASE_URL)
+        if str(data.get("status") or "").lower() == "failed":
+            raise DataFetchError(f"[{self.name}] FiinTrade trả về lỗi: {data.get('errors') or data}")
+        items = data.get("items")
+        return items if isinstance(items, list) else []
+
+    @staticmethod
+    def _contribution_rows(rows: Any, with_change: bool) -> List[Dict[str, Any]]:
+        top: List[Dict[str, Any]] = []
+        for row in rows or []:
+            if not isinstance(row, dict):
+                continue
+            # Dùng ``ticker``: ``organCode`` là mã nội bộ (NHN = VHM).
+            # Use ``ticker``; ``organCode`` is FiinTrade's internal code.
+            ticker = str(row.get("ticker") or "").strip().upper()
+            points = _to_float(row.get("contribution"))
+            if not ticker or points is None:
+                continue
+            entry: Dict[str, Any] = {"ticker": ticker, "points": round(points, 2)}
+            # ``percentPriceChange`` luôn là % của phiên hiện tại, kể cả ở khối 5/20
+            # phiên, nên chỉ gắn cho kỳ 1 phiên.
+            # ``percentPriceChange`` is always today's move, so only keep it for 1d.
+            change = _to_float(row.get("percentPriceChange")) if with_change else None
+            if change is not None:
+                entry["change_pct"] = round(change * 100, 2)
+            top.append(entry)
+            if len(top) >= _CONTRIBUTION_TOP_N:
+                break
+        return top
+
+    def _load_index_contribution(self) -> Optional[Dict[str, Any]]:
+        """Mã kéo/đè điểm VN-Index theo 1/5/20 phiên (điểm chỉ số).
+
+        Top index point contributors (gainers/losers) of VN-Index over 1/5/20 sessions.
+        """
+
+        items = self._market_items(_CONTRIBUTION_PATH, {"ComGroupCode": _FLOW_SCOPE_CODE, "Type": "Total"})
+        record = items[0] if items and isinstance(items[0], dict) else {}
+        periods: Dict[str, Any] = {}
+        for api_key, out_key in _CONTRIBUTION_PERIODS:
+            block = record.get(api_key)
+            if not isinstance(block, dict):
+                continue
+            with_change = out_key == "1d"
+            gainers = self._contribution_rows(block.get("topGainers"), with_change)
+            losers = self._contribution_rows(block.get("topLosers"), with_change)
+            if gainers or losers:
+                periods[out_key] = {"top_gainers": gainers, "top_losers": losers}
+        if not periods:
+            return None
+        series = record.get("series") if isinstance(record.get("series"), dict) else {}
+        return {
+            "index": "VNINDEX",
+            "index_change": _round_or_none(_to_float(series.get("indexChange")), 2),
+            "periods": periods,
+        }
+
+    def _load_volume_breakouts(self) -> Optional[Dict[str, Any]]:
+        """Mã có KL phiên ≥ 1,5 lần bình quân 1 tuần, xếp theo giá trị giao dịch.
+
+        Volume breakouts (>= 1.5x the 1-week average), ranked by traded value.
+        """
+
+        rows: List[Dict[str, Any]] = []
+        for row in self._market_items(_TOP_BREAKOUT_PATH, _BREAKOUT_PARAMS):
+            if not isinstance(row, dict):
+                continue
+            ticker = str(row.get("ticker") or "").strip().upper()
+            volume = _to_float(row.get("volume"))
+            average = _to_float(row.get("averageMatchVolume"))
+            if not is_vn_security_code(ticker) or not volume or not average:
+                continue
+            change = _to_float(row.get("percentPriceChange"))
+            rows.append({
+                "ticker": ticker,
+                "sector": str(row.get("sectorName") or "").strip() or None,
+                "change_pct": round(change * 100, 2) if change is not None else None,
+                "volume_ratio": round(volume / average, 2),
+                "value": _to_billion(_to_float(row.get("value"))),
+            })
+        if not rows:
+            return None
+        rows.sort(key=lambda r: r.get("value") or 0.0, reverse=True)
+        return {"min_ratio": 1.5, "baseline": "1-week average volume", "items": rows[:_BREAKOUT_TOP_N]}
+
+    def _load_index_intraday(self) -> Optional[Dict[str, Any]]:
+        """Diễn biến VN-Index trong phiên từ chuỗi điểm theo phút.
+
+        Trả điểm đầu phiên, hết phiên sáng, cao/thấp kèm giờ, điểm cuối và tỷ trọng
+        giá trị khớp từ 14:30 (gồm ATC) khi phiên đã qua mốc đó.
+        Intraday VN-Index path from the per-minute series.
+        """
+
+        points: List[Tuple[str, float, Optional[float]]] = []
+        for row in self._market_items(_INDEX_SERIES_PATH, {"ComGroupCode": _FLOW_SCOPE_CODE, "TimeRange": "OneDay"}):
+            if not isinstance(row, dict):
+                continue
+            stamp = str(row.get("tradingDate") or "")
+            value = _to_float(row.get("indexValue"))
+            if len(stamp) < 16 or value is None:
+                continue
+            points.append((stamp, value, _to_float(row.get("totalMatchValue"))))
+        if len(points) < 2:
+            return None
+        points.sort(key=lambda p: p[0])
+        high = max(points, key=lambda p: p[1])
+        low = min(points, key=lambda p: p[1])
+        morning = [p for p in points if p[0][11:16] <= _MORNING_CLOSE_TIME]
+        result: Dict[str, Any] = {
+            "index": "VNINDEX",
+            "date": points[-1][0][:10],
+            "first": {"time": points[0][0][11:16], "value": points[0][1]},
+            "morning_close": (
+                {"time": morning[-1][0][11:16], "value": morning[-1][1]} if morning else None
+            ),
+            "high": {"time": high[0][11:16], "value": high[1]},
+            "low": {"time": low[0][11:16], "value": low[1]},
+            "last": {"time": points[-1][0][11:16], "value": points[-1][1]},
+        }
+        before_close = [p for p in points if p[0][11:16] <= _CLOSING_WINDOW_START and p[2]]
+        total = points[-1][2]
+        if before_close and total and points[-1][0][11:16] > _CLOSING_WINDOW_START:
+            # Tỷ trọng giá trị khớp từ 14:30 tới cuối phiên / Share of matched value after 14:30
+            result["closing_window_value_share"] = round((total - before_close[-1][2]) / total * 100, 1)
+        return result
+
+    def get_market_drivers(self, region: str = "vn") -> Optional[Dict[str, Any]]:
+        """Động lực thị trường: mã dẫn dắt VN-Index, đột biến KL, diễn biến trong phiên.
+
+        Mỗi nhánh fail-open: nhánh lỗi chỉ log, các nhánh còn lại vẫn được trả.
+        Market drivers (index contributors, volume breakouts, intraday path); fail-open.
+        """
+
+        if region != "vn":
+            return None
+
+        def _load() -> Optional[Dict[str, Any]]:
+            result: Dict[str, Any] = {}
+            for key, loader, label in (
+                ("index_contribution", self._load_index_contribution, "mã dẫn dắt chỉ số"),
+                ("volume_breakouts", self._load_volume_breakouts, "mã đột biến khối lượng"),
+                ("intraday", self._load_index_intraday, "diễn biến trong phiên"),
+            ):
+                try:
+                    data = loader()
+                except Exception as exc:
+                    logger.warning("[%s] Lấy %s thất bại: %s", self.name, label, exc)
+                    continue
+                if data:
+                    result[key] = data
+            return result or None
+
+        return self._cached_market("market_drivers", _DRIVERS_CACHE_TTL, _load)
 
     def close(self) -> None:
         try:

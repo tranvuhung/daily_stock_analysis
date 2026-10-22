@@ -361,6 +361,13 @@ class BaseFetcher(ABC):
         """
         return None
 
+    def get_market_drivers(self, region: str = "vn") -> Optional[Dict[str, Any]]:
+        """Mã dẫn dắt chỉ số, mã đột biến KL, diễn biến trong phiên; mặc định không hỗ trợ.
+
+        Index contributors, volume breakouts and intraday path; unsupported by default.
+        """
+        return None
+
     def get_daily_data(
         self,
         stock_code: str,
@@ -1627,6 +1634,34 @@ class DataFetcherManager:
             if data:
                 logger.info(
                     "[MoneyFlow] action=provider_success region=%s provider=%s elapsed=%.2fs",
+                    region,
+                    fetcher.name,
+                    time.monotonic() - started_at,
+                )
+                return data
+        return {}
+
+    def get_market_drivers(self, region: str = "vn") -> Dict[str, Any]:
+        """Động lực thị trường từ nguồn đầu tiên có dữ liệu; lỗi chỉ log (fail-open).
+
+        Market drivers from the first provider with data; fail-open.
+        """
+        for fetcher in self._get_fetchers_snapshot():
+            started_at = time.monotonic()
+            try:
+                data = fetcher.get_market_drivers(region)
+            except Exception as e:
+                logger.warning(
+                    "[MarketDrivers] action=provider_failed region=%s provider=%s elapsed=%.2fs error=%s",
+                    region,
+                    fetcher.name,
+                    time.monotonic() - started_at,
+                    e,
+                )
+                continue
+            if data:
+                logger.info(
+                    "[MarketDrivers] action=provider_success region=%s provider=%s elapsed=%.2fs",
                     region,
                     fetcher.name,
                     time.monotonic() - started_at,

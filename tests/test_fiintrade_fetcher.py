@@ -596,6 +596,142 @@ class FiinTradeMarketTestCase(unittest.TestCase):
         self.assertIn("proprietary", flow)
 
 
+def _contrib_row(organ, ticker, points, change):
+    return {"organCode": organ, "ticker": ticker, "contribution": points, "percentPriceChange": change}
+
+
+# Rút gọn từ response thật (2026-10-22) của GetContribution / GetTopBreakout / GetIndexSeries.
+_CONTRIBUTION_PAYLOAD = {
+    "items": [{
+        "series": {"comGroupCode": "VNINDEX", "indexChange": 21.96},
+        "contrib1Day": {
+            # organCode NHN là VHM: phải dùng ticker / organCode NHN is VHM, use ticker
+            "topGainers": [_contrib_row("VIC", "VIC", 14.8835, 0.0416), _contrib_row("NHN", "VHM", 3.7261, 0.0356)],
+            "topLosers": [_contrib_row("BID", "BID", -0.4812, -0.0088)],
+        },
+        "contrib5Day": {
+            # percentPriceChange ở đây vẫn là % hôm nay (TCB −0,73%) nên bị bỏ
+            "topGainers": [_contrib_row("TCB", "TCB", 1.83, -0.0073)],
+            "topLosers": [],
+        },
+    }],
+    "status": "Success",
+}
+
+_BREAKOUT_PAYLOAD = {
+    "items": [
+        {"ticker": "TPB", "sectorName": "Ngân hàng", "volume": 27474500.0, "averageMatchVolume": 15800950.0,
+         "value": 349108525000.0, "percentPriceChange": 0.0079},
+        {"ticker": "FPT", "sectorName": "Phần mềm", "volume": 10088500.0, "averageMatchVolume": 5054437.0,
+         "value": 582190000000.0, "percentPriceChange": 0.0},
+        # Chứng quyền bị lọc / Covered warrants are filtered out
+        {"ticker": "CFPT2601", "sectorName": None, "volume": 9.0e6, "averageMatchVolume": 1.0e6,
+         "value": 9.0e11, "percentPriceChange": 0.1},
+    ],
+    "status": 0,
+}
+
+
+def _series_point(stamp, value, total):
+    return {"comGroupCode": "VNINDEX", "tradingDate": f"2026-10-22T{stamp}:00", "indexValue": value,
+            "totalMatchValue": total}
+
+
+_INDEX_SERIES_PAYLOAD = {
+    "items": [
+        _series_point("09:15", 1751.62, 2.4e11),
+        _series_point("09:20", 1748.10, 9.0e11),
+        _series_point("10:42", 1763.25, 4.0e12),
+        _series_point("11:30", 1759.83, 6.0e12),
+        _series_point("14:30", 1756.00, 1.2e13),
+        _series_point("15:00", 1760.63, 1.3e13),
+    ],
+    "status": "Success",
+}
+
+
+class FiinTradeMarketDriversTestCase(unittest.TestCase):
+    def setUp(self):
+        module.reset_market_cache()
+        self.fetcher = FiinTradeFetcher(min_interval=0.0, origin="https://partner.example")
+
+    def tearDown(self):
+        module.reset_market_cache()
+
+    @staticmethod
+    def _get(contribution=_CONTRIBUTION_PAYLOAD, breakout=_BREAKOUT_PAYLOAD, series=_INDEX_SERIES_PAYLOAD):
+        def _inner(url, params=None, timeout=None):
+            for suffix, payload in (
+                ("/MoneyFlow/GetContribution", contribution),
+                ("/TopMover/GetTopBreakout", breakout),
+                ("/MarketInDepth/GetIndexSeries", series),
+            ):
+                if url.endswith(suffix):
+                    if isinstance(payload, Exception):
+                        raise payload
+                    return _response(payload)
+            raise AssertionError(url)
+        return _inner
+
+    def test_contribution_uses_ticker_and_drops_period_change(self):
+        with patch.object(self.fetcher._session, "get", side_effect=self._get()):
+            drivers = self.fetcher.get_market_drivers("vn")
+
+        contribution = drivers["index_contribution"]
+        self.assertEqual(contribution["index_change"], 21.96)
+        today = contribution["periods"]["1d"]
+        self.assertEqual(
+            today["top_gainers"],
+            [{"ticker": "VIC", "points": 14.88, "change_pct": 4.16},
+             {"ticker": "VHM", "points": 3.73, "change_pct": 3.56}],
+        )
+        self.assertEqual(today["top_losers"][0]["points"], -0.48)
+        self.assertEqual(contribution["periods"]["5d"]["top_gainers"], [{"ticker": "TCB", "points": 1.83}])
+
+    def test_breakouts_rank_by_value_and_filter_warrants(self):
+        with patch.object(self.fetcher._session, "get", side_effect=self._get()):
+            breakouts = self.fetcher.get_market_drivers("vn")["volume_breakouts"]
+
+        self.assertEqual([row["ticker"] for row in breakouts["items"]], ["FPT", "TPB"])
+        self.assertEqual(breakouts["items"][1], {
+            "ticker": "TPB", "sector": "Ngân hàng", "change_pct": 0.79, "volume_ratio": 1.74, "value": 349.11,
+        })
+
+    def test_intraday_path_and_closing_window_share(self):
+        with patch.object(self.fetcher._session, "get", side_effect=self._get()):
+            intraday = self.fetcher.get_market_drivers("vn")["intraday"]
+
+        self.assertEqual(intraday["date"], "2026-10-22")
+        self.assertEqual(intraday["morning_close"], {"time": "11:30", "value": 1759.83})
+        self.assertEqual(intraday["high"], {"time": "10:42", "value": 1763.25})
+        self.assertEqual(intraday["low"], {"time": "09:20", "value": 1748.10})
+        self.assertEqual(intraday["last"], {"time": "15:00", "value": 1760.63})
+        # (1,3e13 − 1,2e13) / 1,3e13
+        self.assertEqual(intraday["closing_window_value_share"], 7.7)
+
+    def test_intraday_skips_closing_share_before_window(self):
+        series = {"items": _INDEX_SERIES_PAYLOAD["items"][:4], "status": "Success"}
+        with patch.object(self.fetcher._session, "get", side_effect=self._get(series=series)):
+            intraday = self.fetcher.get_market_drivers("vn")["intraday"]
+        self.assertNotIn("closing_window_value_share", intraday)
+
+    def test_branch_failure_is_fail_open_and_cached(self):
+        failed = {"status": "Failed", "errors": ["boom"]}
+        with patch.object(
+            self.fetcher._session, "get", side_effect=self._get(contribution=failed),
+        ) as mocked:
+            drivers = self.fetcher.get_market_drivers("vn")
+            self.fetcher.get_market_drivers("vn")
+
+        self.assertNotIn("index_contribution", drivers)
+        self.assertIn("volume_breakouts", drivers)
+        self.assertIn("intraday", drivers)
+        self.assertEqual(mocked.call_count, 3)
+
+    def test_non_vn_region_returns_none(self):
+        self.assertIsNone(self.fetcher.get_market_drivers("us"))
+
+
 class _MarketStub:
     def __init__(self, name, indices=None, stats=None, error=None):
         self.name = name
@@ -617,6 +753,11 @@ class _MarketStub:
             raise self._error
         return None
 
+    def get_market_drivers(self, region="vn"):
+        if self._error:
+            raise self._error
+        return None
+
 
 class FiinTradeMarketFallbackTestCase(unittest.TestCase):
     def test_manager_falls_back_when_fiintrade_market_fails(self):
@@ -627,6 +768,7 @@ class FiinTradeMarketFallbackTestCase(unittest.TestCase):
         self.assertEqual(manager.get_main_indices("vn"), [{"code": "VNINDEX"}])
         self.assertEqual(manager.get_market_stats(region="vn"), {"up_count": 1})
         self.assertEqual(manager.get_market_money_flow("vn"), {})
+        self.assertEqual(manager.get_market_drivers("vn"), {})
 
 
 # Rút gọn từ response Master/GetListOrganization thật (2026-10-22).

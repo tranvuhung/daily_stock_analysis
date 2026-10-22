@@ -48,13 +48,15 @@ Các nguồn A-share / quốc tế đã bị xoá: akshare, efinance, tushare, p
 | Chỉ số chính | `FiinTradeFetcher.get_main_indices` khi có `FIINTRADE_ORIGIN`, nếu không thì `VciFetcher.get_main_indices(region="vn")` | VN-Index, VN30, HNX-Index, UPCoM-Index. FiinTrade lấy cả 4 trong một request (`GetLatestIndices`), giá trị giao dịch = khớp lệnh + thoả thuận (cùng ngữ nghĩa VCI). VCI dựng từ nến ngày mới nhất; một chỉ số lỗi thì chỉ bỏ qua chỉ số đó. |
 | Độ rộng thị trường | `FiinTradeFetcher.get_region_market_stats("vn")` khi có origin, nếu không thì `SsiFetcher` | Số mã tăng/giảm/đứng giá, trần/sàn, giá trị khớp lệnh (tỷ đồng). FiinTrade cộng ba chỉ số sàn và có thêm giá trị thoả thuận, khối ngoại ròng 3 sàn. |
 | Dòng tiền khối ngoại / tự doanh | `FiinTradeFetcher.get_market_money_flow("vn")` (chỉ khi có origin) | Sàn HOSE: ròng hôm nay / 1 tuần / 1 tháng / YTD kèm top 5 mã mua/bán ròng. Tự doanh công bố sau phiên, kỳ mới nhất có thể là phiên trước hoặc gộp hai phiên, nên prompt luôn ghi khoảng ngày. |
+| Động lực thị trường | `FiinTradeFetcher.get_market_drivers("vn")` (chỉ khi có origin) | Mục "Market Drivers" trong prompt: top 5 mã kéo/đè điểm VN-Index trong 1 / 5 / 20 phiên (`GetContribution`); tối đa 10 mã cả 3 sàn có KL phiên ≥ 1,5 lần bình quân 1 tuần, xếp theo giá trị giao dịch (`GetTopBreakout`); diễn biến VN-Index trong phiên: mở, hết phiên sáng, cao/thấp kèm giờ, điểm cuối, tỷ trọng giá trị khớp từ 14:30 (gồm ATC) (`GetIndexSeries`). Mỗi phần lỗi thì chỉ bỏ phần đó. |
 | Tin tức | `SearchService` | Truy vấn tiếng Việt theo `VN_PROFILE.news_queries`, ngữ cảnh `VNINDEX`. |
 
 Giới hạn:
 
 - Chỉ tính cổ phiếu/ETF đã có giá khớp; loại chứng quyền, phái sinh, trái phiếu và mã chưa giao dịch.
 - Giá trị giao dịch ở độ rộng là giá trị **khớp lệnh**, không gồm thoả thuận (FiinTrade báo thoả thuận ở dòng riêng).
-- Không có xếp hạng ngành. Dòng tiền khối ngoại / tự doanh chỉ có khi FiinTrade chạy; khi không có, prompt vẫn cấm model tự bịa số liệu dòng tiền.
+- Không có xếp hạng ngành (mã đột biến KL chỉ kèm tên ngành). Dòng tiền khối ngoại / tự doanh và động lực thị trường chỉ có khi FiinTrade chạy; khi không có, prompt vẫn cấm model tự bịa số liệu dòng tiền.
+- Điểm đóng góp kỳ 5/20 phiên không kèm % giá vì FiinTrade chỉ trả % của phiên hiện tại. Khi chạy trong phiên, các số này là ảnh chụp tại thời điểm gọi (cache 2 phút).
 - UPCoM-Index từ FiinTrade theo chuỗi riêng của FiinTrade: tham chiếu 125,22 so với 125,51 của VCI/SSI biểu đồ (21/10/2026). Nến ngày cũng lấy từ FiinTrade, nên điểm lại thị trường và nến ngày nhất quán với nhau.
 - Market Light và cảnh báo thị trường (`target_scope=market`, `target=vn`) chỉ hỗ trợ `vn`. Xem [alerts.md](alerts.md).
 
