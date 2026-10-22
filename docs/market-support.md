@@ -22,7 +22,7 @@ Ba cách viết sau được quy về cùng một `canonical_id`, tránh `stock_
 - Tiền tố tường minh: `vnHPG` (tiền tố viết thường).
 - Chứng chỉ quỹ ETF / quỹ đóng: `FUEVN100`, `E1VFVN30`, `FUCVREIT` (8 ký tự, tiền tố `FU` hoặc `E1VF`; cũng nhận `FUEVN100.VN`, `vnFUEVN100`). Dữ liệu ngày lấy từ VCI như cổ phiếu.
 
-Chỉ số: `VNINDEX`, `VN30`, `VN100`, `HNXIndex`, `HNX30`, `HNXUpcomIndex`. Người dùng nhập không phân biệt hoa/thường, nhưng tên gửi sang VCI **phân biệt hoa/thường** (`HNXINDEX` trả rỗng, `HNXIndex` mới có dữ liệu); bảng ánh xạ ở `data_provider/base.py:VN_INDEX_SYMBOLS`.
+Chỉ số: `VNINDEX`, `VN30`, `VN100`, `HNXIndex`, `HNX30`, `UPCOMINDEX` (nhận thêm `UPCOM`). Không có mã chỉ số nào tên `HNXUPCOMINDEX`: đó chỉ là cách viết riêng của VCI (`HNXUpcomIndex`) và SSI (`HNXUPCOMINDEX`), được đổi trong adapter tương ứng. Người dùng nhập không phân biệt hoa/thường, nhưng tên gửi sang VCI **phân biệt hoa/thường** (`HNXINDEX` trả rỗng, `HNXIndex` mới có dữ liệu); bảng ánh xạ ở `data_provider/base.py:VN_INDEX_SYMBOLS`.
 
 Mã không thuộc Việt Nam (ví dụ `600519`, `hk00700`, `AAPL`) bị từ chối ở đầu vào; endpoint lấy giá trả 404.
 
@@ -30,9 +30,9 @@ Mã không thuộc Việt Nam (ví dụ `600519`, `hk00700`, `AAPL`) bị từ c
 
 | Tình huống | Nguồn | Ghi chú |
 | --- | --- | --- |
-| Nến ngày / nến ngày chỉ số | `FiinTradeFetcher` (ưu tiên -1) | Mặc định bật nhưng chỉ chạy khi có `FIINTRADE_ORIGIN` (origin trong whitelist của FiinTrade); tắt bằng `FIINTRADE_ENABLED=false`. Phủ HOSE / HNX / ETF / chỉ số trừ UPCoM; mã UPCOM và chỉ số UPCoM tự chuyển sang VCI. Giá cùng cơ sở điều chỉnh với VCI. |
+| Nến ngày / nến ngày chỉ số | `FiinTradeFetcher` (ưu tiên -1) | Mặc định bật nhưng chỉ chạy khi có `FIINTRADE_ORIGIN` (origin trong whitelist của FiinTrade); tắt bằng `FIINTRADE_ENABLED=false`. Phủ cổ phiếu HOSE / HNX / UPCOM (tra `organCode` qua `Master/GetListOrganization`), ETF và chỉ số (gồm UPCoM-Index); mã không tra được hoặc FiinTrade lỗi thì tự chuyển sang VCI. Giá cùng cơ sở điều chỉnh với VCI. Lưu ý UPCoM-Index: từ 12/08/2025 close của FiinTrade khác VCI/SSI biểu đồ (lệch tới ~1,6 điểm) nhưng trùng bảng điện SSI; hệ thống lấy FiinTrade trước, lỗi mới sang VCI. |
 | Nến ngày / nến ngày chỉ số | `VciFetcher` (ưu tiên 0) | `POST trading.vietcap.com.vn/api/chart/OHLCChart/gap-chart`, không cần API key. **Mỗi lần chỉ hỏi một mã**, nên không có prefetch nến ngày hàng loạt. |
-| Giá realtime + định giá | `FiinTradeFetcher` | Khi chạy (có origin) thì đứng đầu chuỗi giá realtime (token `fiintrade`). `PriceDepth`: giá, tham chiếu/trần/sàn, khối ngoại, thoả thuận, P/E, P/B, vốn hoá, EPS, ROE. `GetStockEvents`: cổ tức TTM, phát hành, giao dịch nội bộ. Chỉ cổ phiếu HOSE/HNX; chỉ số và UPCOM rơi sang VCI/SSI. |
+| Giá realtime + định giá | `FiinTradeFetcher` | Khi chạy (có origin) thì đứng đầu chuỗi giá realtime (token `fiintrade`). `PriceDepth`: giá, tham chiếu/trần/sàn, khối ngoại, thoả thuận, P/E, P/B, vốn hoá, EPS, ROE. `GetStockEvents`: cổ tức TTM, phát hành, giao dịch nội bộ. Cổ phiếu/ETF cả ba sàn; chỉ số rơi sang VCI. |
 | Giá realtime | `SsiFetcher` (ưu tiên 1) | `GET iboard-query.ssi.com.vn/stock/exchange/{hose,hnx,upcom}`, **một request phủ cả sàn**; `prefetch_realtime_quotes` chỉ cần ba request cho toàn thị trường. |
 | Nến ngày dự phòng | `SsiFetcher` | `GET iboard-api.ssi.com.vn/statistics/charts/history` (định dạng TradingView UDF). |
 | Bổ sung tuỳ chọn | `VnstockFetcher` (ưu tiên 2) | Cần `VNSTOCK_ENABLED=true` và đã cài `requirements-vn-optional.txt`; mặc định tắt vì giấy phép vnstock là "Personal Use" và có telemetry. |
@@ -55,7 +55,7 @@ Giới hạn:
 - Chỉ tính cổ phiếu/ETF đã có giá khớp; loại chứng quyền, phái sinh, trái phiếu và mã chưa giao dịch.
 - Giá trị giao dịch ở độ rộng là giá trị **khớp lệnh**, không gồm thoả thuận (FiinTrade báo thoả thuận ở dòng riêng).
 - Không có xếp hạng ngành. Dòng tiền khối ngoại / tự doanh chỉ có khi FiinTrade chạy; khi không có, prompt vẫn cấm model tự bịa số liệu dòng tiền.
-- UPCoM-Index từ FiinTrade có giá tham chiếu khác SSI/VCI (125,22 so với 125,51 ngày 21/10/2026), nên % thay đổi trong ngày có thể lệch nhỏ.
+- UPCoM-Index từ FiinTrade theo chuỗi riêng của FiinTrade: tham chiếu 125,22 so với 125,51 của VCI/SSI biểu đồ (21/10/2026). Nến ngày cũng lấy từ FiinTrade, nên điểm lại thị trường và nến ngày nhất quán với nhau.
 - Market Light và cảnh báo thị trường (`target_scope=market`, `target=vn`) chỉ hỗ trợ `vn`. Xem [alerts.md](alerts.md).
 
 ## Ngôn ngữ báo cáo

@@ -21,7 +21,7 @@ const STOCK_CODE_PATTERNS = [
   /^(?:FU[A-Z0-9]{6}|E1VF[A-Z0-9]{4})$/, // Vietnam fund bare code
   /^(?:FU[A-Z0-9]{6}|E1VF[A-Z0-9]{4})\.VN$/, // Vietnam fund explicit suffix, for example FUEVN100.VN
   /^VN(?:FU[A-Z0-9]{6}|E1VF[A-Z0-9]{4})$/, // Vietnam fund explicit prefix, for example vnFUEVN100
-  /^(VNINDEX|VN30|VN100|HNXINDEX|HNX30|HNXUPCOMINDEX|UPCOMINDEX)$/, // Vietnam indices
+  /^(VNINDEX|VN30|VN100|HNXINDEX|HNX30|UPCOMINDEX|UPCOM)$/, // Vietnam indices
 ];
 
 /**

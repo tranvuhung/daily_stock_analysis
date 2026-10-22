@@ -75,16 +75,18 @@ def summarize_exception(exc: Exception) -> Tuple[str, str]:
     return error_type, " ".join(message.split())
 
 
-# Mã chỉ số Việt Nam. API của VCI phân biệt hoa/thường (``HNXINDEX`` trả về rỗng,
-# phải là ``HNXIndex`` mới có dữ liệu), nên ở đây lưu đúng cách viết mà provider
-# yêu cầu; khoá là phần người dùng nhập đã quy chuẩn về chữ hoa.
+# Mã chỉ số Việt Nam. Khoá là mã người dùng nhập đã quy chuẩn về chữ hoa (chỉ số
+# UPCoM có mã chuẩn ``UPCOMINDEX``, nhận thêm ``UPCOM``); giá trị là cách viết mà
+# **API VCI** yêu cầu. VCI phân biệt hoa/thường (``HNXINDEX`` trả rỗng, ``HNXIndex``
+# mới có dữ liệu) và gọi chỉ số UPCoM là ``HNXUpcomIndex``. Nguồn khác có bảng riêng
+# (SSI ``HNXUPCOMINDEX``, FiinTrade ``UpcomIndex``).
+# Keys: normalised user codes; values: the spelling VCI's API expects.
 VN_INDEX_SYMBOLS = {
     "VNINDEX": "VNINDEX",
     "VN30": "VN30",
     "VN100": "VN100",
     "HNXINDEX": "HNXIndex",
     "HNX30": "HNX30",
-    "HNXUPCOMINDEX": "HNXUpcomIndex",
     "UPCOMINDEX": "HNXUpcomIndex",
     "UPCOM": "HNXUpcomIndex",
 }
@@ -165,7 +167,7 @@ def _is_vn_market(code: str) -> bool:
 
     Chấp nhận các cách viết:
     - Hậu tố tường minh ``HPG.VN``
-    - Chỉ số đã đăng ký ``VNINDEX`` / ``VN30`` / ``HNXIndex`` / ``HNXUpcomIndex``
+    - Chỉ số đã đăng ký ``VNINDEX`` / ``VN30`` / ``HNXIndex`` / ``UPCOMINDEX``
     - Tiền tố ``vnHPG`` (tiền tố bắt buộc viết thường)
     - Mã trần ``HPG`` (3 ký tự chữ hoa hoặc số)
     - Mã chứng chỉ quỹ ``FUEVN100`` / ``E1VFVN30``
@@ -1843,7 +1845,13 @@ class DataFetcherManager:
         """
         if fiintrade is not None:
             quote = self._call_fetcher_method(fiintrade, "get_realtime_quote", stock_code)
-            if quote is not None and quote.has_basic_data():
+            # Trước khi khớp lệnh (ATO) giá bằng 0 nhưng P/E/P/B vẫn có: vẫn nhận để
+            # khối định giá không bị trống. / Before the first match price is 0 but
+            # PE/PB are still present, so keep the quote for valuation.
+            if quote is not None and (
+                quote.has_basic_data()
+                or any(getattr(quote, f, None) is not None for f in ("pe_ratio", "pb_ratio", "total_mv"))
+            ):
                 return quote
         return self.get_realtime_quote(stock_code)
 
@@ -1860,10 +1868,10 @@ class DataFetcherManager:
         Build the ``earnings`` / ``institution`` blocks from FiinTrade events.
         """
         errors = [events_err] if events_err else []
-        # FiinTrade không phủ UPCOM và trả danh sách rỗng: rỗng hoàn toàn nghĩa là
+        # Mã không tra được trên FiinTrade trả danh sách rỗng: rỗng hoàn toàn nghĩa là
         # "không có dữ liệu", không phải "không có sự kiện" (mã niêm yết luôn có ít
         # nhất ngày công bố KQKD trong 2 năm). Không được báo cổ tức = 0.
-        # An all-empty payload means "not covered" (e.g. UPCOM), never "no events".
+        # An all-empty payload means "not covered", never "no events".
         if isinstance(events, dict) and not any(events.get(key) for key in events):
             events = None
             errors = errors or ["no FiinTrade events for this symbol"]

@@ -38,7 +38,7 @@ describe('stock code validation', () => {
     expect(isObviouslyInvalidStockQuery(input)).toBe(false);
   });
 
-  test.each(['VNINDEX', 'vn30', 'HNXINDEX', 'HNXUPCOMINDEX', 'UPCOMINDEX'])(
+  test.each(['VNINDEX', 'vn30', 'HNXINDEX', 'UPCOMINDEX', 'upcom'])(
     'accepts Vietnam index %s',
     (input) => {
       expect(validateStockCode(input).valid).toBe(true);

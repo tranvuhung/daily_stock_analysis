@@ -70,11 +70,14 @@ _request_lock = RLock()
 # Chỉ số chính cho điểm lại thị trường: (mã hiển thị thống nhất với VCI, mã SSI, tên).
 # Mã SSI phải viết hoa: ``HNXIndex`` trả về chuỗi giá sai, ``HNXINDEX`` mới đúng.
 # Main indices for the market review: (code shared with VCI, SSI symbol, display name).
+# Cách viết chỉ số riêng của SSI, khoá là mã chuẩn / SSI-specific index spellings
+_SSI_INDEX_SYMBOLS = {"UPCOMINDEX": "HNXUPCOMINDEX", "UPCOM": "HNXUPCOMINDEX"}
+
 _VN_MAIN_INDICES = (
     ("VNINDEX", "VNINDEX", "VN-Index"),
     ("VN30", "VN30", "VN30"),
     ("HNXIndex", "HNXINDEX", "HNX-Index"),
-    ("HNXUpcomIndex", "HNXUPCOMINDEX", "UPCoM-Index"),
+    ("UPCOMINDEX", "HNXUPCOMINDEX", "UPCoM-Index"),
 )
 
 
@@ -135,7 +138,9 @@ class SsiFetcher(BaseFetcher):
         normalized = (stock_code or "").strip().upper()
         if normalized.endswith(".VN"):
             normalized = normalized[:-3]
-        return normalized
+        # SSI gọi chỉ số UPCoM là ``HNXUPCOMINDEX`` (``UPCOMINDEX`` trả rỗng).
+        # SSI names the UPCoM index ``HNXUPCOMINDEX``; ``UPCOMINDEX`` returns nothing.
+        return _SSI_INDEX_SYMBOLS.get(normalized, normalized)
 
     # ------------------------------------------------------------------
     # Snapshot toàn thị trường

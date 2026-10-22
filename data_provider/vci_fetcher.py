@@ -82,7 +82,8 @@ _VN_MAIN_INDICES = (
     ("VNINDEX", "VN-Index"),
     ("VN30", "VN30"),
     ("HNXIndex", "HNX-Index"),
-    ("HNXUpcomIndex", "UPCoM-Index"),
+    # Mã chuẩn; to_provider_symbol đổi sang ``HNXUpcomIndex`` khi gọi VCI.
+    ("UPCOMINDEX", "UPCoM-Index"),
 )
 
 

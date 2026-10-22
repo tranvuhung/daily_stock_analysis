@@ -15,6 +15,7 @@ from data_provider.base import (
     DataFetchError,
     DataFetcherManager,
     _market_tag,
+    is_vn_index_code,
     normalize_stock_code,
 )
 from src.core import markets
@@ -177,7 +178,10 @@ class ParseAnalysisTargetVnTestCase(unittest.TestCase):
             self.assertEqual(
                 parse_analysis_target("hnxindex").canonical_id, "HNXIndex"
             )
-            self.assertEqual(parse_analysis_target("upcom").canonical_id, "HNXUpcomIndex")
+            self.assertEqual(parse_analysis_target("upcom").canonical_id, "UPCOMINDEX")
+            # Không có mã chỉ số nào tên HNXUPCOMINDEX (đó chỉ là cách viết của VCI/SSI).
+            # No index is called HNXUPCOMINDEX; that is only a provider spelling.
+            self.assertFalse(is_vn_index_code("HNXUPCOMINDEX"))
 
 class ManagerGatingTestCase(unittest.TestCase):
     def test_daily_data_rejects_non_vn_code_without_touching_fetchers(self):

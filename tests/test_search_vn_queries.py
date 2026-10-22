@@ -66,7 +66,7 @@ class VnSymbolDetectionTestCase(unittest.TestCase):
 
 class VnIndexOrEtfTestCase(unittest.TestCase):
     def test_vn_indices_are_index_or_etf(self):
-        for code in ("VNINDEX", "VN30", "HNXIndex", "HNXUpcomIndex"):
+        for code in ("VNINDEX", "VN30", "HNXIndex", "UPCOMINDEX"):
             self.assertTrue(SearchService.is_index_or_etf(code, code), code)
 
     def test_vn_fund_certificates_are_index_or_etf(self):

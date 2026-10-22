@@ -2,7 +2,7 @@
 // Vietnam security code: 3-char ticker or fund certificate code.
 const VN_SECURITY_CODE_RE = /^(?:[A-Z][A-Z0-9]{2}|FU[A-Z0-9]{6}|E1VF[A-Z0-9]{4})$/;
 const VN_FUND_CODE_RE = /^(?:FU[A-Z0-9]{6}|E1VF[A-Z0-9]{4})$/;
-const VN_INDEX_SYMBOLS = new Set(['VNINDEX', 'VN30', 'VN100', 'HNXINDEX', 'HNX30', 'HNXUPCOMINDEX', 'UPCOMINDEX']);
+const VN_INDEX_SYMBOLS = new Set(['VNINDEX', 'VN30', 'VN100', 'HNXINDEX', 'HNX30', 'UPCOMINDEX', 'UPCOM']);
 
 /**
  * Chuẩn hoá mã chứng khoán Việt Nam (khớp data_provider.base.normalize_stock_code).

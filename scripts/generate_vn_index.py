@@ -53,7 +53,7 @@ _VN_INDEX_ROWS = [
     ("VN100", "Chỉ số VN100", ["VN100"]),
     ("HNXIndex", "Chỉ số HNX-Index", ["HNXINDEX", "HNX-Index"]),
     ("HNX30", "Chỉ số HNX30", ["HNX30"]),
-    ("HNXUpcomIndex", "Chỉ số UPCoM-Index", ["UPCOM", "UPCOMINDEX"]),
+    ("UPCOMINDEX", "Chỉ số UPCoM-Index", ["UPCOMINDEX", "UPCOM", "UPCoM-Index"]),
 ]
 
 

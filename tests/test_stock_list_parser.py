@@ -29,7 +29,8 @@ def test_split_and_serialize_handle_common_separators() -> None:
         ("VNINDEX", "VNINDEX"),
         ("vn30", "VN30"),
         ("HNXINDEX", "HNXIndex"),
-        ("UPCOM", "HNXUpcomIndex"),
+        ("UPCOM", "UPCOMINDEX"),
+        ("upcomindex", "UPCOMINDEX"),
     ],
 )
 def test_vietnam_codes_parse_as_stock_targets(raw: str, canonical: str) -> None:

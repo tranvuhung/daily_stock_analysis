@@ -263,6 +263,23 @@ class TestFundamentalContextWithFiinTrade(unittest.TestCase):
         self.assertEqual(ctx["coverage"]["growth"], "not_supported")
         self.assertEqual(ctx["status"], "partial")
 
+    def test_valuation_kept_before_first_match(self) -> None:
+        # Phiên ATO: giá khớp = 0 nhưng FiinTrade vẫn có P/E.
+        # During ATO the matched price is 0 but FiinTrade still has PE.
+        from data_provider.realtime_types import UnifiedRealtimeQuote
+
+        quote = UnifiedRealtimeQuote(code="FPT", price=0.0, pe_ratio=10.78, pb_ratio=2.72)
+        stub = _FiinTradeStub(quote=quote, events=self._events())
+        manager = DataFetcherManager(fetchers=[stub])
+        with patch("src.config.get_config", return_value=_cfg()), \
+                patch.object(manager, "get_realtime_quote") as regular_quote:
+            ctx = manager.get_fundamental_context("FPT")
+
+        regular_quote.assert_not_called()
+        self.assertEqual(ctx["valuation"]["data"]["pe_ratio"], 10.78)
+        # Không có giá thì không tính lợi suất cổ tức / No price, no yield
+        self.assertIsNone(ctx["earnings"]["data"]["dividend"]["ttm_dividend_yield_pct"])
+
     def test_events_failure_is_fail_open(self) -> None:
         stub = _FiinTradeStub(quote=self._quote(), events_error="boom")
         manager = DataFetcherManager(fetchers=[stub])
@@ -274,7 +291,7 @@ class TestFundamentalContextWithFiinTrade(unittest.TestCase):
         self.assertEqual(ctx["coverage"]["institution"], "failed")
         self.assertEqual(ctx["status"], "partial")
 
-    def test_upcom_quote_falls_back_to_regular_chain(self) -> None:
+    def test_unresolved_symbol_quote_falls_back_to_regular_chain(self) -> None:
         stub = _FiinTradeStub(
             quote=None,
             events={"dividends": [], "share_issuances": [], "insider_transactions": [], "earnings_releases": []},
@@ -286,8 +303,8 @@ class TestFundamentalContextWithFiinTrade(unittest.TestCase):
             ctx = manager.get_fundamental_context("ACV")
 
         regular_quote.assert_called_once_with("ACV")
-        # Sự kiện rỗng hoàn toàn (UPCOM không được phủ) không được báo thành "cổ tức = 0".
-        # All-empty events (UPCOM not covered) must not be reported as "zero dividends".
+        # Sự kiện rỗng hoàn toàn (mã không tra được) không được báo thành "cổ tức = 0".
+        # All-empty events (symbol not resolved) must not be reported as "zero dividends".
         self.assertEqual(ctx["coverage"]["earnings"], "not_supported")
         self.assertEqual(ctx["coverage"]["institution"], "not_supported")
         self.assertEqual(ctx["earnings"]["data"], {})

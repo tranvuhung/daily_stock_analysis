@@ -215,5 +215,15 @@ class SsiDailyUnitTestCase(unittest.TestCase):
                 )
 
 
+
+class SsiIndexSymbolTestCase(unittest.TestCase):
+    def test_upcom_index_uses_ssi_spelling(self):
+        # Mã chuẩn UPCOMINDEX; SSI chỉ nhận HNXUPCOMINDEX (UPCOMINDEX trả rỗng).
+        # Canonical UPCOMINDEX; SSI only answers to HNXUPCOMINDEX.
+        self.assertEqual(SsiFetcher.to_provider_symbol("UPCOMINDEX"), "HNXUPCOMINDEX")
+        self.assertEqual(SsiFetcher.to_provider_symbol("upcom"), "HNXUPCOMINDEX")
+        self.assertEqual(SsiFetcher.to_provider_symbol("HPG.VN"), "HPG")
+
+
 if __name__ == "__main__":
     unittest.main()

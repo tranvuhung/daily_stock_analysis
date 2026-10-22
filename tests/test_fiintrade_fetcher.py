@@ -19,6 +19,21 @@ from data_provider import fiintrade_fetcher as module
 from data_provider.base import DataFetchError, DataFetcherManager, STANDARD_COLUMNS
 from data_provider.fiintrade_fetcher import FiinTradeFetcher, is_fiintrade_enabled
 
+# Mặc định coi bảng organCode là rỗng (ticker = organCode) để mỗi test chỉ mock đúng
+# endpoint nó kiểm; phần ánh xạ có test riêng ở FiinTradeOrganCodeTestCase.
+# By default the organCode map is empty so tests only mock the endpoint under test.
+_ORG_MAP_PATCHER = patch.object(FiinTradeFetcher, "_organization_map", return_value={})
+
+
+def setUpModule():
+    module.reset_organizations_cache()
+    _ORG_MAP_PATCHER.start()
+
+
+def tearDownModule():
+    _ORG_MAP_PATCHER.stop()
+    module.reset_organizations_cache()
+
 # Lấy từ response thật (FPT, 2025-11-26 ~ 2025-11-28): giá đã điều chỉnh có phần lẻ
 # dài, ngày GDKHQ 2025-11-28 có rateAdjusted khác 0. Close/volume khớp tuyệt đối VCI.
 _REAL_PAYLOAD = {
@@ -58,7 +73,8 @@ _PARTIAL_PAYLOAD = {
     "errors": None,
 }
 
-# Mã không có trên FiinTrade (toàn bộ UPCOM) trả HTTP 200 kèm status Failed.
+# Mã không tra được trên FiinTrade (ví dụ gửi ticker thay vì organCode) trả HTTP 200
+# kèm status Failed.
 _NOT_FOUND_PAYLOAD = {
     "page": 0, "pageSize": 0, "totalCount": 0, "items": None, "packageId": None,
     "status": "Failed", "errors": ["Sequence contains no matching element"],
@@ -134,15 +150,12 @@ class FiinTradeDailyDataTestCase(unittest.TestCase):
                 self.assertEqual(FiinTradeFetcher.to_provider_symbol(code), (expected, "Index"))
         self.assertEqual(FiinTradeFetcher.to_provider_symbol("hpg.vn"), ("HPG", "Stock"))
 
-    def test_upcom_index_is_left_to_vci_without_request(self):
-        # UpcomIndex của FiinTrade lệch close so với VCI, không được trộn vào stock_daily.
-        # FiinTrade's UpcomIndex close drifts from VCI, so it must never be used.
-        for code in ("UPCOM", "UPCOMINDEX", "HNXUPCOMINDEX"):
+    def test_upcom_index_uses_fiintrade_code(self):
+        # Chủ dự án chọn FiinTrade trước cho UPCoM-Index, lỗi mới sang VCI (2026-10-22).
+        # UPCoM-Index comes from FiinTrade first, falling back to VCI on failure.
+        for code in ("UPCOM", "UPCOMINDEX"):
             with self.subTest(code=code):
-                with patch.object(self.fetcher._session, "get") as mocked:
-                    df = self.fetcher.get_daily_data(code, start_date="2026-10-01", end_date="2026-10-21")
-                self.assertTrue(df.empty)
-                mocked.assert_not_called()
+                self.assertEqual(FiinTradeFetcher.to_provider_symbol(code), ("UpcomIndex", "Index"))
 
     def test_unknown_symbol_returns_empty_frame(self):
         with patch.object(self.fetcher._session, "get", return_value=_response(_NOT_FOUND_PAYLOAD)):
@@ -182,8 +195,8 @@ class FiinTradeManagerFallbackTestCase(unittest.TestCase):
         DataFetcherManager.reset_daily_source_health()
 
     def test_unknown_symbols_fall_back_without_tripping_breaker(self):
-        # Nhiều mã UPCOM liên tiếp không được làm FiinTrade bị ngắt mạch cho mã HOSE.
-        # Repeated UPCOM misses must not open the breaker for HOSE symbols.
+        # Nhiều mã không tra được liên tiếp không được làm FiinTrade bị ngắt mạch cho mã khác.
+        # Repeated unresolved symbols must not open the breaker for other symbols.
         fiintrade = FiinTradeFetcher(min_interval=0.0, origin="https://partner.example")
         manager = DataFetcherManager(fetchers=[fiintrade, _StubFetcher()])
 
@@ -328,7 +341,7 @@ class FiinTradeRealtimeQuoteTestCase(unittest.TestCase):
         self.assertIn("circ_mv", quote.missing_fields)
         self.assertTrue(quote.has_basic_data())
 
-    def test_failed_status_returns_none_for_upcom(self):
+    def test_failed_status_returns_none_for_unresolved_symbol(self):
         payload = {"items": None, "status": "Failed", "errors": ["Sequence contains no matching element"]}
         with patch.object(self.fetcher._session, "get", return_value=_response(payload)):
             self.assertIsNone(self.fetcher.get_realtime_quote("ACV"))
@@ -421,7 +434,7 @@ class FiinTradeRealtimeOrderTestCase(unittest.TestCase):
         with patch("src.config.get_config", return_value=self._cfg("ssi,vci")):
             self.assertEqual(manager._vn_realtime_source_order(), ["SsiFetcher", "VciFetcher"])
 
-    def test_upcom_falls_back_to_ssi(self):
+    def test_unresolved_symbol_falls_back_to_ssi(self):
         fiin = _QuoteStub("FiinTradeFetcher", None)
         ssi = _QuoteStub("SsiFetcher", self._quote(41700.0))
         manager = DataFetcherManager(fetchers=[fiin, ssi])
@@ -514,7 +527,7 @@ class FiinTradeMarketTestCase(unittest.TestCase):
         self.assertEqual(
             [(i["code"], i["name"]) for i in indices],
             [("VNINDEX", "VN-Index"), ("VN30", "VN30"), ("HNXIndex", "HNX-Index"),
-             ("HNXUpcomIndex", "UPCoM-Index")],
+             ("UPCOMINDEX", "UPCoM-Index")],
         )
         vnindex = indices[0]
         self.assertEqual(vnindex["change_pct"], 2.76)
@@ -614,6 +627,75 @@ class FiinTradeMarketFallbackTestCase(unittest.TestCase):
         self.assertEqual(manager.get_main_indices("vn"), [{"code": "VNINDEX"}])
         self.assertEqual(manager.get_market_stats(region="vn"), {"up_count": 1})
         self.assertEqual(manager.get_market_money_flow("vn"), {})
+
+
+# Rút gọn từ response Master/GetListOrganization thật (2026-10-22).
+_ORGANIZATIONS_PAYLOAD = {
+    "items": [
+        {"organCode": "FPT", "ticker": "FPT", "comGroupCode": "VNINDEX"},
+        {"organCode": "NHN", "ticker": "VHM", "comGroupCode": "VNINDEX"},
+        {"organCode": "ACVN", "ticker": "ACV", "comGroupCode": "UpcomIndex"},
+        {"organCode": "TLSC", "ticker": "MBS", "comGroupCode": "HNXIndex"},
+    ],
+    "status": "Success",
+}
+
+
+class FiinTradeOrganCodeTestCase(unittest.TestCase):
+    """API theo từng mã nhận organCode, không phải ticker (VHM -> NHN, ACV -> ACVN)."""
+
+    def setUp(self):
+        _ORG_MAP_PATCHER.stop()
+        module.reset_organizations_cache()
+        module.reset_events_cache()
+        self.fetcher = FiinTradeFetcher(min_interval=0.0, origin="https://partner.example")
+
+    def tearDown(self):
+        module.reset_organizations_cache()
+        module.reset_events_cache()
+        _ORG_MAP_PATCHER.start()
+
+    def _router(self, depth_payload=None):
+        def _get(url, params=None, timeout=None):
+            if url.endswith("/Master/GetListOrganization"):
+                return _response(_ORGANIZATIONS_PAYLOAD)
+            if url.endswith("/PriceDepth/GetPriceDepth"):
+                return _response(depth_payload or _PRICE_DEPTH_PAYLOAD)
+            if url.endswith("/TradingView/GetStockEvents"):
+                return _response(_EVENTS_PAYLOAD)
+            return _response(_REAL_PAYLOAD)
+        return _get
+
+    def test_all_per_symbol_calls_send_organ_code(self):
+        with patch.object(self.fetcher._session, "get", side_effect=self._router()) as mocked:
+            self.fetcher.get_daily_data("VHM", start_date="2025-11-26", end_date="2025-11-28")
+            quote = self.fetcher.get_realtime_quote("ACV")
+            self.fetcher.get_corporate_events("MBS", today=date(2026, 10, 21))
+
+        sent = {
+            call.args[0].rsplit("/", 1)[-1]: call.kwargs["params"]
+            for call in mocked.call_args_list
+        }
+        self.assertEqual(sent["GetStockChartData"]["Code"], "NHN")
+        self.assertEqual(sent["GetPriceDepth"]["Code"], "ACVN")
+        self.assertEqual(sent["GetStockEvents"]["OrganCode"], "TLSC")
+        # Quote trả mã giao dịch, không trả organCode nội bộ.
+        self.assertEqual(quote.code, "ACV")
+
+    def test_organization_map_is_cached(self):
+        with patch.object(self.fetcher._session, "get", side_effect=self._router()) as mocked:
+            self.fetcher.get_realtime_quote("ACV")
+            self.fetcher.get_realtime_quote("VHM")
+        org_calls = [c for c in mocked.call_args_list if c.args[0].endswith("/Master/GetListOrganization")]
+        self.assertEqual(len(org_calls), 1)
+
+    def test_unknown_ticker_and_failed_map_fall_back_to_ticker(self):
+        with patch.object(self.fetcher._session, "get", side_effect=self._router()):
+            self.assertEqual(self.fetcher._resolve_code("ZZZ"), ("ZZZ", "Stock", "ZZZ"))
+
+        module.reset_organizations_cache()
+        with patch.object(self.fetcher._session, "get", side_effect=DataFetchError("down")):
+            self.assertEqual(self.fetcher._resolve_code("VHM"), ("VHM", "Stock", "VHM"))
 
 
 if __name__ == "__main__":

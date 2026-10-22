@@ -14,7 +14,7 @@ Hệ thống chỉ hỗ trợ thị trường Việt Nam (xem [Phạm vi thị t
 | --- | --- | --- | --- |
 | Nến ngày cổ phiếu / kỹ thuật | FiinTrade (tuỳ chọn), VCI (Vietcap), SSI iBoard, vnstock (tuỳ chọn), Yahoo (chỉ HOSE) | `DataFetcherManager` thử theo priority: FiinTrade(P-1, nếu bật) → VCI(P0) → SSI(P1) → vnstock(P2, nếu bật) → Yahoo(P4) | Lỗi thì sang nguồn kế; lỗi liên tiếp sẽ ngắt mạch nguồn đó một thời gian ngắn; tất cả đều lỗi thì ném ngoại lệ tổng hợp |
 | Giá realtime | FiinTrade PriceDepth (tuỳ chọn, đứng đầu khi bật), SSI iBoard (VCI là lựa chọn thứ hai qua `REALTIME_SOURCE_PRIORITY`), TVSI MQTT (tuỳ chọn) | Snapshot toàn thị trường (HOSE/HNX/UPCoM mỗi sàn một request), tra từng mã trúng cache trong tiến trình | Snapshot lỗi thì trả `None` và hạ cấp về giá đóng cửa lịch sử; một sàn lỗi không ảnh hưởng hai sàn còn lại |
-| Nến ngày chỉ số | VCI (Vietcap) | `VNINDEX` / `VN30` / `VN100` / `HNXIndex` / `HNX30` / `HNXUpcomIndex`, dùng cùng API nến ngày với cổ phiếu | Lỗi thì sang SSI. **Yahoo không tham gia** vì không có lịch sử chỉ số Việt Nam |
+| Nến ngày chỉ số | FiinTrade (khi có origin), VCI (Vietcap) | `VNINDEX` / `VN30` / `VN100` / `HNXIndex` / `HNX30` / `UPCOMINDEX` (VCI gọi là `HNXUpcomIndex`, SSI là `HNXUPCOMINDEX`, FiinTrade là `UpcomIndex`), dùng cùng API nến ngày với cổ phiếu | FiinTrade lỗi thì sang VCI, rồi SSI. **Yahoo không tham gia** vì không có lịch sử chỉ số Việt Nam |
 | Điểm lại thị trường | FiinTrade (chỉ số, độ rộng, dòng tiền khối ngoại/tự doanh; khi có origin), VCI (chỉ số), SSI (độ rộng thị trường) | `MARKET_REVIEW_REGION=vn` | FiinTrade lỗi thì chuyển sang VCI/SSI; một chỉ số lỗi chỉ bỏ qua chỉ số đó; độ rộng lỗi thì báo cáo thiếu khối độ rộng; dòng tiền lỗi thì bỏ mục Fund Flows |
 
 ## Chuỗi hạ cấp
@@ -23,7 +23,7 @@ Hệ thống chỉ hỗ trợ thị trường Việt Nam (xem [Phạm vi thị t
 flowchart LR
     Q[Yêu cầu mã Việt Nam] --> K{Nến ngày hay realtime?}
     K -->|Nến ngày| FT{Có FIINTRADE_ORIGIN<br/>và chưa tắt?}
-    FT -->|Có| F[FiinTradeFetcher<br/>HOSE/HNX/chỉ số trừ UPCoM]
+    FT -->|Có| F[FiinTradeFetcher<br/>HOSE/HNX/UPCOM, ETF, chỉ số]
     F -->|Thành công| OK
     F -->|Rỗng UPCOM / lỗi| V
     FT -->|Không| V[VciFetcher]
@@ -54,9 +54,15 @@ API biểu đồ `GET wlgw-technical.fiintrade.vn/TradingView/GetStockChartData`
 | FPT (HOSE) | Trùng 100% | Lệch < 1% ở 13 phiên | FiinTrade có vẻ gồm cả lô lẻ |
 | PVS (HNX) | Trùng 100% | Lệch ±1% | |
 | VNINDEX / HNXIndex | Trùng 100% | Thấp hơn ~10-15% | FiinTrade chỉ tính khớp lệnh |
-| UpcomIndex | **Lệch** (16/10: 124.87 vs 125.97) | Lệch | **Không lấy từ FiinTrade**, để VCI phục vụ |
-| Mã UPCOM (ACV, BSR, VEA...) | Không có | | API trả `status=Failed`; fetcher trả rỗng nên manager sang VCI **mà không ngắt mạch** FiinTrade |
+| UpcomIndex | Trùng tới 11/08/2025; **lệch từ 12/08/2025** (265/369 phiên, tới ~1,6 điểm; 16/10: 124,87 vs 125,97) | Lệch | Vẫn lấy từ FiinTrade trước (quyết định 2026-10-22), lỗi mới sang VCI. Xem ghi chú dưới bảng |
+| Mã UPCOM và mã có organCode khác ticker (VHM, ACV, MBS, MCH, VEA, FRT; đo 2026-10-22) | Trùng 100% | | Phải gửi `organCode` (xem dưới); gửi ticker thì API trả `status=Failed` |
 
+- **UPCoM-Index có hai chuỗi giá trị** (kiểm 2026-10-22):
+  - Nến ngày FiinTrade (`GetStockChartData`), `GetLatestIndices` và bảng điện SSI: 126,24 ngày 21/10.
+  - VCI, SSI biểu đồ và điểm cuối (14:55) chuỗi trong ngày của chính FiinTrade (`GetIndexSeries`): 126,60.
+  - Giá mở cửa luôn trùng. Close nến ngày FiinTrade không trùng thời điểm nào trong chuỗi trong ngày, nên được tính theo cách khác (có thể từ giá đóng cửa bình quân gia quyền của cổ phiếu UPCOM). Chưa xác nhận được số chính thức của HNX.
+  - Hệ thống lấy FiinTrade trước. **Rủi ro**: ngày nào FiinTrade lỗi và VCI bù vào thì nến UPCoM-Index ngày đó theo cách tính VCI. Nơi triển khai đã lưu lịch sử UPCoM-Index từ VCI trước khi bật FiinTrade sẽ có chuỗi trộn từ 12/08/2025, nên xoá các dòng đó để tải lại.
+- **API theo từng mã nhận `organCode`, không phải ticker.** Danh mục `wlgw-core.fiintrade.vn/Master/GetListOrganization` có 1.547 mã (HOSE 431, HNX 299, UPCOM 817, gồm cả ETF), trong đó 647 mã có `organCode` khác ticker (VHM → `NHN`, ACV → `ACVN`, MBS → `TLSC`, FRT → `FPTR`). Fetcher tra bảng này (cache 24 giờ; tải lỗi thì tạm gửi ticker và 5 phút sau thử lại). Mã vẫn không tra được thì trả rỗng để manager chuyển sang VCI **mà không ngắt mạch** FiinTrade.
 - Giá đã điều chỉnh quyền và trùng cơ sở với VCI, nên nến ngày **được ghi** `stock_daily` (khác Yahoo). Trường `rateAdjusted` khác 0 tại ngày GDKHQ.
 - API không có giá trị giao dịch, giá tham chiếu hay trần/sàn: `amount` được ước lượng bằng `(high+low)/2 × volume` (giống API biểu đồ SSI).
 - Nến hôm nay trong phiên là nến dở (`tradingDate` có kèm giờ). Fetcher quy về ngày giao dịch; tầng phân tích vẫn xử lý nến dở như với VCI.
@@ -64,7 +70,7 @@ API biểu đồ `GET wlgw-technical.fiintrade.vn/TradingView/GetStockChartData`
 
 #### Giá trong phiên và định giá (`PriceDepth/GetPriceDepth`)
 
-Khi bật, FiinTrade đứng đầu chuỗi giá realtime (token `fiintrade` trong `REALTIME_SOURCE_PRIORITY`; không ghi thì tự đứng đầu, ghi rõ vị trí thì giữ đúng vị trí). Tick TVSI MQTT vẫn được dùng trước nếu còn mới. Chỉ có cổ phiếu HOSE/HNX: chỉ số rơi sang VCI, mã UPCOM rơi sang SSI.
+Khi bật, FiinTrade đứng đầu chuỗi giá realtime (token `fiintrade` trong `REALTIME_SOURCE_PRIORITY`; không ghi thì tự đứng đầu, ghi rõ vị trí thì giữ đúng vị trí). Tick TVSI MQTT vẫn được dùng trước nếu còn mới. Có cổ phiếu và ETF cả ba sàn (tra `organCode`); chỉ số rơi sang VCI. Trước khi khớp lệnh (ví dụ phiên ATO của HOSE) `matchPrice = 0` nên giá rơi sang SSI, nhưng khối định giá vẫn lấy P/E, P/B, vốn hoá từ FiinTrade.
 
 Ngoài giá/OHLC/khối lượng/giá trị khớp, nguồn này điền thêm: giá tham chiếu/trần/sàn, giao dịch thoả thuận, khối ngoại mua/bán/ròng, room ngoại còn lại, tỷ lệ sở hữu nước ngoài, tỷ lệ dư mua 3 bước giá, KL bình quân 1 tháng và các chỉ tiêu định giá. Các chỉ tiêu định giá nằm trong `extraInfo` dưới dạng mã nội bộ, ý nghĩa được **suy ra** bằng đối chiếu chéo:
 
@@ -85,7 +91,7 @@ Ngoài giá/OHLC/khối lượng/giá trị khớp, nguồn này điền thêm: 
 - **`exrightDate` là ngày đăng ký cuối cùng**, không phải ngày GDKHQ: nó luôn đứng sau ngày có `rateAdjusted` của API biểu đồ đúng một phiên. Fetcher suy ra GDKHQ = ngày làm việc liền trước (chưa trừ ngày lễ vì repo chưa có lịch nghỉ lễ). Với FPT, GDKHQ suy ra (28/11/2025, 27/05/2026, 18/09/2026) trùng đúng ngày điều chỉnh giá.
 - Khối `earnings` (`partial`, vì chưa có báo cáo tài chính): cổ tức tiền mặt 12 tháng theo GDKHQ (`ttm_cash_dividend_per_share`, lợi suất theo giá hiện tại, số đợt), phát hành/thưởng 365 ngày, 4 kỳ công bố KQKD gần nhất. Số liệu `revenue`/`profit` của sự kiện `Earning` **không dùng** vì chưa rõ là loại lợi nhuận nào.
 - Khối `institution`: giao dịch nội bộ 90 ngày (tối đa 10 dòng, cộng KL ròng đã thực hiện), tỷ lệ sở hữu và room ngoại.
-- Mã UPCOM trả danh sách rỗng vì không được phủ: hai khối trên thành `not_supported` thay vì báo "cổ tức = 0".
+- Mã không tra được (danh sách sự kiện rỗng hoàn toàn): hai khối trên thành `not_supported` thay vì báo "cổ tức = 0".
 - Sự kiện được cache theo mã 6 giờ. Lỗi API chỉ làm hai khối này `failed`, khối định giá không bị ảnh hưởng.
 
 #### Điểm lại thị trường (máy chủ `wlgw-market.fiintrade.vn`)

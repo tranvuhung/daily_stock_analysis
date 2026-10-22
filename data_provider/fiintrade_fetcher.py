@@ -34,13 +34,18 @@ Hành vi API đã kiểm chứng trực tiếp (2026-10-21):
    điều chỉnh.
 2. **Đơn vị**: giá cổ phiếu tính bằng VND (``57500``), chỉ số tính bằng điểm;
    không nhân 1000.
-3. **Không có UPCOM**: mã không tồn tại (gồm toàn bộ mã UPCOM) trả HTTP 200 kèm
-   ``status="Failed"`` và lỗi ``Sequence contains no matching element``. Fetcher
-   trả DataFrame rỗng để manager chuyển sang VCI mà không mở circuit breaker.
+3. **API nhận ``organCode`` (mã tổ chức), không phải mã giao dịch**: với 647/1.547
+   mã (2026-10-22) hai mã này khác nhau, ví dụ VHM → ``NHN``, ACV → ``ACVN``,
+   MBS → ``TLSC``. Gửi ticker cho các mã đó trả HTTP 200 kèm ``status="Failed"``
+   (``Sequence contains no matching element``). Fetcher tra bảng ánh xạ từ
+   ``wlgw-core /Master/GetListOrganization`` (đủ HOSE, HNX, UPCOM, ETF), cache 24
+   giờ. Mã vẫn không tìm thấy thì trả DataFrame rỗng để manager chuyển sang VCI mà
+   không mở circuit breaker.
 4. **Chỉ số** dùng ``Type=Index``. ``VNINDEX``/``VN30``/``VN100``/``HNXIndex``/
-   ``HNX30`` khớp close với VCI. ``UpcomIndex`` của FiinTrade **lệch close** so với
-   ``HNXUpcomIndex`` của VCI (16/10/2026: 124.87 vs 125.97), nên chỉ số UPCoM
-   không lấy từ đây để tránh trộn hai chuỗi trong ``stock_daily``.
+   ``HNX30`` khớp close với VCI. ``UpcomIndex`` khớp VCI tới 11/08/2025; từ
+   12/08/2025 close nến ngày của FiinTrade khác VCI/SSI biểu đồ (16/10/2026: 124,87
+   vs 125,97) nhưng trùng bảng điện SSI. Theo quyết định của chủ dự án
+   (2026-10-22), UPCoM-Index vẫn lấy từ FiinTrade trước, lỗi mới sang VCI.
 5. **Khối lượng** không trùng hoàn toàn VCI: cổ phiếu lệch < 1% (FiinTrade có vẻ
    gồm cả lô lẻ), chỉ số thấp hơn ~10-15% (chỉ khớp lệnh). Giá thì trùng.
 6. **Thời gian**: ``From``/``To`` là UTC, nến ngày đóng dấu 00:00 giờ VN. Nến
@@ -50,8 +55,9 @@ Hành vi API đã kiểm chứng trực tiếp (2026-10-21):
 
 PriceDepth (kiểm chứng 2026-10-21):
 
-8. Chỉ số và mã UPCOM trả ``status="Failed"``: ``get_realtime_quote`` trả ``None``
-   để manager chuyển sang SSI/VCI.
+8. Chỉ số không có trên PriceDepth: ``get_realtime_quote`` trả ``None`` để manager
+   chuyển sang VCI. Mã chưa khớp lệnh trong phiên có ``matchPrice = 0`` nên cũng
+   rơi sang nguồn kế.
 9. ``percentPriceChange`` là tỷ lệ (``0.0133`` = 1.33%).
 10. ``extraInfo`` dùng mã chỉ tiêu nội bộ, ý nghĩa **suy ra** bằng đối chiếu chéo:
     ``rtd11`` vốn hoá (VND, = giá × số CP), ``rtd14`` EPS TTM, ``rtd21`` P/E
@@ -62,7 +68,7 @@ GetStockEvents (kiểm chứng 2026-10-21):
 11. ``exrightDate`` là **ngày đăng ký cuối cùng**, không phải ngày GDKHQ: nó luôn
     đứng sau ngày có ``rateAdjusted`` của API biểu đồ đúng một phiên (FPT
     28/11/2025 → 01/12/2025, 18/09/2026 → 21/09/2026). GDKHQ = phiên liền trước.
-12. Không trả sự kiện tương lai; mã UPCOM trả danh sách rỗng. Số liệu
+12. Không trả sự kiện tương lai; mã không tra được trả danh sách rỗng. Số liệu
     ``revenue``/``profit`` của sự kiện ``Earning`` chưa rõ loại lợi nhuận nên
     không được dùng, chỉ lấy kỳ báo cáo và ngày công bố.
 
@@ -70,8 +76,8 @@ Thị trường (kiểm chứng 2026-10-21):
 
 13. Giá trị giao dịch chỉ số của VCI = khớp lệnh + thoả thuận của FiinTrade
     (VNINDEX 20.290 = 17.071 + 3.219 tỷ), nên ``amount`` chỉ số dùng tổng này.
-14. UPCoM-Index: close trùng SSI nhưng ``referenceIndex`` khác SSI/VCI (125,22 vs
-    125,51), nên % thay đổi trong ngày có thể lệch nhỏ. Chỉ dùng cho snapshot.
+14. UPCoM-Index: ``referenceIndex`` (125,22) là close nến ngày FiinTrade phiên trước,
+    khác SSI/VCI (125,51); nhất quán với nến ngày FiinTrade (xem mục 4).
 15. ``foreignNetBuyValue``/``foreignNetSellValue`` của khối tổng là tổng các mã
     mua ròng / bán ròng, **không** phải ròng thị trường: ròng = mua − bán.
 16. Tự doanh được công bố sau phiên và khoảng ngày của khối ``today`` thay đổi
@@ -113,6 +119,10 @@ FIINTRADE_MARKET_BASE_URL = os.getenv(
 _LATEST_INDICES_PATH = "/MarketInDepth/GetLatestIndices"
 _FOREIGN_FLOW_PATH = "/MoneyFlow/GetForeign"
 _PROPRIETARY_FLOW_PATH = "/MoneyFlow/GetProprietaryV2"
+FIINTRADE_CORE_BASE_URL = os.getenv(
+    "FIINTRADE_CORE_BASE_URL", "https://wlgw-core.fiintrade.vn"
+).rstrip("/")
+_ORGANIZATIONS_PATH = "/Master/GetListOrganization"
 _CHART_PATH = "/TradingView/GetStockChartData"
 _PRICE_DEPTH_PATH = "/PriceDepth/GetPriceDepth"
 _EVENTS_PATH = "/TradingView/GetStockEvents"
@@ -121,8 +131,8 @@ _DEFAULT_TIMEOUT = 20.0
 _MIN_INTERVAL_SECONDS = 0.3
 _JITTER_SECONDS = 0.2
 
-# Thông báo lỗi của server khi không tìm thấy mã (UPCOM, mã sai, đã huỷ niêm yết).
-# Server error text when the symbol is unknown (UPCOM, typo, delisted).
+# Thông báo lỗi của server khi không tìm thấy mã (mã sai, đã huỷ niêm yết, chưa tra
+# được organCode). / Server error text when the symbol is unknown.
 _NOT_FOUND_MARKER = "no matching element"
 
 _UA = (
@@ -130,15 +140,17 @@ _UA = (
     "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
 
-# Chỉ số lấy từ FiinTrade, khoá là mã nội bộ viết hoa (VN_INDEX_SYMBOLS). Chỉ số
-# UPCoM cố ý không có mặt: ``UpcomIndex`` lệch close so với VCI, để VCI phục vụ.
-# Indices served by FiinTrade; UPCoM is deliberately left to VCI (close drifts).
+# Chỉ số lấy từ FiinTrade, khoá là mã nội bộ viết hoa (VN_INDEX_SYMBOLS). Lưu ý
+# UPCoM-Index: từ 12/08/2025 close của FiinTrade khác VCI (xem mục 4 ở đầu file).
+# Indices served by FiinTrade; note UPCoM-Index closes differ from VCI since 2025-08-12.
 _FIIN_INDEX_SYMBOLS = {
     "VNINDEX": "VNINDEX",
     "VN30": "VN30",
     "VN100": "VN100",
     "HNXINDEX": "HNXIndex",
     "HNX30": "HNX30",
+    "UPCOMINDEX": "UpcomIndex",
+    "UPCOM": "UpcomIndex",
 }
 
 # Sự kiện doanh nghiệp ít thay đổi trong ngày: cache theo mã 6 giờ.
@@ -149,14 +161,14 @@ _EVENTS_LOOKBACK_DAYS = 730
 # Sàn niêm yết theo ``comGroupCode`` của PriceDepth (khớp ``vn_exchange`` của SSI).
 _EXCHANGE_BY_GROUP = {"VNINDEX": "hose", "HNXINDEX": "hnx"}
 
-# Chỉ số chính của điểm lại thị trường: (mã FiinTrade, mã/tên hiển thị như VCI).
-# Giữ đúng mã/tên của VciFetcher để báo cáo không đổi khi nguồn đổi.
-# Main review indices: (FiinTrade code, VCI-compatible code, display name).
+# Chỉ số chính của điểm lại thị trường: (mã FiinTrade, mã chuẩn của repo, tên hiển thị).
+# Mã/tên giống VciFetcher/SsiFetcher để báo cáo không đổi khi nguồn đổi.
+# Main review indices: (FiinTrade code, canonical repo code, display name).
 _MAIN_INDEX_CODES = (
     ("VNINDEX", "VNINDEX", "VN-Index"),
     ("VN30", "VN30", "VN30"),
     ("HNXIndex", "HNXIndex", "HNX-Index"),
-    ("UpcomIndex", "HNXUpcomIndex", "UPCoM-Index"),
+    ("UpcomIndex", "UPCOMINDEX", "UPCoM-Index"),
 )
 # Ba chỉ số sàn dùng để cộng độ rộng toàn thị trường / Exchange-wide indices
 _EXCHANGE_INDEX_CODES = (("hose", "VNINDEX"), ("hnx", "HNXIndex"), ("upcom", "UpcomIndex"))
@@ -172,8 +184,22 @@ _last_request_at = 0.0
 _request_lock = RLock()
 _events_cache: Dict[str, Dict[str, Any]] = {}
 _events_lock = RLock()
+# Bảng ticker -> organCode: danh mục ít đổi nên cache 24 giờ; tải lỗi thì chờ 5 phút
+# mới thử lại để không làm chậm mọi request.
+# Ticker -> organCode map: cached 24h; after a failed load, retry only after 5 min.
+_ORGANIZATIONS_CACHE_TTL = 24 * 3600.0
+_ORGANIZATIONS_RETRY_SECONDS = 300.0
+_organizations_cache: Dict[str, Any] = {"data": None, "ts": 0.0, "failed_at": 0.0}
+_organizations_lock = RLock()
 _market_cache: Dict[str, Dict[str, Any]] = {}
 _market_lock = RLock()
+
+
+def reset_organizations_cache() -> None:
+    """Xoá cache bảng organCode (dùng cho test). / Clear the organCode cache (for tests)."""
+
+    with _organizations_lock:
+        _organizations_cache.update({"data": None, "ts": 0.0, "failed_at": 0.0})
 
 
 def reset_events_cache() -> None:
@@ -266,10 +292,10 @@ class FiinTradeFetcher(BaseFetcher):
     # Mặc định -1 để đứng trước VCI (0) khi được bật.
     # Defaults to -1 so it runs ahead of VCI (0) once enabled.
     priority = int(os.getenv("FIINTRADE_PRIORITY", "-1"))
-    # Mã không có trên FiinTrade (UPCOM) trả rỗng: manager ghi nhận là "rỗng" chứ
+    # Mã không tra được trên FiinTrade trả rỗng: manager ghi nhận là "rỗng" chứ
     # không phải lỗi, nên không làm mở circuit breaker, rồi chuyển sang VCI.
-    # Unknown symbols (UPCOM) return empty so the manager falls through to VCI
-    # without tripping the circuit breaker.
+    # Unknown symbols return empty so the manager falls through to VCI without
+    # tripping the circuit breaker.
     allow_empty_daily_data = True
 
     def __init__(
@@ -316,7 +342,8 @@ class FiinTradeFetcher(BaseFetcher):
     def to_provider_symbol(stock_code: str) -> Tuple[Optional[str], str]:
         """Trả về ``(Code, Type)``: chỉ số dùng ``Type=Index``, còn lại ``Stock``.
 
-        Chỉ số không được FiinTrade phục vụ (UPCoM) trả ``Code=None``.
+        Chỉ số chưa đăng ký trong ``_FIIN_INDEX_SYMBOLS`` trả ``Code=None``. Cổ phiếu
+        trả ticker; quy về ``organCode`` ở ``_resolve_code``.
         """
 
         normalized = (stock_code or "").strip().upper()
@@ -325,6 +352,51 @@ class FiinTradeFetcher(BaseFetcher):
         if is_vn_index_code(normalized):
             return _FIIN_INDEX_SYMBOLS.get(normalized), "Index"
         return normalized, "Stock"
+
+    def _organization_map(self) -> Dict[str, str]:
+        """Bảng ticker -> organCode từ danh mục FiinTrade; lỗi thì trả rỗng (fail-open)."""
+
+        with _organizations_lock:
+            now = time.time()
+            data = _organizations_cache.get("data")
+            if data is not None and now - float(_organizations_cache.get("ts") or 0) < _ORGANIZATIONS_CACHE_TTL:
+                return data
+            if now - float(_organizations_cache.get("failed_at") or 0) < _ORGANIZATIONS_RETRY_SECONDS:
+                return data or {}
+        try:
+            payload = self._get_json(
+                _ORGANIZATIONS_PATH, {"language": "vi"}, base_url=FIINTRADE_CORE_BASE_URL
+            )
+            mapping = {
+                str(item.get("ticker")).strip().upper(): str(item.get("organCode")).strip()
+                for item in payload.get("items") or []
+                if isinstance(item, dict) and item.get("ticker") and item.get("organCode")
+            }
+            if not mapping:
+                raise DataFetchError(f"[{self.name}] danh mục organCode rỗng")
+        except Exception as exc:
+            logger.warning(
+                "[%s] Tải danh mục organCode thất bại, tạm dùng ticker: %s", self.name, exc
+            )
+            with _organizations_lock:
+                _organizations_cache["failed_at"] = time.time()
+                return _organizations_cache.get("data") or {}
+        with _organizations_lock:
+            _organizations_cache.update({"data": mapping, "ts": time.time(), "failed_at": 0.0})
+        return mapping
+
+    def _resolve_code(self, stock_code: str) -> Tuple[Optional[str], str, str]:
+        """``(mã gửi API, Type, ticker)``: cổ phiếu/ETF được quy về ``organCode``.
+
+        Chỉ số giữ nguyên cách viết riêng của FiinTrade; ticker không có trong danh
+        mục thì gửi nguyên ticker.
+        Returns ``(api code, Type, ticker)``; stocks/ETFs are mapped to organCode.
+        """
+
+        code, chart_type = self.to_provider_symbol(stock_code)
+        if code is None or chart_type != "Stock":
+            return code, chart_type, code or ""
+        return self._organization_map().get(code, code), chart_type, code
 
     # ------------------------------------------------------------------
     # Nến ngày
@@ -375,7 +447,7 @@ class FiinTradeFetcher(BaseFetcher):
     def _fetch_raw_data(
         self, stock_code: str, start_date: str, end_date: str
     ) -> pd.DataFrame:
-        code, chart_type = self.to_provider_symbol(stock_code)
+        code, chart_type, _ticker = self._resolve_code(stock_code)
         if code is None:
             # Chỉ số không lấy từ FiinTrade: trả rỗng, không gửi request, để VCI xử lý.
             logger.info("[%s] %s không lấy từ FiinTrade, chuyển nguồn kế tiếp", self.name, stock_code)
@@ -395,7 +467,7 @@ class FiinTradeFetcher(BaseFetcher):
         if str(data.get("status") or "").lower() == "failed":
             errors: List[str] = [str(e) for e in (data.get("errors") or [])]
             if any(_NOT_FOUND_MARKER in e.lower() for e in errors):
-                # Mã không có trên FiinTrade (thường là UPCOM): để VCI xử lý.
+                # Mã không tra được trên FiinTrade: để VCI xử lý.
                 logger.info(
                     "[%s] %s (Code=%s, Type=%s) không có trên FiinTrade, chuyển nguồn kế tiếp",
                     self.name,
@@ -442,7 +514,7 @@ class FiinTradeFetcher(BaseFetcher):
     # Giá trong phiên + định giá (PriceDepth)
     # ------------------------------------------------------------------
     def get_realtime_quote(self, stock_code: str, **_: Any) -> Optional[UnifiedRealtimeQuote]:
-        code, chart_type = self.to_provider_symbol(stock_code)
+        code, chart_type, ticker = self._resolve_code(stock_code)
         if code is None or chart_type != "Stock":
             # PriceDepth không có chỉ số: để VCI suy ra từ nến ngày.
             return None
@@ -456,8 +528,8 @@ class FiinTradeFetcher(BaseFetcher):
         record = items[0] if items and isinstance(items[0], dict) else {}
         price = record.get("price") if isinstance(record.get("price"), dict) else None
         if str(data.get("status") or "").lower() == "failed" or not price:
-            # UPCOM / mã không có: để SSI xử lý.
-            logger.info("[%s] PriceDepth không có mã %s", self.name, code)
+            # Mã không tra được: để SSI xử lý.
+            logger.info("[%s] PriceDepth không có mã %s (Code=%s)", self.name, ticker, code)
             return None
         bid_ask = record.get("bidAsk") if isinstance(record.get("bidAsk"), dict) else {}
         extra = record.get("extraInfo") if isinstance(record.get("extraInfo"), dict) else {}
@@ -502,7 +574,8 @@ class FiinTradeFetcher(BaseFetcher):
         avg_volume = _to_float(extra.get("averageVolume1Month"))
 
         quote = UnifiedRealtimeQuote(
-            code=code,
+            # Luôn trả mã giao dịch, không trả organCode nội bộ / Always the ticker
+            code=ticker,
             name="",
             source=RealtimeSource.FALLBACK,
             provider_timestamp=str(price.get("tradingDate") or "") or None,
@@ -570,7 +643,7 @@ class FiinTradeFetcher(BaseFetcher):
         Returns ``None`` for indices; each list is newest first.
         """
 
-        code, chart_type = self.to_provider_symbol(stock_code)
+        code, chart_type, _ticker = self._resolve_code(stock_code)
         if code is None or chart_type != "Stock":
             return None
 

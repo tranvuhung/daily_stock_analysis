@@ -58,17 +58,17 @@ class ParseStatus:
     UNSUPPORTED = "unsupported"
 
 
-# Chỉ số Việt Nam. API của VCI phân biệt hoa/thường nên lưu đúng cách viết provider yêu cầu.
-# Vietnamese indices, stored with the exact spelling the provider expects.
+# Mã chuẩn của chỉ số Việt Nam (khoá là mã đã viết hoa). Chỉ số UPCoM dùng
+# ``UPCOMINDEX``; cách viết riêng của từng nhà cung cấp nằm trong adapter tương ứng.
+# Canonical Vietnamese index ids; provider spellings live in each adapter.
 _VN_INDEX_CANONICAL = {
     "VNINDEX": "VNINDEX",
     "VN30": "VN30",
     "VN100": "VN100",
     "HNXINDEX": "HNXIndex",
     "HNX30": "HNX30",
-    "HNXUPCOMINDEX": "HNXUpcomIndex",
-    "UPCOMINDEX": "HNXUpcomIndex",
-    "UPCOM": "HNXUpcomIndex",
+    "UPCOMINDEX": "UPCOMINDEX",
+    "UPCOM": "UPCOMINDEX",
 }
 
 _UNSUPPORTED_REASON = "not a Vietnam stock, fund or index code"

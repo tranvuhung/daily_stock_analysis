@@ -117,7 +117,9 @@ class VciSymbolTestCase(unittest.TestCase):
         # 已实测：HNXINDEX 返回空，HNXIndex 才有数据
         self.assertEqual(VciFetcher.to_provider_symbol("hnxindex"), "HNXIndex")
         self.assertEqual(VciFetcher.to_provider_symbol("HNXINDEX"), "HNXIndex")
+        # Mã chuẩn UPCOMINDEX; VCI gọi chỉ số UPCoM là HNXUpcomIndex.
         self.assertEqual(VciFetcher.to_provider_symbol("upcom"), "HNXUpcomIndex")
+        self.assertEqual(VciFetcher.to_provider_symbol("UPCOMINDEX"), "HNXUpcomIndex")
         self.assertEqual(VciFetcher.to_provider_symbol("vnindex"), "VNINDEX")
 
     def test_dot_vn_suffix_is_stripped(self):

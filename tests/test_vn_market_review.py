@@ -84,7 +84,7 @@ class VciMainIndicesTestCase(unittest.TestCase):
 
         self.assertEqual(
             [item["code"] for item in indices],
-            ["VNINDEX", "VN30", "HNXIndex", "HNXUpcomIndex"],
+            ["VNINDEX", "VN30", "HNXIndex", "UPCOMINDEX"],
         )
         required = {
             "code", "name", "current", "change", "change_pct", "open", "high",
@@ -112,7 +112,7 @@ class VciMainIndicesTestCase(unittest.TestCase):
 
         self.assertEqual(
             [item["code"] for item in indices],
-            ["VNINDEX", "HNXIndex", "HNXUpcomIndex"],
+            ["VNINDEX", "HNXIndex", "UPCOMINDEX"],
         )
 
 
@@ -230,7 +230,7 @@ class SsiMainIndicesTestCase(unittest.TestCase):
         self.assertEqual(self.requested, ["VNINDEX", "VN30", "HNXINDEX", "HNXUPCOMINDEX"])
         # Mã trong payload thống nhất với VciFetcher
         self.assertEqual(
-            [i["code"] for i in indices], ["VNINDEX", "VN30", "HNXIndex", "HNXUpcomIndex"]
+            [i["code"] for i in indices], ["VNINDEX", "VN30", "HNXIndex", "UPCOMINDEX"]
         )
         self.assertEqual(
             [i["name"] for i in indices], ["VN-Index", "VN30", "HNX-Index", "UPCoM-Index"]
@@ -249,7 +249,7 @@ class SsiMainIndicesTestCase(unittest.TestCase):
         with patch.object(self.fetcher._session, "get", side_effect=self._fake_get(closes)):
             indices = self.fetcher.get_main_indices(region="vn")
 
-        self.assertEqual([i["code"] for i in indices], ["VNINDEX", "HNXIndex", "HNXUpcomIndex"])
+        self.assertEqual([i["code"] for i in indices], ["VNINDEX", "HNXIndex", "UPCOMINDEX"])
 
     def test_all_failing_returns_none(self):
         with patch.object(self.fetcher._session, "get", side_effect=self._fake_get({})):

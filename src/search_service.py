@@ -2121,7 +2121,7 @@ class SearchService:
         helpers = cls._vn_code_helpers()
         if helpers is None:
             return False
-        # Chỉ số Việt Nam (VNINDEX / VN30 / HNXIndex / HNXUpcomIndex ...): mã chính là
+        # Chỉ số Việt Nam (VNINDEX / VN30 / HNXIndex / UPCOMINDEX ...): mã chính là
         # tên gọi nên đi thẳng qua bảng đăng ký thay vì suy đoán theo hình dạng.
         # Vietnam indices are looked up in the registry directly.
         if helpers["is_vn_index_code"](raw):

@@ -57,9 +57,9 @@ _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
         fetcher_name="FiinTradeFetcher",
         dataset_markets={
             # Mặc định bật khi có FIINTRADE_ORIGIN (tắt bằng FIINTRADE_ENABLED=false); phủ HOSE,
-            # HNX và chỉ số trừ UPCoM (UPCOM để VCI), giá cùng cơ sở điều chỉnh với VCI.
+            # HNX, UPCOM (tra organCode), ETF và chỉ số; giá cùng cơ sở với VCI.
             # On by default once FIINTRADE_ORIGIN is set (FIINTRADE_ENABLED=false disables);
-            # covers HOSE, HNX and non-UPCoM indices, same adjustment basis as VCI.
+            # covers HOSE, HNX, UPCOM (via organCode), ETFs and indices.
             # PriceDepth: giá trong phiên + định giá + khối ngoại (cổ phiếu HOSE/HNX)
             # PriceDepth: intraday quote + valuation + foreign flow (HOSE/HNX stocks)
             "quote.realtime": (_VN,),
@@ -79,8 +79,8 @@ _PROVIDER_DEFINITIONS: Sequence[_ProviderDefinition] = (
             # Realtime quotes for registered indices (derived from latest daily bar), after SSI
             "quote.realtime": (_VN,),
             "kline.daily": (_VN,),
-            # VNINDEX / VN30 / HNXIndex / HNX30 / HNXUpcomIndex dùng chung endpoint nến ngày
-            # VNINDEX / VN30 / HNXIndex / HNX30 / HNXUpcomIndex share the same daily endpoint
+            # VNINDEX / VN30 / HNXIndex / HNX30 / UPCOMINDEX dùng chung endpoint nến ngày
+            # VNINDEX / VN30 / HNXIndex / HNX30 / UPCOMINDEX share the same daily endpoint
             "index.daily": (_VN,),
             # Chỉ số chính cho điểm lại thị trường (get_main_indices)
             # Main indices for the market review (get_main_indices)

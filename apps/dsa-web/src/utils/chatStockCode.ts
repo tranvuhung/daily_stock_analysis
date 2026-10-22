@@ -61,7 +61,7 @@ export function extractStockCodesFromMessage(
   const patterns = [
     /\b((?:FU[A-Z0-9]{6}|E1VF[A-Z0-9]{4})(?:\.VN)?)\b/g,
     /\b([A-Z][A-Z0-9]{2}\.VN)\b/g,
-    /\b(VNINDEX|VN30|VN100|HNXINDEX|HNX30|HNXUPCOMINDEX|UPCOMINDEX)\b/g,
+    /\b(VNINDEX|VN30|VN100|HNXINDEX|HNX30|UPCOMINDEX)\b/g,
     /\b([A-Z][A-Z0-9]{2})\b/g,
   ];
   // Không nhận mã viết thường: tiếng Việt có nhiều từ 3 chữ cái (mua, xem, nen...).
