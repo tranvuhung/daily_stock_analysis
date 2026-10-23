@@ -102,6 +102,140 @@ def _format_strategy_skill_items(items: Any, report_language: str = "vi") -> str
     return "、".join(formatted) if formatted else none_text
 
 
+# Nhóm trường văn bản của mục "Phân tích chi tiết": (nhãn heading | None, [(nhãn, thuộc tính)]).
+# Field groups of the "Detailed Analysis" section: (group heading label | None, [(label, attribute)]).
+_DETAILED_ANALYSIS_GROUPS = (
+    (None, (
+        ("analysis_summary_label", "analysis_summary"),
+        ("key_points_label", "key_points"),
+        ("buy_reason_label", "buy_reason"),
+        ("risk_warning_label", "risk_warning"),
+    )),
+    ("outlook_heading", (
+        ("short_term_outlook_label", "short_term_outlook"),
+        ("medium_term_outlook_label", "medium_term_outlook"),
+    )),
+    ("technical_heading", (
+        ("trend_analysis_label", "trend_analysis"),
+        ("technical_analysis_label", "technical_analysis"),
+        ("ma_analysis_label", "ma_analysis"),
+        ("volume_analysis_label", "volume_analysis"),
+        ("pattern_analysis_label", "pattern_analysis"),
+    )),
+    ("fundamental_heading", (
+        ("fundamental_analysis_label", "fundamental_analysis"),
+        ("sector_position_label", "sector_position"),
+        ("company_highlights_label", "company_highlights"),
+    )),
+    ("news_heading", (
+        ("news_summary_label", "news_summary"),
+        ("market_sentiment_label", "market_sentiment"),
+        ("hot_topics_label", "hot_topics"),
+    )),
+)
+
+
+def append_detailed_analysis_block(
+    report_lines: List[str],
+    result: Any,
+    labels: Dict[str, str],
+) -> None:
+    """Mục "Phân tích chi tiết" dùng chung cho thông báo đẩy và báo cáo chi tiết lịch sử.
+
+    Hiển thị nguyên văn các đoạn phân tích dài (không cắt); dòng/nhóm rỗng tự ẩn, không có
+    gì thì bỏ cả mục. Shared "Detailed Analysis" section for push notifications and the
+    history detailed report: full text, empty rows/groups hidden, skipped when empty.
+    """
+    section: List[str] = []
+    for heading_key, fields in _DETAILED_ANALYSIS_GROUPS:
+        rows = []
+        for label_key, attr in fields:
+            text = str(getattr(result, attr, "") or "").strip()
+            if text:
+                rows.append(f"- **{labels[label_key]}**: {text}")
+        if not rows:
+            continue
+        if heading_key:
+            section.append(f"#### {labels[heading_key]}")
+            section.append("")
+        section.extend(rows)
+        section.append("")
+    if not section:
+        return
+    report_lines.extend([f"### 📝 {labels['detailed_analysis_heading']}", ""])
+    report_lines.extend(section)
+
+
+def _phase_decision_list(value: Any) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _phase_decision_has_content(phase_decision: Dict[str, Any]) -> bool:
+    text_keys = (
+        "action_window",
+        "immediate_action",
+        "next_check_time",
+        "confidence_reason",
+    )
+    if any(str(phase_decision.get(key) or "").strip() for key in text_keys):
+        return True
+    return bool(
+        _phase_decision_list(phase_decision.get("watch_conditions"))
+        or _phase_decision_list(phase_decision.get("data_limitations"))
+    )
+
+
+def append_phase_decision_block(
+    report_lines: List[str],
+    dashboard: Optional[Dict[str, Any]],
+    labels: Dict[str, str],
+) -> None:
+    """Khối "Quyết định theo phiên" dùng chung cho thông báo và báo cáo chi tiết lịch sử.
+
+    Shared phase-decision block for notifications and the history detailed report.
+    """
+    phase_decision = dashboard.get("phase_decision") if dashboard else None
+    if not isinstance(phase_decision, dict):
+        return
+    if not _phase_decision_has_content(phase_decision):
+        return
+
+    watch_conditions = _phase_decision_list(phase_decision.get("watch_conditions"))
+    data_limitations = _phase_decision_list(phase_decision.get("data_limitations"))
+
+    report_lines.extend([
+        f"### 🛡️ {labels['phase_decision_heading']}",
+        "",
+        f"| {labels['action_window_label']} | {labels['immediate_action_label']} | {labels['next_check_time_label']} |",
+        "|---------|---------|---------|",
+        f"| {phase_decision.get('action_window') or 'N/A'} | "
+        f"{phase_decision.get('immediate_action') or 'N/A'} | "
+        f"{phase_decision.get('next_check_time') or 'N/A'} |",
+        "",
+    ])
+
+    if watch_conditions:
+        report_lines.append(f"**{labels['watch_conditions_label']}**:")
+        for condition in watch_conditions:
+            report_lines.append(f"- {condition}")
+        report_lines.append("")
+
+    confidence_reason = str(phase_decision.get("confidence_reason") or "").strip()
+    if confidence_reason:
+        report_lines.extend([
+            f"**{labels['confidence_reason_label']}**: {confidence_reason}",
+            "",
+        ])
+
+    if data_limitations:
+        report_lines.append(f"**{labels['data_limitations_label']}**:")
+        for limitation in data_limitations:
+            report_lines.append(f"- {limitation}")
+        report_lines.append("")
+
+
 def _append_strategy_synthesis_block(lines: List[str], strategy_synthesis: Any, labels: Dict[str, str], report_language: str) -> None:
     strategy_synthesis = normalize_strategy_synthesis_payload(strategy_synthesis)
     if not strategy_synthesis:
@@ -881,71 +1015,13 @@ class NotificationService(
                 return value[len(prefix):]
         return value
 
-    @staticmethod
-    def _phase_decision_list(value: Any) -> List[str]:
-        if not isinstance(value, list):
-            return []
-        return [str(item).strip() for item in value if str(item).strip()]
-
-    @classmethod
-    def _phase_decision_has_content(cls, phase_decision: Dict[str, Any]) -> bool:
-        text_keys = (
-            "action_window",
-            "immediate_action",
-            "next_check_time",
-            "confidence_reason",
-        )
-        if any(str(phase_decision.get(key) or "").strip() for key in text_keys):
-            return True
-        return bool(
-            cls._phase_decision_list(phase_decision.get("watch_conditions"))
-            or cls._phase_decision_list(phase_decision.get("data_limitations"))
-        )
-
     def _append_phase_decision_block(
         self,
         report_lines: List[str],
         dashboard: Dict[str, Any],
         labels: Dict[str, str],
     ) -> None:
-        phase_decision = dashboard.get("phase_decision") if dashboard else None
-        if not isinstance(phase_decision, dict):
-            return
-        if not self._phase_decision_has_content(phase_decision):
-            return
-
-        watch_conditions = self._phase_decision_list(phase_decision.get("watch_conditions"))
-        data_limitations = self._phase_decision_list(phase_decision.get("data_limitations"))
-
-        report_lines.extend([
-            f"### 🛡️ {labels['phase_decision_heading']}",
-            "",
-            f"| {labels['action_window_label']} | {labels['immediate_action_label']} | {labels['next_check_time_label']} |",
-            "|---------|---------|---------|",
-            f"| {phase_decision.get('action_window') or 'N/A'} | "
-            f"{phase_decision.get('immediate_action') or 'N/A'} | "
-            f"{phase_decision.get('next_check_time') or 'N/A'} |",
-            "",
-        ])
-
-        if watch_conditions:
-            report_lines.append(f"**{labels['watch_conditions_label']}**:")
-            for condition in watch_conditions:
-                report_lines.append(f"- {condition}")
-            report_lines.append("")
-
-        confidence_reason = str(phase_decision.get("confidence_reason") or "").strip()
-        if confidence_reason:
-            report_lines.extend([
-                f"**{labels['confidence_reason_label']}**: {confidence_reason}",
-                "",
-            ])
-
-        if data_limitations:
-            report_lines.append(f"**{labels['data_limitations_label']}**:")
-            for limitation in data_limitations:
-                report_lines.append(f"- {limitation}")
-            report_lines.append("")
+        append_phase_decision_block(report_lines, dashboard, labels)
 
     def _get_display_operation_advice(
         self,
@@ -1022,23 +1098,6 @@ class NotificationService(
         labels = get_report_labels(report_language)
         label_sep = get_label_separator(report_language)
 
-        def _nlabel(en: str, zh: str, ko: str, vi: str = "") -> str:
-            # When vi is missing, fall back to English rather than Chinese: this deployment only produces Vietnamese reports,
-            # and English is more usable than Chinese for missing translations.
-            if report_language == "vi":
-                return vi or en
-            if report_language == "en":
-                return en
-            if report_language == "ko":
-                return ko
-            return zh
-
-        reason_label = _nlabel("Rationale", "操作理由", "판단 근거", "Lý do khuyến nghị")
-        risk_warning_label = _nlabel("Risk Warning", "风险提示", "리스크 경고", "Cảnh báo rủi ro")
-        technical_heading = _nlabel("Technicals", "技术面", "기술적 분석", "Phân tích kỹ thuật")
-        ma_label = _nlabel("Moving Averages", "均线", "이동평균", "Đường trung bình")
-        volume_analysis_label = _nlabel("Volume", "量能", "거래량", "Khối lượng")
-        news_heading = _nlabel("News Flow", "消息面", "뉴스 흐름", "Dòng tin tức")
         if getattr(config, 'report_renderer_enabled', False) and results:
             from src.services.report_renderer import render
             out = render(
@@ -1298,40 +1357,16 @@ class NotificationService(
                 # Financial summary / shareholder returns / related sectors (sections auto-hidden when data is missing)
                 self._append_fundamental_blocks(report_lines, result)
 
-                # Without a dashboard, show the legacy format
+                # Phân tích chi tiết (nguyên văn, không cắt) — dùng chung với báo cáo chi tiết Web.
+                # Detailed analysis (full text) — shared with the Web detailed report.
+                append_detailed_analysis_block(report_lines, result, labels)
+
+                # Không có dashboard: vẫn công bố tình trạng thiếu tin như định dạng cũ.
+                # Without a dashboard, keep the legacy empty-news disclosure.
                 if not dashboard:
-                    # Rationale for the action
-                    if result.buy_reason:
-                        report_lines.extend([
-                            f"**💡 {reason_label}**: {result.buy_reason}",
-                            "",
-                        ])
-                    # Risk warnings
-                    if result.risk_warning:
-                        report_lines.extend([
-                            f"**⚠️ {risk_warning_label}**: {result.risk_warning}",
-                            "",
-                        ])
-                    # Technical analysis
-                    if result.ma_analysis or result.volume_analysis:
-                        report_lines.extend([
-                            f"### 📊 {technical_heading}",
-                            "",
-                        ])
-                        if result.ma_analysis:
-                            report_lines.append(f"**{ma_label}**: {result.ma_analysis}")
-                        if result.volume_analysis:
-                            report_lines.append(f"**{volume_analysis_label}**: {result.volume_analysis}")
-                        report_lines.append("")
-                    # News
                     news_disclosure = self._empty_news_disclosure(result, report_language)
-                    if result.news_summary or news_disclosure:
-                        report_lines.append(f"### 📰 {news_heading}")
-                        if news_disclosure:
-                            report_lines.append(news_disclosure)
-                        if result.news_summary:
-                            report_lines.append(f"{result.news_summary}")
-                        report_lines.append("")
+                    if news_disclosure:
+                        report_lines.extend([news_disclosure, ""])
 
                 if self._append_data_sources_line(report_lines, result, labels, label_sep):
                     report_lines.append("")
@@ -1479,14 +1514,14 @@ class NotificationService(
                     lines.append(f"### 📰 {labels['info_heading']}")
                     lines.append("")
                     info_added = True
-                lines.append(f"📊 **{labels['earnings_outlook_label']}**: {str(intel['earnings_outlook'])[:100]}")
+                lines.append(f"📊 **{labels['earnings_outlook_label']}**: {intel['earnings_outlook']}")
 
             if intel.get('sentiment_summary'):
                 if not info_added:
                     lines.append(f"### 📰 {labels['info_heading']}")
                     lines.append("")
                     info_added = True
-                lines.append(f"💭 **{labels['sentiment_summary_label']}**: {str(intel['sentiment_summary'])[:80]}")
+                lines.append(f"💭 **{labels['sentiment_summary_label']}**: {intel['sentiment_summary']}")
 
             # Risk alerts
             risks = intel.get('risk_alerts', [])
@@ -1497,16 +1532,16 @@ class NotificationService(
                     info_added = True
                 lines.append("")
                 lines.append(f"🚨 **{labels['risk_alerts_label']}**:")
-                for risk in risks[:3]:
-                    lines.append(f"- {str(risk)[:60]}")
+                for risk in risks:
+                    lines.append(f"- {risk}")
 
             # Positive catalysts
             catalysts = intel.get('positive_catalysts', [])
             if catalysts:
                 lines.append("")
                 lines.append(f"✨ **{labels['positive_catalysts_label']}**:")
-                for cat in catalysts[:3]:
-                    lines.append(f"- {str(cat)[:60]}")
+                for cat in catalysts:
+                    lines.append(f"- {cat}")
 
         if info_added:
             lines.append("")
@@ -1570,6 +1605,9 @@ class NotificationService(
 
         # Financial summary / shareholder returns / related sectors (sections auto-hidden when data is missing)
         self._append_fundamental_blocks(lines, result)
+
+        # Phân tích chi tiết nguyên văn. / Full-text detailed analysis.
+        append_detailed_analysis_block(lines, result, labels)
 
         lines.append("---")
         if self._should_show_llm_model():

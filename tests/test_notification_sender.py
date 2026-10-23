@@ -1099,6 +1099,42 @@ class TestTelegramSender(unittest.TestCase):
             self.assertLessEqual(len(sent_text), 4096)
 
     @mock.patch.object(TelegramSender, "_send_telegram_message", return_value=True)
+    def test_send_telegram_chunked_splits_oversized_section_on_line_boundaries(self, mock_send_telegram_message):
+        # Không cắt giữa dòng khi mỗi dòng đều ngắn hơn giới hạn. / No mid-line cuts for short lines.
+        cfg = _config(telegram_bot_token="BOT", telegram_chat_id="CHAT")
+        sender = TelegramSender(cfg)
+        lines = [f"- Dòng phân tích số {i:03d} " + ("x" * 60) for i in range(120)]
+        content = "\n".join(lines)
+
+        result = sender._send_telegram_chunked(
+            "http://api.telegram.org", "CHAT", content, max_length=4096, timeout_seconds=3,
+        )
+
+        self.assertTrue(result)
+        sent = [call.args[2] for call in mock_send_telegram_message.call_args_list]
+        self.assertGreaterEqual(len(sent), 2)
+        for text in sent:
+            self.assertLessEqual(len(text), 4096)
+            for line in text.split("\n"):
+                self.assertIn(line, lines)
+        self.assertEqual("\n".join(sent), content)
+
+    @mock.patch.object(TelegramSender, "_send_telegram_message", side_effect=[False, True, True])
+    def test_send_telegram_chunked_keeps_sending_after_failed_chunk(self, mock_send_telegram_message):
+        cfg = _config(telegram_bot_token="BOT", telegram_chat_id="CHAT")
+        sender = TelegramSender(cfg)
+        # Phần nhỏ đầu tiên lỗi, phần quá dài phía sau vẫn phải được gửi (trước đây bị bỏ dở).
+        # The first small chunk fails; the oversized section after it must still be sent.
+        sections = ["A" * 100, "B" * 5000]
+
+        result = sender._send_telegram_chunked(
+            "http://api.telegram.org", "CHAT", "\n---\n".join(sections), max_length=4096,
+        )
+
+        self.assertFalse(result)
+        self.assertEqual(mock_send_telegram_message.call_count, 3)
+
+    @mock.patch.object(TelegramSender, "_send_telegram_message", return_value=True)
     def test_send_to_telegram_chunked_path_with_long_reason_without_delimiter(self, mock_send_telegram_message):
         cfg = _config(telegram_bot_token="BOT", telegram_chat_id="CHAT")
         sender = TelegramSender(cfg)

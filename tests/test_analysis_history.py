@@ -1586,6 +1586,75 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         self.assertIn("✅Safe", markdown)
         self.assertNotIn("🚨Safe", markdown)
 
+    def test_history_markdown_renders_detailed_analysis_and_phase_decision(self) -> None:
+        """Báo cáo chi tiết hiển thị phân tích dài + phase_decision; nhóm rỗng tự ẩn."""
+        result = AnalysisResult(
+            code="FPT",
+            name="FPT Corporation",
+            sentiment_score=50,
+            trend_prediction="Đi ngang",
+            operation_advice="Quan sát",
+            analysis_summary="Tổng quan đầy đủ về FPT.",
+            key_points="Lợi nhuận kỷ lục; Khối ngoại bán ròng",
+            technical_analysis="MA xếp giảm.",
+            short_term_outlook="Giằng co 1-3 phiên.",
+            report_language="vi",
+            dashboard={
+                "core_conclusion": {"one_sentence": "Quan sát"},
+                "phase_decision": {
+                    "action_window": "Theo dõi trong phiên",
+                    "immediate_action": "Chờ xác nhận",
+                    "next_check_time": "14:30",
+                    "watch_conditions": ["Giữ hỗ trợ 55.800"],
+                },
+            },
+        )
+
+        saved = self.db.save_analysis_history(
+            result=result,
+            query_id="query_vi_detailed_analysis_001",
+            report_type="full",
+            news_content="news",
+            context_snapshot=None,
+            save_snapshot=False,
+        )
+        markdown = HistoryService(self.db).get_markdown_report(str(saved))
+
+        self.assertIn("### 📝 Phân tích chi tiết", markdown)
+        self.assertIn("- **Tổng quan**: Tổng quan đầy đủ về FPT.", markdown)
+        self.assertIn("- **Điểm chính**: Lợi nhuận kỷ lục; Khối ngoại bán ròng", markdown)
+        self.assertIn("#### Kỹ thuật", markdown)
+        self.assertIn("- **Tổng hợp**: MA xếp giảm.", markdown)
+        self.assertIn("- **Ngắn hạn (1-3 phiên)**: Giằng co 1-3 phiên.", markdown)
+        # Nhóm không có dữ liệu không xuất hiện.
+        self.assertNotIn("#### Cơ bản", markdown)
+        self.assertNotIn("#### Tin tức & tâm lý", markdown)
+        self.assertIn("Hàng rào quyết định theo phiên", markdown)
+        self.assertIn("- Giữ hỗ trợ 55.800", markdown)
+
+    def test_history_markdown_skips_detailed_analysis_when_empty(self) -> None:
+        result = AnalysisResult(
+            code="FPT",
+            name="FPT",
+            sentiment_score=50,
+            trend_prediction="Sideways",
+            operation_advice="Watch",
+            analysis_summary="",
+            report_language="en",
+            dashboard={"core_conclusion": {"one_sentence": "Watch"}},
+        )
+        saved = self.db.save_analysis_history(
+            result=result,
+            query_id="query_en_detailed_analysis_empty_001",
+            report_type="full",
+            news_content="news",
+            context_snapshot=None,
+            save_snapshot=False,
+        )
+        markdown = HistoryService(self.db).get_markdown_report(str(saved))
+
+        self.assertNotIn("Detailed Analysis", markdown)
+
     def test_history_markdown_localizes_multi_agent_enums_for_vietnamese(self) -> None:
         """Enum ma_alignment/volume_status tiếng Anh của TechnicalAgent phải hiển thị tiếng Việt."""
         result = AnalysisResult(

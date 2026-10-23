@@ -296,18 +296,36 @@ class TelegramSender:
             return all_success
 
         def _split_long_section(section: str, limit: int) -> list[str]:
+            # Chia theo ranh giới dòng để không cắt giữa chữ/định dạng; chỉ cắt cứng khi một dòng
+            # đơn lẻ dài hơn giới hạn. / Split on line boundaries; hard-slice only a single
+            # line that alone exceeds the limit.
             if len(section) <= limit:
                 return [section]
             chunks: list[str] = []
-            for start in range(0, len(section), limit):
-                chunks.append(section[start:start + limit])
+            current = ""
+            for line in section.split("\n"):
+                while len(line) > limit:
+                    if current:
+                        chunks.append(current)
+                        current = ""
+                    chunks.append(line[:limit])
+                    line = line[limit:]
+                candidate = f"{current}\n{line}" if current else line
+                if len(candidate) > limit:
+                    chunks.append(current)
+                    current = line
+                else:
+                    current = candidate
+            if current:
+                chunks.append(current)
             return chunks
 
         for section in sections:
             if len(section) > max_length:
-                # Force-slice an oversized single segment instead of relying on "\\n---\\n" boundaries, which could send an over-length chunk
-                if not _flush_chunk():
-                    return False
+                # Force-slice an oversized single segment instead of relying on "\\n---\\n" boundaries, which could send an over-length chunk.
+                # Một phần lỗi không dừng các phần sau, để nội dung còn lại vẫn đến người nhận.
+                # A failed chunk does not stop later chunks, so the rest of the report still arrives.
+                _flush_chunk()
                 for long_chunk in _split_long_section(section, max_length):
                     logger.info(f"发送 Telegram 消息块 {chunk_index}...")
                     chunk_index += 1
@@ -336,8 +354,7 @@ class TelegramSender:
             current_length += additional_length
 
         # Send the last chunk
-        if not _flush_chunk():
-            return False
+        _flush_chunk()
 
         return all_success
 

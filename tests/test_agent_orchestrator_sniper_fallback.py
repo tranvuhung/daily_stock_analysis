@@ -75,5 +75,42 @@ class TestAgentOrchestratorSniperFallback(unittest.TestCase):
         self.assertEqual(sniper["secondary_buy"], "N/A")
 
 
+    def test_long_analysis_summary_is_not_cut_at_old_limit(self):
+        # Giới hạn cũ 220 ký tự cắt giữa câu tiếng Việt. / The old 220-char cap cut sentences.
+        orch = AgentOrchestrator(tool_registry=MagicMock(), llm_adapter=MagicMock())
+        ctx = AgentContext(query="test", stock_code="FPT", stock_name="FPT")
+        summary = "FPT giữ nền tảng cơ bản mạnh, " * 16
+        one_sentence = "Quan sát: giá sát hỗ trợ, chờ xác nhận lực cầu trước khi giải ngân thêm."
+
+        normalized = orch._finalize_dashboard_payload(
+            {
+                "decision_type": "hold",
+                "analysis_summary": summary,
+                "dashboard": {"core_conclusion": {"one_sentence": one_sentence}},
+            },
+            ctx,
+        )
+
+        self.assertEqual(normalized["analysis_summary"], summary.strip())
+        self.assertEqual(normalized["dashboard"]["core_conclusion"]["one_sentence"], one_sentence)
+
+
+    def test_string_key_points_from_decision_agent_are_kept(self):
+        orch = AgentOrchestrator(tool_registry=MagicMock(), llm_adapter=MagicMock())
+        ctx = AgentContext(query="test", stock_code="FPT", stock_name="FPT")
+
+        normalized = orch._finalize_dashboard_payload(
+            {
+                "decision_type": "hold",
+                "analysis_summary": "Tóm tắt.",
+                "key_points": "Lợi nhuận kỷ lục, khối ngoại bán ròng",
+                "dashboard": {},
+            },
+            ctx,
+        )
+
+        self.assertEqual(normalized["key_points"], ["Lợi nhuận kỷ lục, khối ngoại bán ròng"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1972,6 +1972,7 @@ class StockAnalysisPipeline:
                 result.analysis_summary = str(raw_summary)
             else:
                 result.analysis_summary = self._summary_fallback_from_result(result, report_language)
+            self._apply_agent_narrative_fields(result, dash, nested_dashboard)
             top_level_phase_decision = dash.get("phase_decision") if isinstance(dash, dict) else None
             if isinstance(nested_dashboard, dict) and isinstance(top_level_phase_decision, dict):
                 nested_dashboard = dict(nested_dashboard)
@@ -2021,6 +2022,58 @@ class StockAnalysisPipeline:
         result.action = fields["action"]
         result.action_label = fields["action_label"]
         return result
+
+    # Các trường văn bản tự do của Decision Dashboard mà AnalysisResult lưu và báo cáo chi tiết hiển thị.
+    # Free-text Decision Dashboard fields persisted on AnalysisResult and shown in the detailed report.
+    _AGENT_NARRATIVE_FIELDS = (
+        "risk_warning",
+        "buy_reason",
+        "trend_analysis",
+        "short_term_outlook",
+        "medium_term_outlook",
+        "technical_analysis",
+        "ma_analysis",
+        "volume_analysis",
+        "pattern_analysis",
+        "fundamental_analysis",
+        "sector_position",
+        "company_highlights",
+        "news_summary",
+        "market_sentiment",
+        "hot_topics",
+    )
+
+    @classmethod
+    def _apply_agent_narrative_fields(
+        cls,
+        result: AnalysisResult,
+        dash: Dict[str, Any],
+        nested_dashboard: Any,
+    ) -> None:
+        """Chép key_points và các trường phân tích dài từ payload agent; thiếu thì giữ rỗng.
+
+        Copy key_points and the narrative fields from the agent payload; missing ones stay empty.
+        """
+        for key in cls._AGENT_NARRATIVE_FIELDS:
+            value = cls._agent_dashboard_value(
+                dash,
+                nested_dashboard,
+                key,
+                scalar=True,
+                expect_text=True,
+            )
+            if not cls._is_agent_field_missing(value, scalar=True, expect_text=True):
+                setattr(result, key, str(value).strip())
+
+        # key_points: schema mô tả chuỗi, orchestrator multi-agent trả list.
+        # key_points: the schema describes a string; the multi-agent orchestrator returns a list.
+        raw_points = dash.get("key_points") if isinstance(dash, dict) else None
+        if isinstance(raw_points, (list, tuple)):
+            points = [str(item).strip() for item in raw_points if str(item or "").strip()]
+            if points:
+                result.key_points = "; ".join(points)
+        elif not cls._is_agent_field_missing(raw_points, scalar=True, expect_text=True):
+            result.key_points = str(raw_points).strip()
 
     @staticmethod
     def _agent_dashboard_value(

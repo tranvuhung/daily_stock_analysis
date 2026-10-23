@@ -37,6 +37,7 @@ from src.report_language import (
     normalize_strategy_synthesis_payload,
     strategy_invalid_opinion_count,
 )
+from src.notification import append_detailed_analysis_block, append_phase_decision_block
 from src.storage import DatabaseManager
 from src.services.run_diagnostics import build_run_diagnostic_summary
 from src.services.empty_news import (
@@ -1035,12 +1036,6 @@ class HistoryService:
 
         analysis_date_label = _label("Analysis Date", "Ngày phân tích")
         report_time_label = _label("Report Time", "Thời điểm tạo báo cáo")
-        reason_label = _label("Rationale", "Lý do khuyến nghị")
-        risk_warning_label = _label("Risk Warning", "Cảnh báo rủi ro")
-        technical_heading = _label("Technicals", "Phân tích kỹ thuật")
-        ma_label = _label("Moving Averages", "Đường trung bình")
-        volume_analysis_label = _label("Volume", "Khối lượng")
-        news_heading = _label("News Flow", "Dòng tin tức")
 
         # Escape markdown special characters in stock name
         name_escaped = self._escape_md(
@@ -1122,6 +1117,9 @@ class HistoryService:
                 f"| 💼 **{labels['has_position_label']}** | {pos_advice.get('has_position', labels['continue_holding'])} |",
                 "",
             ])
+
+        # ========== Phase decision (shared with notifications) ==========
+        append_phase_decision_block(report_lines, dashboard, labels)
 
         # ========== Market snapshot ==========
         self._append_market_snapshot_to_report(report_lines, result, labels)
@@ -1290,38 +1288,8 @@ class HistoryService:
                 report_lines.append(f"- {invalid_text}")
             report_lines.append("")
 
-        # ========== Without a dashboard, show the legacy format ==========
-        if not dashboard:
-            # Rationale
-            if result.buy_reason:
-                report_lines.extend([
-                    f"**💡 {reason_label}**: {result.buy_reason}",
-                    "",
-                ])
-            # Risk warning
-            if result.risk_warning:
-                report_lines.extend([
-                    f"**⚠️ {risk_warning_label}**: {result.risk_warning}",
-                    "",
-                ])
-            # Technical analysis
-            if result.ma_analysis or result.volume_analysis:
-                report_lines.extend([
-                    f"### 📊 {technical_heading}",
-                    "",
-                ])
-                if result.ma_analysis:
-                    report_lines.append(f"**{ma_label}**: {result.ma_analysis}")
-                if result.volume_analysis:
-                    report_lines.append(f"**{volume_analysis_label}**: {result.volume_analysis}")
-                report_lines.append("")
-            # News
-            if result.news_summary:
-                report_lines.extend([
-                    f"### 📰 {news_heading}",
-                    f"{result.news_summary}",
-                    "",
-                ])
+        # ========== Detailed analysis (shared with notifications) ==========
+        append_detailed_analysis_block(report_lines, result, labels)
 
         # ========== Footer ==========
         report_lines.extend([

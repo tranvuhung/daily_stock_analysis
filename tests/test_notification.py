@@ -1160,6 +1160,76 @@ class TestNotificationServiceReportGeneration(unittest.TestCase):
         self.assertIn("Buy", out)
 
     @mock.patch("src.notification.get_config")
+    def test_generate_dashboard_report_includes_full_detailed_analysis_with_dashboard(
+        self, mock_get_config: mock.MagicMock
+    ):
+        # Thông báo đẩy phải có đủ phân tích dài, không cắt, kể cả khi có dashboard.
+        # Push notifications must carry the full narrative analysis even with a dashboard.
+        mock_get_config.return_value = _make_config(report_renderer_enabled=False, report_language="vi")
+        service = NotificationService()
+        long_summary = "FPT giữ nền tảng cơ bản mạnh nhưng kỹ thuật còn yếu. " * 12
+        result = AnalysisResult(
+            code="FPT",
+            name="FPT",
+            sentiment_score=45,
+            trend_prediction="Giảm",
+            operation_advice="Quan sát",
+            analysis_summary=long_summary,
+            key_points="Lợi nhuận kỷ lục; Khối ngoại bán ròng",
+            technical_analysis="MA xếp giảm, RSI quanh 30.",
+            fundamental_analysis="ROE 26%, P/E 11.",
+            news_summary="Hợp tác AI với NVIDIA.",
+            report_language="vi",
+            dashboard={
+                "core_conclusion": {"one_sentence": "Quan sát rũ bỏ"},
+                "intelligence": {"risk_alerts": [f"Rủi ro số {i}" for i in range(1, 7)]},
+            },
+        )
+
+        out = service.generate_dashboard_report([result], report_date="2026-10-23")
+
+        self.assertIn("### 📝 Phân tích chi tiết", out)
+        self.assertIn(long_summary.strip(), out)
+        self.assertIn("- **Điểm chính**: Lợi nhuận kỷ lục; Khối ngoại bán ròng", out)
+        self.assertIn("- **Tổng hợp**: MA xếp giảm, RSI quanh 30.", out)
+        self.assertIn("- **Phân tích cơ bản**: ROE 26%, P/E 11.", out)
+        self.assertIn("- **Tóm tắt tin**: Hợp tác AI với NVIDIA.", out)
+        self.assertIn("- Rủi ro số 6", out)
+
+    @mock.patch("src.notification.get_config")
+    def test_generate_single_stock_report_keeps_full_intel_lists(
+        self, mock_get_config: mock.MagicMock
+    ):
+        mock_get_config.return_value = _make_config(report_renderer_enabled=False, report_language="vi")
+        service = NotificationService()
+        long_risk = "Khối ngoại bán ròng liên tục nhiều phiên khiến áp lực cung tại vùng hỗ trợ tăng mạnh"
+        result = AnalysisResult(
+            code="FPT",
+            name="FPT",
+            sentiment_score=45,
+            trend_prediction="Giảm",
+            operation_advice="Quan sát",
+            analysis_summary="Tóm tắt.",
+            technical_analysis="MA xếp giảm.",
+            report_language="vi",
+            dashboard={
+                "intelligence": {
+                    "risk_alerts": [long_risk, "Rủi ro 2", "Rủi ro 3", "Rủi ro 4"],
+                    "positive_catalysts": ["Xúc tác 1", "Xúc tác 2", "Xúc tác 3", "Xúc tác 4"],
+                    "sentiment_summary": "Tâm lý thận trọng " * 10,
+                },
+            },
+        )
+
+        out = service.generate_single_stock_report(result)
+
+        self.assertIn(f"- {long_risk}", out)
+        self.assertIn("- Rủi ro 4", out)
+        self.assertIn("- Xúc tác 4", out)
+        self.assertIn(("Tâm lý thận trọng " * 10).strip(), out)
+        self.assertIn("- **Tổng hợp**: MA xếp giảm.", out)
+
+    @mock.patch("src.notification.get_config")
     def test_generate_dashboard_report_localizes_english_no_dashboard_fallback(
         self, mock_get_config: mock.MagicMock
     ):

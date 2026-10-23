@@ -15,6 +15,7 @@ import logging
 from typing import List, Optional
 
 from src.agent.agents.base_agent import BaseAgent
+from src.agent.dashboard_payload import decision_dashboard_json_schema
 from src.agent.protocols import AgentContext, AgentOpinion, normalize_decision_signal
 from src.report_language import normalize_report_language
 
@@ -62,6 +63,8 @@ Requirements:
         skills = ""
         if self.skill_instructions:
             skills = f"\n## Active Trading Skills\n\n{self.skill_instructions}\n"
+        # Schema dùng chung với executor để key khớp renderer. / Shared schema keeps keys renderer-compatible.
+        schema = decision_dashboard_json_schema()
 
         prompt = f"""\
 You are a **Decision Synthesis Agent** that produces the final investment \
@@ -75,7 +78,7 @@ You will receive:
 Your task: synthesise all inputs into a single, actionable Decision Dashboard.
 {skills}
 ## Core Principles
-1. **Core conclusion first** — one sentence, ≤30 chars
+1. **Core conclusion first** — one sentence, ≤30 words
 2. **Split advice** — different for no-position vs has-position
 3. **Precise sniper levels** — concrete price numbers, no hedging
 4. **Checklist visual** — ✅⚠️❌ for each checkpoint
@@ -103,11 +106,26 @@ Your task: synthesise all inputs into a single, actionable Decision Dashboard.
 - Sell requires support failure, sustained main-force outflow, or clearly elevated risk.
 
 ## Output Format
-Return a valid JSON object following the Decision Dashboard schema.  The JSON \
-must include at minimum these top-level keys:
+Return a valid JSON object following this Decision Dashboard schema exactly \
+(same key names and nesting; do not rename or invent keys such as \
+``checklists``/``split_advice``/``sniper_levels``):
+
+```json
+{schema}
+```
+
+The JSON must include at minimum these top-level keys:
   stock_name, sentiment_score, trend_prediction, operation_advice,
   decision_type, confidence_level, dashboard, analysis_summary,
   key_points, risk_warning
+
+Fill the narrative fields (``analysis_summary`` of about 100-150 words,
+``key_points``, ``buy_reason``, ``trend_analysis``, ``short_term_outlook``,
+``medium_term_outlook``, ``technical_analysis``, ``ma_analysis``,
+``volume_analysis``, ``pattern_analysis``, ``fundamental_analysis``,
+``sector_position``, ``company_highlights``, ``news_summary``,
+``market_sentiment``, ``hot_topics``) from the Technical, Intel and Risk
+opinions. Leave a field empty only when the inputs carry no evidence for it.
 
 Important: ``decision_type`` must stay within the existing enum
 ``buy|hold|sell``. Express stronger conviction via ``confidence_level``,
@@ -144,6 +162,10 @@ should sum to 100; all-zero means no effective signal and must not be faked.
 - `decision_type` must remain `buy|hold|sell`.
 - Write all human-readable JSON values in Vietnamese (Tiếng Việt), with correct diacritics.
 - Use standard Vietnamese securities terminology (mua / nắm giữ / bán, hỗ trợ / kháng cự, cắt lỗ).
+- The slash-separated sample values in the schema above (for example `action_window`, \
+`immediate_action`, `time_sensitivity`, `signal_type`) are illustrative English options. \
+Never copy them verbatim — write the Vietnamese equivalent. Only `decision_type` and \
+`phase_context.phase` keep their English enum values.
 """
         return prompt + """
 

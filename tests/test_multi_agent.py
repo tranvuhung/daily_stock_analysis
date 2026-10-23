@@ -2351,6 +2351,48 @@ class TestBaseAgentMessageAssembly(unittest.TestCase):
         self.assertEqual(system_content.count("## Output Language"), 1)
 
 
+    def test_decision_agent_dashboard_prompt_embeds_shared_schema(self):
+        # Không có schema, model tự đặt key (checklists/split_advice) và bỏ trống phân tích dài.
+        # Without the schema the model invented keys and left narrative fields empty.
+        from src.agent.agents.decision_agent import DecisionAgent
+        from src.agent.dashboard_payload import decision_dashboard_json_schema
+
+        agent = DecisionAgent(tool_registry=MagicMock(), llm_adapter=MagicMock())
+        ctx = AgentContext(query="hello", stock_code="FPT")
+        ctx.meta["report_language"] = "vi"
+
+        prompt = agent.system_prompt(ctx)
+
+        self.assertIn(decision_dashboard_json_schema(), prompt)
+        for key in ("core_conclusion", "action_checklist", "technical_analysis", "news_summary"):
+            self.assertIn(f'"{key}"', prompt)
+        # Lựa chọn ví dụ tiếng Anh trong schema (action_window...) không được chép nguyên.
+        self.assertIn("Never copy them verbatim", prompt)
+
+        ctx.meta["response_mode"] = "chat"
+        self.assertNotIn('"action_checklist"', agent.system_prompt(ctx))
+
+    def test_executor_prompts_render_shared_schema_with_single_braces(self):
+        from src.agent.dashboard_payload import decision_dashboard_json_schema
+        from src.agent.executor import AGENT_SYSTEM_PROMPT, LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT
+
+        fields = dict(
+            market_role="R", market_guidelines="G", skills_section="S",
+            default_skill_policy_section="D", language_section="L",
+        )
+        rendered = AGENT_SYSTEM_PROMPT.format(**fields)
+        legacy = LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT.format(**fields)
+
+        self.assertIn(
+            decision_dashboard_json_schema(
+                "Reasoning for the call, citing the activated skill or the risk framework"
+            ),
+            rendered,
+        )
+        self.assertIn(decision_dashboard_json_schema(), legacy)
+        self.assertNotIn("{{", rendered + legacy)
+
+
 # ============================================================
 # EventMonitor serialization
 # ============================================================

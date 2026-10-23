@@ -137,9 +137,9 @@ First confirm whether `LITELLM_CONFIG` or `LLM_CHANNELS` is active, because eith
 - Discord: 2000 characters per message
 
 **Solution**:
-1. **Auto-chunking**: Latest version implements automatic long message splitting
+1. **Auto-chunking**: Long messages are split automatically. Telegram splits on line boundaries (a single line is hard-sliced only when it alone exceeds 4096 characters), and a failed chunk does not stop the remaining chunks. Since the report now includes the full "Detailed Analysis" section, a `full`/`simple` report for one stock often arrives as 2-3 Telegram messages
 2. **Single stock push mode**: Set `SINGLE_STOCK_NOTIFY=true`, push immediately after each stock analysis
-3. **Brief report**: Set `REPORT_TYPE=simple` for simplified format
+3. **Brief report**: Set `REPORT_TYPE=brief` for the shortest 3-5 sentence format (it omits the detailed analysis)
 4. **Local file fallback**: Even with no notification channel configured, `SINGLE_STOCK_NOTIFY=true` still saves each stock report to `reports/report_YYYYMMDD_<stock_code>.md`
 
 ---

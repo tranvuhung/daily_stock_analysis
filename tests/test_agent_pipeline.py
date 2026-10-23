@@ -1126,6 +1126,41 @@ class TestAgentResultConversion(unittest.TestCase):
         self.assertEqual(result.analysis_summary, "AI 已给出的摘要")
         self.assertEqual(result.dashboard["analysis_summary"], "AI 已给出的摘要")
 
+    def test_convert_copies_key_points_and_narrative_fields(self):
+        """Trường phân tích dài và key_points (list) của agent phải được giữ lại."""
+        pipeline = self._make_pipeline()
+
+        from src.agent.executor import AgentResult
+        from src.enums import ReportType
+
+        agent_result = AgentResult(
+            success=True,
+            content="{}",
+            dashboard={
+                "analysis_summary": "Tóm tắt",
+                "key_points": ["Lợi nhuận kỷ lục", "  ", "Khối ngoại bán ròng"],
+                "technical_analysis": "MA xếp giảm, RSI yếu.",
+                "news_summary": "Hợp tác AI mới.",
+                "buy_reason": "Chờ hỗ trợ xác nhận.",
+                "fundamental_analysis": ["not", "text"],
+                "dashboard": {"short_term_outlook": "Giằng co 1-3 phiên."},
+            },
+            provider="gemini",
+        )
+
+        result = pipeline._agent_result_to_analysis_result(
+            agent_result, "FPT", "FPT", ReportType.SIMPLE, "q-narrative",
+        )
+
+        self.assertEqual(result.key_points, "Lợi nhuận kỷ lục; Khối ngoại bán ròng")
+        self.assertEqual(result.technical_analysis, "MA xếp giảm, RSI yếu.")
+        self.assertEqual(result.news_summary, "Hợp tác AI mới.")
+        self.assertEqual(result.buy_reason, "Chờ hỗ trợ xác nhận.")
+        self.assertEqual(result.short_term_outlook, "Giằng co 1-3 phiên.")
+        # Giá trị không phải chuỗi bị bỏ qua, không bịa nội dung.
+        self.assertEqual(result.fundamental_analysis, "")
+        self.assertEqual(result.hot_topics, "")
+
     def test_convert_non_string_summary_falls_back_to_nested_or_local_summary(self):
         """Non-string analysis_summary should trigger fallback to nested summary or local fallback."""
         pipeline = self._make_pipeline()

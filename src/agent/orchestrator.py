@@ -1390,7 +1390,9 @@ class AgentOrchestrator:
             )
             if not analysis_summary.startswith(transition_prefix):
                 analysis_summary = f"{transition_prefix} {analysis_summary}"
-        analysis_summary = _truncate_text(analysis_summary, 220)
+        # Chỉ chặn trường hợp quá dài bất thường; schema yêu cầu ~100-150 từ.
+        # Only guards runaway output; the schema asks for ~100-150 words.
+        analysis_summary = _truncate_text(analysis_summary, _ANALYSIS_SUMMARY_MAX_CHARS)
 
         trend_prediction = _first_non_empty_text(
             payload.get("trend_prediction"),
@@ -1513,7 +1515,7 @@ class AgentOrchestrator:
         )
         if risk_applied and not one_sentence.startswith(transition_prefix):
             one_sentence = f"{transition_prefix} {one_sentence}"
-        core["one_sentence"] = _truncate_text(one_sentence, 60)
+        core["one_sentence"] = _truncate_text(one_sentence, _ONE_SENTENCE_MAX_CHARS)
         if not core.get("time_sensitivity"):
             core["time_sensitivity"] = _fallback_text("this_week", lang)
         if risk_applied or not core.get("signal_type"):
@@ -1567,6 +1569,10 @@ class AgentOrchestrator:
         dashboard_block["battle_plan"] = battle
 
         key_points = payload.get("key_points")
+        # Schema dashboard mô tả key_points là chuỗi; giữ nguyên thay vì thay bằng lý do sub-agent bị cắt.
+        # The dashboard schema describes key_points as a string; keep it instead of truncated sub-agent reasoning.
+        if isinstance(key_points, str) and key_points.strip():
+            key_points = [key_points.strip()]
         if not isinstance(key_points, list) or not key_points:
             key_points = [
                 _truncate_text(op.reasoning, 120)
@@ -2217,6 +2223,12 @@ def _first_non_empty_text(*values: Any) -> str:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return ""
+
+
+# Giới hạn độ dài văn bản tổng hợp; 220/60 ký tự cũ cắt giữa câu tiếng Việt.
+# Length caps for synthesized text; the old 220/60 caps cut Vietnamese sentences mid-way.
+_ANALYSIS_SUMMARY_MAX_CHARS = 800
+_ONE_SENTENCE_MAX_CHARS = 160
 
 
 def _truncate_text(text: Any, limit: int) -> str:
