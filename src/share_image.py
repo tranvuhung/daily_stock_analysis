@@ -1129,7 +1129,9 @@ def _market_title(markdown_text: str) -> str:
 def _parsed_breadth_metrics(overview: str) -> list[tuple[str, str]]:
     metrics: list[tuple[str, str]] = []
     advance_match = re.search(
-        r"Advancers\s+([^/;\n]+?)\s*/\s*Decliners\s+([^/;\n]+?)(?:\s*/\s*Flat\s+([^;\n]+?))?(?=$|;|\n)",
+        # Nhãn tiếng Anh hoặc tiếng Việt của khối độ rộng. / English or Vietnamese breadth labels.
+        r"(?:Advancers|Tăng)\s+([^/;\n]+?)\s*/\s*(?:Decliners|Giảm)\s+([^/;\n]+?)"
+        r"(?:\s*/\s*(?:Flat|Đứng giá)\s+([^;\n]+?))?(?=$|;|\n)",
         overview or "",
         flags=re.IGNORECASE,
     )
@@ -1142,7 +1144,7 @@ def _parsed_breadth_metrics(overview: str) -> list[tuple[str, str]]:
         )
 
     limit_match = re.search(
-        r"Limit(?:-|\s)?up\s+([^/;\n]+?)\s*/\s*Limit(?:-|\s)?down\s+([^;\n]+?)(?=$|;|\n)",
+        r"(?:Limit(?:-|\s)?up|Trần)\s+([^/;\n]+?)\s*/\s*(?:Limit(?:-|\s)?down|Sàn)\s+([^;\n]+?)(?=$|;|\n)",
         overview or "",
         flags=re.IGNORECASE,
     )
@@ -1155,7 +1157,7 @@ def _parsed_breadth_metrics(overview: str) -> list[tuple[str, str]]:
         )
 
     turnover_match = re.search(
-        r"Turnover\s+(.+?)(?=$|;|\n)",
+        r"(?:Turnover|Giá trị giao dịch)\s+(.+?)(?=$|;|\n)",
         overview or "",
         flags=re.IGNORECASE,
     )

@@ -3208,6 +3208,97 @@ class TestMarketAnalyzerBypassFix:
         assert isinstance(result, str) and len(result) > 0
         ma.analyzer.generate_text_with_metadata.assert_called_once()
 
+    @staticmethod
+    def _generation(text, completion_tokens):
+        return SimpleNamespace(
+            text=text,
+            provider="litellm",
+            model="gemini/gemini-3.6-flash",
+            backend="litellm",
+            usage={"completion_tokens": completion_tokens},
+        )
+
+    def test_truncated_review_is_retried_with_larger_budget(self):
+        # Model suy luận chạm trần 8192 làm báo cáo đứt giữa câu (#129). / Thinking model hit the cap.
+        from src.market_analyzer import MarketOverview
+
+        ma = self._make_market_analyzer_with_mock_generate_text()
+        ma.analyzer.generate_text_with_metadata.side_effect = [
+            self._generation("### 1. Tóm tắt\nBản bị cắt (mua", 8188),
+            self._generation("### 1. Tóm tắt\nBản đầy đủ.\n\n### 7. Kế hoạch\nKết thúc.", 9500),
+        ]
+
+        result = ma.generate_market_review(MarketOverview(date="2026-10-23"), [])
+
+        calls = ma.analyzer.generate_text_with_metadata.call_args_list
+        assert [call.kwargs["max_tokens"] for call in calls] == [8192, 32768]
+        assert "Bản đầy đủ." in result
+        assert "Bản bị cắt" not in result
+        assert "chưa đầy đủ" not in result
+
+    def test_truncated_review_keeps_text_with_warning_when_retry_fails(self):
+        from src.market_analyzer import MarketOverview
+
+        ma = self._make_market_analyzer_with_mock_generate_text()
+        ma.analyzer.generate_text_with_metadata.side_effect = [
+            self._generation("### 1. Tóm tắt\nBản bị cắt (mua", 8190),
+            RuntimeError("max_tokens too large"),
+        ]
+
+        result = ma.generate_market_review(MarketOverview(date="2026-10-23"), [])
+
+        assert "Bản bị cắt (mua" in result
+        assert "⚠️ Báo cáo có thể chưa đầy đủ" in result
+
+    def test_review_under_cap_is_not_retried(self):
+        from src.market_analyzer import MarketOverview
+
+        ma = self._make_market_analyzer_with_mock_generate_text()
+        ma.analyzer.generate_text_with_metadata.return_value = self._generation("### 1. Tóm tắt\nĐủ.", 5000)
+
+        result = ma.generate_market_review(MarketOverview(date="2026-10-23"), [])
+
+        ma.analyzer.generate_text_with_metadata.assert_called_once()
+        assert "chưa đầy đủ" not in result
+
+    def test_inject_data_into_review_matches_vietnamese_numbered_headings(self):
+        # LLM dịch tiêu đề sang tiếng Việt kèm emoji; bảng vẫn phải được chèn, nhãn tiếng Việt.
+        from src.market_analyzer import MarketIndex, MarketOverview
+
+        ma = self._make_market_analyzer_with_mock_generate_text(return_value="review")
+        overview = MarketOverview(
+            date="2026-10-23",
+            indices=[MarketIndex(code="VNINDEX", name="VN-Index", current=1774.15, change_pct=0.77)],
+            up_count=337,
+            down_count=330,
+            flat_count=248,
+            limit_up_count=39,
+            limit_down_count=26,
+            total_amount=15130.0,
+        )
+        review = """## Báo cáo Thị trường
+
+### 1. 📝 Tóm tắt Thị trường
+Tóm tắt.
+
+### 2. 📈 Nhận định Chỉ số
+Chỉ số.
+
+### 3. 💸 Dòng tiền
+Dòng tiền.
+"""
+
+        result = ma._inject_data_into_review(review, overview)
+
+        summary = result.split("### 2.")[0]
+        assert "- **Tín hiệu thị trường**:" in summary
+        assert "- **Độ rộng**: Tăng 337 / Giảm 330 / Đứng giá 248; Trần 39 / Sàn 26; Giá trị giao dịch 15130 (tỷ đồng)" in summary
+        index_part = result.split("### 2.")[1].split("### 3.")[0]
+        assert "| Chỉ số | Đóng cửa | Thay đổi % |" in index_part
+        assert "| VN-Index | 1774.15 |" in index_part
+        assert "Market Signal" not in result
+        assert "Advancers" not in result
+
     def test_generation_backend_config_error_does_not_template_fallback(self):
         from src.llm.generation_backend import GenerationError
         from src.market_analyzer import MarketOverview, MarketIndex
@@ -4419,7 +4510,8 @@ Nội dung
 
         assert "| VN-Index | 1300.00 | 🟢 +0.68% |" in result
         assert "| VN30 | 1400.00 | 🔴 -0.42% |" in result
-        assert "Turnover (VND bn)" in result
+        # Báo cáo mặc định tiếng Việt: header bảng chỉ số tiếng Việt.
+        assert "GTGD (tỷ đồng)" in result
 
     def test_no_private_attribute_access_in_market_analyzer_source(self):
         """Static guard: market_analyzer.py must not access private analyzer attrs."""

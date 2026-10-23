@@ -40,10 +40,82 @@ logger = logging.getLogger(__name__)
 
 _LEGACY_ANALYZER_BACKEND_ID = "legacy_analyzer"
 
-_ENGLISH_SECTION_PATTERNS = {
-    "market_summary": r"###\s*(?:1\.\s*)?Market Summary",
-    "index_commentary": r"###\s*(?:2\.\s*)?(?:Index Commentary|Major Indices)",
+# Nhận diện mục theo số thứ tự: LLM dịch tiêu đề sang tiếng Việt và thêm emoji
+# ("### 1. 📝 Tóm tắt Thị trường"), nên khớp theo tên tiếng Anh sẽ trượt và bảng số liệu
+# không bao giờ được chèn. Tên tiếng Anh cũ vẫn khớp.
+# Match sections by number: the model translates headings and adds emoji, so English-name
+# matching missed every Vietnamese report. Legacy English names still match.
+_SECTION_PATTERNS = {
+    "market_summary": r"(?im)^###\s*(?:1\.[^\n]*|Market Summary[^\n]*)$",
+    "index_commentary": r"(?im)^###\s*(?:2\.[^\n]*|(?:Index Commentary|Major Indices)[^\n]*)$",
 }
+
+# Nhãn khối số liệu chèn vào báo cáo. / Labels for data blocks injected into the report.
+_DATA_BLOCK_LABELS = {
+    "vi": {
+        "market_signal": "Tín hiệu thị trường",
+        "drivers": "Động lực",
+        "guidance": "Khuyến nghị",
+        "breadth": "Độ rộng",
+        "advancers": "Tăng",
+        "decliners": "Giảm",
+        "flat": "Đứng giá",
+        "limit_up": "Trần",
+        "limit_down": "Sàn",
+        "turnover": "Giá trị giao dịch",
+        "index_header": "| Chỉ số | Đóng cửa | Thay đổi % | Mở cửa | Cao | Thấp | Biên độ | GTGD ({unit}) |",
+    },
+    "en": {
+        "market_signal": "Market Signal",
+        "drivers": "Drivers",
+        "guidance": "Guidance",
+        "breadth": "Breadth",
+        "advancers": "Advancers",
+        "decliners": "Decliners",
+        "flat": "Flat",
+        "limit_up": "Limit-up",
+        "limit_down": "Limit-down",
+        "turnover": "Turnover",
+        "index_header": "| Index | Last | Change % | Open | High | Low | Amplitude | Turnover ({unit}) |",
+    },
+}
+
+# Bản tiếng Việt của nhãn/khuyến nghị market light khi hiển thị trong báo cáo; payload
+# `market_light` giữ giá trị tiếng Anh (share image đọc chúng).
+# Vietnamese display text for market-light labels; the `market_light` payload stays English.
+_MARKET_LIGHT_VI_TEXT = {
+    "temperature": {
+        "risk-on": "hưng phấn",
+        "constructive": "tích cực",
+        "mixed": "phân hoá",
+        "defensive": "phòng thủ",
+    },
+    "label": {
+        "risk-on": "ưa rủi ro",
+        "balanced": "cân bằng",
+        "risk-off": "né rủi ro",
+    },
+    "guidance": {
+        "green": "Khẩu vị rủi ro ổn; tập trung nhóm dẫn dắt và giữ kỷ luật tỷ trọng.",
+        "yellow": "Tín hiệu trái chiều; giữ tỷ trọng vừa phải và chờ xác nhận.",
+        "red": "Rủi ro cao; ưu tiên kiểm soát sụt giảm, tránh mua đuổi các nhịp hồi yếu.",
+    },
+}
+
+# Ngân sách token đầu ra cho điểm lại thị trường. Model có suy luận (vd Gemini 3) tính token
+# suy luận vào trần này; khi chạm trần, văn bản bị đứt giữa câu nên gọi lại một lần với ngân
+# sách lớn hơn. Output-token budget for the market review; thinking models count reasoning
+# tokens against it, so a capped response is retried once with a larger budget.
+_MARKET_REVIEW_MAX_TOKENS = 8192
+_MARKET_REVIEW_RETRY_MAX_TOKENS = 32768
+# Coi là chạm trần khi completion_tokens còn cách trần không quá ngưỡng này.
+_MARKET_REVIEW_TRUNCATION_MARGIN = 64
+
+_TRUNCATED_REVIEW_NOTE = {
+    "vi": "> ⚠️ Báo cáo có thể chưa đầy đủ do mô hình chạm giới hạn độ dài đầu ra.",
+    "en": "> ⚠️ This report may be incomplete because the model hit its output length limit.",
+}
+
 
 @dataclass
 class MarketIndex:
@@ -299,6 +371,10 @@ class MarketAnalyzer:
     def _get_turnover_unit_label(self) -> str:
         """Đơn vị giá trị giao dịch: tỷ đồng. / Turnover unit label: VND bn."""
         return "VND bn"
+
+    def _get_report_turnover_unit(self, language: str) -> str:
+        """Đơn vị hiển thị trong báo cáo (prompt vẫn dùng nhãn tiếng Anh). / Report-facing unit label."""
+        return "tỷ đồng" if language == "vi" else self._get_turnover_unit_label()
 
     def _format_turnover_value(self, amount_raw: float) -> str:
         """Định dạng giá trị giao dịch thô (VND) sang tỷ đồng. / Format raw VND turnover as VND bn."""
@@ -587,6 +663,12 @@ class MarketAnalyzer:
                 provider=provider,
                 model=model,
             )
+            generation_result, review_truncated = self._retry_truncated_market_review(
+                generation_result,
+                prompt,
+                provider=provider,
+                model=model,
+            )
             review = generation_result.text if generation_result else None
             generation_diagnostics = (
                 getattr(generation_result, "diagnostics", None) if generation_result is not None else None
@@ -646,10 +728,13 @@ class MarketAnalyzer:
 
         if review:
             logger.info(
-                "[Thị trường] %s action=generate_review status=success length=%d",
+                "[Thị trường] %s action=generate_review status=success length=%d truncated=%s",
                 self._log_context(),
                 len(review),
+                review_truncated,
             )
+            if review_truncated:
+                review = f"{review.rstrip()}\n\n{_TRUNCATED_REVIEW_NOTE[self._get_output_language()]}\n"
             # Inject structured data tables into LLM prose sections
             return self._inject_data_into_review(review, overview, news)
 
@@ -701,12 +786,84 @@ class MarketAnalyzer:
                 return method()
         return self._get_legacy_analyzer_generation_backend_identity()
 
+    @staticmethod
+    def _is_generation_truncated(result: Optional[GenerationResult], max_tokens: int) -> bool:
+        """Chạm trần token đầu ra theo usage; không có usage thì coi như không chạm.
+
+        Hit the output-token cap according to usage; no usage means not truncated.
+        """
+        if result is None or not getattr(result, "text", ""):
+            return False
+        usage = getattr(result, "usage", None)
+        if not isinstance(usage, dict):
+            return False
+        try:
+            completion_tokens = int(usage.get("completion_tokens") or 0)
+        except (TypeError, ValueError):
+            return False
+        return completion_tokens >= max_tokens - _MARKET_REVIEW_TRUNCATION_MARGIN
+
+    def _retry_truncated_market_review(
+        self,
+        result: Optional[GenerationResult],
+        prompt: str,
+        *,
+        provider: str,
+        model: str,
+    ) -> tuple[Optional[GenerationResult], bool]:
+        """Gọi lại một lần với ngân sách lớn hơn khi bản đầu chạm trần.
+
+        Trả về (kết quả dùng tiếp, còn bị cắt hay không). Lần gọi lại lỗi hoặc vẫn chạm trần
+        thì giữ bản dài hơn và báo còn bị cắt để caller gắn cảnh báo, không coi là đầy đủ.
+        Returns (result to use, still truncated); a failed or still-capped retry keeps the
+        longer text and reports truncation instead of passing it off as complete.
+        """
+        if not self._is_generation_truncated(result, _MARKET_REVIEW_MAX_TOKENS):
+            return result, False
+
+        usage = result.usage if isinstance(result.usage, dict) else {}
+        logger.warning(
+            "[Thị trường] %s action=generate_review status=truncated completion_tokens=%s "
+            "max_tokens=%d retry_max_tokens=%d",
+            self._log_context(),
+            usage.get("completion_tokens"),
+            _MARKET_REVIEW_MAX_TOKENS,
+            _MARKET_REVIEW_RETRY_MAX_TOKENS,
+        )
+        try:
+            retry_result = self._generate_market_review_with_metadata(
+                prompt,
+                provider=provider,
+                model=model,
+                max_tokens=_MARKET_REVIEW_RETRY_MAX_TOKENS,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[Thị trường] %s action=generate_review status=retry_failed error=%s",
+                self._log_context(),
+                exc,
+            )
+            return result, True
+
+        if retry_result is None or not retry_result.text:
+            return result, True
+        if self._is_generation_truncated(retry_result, _MARKET_REVIEW_RETRY_MAX_TOKENS):
+            longer = retry_result if len(retry_result.text) >= len(result.text) else result
+            return longer, True
+        logger.info(
+            "[Thị trường] %s action=generate_review status=retry_success length=%d",
+            self._log_context(),
+            len(retry_result.text),
+        )
+        return retry_result, False
+
     def _generate_market_review_with_metadata(
         self,
         prompt: str,
         *,
         provider: str,
         model: str,
+        max_tokens: int = _MARKET_REVIEW_MAX_TOKENS,
     ) -> Optional[GenerationResult]:
         """Support legacy analyzers that only implement the public generate_text() contract."""
         if self.analyzer is None:
@@ -717,7 +874,7 @@ class MarketAnalyzer:
             if callable(method):
                 return method(
                     prompt,
-                    max_tokens=8192,
+                    max_tokens=max_tokens,
                     temperature=0.7,
                 )
 
@@ -732,7 +889,7 @@ class MarketAnalyzer:
             )
         review = legacy_method(
             prompt,
-            max_tokens=8192,
+            max_tokens=max_tokens,
             temperature=0.7,
         )
         if review is None:
@@ -895,7 +1052,7 @@ class MarketAnalyzer:
         # Build data blocks
         stats_block = self._build_stats_block(overview)
         indices_block = self._build_indices_block(overview)
-        patterns = _ENGLISH_SECTION_PATTERNS
+        patterns = _SECTION_PATTERNS
 
         if stats_block:
             review = self._insert_after_section(
@@ -932,31 +1089,42 @@ class MarketAnalyzer:
         # Insert the block before the next heading, with spacing
         return text[:insert_pos].rstrip() + '\n\n' + block + '\n\n' + text[insert_pos:].lstrip('\n')
 
-    def _build_stats_block(self, overview: MarketOverview) -> str:
-        """Build market statistics block."""
+    def _build_stats_block(self, overview: MarketOverview, language: Optional[str] = None) -> str:
+        """Build market statistics block (nhãn theo ngôn ngữ báo cáo / labels follow report language)."""
         has_stats = overview.up_count or overview.down_count or overview.total_amount
         has_market_signal = bool(self._supports_market_light() and (overview.indices or has_stats))
         if not has_stats and not has_market_signal:
             return ""
+        lang = language or self._get_output_language()
+        labels = _DATA_BLOCK_LABELS["vi" if lang == "vi" else "en"]
         light = self.build_market_light_snapshot(overview) if has_market_signal else None
         lines = []
         if isinstance(light, dict):
+            temperature = light["temperature_label"]
+            label = light["label"]
+            guidance = light["guidance"]
+            reasons = light["reasons"]
+            if lang == "vi":
+                temperature = _MARKET_LIGHT_VI_TEXT["temperature"].get(temperature, temperature)
+                label = _MARKET_LIGHT_VI_TEXT["label"].get(label, label)
+                guidance = _MARKET_LIGHT_VI_TEXT["guidance"].get(light.get("status"), guidance)
+                reasons = self._build_market_light_reasons_vi(overview)
             lines.extend(
                 [
-                    f"- **Market Signal**: {light['score']}/100 "
-                    f"({light['temperature_label']}, {light['label']})",
-                    f"- **Drivers**: {'; '.join(light['reasons'])}",
-                    f"- **Guidance**: {light['guidance']}",
+                    f"- **{labels['market_signal']}**: {light['score']}/100 ({temperature}, {label})",
+                    f"- **{labels['drivers']}**: {'; '.join(reasons)}",
+                    f"- **{labels['guidance']}**: {guidance}",
                 ]
             )
         if has_stats:
             if lines:
                 lines.append("")
             lines.append(
-                f"- **Breadth**: Advancers {overview.up_count} / Decliners {overview.down_count} / "
-                f"Flat {overview.flat_count}; "
-                f"Limit-up {overview.limit_up_count} / Limit-down {overview.limit_down_count}; "
-                f"Turnover {overview.total_amount:.0f} ({self._get_turnover_unit_label()})"
+                f"- **{labels['breadth']}**: {labels['advancers']} {overview.up_count} / "
+                f"{labels['decliners']} {overview.down_count} / "
+                f"{labels['flat']} {overview.flat_count}; "
+                f"{labels['limit_up']} {overview.limit_up_count} / {labels['limit_down']} {overview.limit_down_count}; "
+                f"{labels['turnover']} {overview.total_amount:.0f} ({self._get_report_turnover_unit(lang)})"
             )
         return "\n".join(lines)
 
@@ -998,6 +1166,30 @@ class MarketAnalyzer:
         )
         return snapshot.model_dump()
 
+    def _build_market_light_reasons_vi(self, overview: MarketOverview) -> List[str]:
+        """Bản tiếng Việt của ``_build_market_light_reasons_en`` cho phần hiển thị báo cáo."""
+        participation = overview.up_count + overview.down_count
+        up_ratio = overview.up_count / participation if participation else None
+        reasons: List[str] = []
+        if up_ratio is not None:
+            if up_ratio >= 0.6:
+                reasons.append(f"tỷ lệ mã tăng {up_ratio:.0%}, độ rộng mở rộng")
+            elif up_ratio <= 0.4:
+                reasons.append(f"tỷ lệ mã tăng {up_ratio:.0%}, áp lực giảm chiếm ưu thế")
+            else:
+                reasons.append(f"tỷ lệ mã tăng {up_ratio:.0%}, độ rộng phân hoá")
+        index_changes = [idx.change_pct for idx in overview.indices if idx.change_pct is not None]
+        if index_changes:
+            avg_change = sum(index_changes) / len(index_changes)
+            reasons.append(f"biến động bình quân các chỉ số chính {avg_change:+.2f}%")
+        if overview.limit_up_count or overview.limit_down_count:
+            reasons.append(f"chênh lệch trần/sàn {overview.limit_up_count - overview.limit_down_count:+d}")
+        if not reasons and overview.total_amount:
+            reasons.append(f"giá trị giao dịch {overview.total_amount:.0f} (tỷ đồng)")
+        if not reasons:
+            reasons.append("dữ liệu độ rộng còn hạn chế; dùng các dữ liệu thị trường sẵn có")
+        return reasons[:4]
+
     def _build_market_light_reasons_en(self, overview: MarketOverview, score: int) -> List[str]:
         participation = overview.up_count + overview.down_count
         up_ratio = overview.up_count / participation if participation else None
@@ -1021,12 +1213,14 @@ class MarketAnalyzer:
             reasons.append("limited structured breadth data; using available market inputs")
         return reasons[:4]
 
-    def _build_indices_block(self, overview: MarketOverview) -> str:
-        """Build the index quotes table"""
+    def _build_indices_block(self, overview: MarketOverview, language: Optional[str] = None) -> str:
+        """Build the index quotes table (header theo ngôn ngữ báo cáo / header follows report language)."""
         if not overview.indices:
             return ""
+        lang = language or self._get_output_language()
+        header = _DATA_BLOCK_LABELS["vi" if lang == "vi" else "en"]["index_header"]
         lines = [
-            f"| Index | Last | Change % | Open | High | Low | Amplitude | Turnover ({self._get_turnover_unit_label()}) |",
+            header.format(unit=self._get_report_turnover_unit(lang)),
             "|-------|------|----------|------|------|-----|-----------|-----------------|",
         ]
         for idx in overview.indices:
@@ -1480,7 +1674,8 @@ Output the report content directly, no extra commentary.
 
         stats_section = ""
         if self._supports_market_light() or self.profile.has_market_stats:
-            stats_block = self._build_stats_block(overview)
+            # Mẫu dự phòng dùng khung tiếng Anh nên giữ nhãn tiếng Anh. / Template shell is English.
+            stats_block = self._build_stats_block(overview, language="en")
             if stats_block:
                 stats_section = f"""
 ### 3. Breadth & Liquidity

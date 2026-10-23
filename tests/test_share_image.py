@@ -1349,3 +1349,18 @@ def test_market_title_defaults_to_vietnam_when_heading_is_not_a_recap():
     assert _market_title("# Some heading\n\nBody") == "Điểm lại thị trường Việt Nam"
     assert _market_title("# Major indices\n\nBody") == "Vietnam Market Recap"
     assert _market_title("# 2026-08-01 Vietnam Market Recap\n") == "2026-08-01 Vietnam Market Recap"
+
+
+def test_parsed_breadth_metrics_reads_vietnamese_breadth_line():
+    # Báo cáo tiếng Việt chèn khối độ rộng với nhãn tiếng Việt. / Vietnamese breadth labels.
+    from src.share_image import _parsed_breadth_metrics
+
+    line = "- **Độ rộng**: Tăng 337 / Giảm 330 / Đứng giá 248; Trần 39 / Sàn 26; Giá trị giao dịch 15130 (tỷ đồng)"
+
+    metrics = dict(_parsed_breadth_metrics(line))
+
+    assert metrics["上涨"] == "337"
+    assert metrics["下跌"] == "330"
+    assert metrics["涨停"] == "39"
+    assert metrics["跌停"] == "26"
+    assert metrics["成交额"].startswith("15130")
