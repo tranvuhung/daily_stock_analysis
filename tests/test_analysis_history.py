@@ -1586,6 +1586,47 @@ class AnalysisHistoryTestCase(unittest.TestCase):
         self.assertIn("✅Safe", markdown)
         self.assertNotIn("🚨Safe", markdown)
 
+    def test_history_markdown_localizes_multi_agent_enums_for_vietnamese(self) -> None:
+        """Enum ma_alignment/volume_status tiếng Anh của TechnicalAgent phải hiển thị tiếng Việt."""
+        result = AnalysisResult(
+            code="FPT",
+            name="FPT Corporation",
+            sentiment_score=45,
+            trend_prediction="Giảm",
+            operation_advice="Quan sát rũ bỏ",
+            analysis_summary="Xu hướng giảm ngắn hạn.",
+            report_language="vi",
+            dashboard={
+                "data_perspective": {
+                    "trend_status": {"ma_alignment": "bearish", "is_bullish": False, "trend_score": 25},
+                    "volume_analysis": {
+                        "volume_ratio": "N/A",
+                        "turnover_rate": "N/A",
+                        "volume_status": "Normal Volume",
+                        "volume_meaning": "Khối lượng chưa xác nhận lực mua.",
+                    },
+                }
+            },
+        )
+
+        saved = self.db.save_analysis_history(
+            result=result,
+            query_id="query_vi_multi_agent_enums_001",
+            report_type="full",
+            news_content="news",
+            context_snapshot=None,
+            save_snapshot=False,
+        )
+        self.assertGreater(saved, 0)
+
+        markdown = HistoryService(self.db).get_markdown_report(str(saved))
+
+        self.assertIsNotNone(markdown)
+        self.assertIn("(Khối lượng bình thường)", markdown)
+        self.assertNotIn("Normal Volume", markdown)
+        self.assertIn("**Sắp xếp đường MA**: Giảm |", markdown)
+        self.assertNotIn(": bearish", markdown)
+
     def test_delete_analysis_history_records_also_cleans_backtests_and_decision_signals(self) -> None:
         """删除历史记录时应一并清理关联回测结果和决策信号。"""
         record_id = self._save_history("query_delete_001")

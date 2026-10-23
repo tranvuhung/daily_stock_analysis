@@ -27,6 +27,9 @@ class DecisionAgent(BaseAgent):
     agent_name = "decision"
     max_steps = 3  # pure synthesis, should not need many tool calls
     tool_names: Optional[List[str]] = []  # no tool access — works from context only
+    # Đã có khối Output Language riêng trong system_prompt (cả chế độ chat lẫn dashboard).
+    # Has its own Output Language block in system_prompt (chat and dashboard modes).
+    append_output_language = False
 
     @staticmethod
     def _is_chat_mode(ctx: AgentContext) -> bool:

@@ -1247,8 +1247,19 @@ def _set_structural_hold_wording(
     if advice_key == "range":
         result.trend_prediction = "Sideways"
 
-    no_position = "Do not chase or panic; wait for support confirmation or a valid breakout."
-    has_position = "Use key support as the risk line and manage position size unless support fails."
+    # Khuyến nghị theo vị thế phải theo ngôn ngữ báo cáo như advice/reason ở trên.
+    # Position advice follows the report language, like advice/reason above.
+    position_templates = {
+        "vi": (
+            "Không mua đuổi, không bán hoảng loạn; chờ hỗ trợ được xác nhận hoặc bứt phá hợp lệ.",
+            "Lấy vùng hỗ trợ chính làm ngưỡng rủi ro và quản trị tỷ trọng, trừ khi hỗ trợ bị thủng.",
+        ),
+        "en": (
+            "Do not chase or panic; wait for support confirmation or a valid breakout.",
+            "Use key support as the risk line and manage position size unless support fails.",
+        ),
+    }
+    no_position, has_position = position_templates.get(language, position_templates["vi"])
     _apply_hold_watch_dashboard(
         result,
         language,

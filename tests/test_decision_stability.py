@@ -134,6 +134,11 @@ def test_refines_hold_pullback_near_support_as_shakeout_watch() -> None:
     assert result.decision_type == "hold"
     assert result.operation_advice == "Quan sát rũ bỏ"
     assert "nhịp rũ bỏ" in result.risk_warning
+    # Khuyến nghị theo vị thế phải theo ngôn ngữ báo cáo, không hardcode tiếng Anh.
+    # Position advice must follow the report language, not hardcoded English.
+    position_advice = result.dashboard["core_conclusion"]["position_advice"]
+    assert position_advice["no_position"].startswith("Không mua đuổi")
+    assert "hỗ trợ" in position_advice["has_position"]
 
 
 def test_english_wording_for_mid_range_hold() -> None:
@@ -144,3 +149,5 @@ def test_english_wording_for_mid_range_hold() -> None:
 
     assert result.operation_advice == "Range-bound watch"
     assert "without a clear signal" in result.risk_warning
+    position_advice = result.dashboard["core_conclusion"]["position_advice"]
+    assert position_advice["no_position"].startswith("Do not chase or panic")

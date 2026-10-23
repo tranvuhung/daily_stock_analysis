@@ -2315,6 +2315,42 @@ class TestBaseAgentMessageAssembly(unittest.TestCase):
         self.assertIs(run_loop.call_args.kwargs["stock_scope"], ctx.meta["stock_scope"])
 
 
+    def test_build_messages_appends_vietnamese_output_language(self):
+        # Sub-agent phải nhận chỉ dẫn ngôn ngữ để rủi ro/xúc tác/reasoning ra tiếng Việt.
+        # Sub-agents get output-language guidance so free text follows report_language.
+        agent = self._make_agent()
+        ctx = AgentContext(query="hello", stock_code="FPT")
+        ctx.meta["report_language"] = "vi"
+
+        system_content = agent._build_messages(ctx)[0]["content"]
+
+        self.assertTrue(system_content.startswith("system"))
+        self.assertIn("## Output Language", system_content)
+        self.assertIn("Vietnamese (Tiếng Việt)", system_content)
+        self.assertIn("`risk_alerts`", system_content)
+
+    def test_build_messages_appends_english_output_language(self):
+        agent = self._make_agent()
+        ctx = AgentContext(query="hello", stock_code="FPT")
+        ctx.meta["report_language"] = "en"
+
+        system_content = agent._build_messages(ctx)[0]["content"]
+
+        self.assertIn("Write every free-text value in English.", system_content)
+        self.assertNotIn("Tiếng Việt", system_content)
+
+    def test_decision_agent_does_not_duplicate_output_language(self):
+        from src.agent.agents.decision_agent import DecisionAgent
+
+        agent = DecisionAgent(tool_registry=MagicMock(), llm_adapter=MagicMock())
+        ctx = AgentContext(query="hello", stock_code="FPT")
+        ctx.meta["report_language"] = "vi"
+
+        system_content = agent._build_messages(ctx)[0]["content"]
+
+        self.assertEqual(system_content.count("## Output Language"), 1)
+
+
 # ============================================================
 # EventMonitor serialization
 # ============================================================

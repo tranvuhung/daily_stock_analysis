@@ -1189,7 +1189,7 @@ class NotificationService(
                             else f"❌ {labels['no_label']}"
                         )
                         report_lines.extend([
-                            f"**{labels['ma_alignment_label']}**: {trend_data.get('ma_alignment', 'N/A')} | "
+                            f"**{labels['ma_alignment_label']}**: {localize_trend_prediction(trend_data.get('ma_alignment', 'N/A'), report_language)} | "
                             f"{labels['bullish_alignment_label']}: {is_bullish} | "
                             f"{labels['trend_strength_label']}: {trend_data.get('trend_score', 'N/A')}/100",
                             "",

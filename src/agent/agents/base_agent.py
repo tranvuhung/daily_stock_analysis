@@ -34,6 +34,37 @@ from src.services.daily_market_context import format_daily_market_context_prompt
 logger = logging.getLogger(__name__)
 
 
+def _output_language_section(report_language: str) -> str:
+    """Khối chỉ dẫn ngôn ngữ đầu ra cho sub-agent.
+
+    Các trường văn bản tự do của sub-agent (reasoning, risk_alerts, positive_catalysts,
+    flags[].description...) được orchestrator chép thẳng vào dashboard báo cáo, nên
+    phải viết theo ngôn ngữ báo cáo. Giá trị enum giữ tiếng Anh vì code so sánh chúng.
+
+    Output-language guidance for sub-agents: free-text values flow verbatim into the
+    report dashboard, while enum values stay English because code compares them.
+    """
+    if report_language == "vi":
+        return """
+
+## Output Language (highest priority)
+- Keep every JSON key unchanged.
+- Keep enum-like values exactly as listed in the schema above, in English \
+(for example `signal`, `ma_alignment`, `volume_status`, `sentiment_label`, `impact`, \
+`risk_level`, `severity`, `category`, `signal_adjustment`).
+- Write every free-text value (`reasoning`, `risk_alerts`, `positive_catalysts`, \
+`key_news[].title`, `flags[].description`, `pattern`, and any other narrative text) \
+in Vietnamese (Tiếng Việt) with correct diacritics, using standard Vietnamese \
+securities terminology. Never write Chinese characters.
+"""
+    return """
+
+## Output Language (highest priority)
+- Keep every JSON key unchanged and keep enum-like values exactly as listed in the schema above.
+- Write every free-text value in English.
+"""
+
+
 class BaseAgent(ABC):
     """Abstract base for all specialised agents.
 
@@ -52,6 +83,10 @@ class BaseAgent(ABC):
     agent_name: str = "base"
     tool_names: Optional[List[str]] = None  # None → all tools available
     max_steps: int = 6
+    # Nối khối "Output Language" chung vào system prompt; agent tự quản lý ngôn ngữ
+    # (vd DecisionAgent) đặt False để không bị lặp chỉ dẫn.
+    # Append the shared "Output Language" block; agents with their own block opt out.
+    append_output_language: bool = True
 
     def __init__(
         self,
@@ -175,8 +210,12 @@ class BaseAgent(ABC):
 
     def _build_messages(self, ctx: AgentContext) -> List[Dict[str, Any]]:
         """Assemble the initial messages list for the LLM."""
+        report_language = normalize_report_language(ctx.meta.get("report_language", "vi"))
+        system_content = self.system_prompt(ctx)
+        if self.append_output_language:
+            system_content += _output_language_section(report_language)
         messages: List[Dict[str, Any]] = [
-            {"role": "system", "content": self.system_prompt(ctx)},
+            {"role": "system", "content": system_content},
         ]
 
         history = ctx.meta.get("conversation_history")
@@ -189,7 +228,6 @@ class BaseAgent(ABC):
                 if role in {"user", "assistant", "system"} and isinstance(content, str) and content:
                     messages.append({"role": role, "content": content})
 
-        report_language = normalize_report_language(ctx.meta.get("report_language", "vi"))
         market_phase_section = format_market_phase_prompt_section(
             ctx.meta.get("market_phase_context"),
             report_language=report_language,

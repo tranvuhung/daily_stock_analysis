@@ -32,6 +32,7 @@ from src.report_language import (
     localize_strategy_skill,
     localize_strategy_synthesis_summary,
     localize_trend_prediction,
+    localize_volume_status,
     normalize_report_language,
     normalize_strategy_synthesis_payload,
     strategy_invalid_opinion_count,
@@ -1144,7 +1145,7 @@ class HistoryService:
                     else f"❌ {labels['no_label']}"
                 )
                 report_lines.extend([
-                    f"**{labels['ma_alignment_label']}**: {trend_data.get('ma_alignment', 'N/A')} | "
+                    f"**{labels['ma_alignment_label']}**: {localize_trend_prediction(trend_data.get('ma_alignment', 'N/A'), report_language)} | "
                     f"{labels['bullish_alignment_label']}: {is_bullish} | "
                     f"{labels['trend_strength_label']}: {trend_data.get('trend_score', 'N/A')}/100",
                     "",
@@ -1170,7 +1171,7 @@ class HistoryService:
             if vol_data:
                 report_lines.extend([
                     f"**{labels['volume_label']}**: {labels['volume_ratio_label']} {vol_data.get('volume_ratio', 'N/A')} "
-                    f"({vol_data.get('volume_status', '')}) | {labels['turnover_rate_label']} {vol_data.get('turnover_rate', 'N/A')}%",
+                    f"({localize_volume_status(vol_data.get('volume_status', ''), report_language)}) | {labels['turnover_rate_label']} {vol_data.get('turnover_rate', 'N/A')}%",
                     f"💡 *{vol_data.get('volume_meaning', '')}*",
                     "",
                 ])

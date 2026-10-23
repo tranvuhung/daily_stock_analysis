@@ -297,6 +297,10 @@ _VOLUME_STATUS_CANONICAL_MAP = {
     "low volume": "shrinking",
     "normal": "normal",
     "normal volume": "normal",
+    # Enum volume_status của TechnicalAgent (multi-agent): heavy|normal|light.
+    # TechnicalAgent volume_status enum (multi-agent): heavy|normal|light.
+    "heavy": "expanding",
+    "light": "shrinking",
     # Nhãn VolumeStatus tiếng Anh của src/stock_analyzer.py.
     # English VolumeStatus values from src/stock_analyzer.py.
     "heavy volume up": "expanding",
