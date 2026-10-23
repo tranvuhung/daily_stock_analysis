@@ -408,10 +408,17 @@ class AgentOrchestrator:
         selected_skill_ids: Optional[List[str]] = None,
     ) -> PreparedOrchestratorChatTurn:
         """Prepare context and persist the user turn before SSE acceptance."""
+        from src.agent.chat_context import attach_latest_analysis_reference
         from src.agent.conversation import conversation_manager
 
         scope_resolution = resolve_stock_scope(message, context)
-        ctx = self._build_context(message, scope_resolution.effective_context)
+        # Báo cáo đã lưu ≤24h làm tham chiếu (cùng hợp đồng previous_* với executor).
+        # Latest saved analysis (≤24h) as reference, same previous_* contract as the executor.
+        effective_context = attach_latest_analysis_reference(
+            scope_resolution.effective_context,
+            message,
+        )
+        ctx = self._build_context(message, effective_context)
         ctx.session_id = session_id
         ctx.meta["response_mode"] = "chat"
         if scope_resolution.stock_scope is not None:
@@ -419,6 +426,9 @@ class AgentOrchestrator:
 
         conversation_manager.get_or_create(session_id)
         config = self.config or getattr(self.llm_adapter, "_config", None) or get_config()
+        # DecisionAgent chat dùng để quyết định có áp ràng buộc rủi ro hay không.
+        # Lets the chat DecisionAgent know whether risk constraints apply.
+        ctx.meta["agent_risk_override"] = bool(getattr(config, "agent_risk_override", True))
         history = build_visible_chat_history(session_id, self.llm_adapter, config)
         if history:
             ctx.meta["conversation_history"] = history
@@ -1183,6 +1193,20 @@ class AgentOrchestrator:
                              "trend_result", "news_context"):
                 if context.get(data_key):
                     ctx.set_data(data_key, context[data_key])
+            # Ngữ cảnh báo cáo trước (Web follow-up hoặc báo cáo đã lưu gần nhất), cùng các
+            # khoá executor single-agent đọc. / Previous-report context, same keys as the executor.
+            previous_analysis = {
+                key: context[key]
+                for key in (
+                    "previous_analysis_summary",
+                    "previous_strategy",
+                    "previous_price",
+                    "previous_change_pct",
+                )
+                if context.get(key) not in (None, "", {}, [])
+            }
+            if previous_analysis:
+                ctx.meta["previous_analysis"] = previous_analysis
 
         # Try to extract stock code from the query text
         if not ctx.stock_code:

@@ -22,7 +22,11 @@ from typing import Any, Callable, Dict, List, Optional
 
 from src.config import get_config
 from src.agent.dashboard_payload import DEFAULT_BUY_REASON_HINT, decision_dashboard_json_schema
-from src.agent.chat_context import build_agent_chat_context_bundle, build_visible_chat_history
+from src.agent.chat_context import (
+    attach_latest_analysis_reference,
+    build_agent_chat_context_bundle,
+    build_visible_chat_history,
+)
 from src.agent.llm_adapter import LLMToolAdapter
 from src.agent.provider_trace import persist_provider_trace_turns
 from src.agent.runner import run_agent_loop, parse_dashboard_json
@@ -281,6 +285,7 @@ When the user asks about a stock, call the tools in the four stages below, in or
 4. **Risk first** — always check for risks (major-holder selling, earnings warnings, regulatory issues).
 5. **Tool failures** — note the failure reason, continue with the data you have, and do not retry a failed tool.
 6. **No disclaimer line** — do not write your own "not investment advice" disclaimer; the system appends one automatically.
+7. **Stay consistent with the saved analysis** — when a previous analysis summary is provided, it is the system's calibrated view: keep your action consistent with it, and deviate only when current data clearly contradicts it, stating the reference time, the reference action, your action and the evidence.
 
 {skills_section}
 {language_section}
@@ -318,6 +323,7 @@ When the user asks about a stock, call the tools in the four stages below, in or
 4. **Risk first** — always check for risks (major-holder selling, earnings warnings, regulatory issues).
 5. **Tool failures** — note the failure reason, continue with the data you have, and do not retry a failed tool.
 6. **No disclaimer line** — do not write your own "not investment advice" disclaimer; the system appends one automatically.
+7. **Stay consistent with the saved analysis** — when a previous analysis summary is provided, it is the system's calibrated view: keep your action consistent with it, and deviate only when current data clearly contradicts it, stating the reference time, the reference action, your action and the evidence.
 
 {skills_section}
 {language_section}
@@ -510,7 +516,12 @@ def prepare_agent_chat(
         context,
         strict_initial_scope=strict_initial_stock_scope,
     )
-    effective_context = scope_resolution.effective_context
+    # Báo cáo đã lưu ≤24h của mã làm tham chiếu khi Web chưa gửi ngữ cảnh báo cáo.
+    # Latest saved analysis (≤24h) as reference when the Web sent no report context.
+    effective_context = attach_latest_analysis_reference(
+        scope_resolution.effective_context,
+        message,
+    )
 
     skills_section = ""
     if skill_instructions:

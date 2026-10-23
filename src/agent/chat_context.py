@@ -500,3 +500,89 @@ def _coerce_int(value: Any, *, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return int(default)
+
+
+# Báo cáo phân tích đã lưu được dùng làm tham chiếu cho Hỏi đáp nếu còn đủ mới.
+# A saved analysis report is used as the chat reference while it is fresh enough.
+LATEST_ANALYSIS_MAX_AGE_HOURS = 24
+
+
+def attach_latest_analysis_reference(
+    context: Optional[Dict[str, Any]],
+    message: str = "",
+    *,
+    db: Any = None,
+    max_age_hours: int = LATEST_ANALYSIS_MAX_AGE_HOURS,
+) -> Dict[str, Any]:
+    """Gắn báo cáo phân tích đã lưu gần nhất của mã vào ngữ cảnh Hỏi đáp.
+
+    Dùng đúng các khoá ``previous_*`` mà Web gửi khi hỏi tiếp từ một báo cáo, nên cả
+    executor single-agent lẫn orchestrator multi-agent đọc chung một hợp đồng. Không ghi
+    đè ngữ cảnh Web đã gửi; chỉ tra cứu khi xác định được đúng một mã (bỏ qua câu so sánh
+    nhiều mã); lỗi DB thì trả nguyên ngữ cảnh (fail-open).
+
+    Attach the latest saved analysis of the stock to the chat context using the same
+    ``previous_*`` keys the Web sends for report follow-ups. Never overrides Web-provided
+    context, only looks up a single unambiguous stock, and fails open on DB errors.
+    """
+    effective = dict(context or {})
+    if effective.get("previous_analysis_summary"):
+        return effective
+
+    code = str(effective.get("stock_code") or "").strip().upper()
+    if not code:
+        from src.agent.stock_scope import extract_stock_codes
+
+        candidates = extract_stock_codes(message or "")
+        if len(candidates) != 1:
+            return effective
+        code = candidates[0]
+
+    try:
+        from datetime import datetime, timedelta
+
+        from src.utils.data_processing import parse_json_field
+
+        database = db or get_db()
+        records = database.get_analysis_history(code=code, days=max(1, math.ceil(max_age_hours / 24)), limit=1)
+        if not records:
+            return effective
+        record = records[0]
+        created_at = getattr(record, "created_at", None)
+        if created_at is None or created_at < datetime.now() - timedelta(hours=max_age_hours):
+            return effective
+
+        raw = parse_json_field(getattr(record, "raw_result", None))
+        raw = raw if isinstance(raw, dict) else {}
+        dashboard = raw.get("dashboard") if isinstance(raw.get("dashboard"), dict) else {}
+        core = dashboard.get("core_conclusion") if isinstance(dashboard.get("core_conclusion"), dict) else {}
+        stability = dashboard.get("decision_stability") if isinstance(dashboard.get("decision_stability"), dict) else {}
+
+        summary = {
+            "source": "latest_saved_analysis",
+            "stock_code": code,
+            "created_at": created_at.strftime("%Y-%m-%d %H:%M"),
+            "operation_advice": getattr(record, "operation_advice", None) or raw.get("operation_advice"),
+            "decision_type": raw.get("decision_type"),
+            "action_label": raw.get("action_label"),
+            "sentiment_score": getattr(record, "sentiment_score", None),
+            "trend_prediction": getattr(record, "trend_prediction", None) or raw.get("trend_prediction"),
+            "one_sentence": core.get("one_sentence"),
+            "analysis_summary": getattr(record, "analysis_summary", None) or raw.get("analysis_summary"),
+            "risk_warning": raw.get("risk_warning"),
+            "decision_stability_reason": stability.get("reason") if stability.get("applied") else None,
+            "ideal_buy": getattr(record, "ideal_buy", None),
+            "stop_loss": getattr(record, "stop_loss", None),
+            "take_profit": getattr(record, "take_profit", None),
+        }
+        effective["previous_analysis_summary"] = {
+            key: value for key, value in summary.items() if value not in (None, "")
+        }
+        if raw.get("current_price") is not None:
+            effective.setdefault("previous_price", raw.get("current_price"))
+        if raw.get("change_pct") is not None:
+            effective.setdefault("previous_change_pct", raw.get("change_pct"))
+    except Exception as exc:
+        logger.debug("Không gắn được báo cáo phân tích gần nhất cho %s (fail-open): %s", code, exc)
+        return dict(context or {})
+    return effective

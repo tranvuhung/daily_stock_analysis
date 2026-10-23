@@ -310,7 +310,13 @@ class TestAgentExecutor(unittest.TestCase):
             ):
                 with patch("src.agent.conversation.conversation_manager.get_or_create"):
                     with patch("src.agent.conversation.conversation_manager.add_message"):
-                        executor.chat("Chuyển sang FPT, không xét HPG", "session-1", context=stale_context)
+                        # Cô lập DB: không có báo cáo FPT đã lưu → không gắn tham chiếu mới.
+                        # Isolate the DB: no saved FPT report, so no new reference is attached.
+                        with patch(
+                            "src.agent.chat_context.get_db",
+                            return_value=MagicMock(get_analysis_history=MagicMock(return_value=[])),
+                        ):
+                            executor.chat("Chuyển sang FPT, không xét HPG", "session-1", context=stale_context)
 
         history_context = "\n".join(
             msg["content"] for msg in captured["messages"] if msg["role"] == "user"
@@ -318,11 +324,19 @@ class TestAgentExecutor(unittest.TestCase):
         self.assertIn("Stock code: FPT", history_context)
         self.assertNotIn("Stock name: Hoa Phat Group", history_context)
         self.assertNotIn("Previous analysis summary", history_context)
+        self.assertNotIn('"summary": "old"', history_context)
         self.assertNotIn("Previous strategy analysis", history_context)
         self.assertNotIn("Market structure context", history_context)
         self.assertEqual(captured["stock_scope"].mode, "switch")
         self.assertEqual(captured["stock_scope"].expected_stock_code, "FPT")
         self.assertEqual(captured["stock_scope"].allowed_stock_codes, {"FPT"})
+
+    def test_chat_prompts_require_consistency_with_saved_analysis(self):
+        from src.agent.executor import CHAT_SYSTEM_PROMPT, LEGACY_DEFAULT_CHAT_SYSTEM_PROMPT
+
+        for template in (CHAT_SYSTEM_PROMPT, LEGACY_DEFAULT_CHAT_SYSTEM_PROMPT):
+            self.assertIn("**Stay consistent with the saved analysis**", template)
+            self.assertIn("stating the reference time, the reference action, your action and the evidence", template)
 
     def test_chat_does_not_trust_exchange_token_from_public_context(self):
         registry = _make_registry_with_echo()

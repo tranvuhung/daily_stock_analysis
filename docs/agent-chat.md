@@ -79,6 +79,17 @@ Mỗi lượt hỏi được gắn một phạm vi mã; công cụ dữ liệu c
 - Từ khoá tiếng Việt / tiếng Anh (`_VI_EN_*`) chỉ dùng để quyết định switch/compare. Mã viết thường (`phân tích las`) **không** được nhận diện — hãy viết hoa mã (LAS), vì trích mã chữ thường chỉ bật với từ khoá tiếng Trung để tránh nhận nhầm từ tiếng Việt không dấu thành mã.
 - Khi AI trả lời "phiên đang giới hạn cho mã X", nghĩa là lượt đó ở chế độ `maintain`; viết lại câu hỏi có từ khoá chuyển mã và mã viết hoa, hoặc bắt đầu hội thoại mới.
 
+### Nhất quán với báo cáo phân tích
+
+- **Tham chiếu báo cáo:** khi hỏi tiếp từ một báo cáo, Web gửi `previous_analysis_summary` / `previous_strategy` / `previous_price` / `previous_change_pct`. Khi không có, backend tự gắn báo cáo phân tích **đã lưu trong 24 giờ** gần nhất của mã (`attach_latest_analysis_reference` trong `src/agent/chat_context.py`), dùng đúng các khoá trên.
+  - Chỉ tra khi xác định được đúng một mã; câu so sánh nhiều mã thì bỏ qua.
+  - Lỗi DB thì bỏ qua (fail-open).
+  - Đổi mã thì các khoá `previous_*` của mã cũ bị xoá như trước.
+- **Cả hai chế độ đều dùng tham chiếu:** single-agent và multi-agent (orchestrator chép các khoá vào `ctx.meta["previous_analysis"]` cho DecisionAgent).
+- **Quy tắc trong prompt:** giữ khuyến nghị giống báo cáo. Chỉ khác khi dữ liệu hiện tại mâu thuẫn rõ, và khi đó phải nêu rõ ở đầu câu trả lời: thời điểm báo cáo, khuyến nghị cũ → mới, bằng chứng.
+- **Ràng buộc rủi ro (multi-agent):** DecisionAgent chat nhận mục `Mandatory risk constraints`, tính bằng cùng `build_risk_override_plan` với dashboard. Có `veto_buy` thì không được khuyên mua; `downgrade_one/two` thì hạ 1–2 bậc. Mục này bị bỏ khi `AGENT_RISK_OVERRIDE=false`.
+- **Giới hạn:** đây là chỉ dẫn cho LLM, không chặn tất định câu văn tự do như dashboard.
+
 ## 6. Lịch sử hội thoại và nén ngữ cảnh
 
 - `conversation_messages` chỉ lưu văn bản user/assistant. Các lượt gọi tool cần round-trip (ví dụ Gemini thought signature, reasoning của DeepSeek) được lưu riêng trong `agent_provider_turns` và chỉ phát lại khi model đích khớp model đã tạo ra trace.

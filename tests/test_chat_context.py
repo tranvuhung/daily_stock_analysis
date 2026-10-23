@@ -729,3 +729,76 @@ def test_summary_failure_with_old_summary_returns_candidate() -> None:
 def test_token_estimator_falls_back_to_character_heuristic() -> None:
     with patch("src.agent.chat_context.get_effective_agent_primary_model", side_effect=RuntimeError("no model")):
         assert estimate_text_tokens("abcdefg", _config()) == math.ceil(7 / 3)
+
+
+def _saved_record(*, hours_ago: float = 1.0, code: str = "TCB"):
+    import json as _json
+    from datetime import datetime, timedelta
+
+    return SimpleNamespace(
+        code=code,
+        created_at=datetime.now() - timedelta(hours=hours_ago),
+        operation_advice="Quan sát vùng dao động",
+        sentiment_score=59,
+        trend_prediction="Sideways",
+        analysis_summary="Tóm tắt báo cáo.",
+        ideal_buy=33.8,
+        stop_loss=32.9,
+        take_profit=None,
+        raw_result=_json.dumps({
+            "decision_type": "hold",
+            "action_label": "Quan sát",
+            "current_price": 34200.0,
+            "change_pct": 0.3,
+            "risk_warning": "Sát kháng cự.",
+            "dashboard": {
+                "core_conclusion": {"one_sentence": "Quan sát vùng dao động"},
+                "decision_stability": {"applied": True, "reason": "Giá sát kháng cự."},
+            },
+        }),
+    )
+
+
+def test_attach_latest_analysis_reference_uses_fresh_saved_report() -> None:
+    # Chat thường (không follow-up) phải thấy báo cáo đã hiệu chỉnh ≤24h của mã.
+    from src.agent.chat_context import attach_latest_analysis_reference
+
+    db = MagicMock(get_analysis_history=MagicMock(return_value=[_saved_record()]))
+
+    context = attach_latest_analysis_reference({"report_language": "vi"}, "Phân tích TCB", db=db)
+
+    db.get_analysis_history.assert_called_once_with(code="TCB", days=1, limit=1)
+    summary = context["previous_analysis_summary"]
+    assert summary["source"] == "latest_saved_analysis"
+    assert summary["decision_type"] == "hold"
+    assert summary["operation_advice"] == "Quan sát vùng dao động"
+    assert summary["decision_stability_reason"] == "Giá sát kháng cự."
+    assert "take_profit" not in summary
+    assert context["previous_price"] == 34200.0
+    assert context["report_language"] == "vi"
+
+
+def test_attach_latest_analysis_reference_keeps_web_follow_up_context() -> None:
+    from src.agent.chat_context import attach_latest_analysis_reference
+
+    db = MagicMock()
+    original = {"stock_code": "TCB", "previous_analysis_summary": {"summary": "từ Web"}}
+
+    context = attach_latest_analysis_reference(original, "Phân tích TCB", db=db)
+
+    assert context["previous_analysis_summary"] == {"summary": "từ Web"}
+    db.get_analysis_history.assert_not_called()
+
+
+def test_attach_latest_analysis_reference_skips_stale_ambiguous_or_failed_lookups() -> None:
+    from src.agent.chat_context import attach_latest_analysis_reference
+
+    stale_db = MagicMock(get_analysis_history=MagicMock(return_value=[_saved_record(hours_ago=30)]))
+    assert "previous_analysis_summary" not in attach_latest_analysis_reference({}, "Phân tích TCB", db=stale_db)
+
+    compare_db = MagicMock()
+    assert attach_latest_analysis_reference({}, "So sánh FPT và TCB", db=compare_db) == {}
+    compare_db.get_analysis_history.assert_not_called()
+
+    broken_db = MagicMock(get_analysis_history=MagicMock(side_effect=RuntimeError("db down")))
+    assert attach_latest_analysis_reference({"stock_code": "TCB"}, "", db=broken_db) == {"stock_code": "TCB"}

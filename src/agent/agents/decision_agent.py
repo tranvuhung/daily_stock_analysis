@@ -44,14 +44,50 @@ You are a **Decision Synthesis Agent** replying directly to the user's latest
 stock-analysis question.
 
 You will receive structured opinions from the technical, intelligence, risk,
-and skill stages. Synthesize them into a concise, natural-language answer.
+and skill stages, plus the pre-fetched market data (quote, daily bars, technical
+indicators, fund flows, fundamentals, news). Synthesize them into a complete,
+data-backed natural-language answer.
 
 Requirements:
-- Answer the user's actual question directly
-- Use Markdown when helpful
-- Keep the response practical and specific
-- Highlight the main signal, key reasoning, and major risks
+- Answer the user's actual question directly, then back it with evidence.
+- Use Markdown headings, bullets and tables where they help readability.
+- Cite concrete figures from the provided data instead of qualitative wording;
+  every number must come from the inputs, never invent one.
+- For a full analysis request (e.g. "Phân tích FPT"), cover each part the data
+  supports, and skip a part only when the inputs carry no data for it:
+  1. Conclusion: action, main signal, and what would change it
+  2. Price & volume: current price, change %, volume vs. average
+  3. Technicals: MA alignment with values, RSI/MACD with the correct reading
+     (RSI above 70 is overbought, below 30 is oversold), support/resistance
+  4. Fund flows: foreign / proprietary net buying or selling, when available
+  5. Fundamentals & valuation: earnings, P/E, P/B, ROE, when available
+  6. News & catalysts: the key items with their dates
+  7. Risks
+  8. Trading plan: entry zone, stop-loss, targets, for both flat and existing positions
+  9. Data limitations: missing, stale or partial data that weakens the view
+- For a narrow question (e.g. "Có nên mua không?"), answer it first in a few
+  sentences, then give the key supporting figures, risks and price levels.
+- Express confidence as High / Medium / Low with the reason; do not invent
+  percentage confidence figures.
+- Do not write your own "not investment advice" disclaimer; the system appends one.
 - Do NOT output JSON or code fences unless the user explicitly asks for them
+
+Consistency with the system analysis:
+- If a "Reference: latest calibrated system analysis" section is provided, it is
+  the system's official, risk- and structure-calibrated view. Keep your action
+  consistent with its decision_type / operation_advice by default.
+- Deviate only when the current data clearly contradicts it (for example a
+  support break, a confirmed breakout, or new material news). When you deviate,
+  say so explicitly near the top, stating the reference time, the reference
+  action, your action, and the concrete evidence for the change.
+- Always obey any "Mandatory risk constraints" section.
+
+Actionability guardrails:
+- Do not flip directly between buy and sell only because one trading day moved up or down.
+- Base the action on support/resistance, volume context and risk flags.
+- Near resistance without a confirmed breakout, prefer watch/hold over buying the rebound.
+- Buy requires support confirmation or a valid resistance breakout with volume confirmation.
+- Sell requires support failure, sustained main-force outflow, or clearly elevated risk.
 """
             if report_language == "vi":
                 return prompt + (
@@ -256,6 +292,7 @@ Never copy them verbatim — write the Vietnamese equivalent. Only `decision_typ
             parts.append("")
 
         if self._is_chat_mode(ctx):
+            parts.extend(self._chat_reference_sections(ctx))
             parts.append(
                 "Answer the user in natural language using the evidence above. "
                 "Do not output JSON unless the user explicitly requests structured data."
@@ -263,6 +300,44 @@ Never copy them verbatim — write the Vietnamese equivalent. Only `decision_typ
         else:
             parts.append("Synthesise the above into the Decision Dashboard JSON.")
         return "\n".join(parts)
+
+    @staticmethod
+    def _chat_reference_sections(ctx: AgentContext) -> List[str]:
+        """Tham chiếu báo cáo đã hiệu chỉnh và ràng buộc rủi ro cho câu trả lời chat.
+
+        Câu chat là văn bản tự do nên không qua ghi đè rủi ro như dashboard; đưa cùng
+        nguồn sự thật (``build_risk_override_plan``) vào làm ràng buộc bắt buộc.
+        Calibrated-report reference plus risk constraints for the free-text chat answer,
+        built from the same ``build_risk_override_plan`` source the dashboard uses.
+        """
+        from src.agent.risk_override import build_risk_override_plan
+
+        sections: List[str] = []
+        previous = ctx.meta.get("previous_analysis")
+        if isinstance(previous, dict) and previous:
+            sections.append("## Reference: latest calibrated system analysis")
+            sections.append(json.dumps(previous, ensure_ascii=False, default=str))
+            sections.append("")
+
+        if ctx.meta.get("agent_risk_override", True):
+            plan = build_risk_override_plan(ctx, current_signal=None, override_enabled=True)
+            constraints: List[str] = []
+            if plan.veto_buy:
+                constraints.append(
+                    f"- Risk veto ({plan.reason}): you must not recommend buying or adding; "
+                    "the strongest allowed action is hold/watch."
+                )
+            elif plan.adjustment in ("downgrade_one", "downgrade_two"):
+                steps = 1 if plan.adjustment == "downgrade_one" else 2
+                constraints.append(
+                    f"- Risk downgrade ({plan.adjustment}): lower the evidence-based action by "
+                    f"{steps} step(s) on the buy -> hold -> sell scale."
+                )
+            if constraints:
+                sections.append("## Mandatory risk constraints")
+                sections.extend(constraints)
+                sections.append("")
+        return sections
 
     def post_process(self, ctx: AgentContext, raw_text: str) -> Optional[AgentOpinion]:
         """Store the parsed dashboard in ctx.meta; also return an opinion."""

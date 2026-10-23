@@ -1031,6 +1031,24 @@ class TestOrchestratorModes(unittest.TestCase):
         self.assertEqual(ctx.stock_name, "贵州茅台")
         self.assertEqual(ctx.meta["skills_requested"], ["bull_trend"])
 
+    def test_build_context_keeps_previous_analysis_for_chat_follow_up(self):
+        # Multi-agent trước đây bỏ qua ngữ cảnh báo cáo Web gửi khi hỏi tiếp.
+        orch = self._make_orchestrator()
+        ctx = orch._build_context(
+            "Có nên mua TCB không?",
+            context={
+                "stock_code": "TCB",
+                "previous_analysis_summary": {"operation_advice": "Quan sát"},
+                "previous_price": 34200,
+                "previous_strategy": {},
+            },
+        )
+
+        self.assertEqual(
+            ctx.meta["previous_analysis"],
+            {"previous_analysis_summary": {"operation_advice": "Quan sát"}, "previous_price": 34200},
+        )
+
     def test_specialist_builder_allows_four_requested_skills(self):
         orch = self._make_orchestrator("specialist")
         ctx = AgentContext(query="test", stock_code="600519")
@@ -2185,6 +2203,81 @@ class TestDecisionAgentChatMode(unittest.TestCase):
         self.assertIn("watch_conditions", prompt)
         self.assertIn("data_limitations", prompt)
         self.assertIn("confidence_level", prompt)
+
+    def test_chat_prompt_requires_data_backed_answer_without_own_disclaimer(self):
+        # Prompt cũ đòi "concise" nên câu chat thiếu số liệu và lặp dòng miễn trừ.
+        # The old "concise" prompt produced thin answers and a duplicated disclaimer.
+        from src.agent.agents.decision_agent import DecisionAgent
+
+        agent = DecisionAgent(tool_registry=MagicMock(), llm_adapter=MagicMock())
+        ctx = AgentContext(query="Phân tích TCB", stock_code="TCB")
+        ctx.meta["response_mode"] = "chat"
+        ctx.meta["report_language"] = "vi"
+
+        prompt = agent.system_prompt(ctx)
+
+        self.assertNotIn("concise", prompt)
+        self.assertIn("Cite concrete figures", prompt)
+        self.assertIn("RSI above 70 is overbought", prompt)
+        self.assertIn("Fund flows", prompt)
+        self.assertIn("Data limitations", prompt)
+        self.assertIn("do not invent", prompt)
+        self.assertIn('Do not write your own "not investment advice" disclaimer', prompt)
+        self.assertIn("Tiếng Việt", prompt)
+        self.assertNotIn('"action_checklist"', prompt)
+
+    def test_chat_message_includes_reference_and_risk_veto_constraint(self):
+        from src.agent.agents.decision_agent import DecisionAgent
+
+        agent = DecisionAgent(tool_registry=MagicMock(), llm_adapter=MagicMock())
+        ctx = AgentContext(query="Phân tích TCB", stock_code="TCB")
+        ctx.meta["response_mode"] = "chat"
+        ctx.meta["agent_risk_override"] = True
+        ctx.meta["previous_analysis"] = {
+            "previous_analysis_summary": {"decision_type": "hold", "created_at": "2026-10-23 17:04"},
+        }
+        ctx.add_opinion(AgentOpinion(
+            agent_name="risk", signal="hold", confidence=0.7, reasoning="Rủi ro cao",
+            raw_data={"risk_level": "high", "veto_buy": True, "signal_adjustment": "veto"},
+        ))
+
+        message = agent.build_user_message(ctx)
+
+        self.assertIn("## Reference: latest calibrated system analysis", message)
+        self.assertIn('"decision_type": "hold"', message)
+        self.assertIn("## Mandatory risk constraints", message)
+        self.assertIn("must not recommend buying", message)
+
+    def test_chat_message_omits_constraints_without_trigger_or_when_disabled(self):
+        from src.agent.agents.decision_agent import DecisionAgent
+
+        agent = DecisionAgent(tool_registry=MagicMock(), llm_adapter=MagicMock())
+        ctx = AgentContext(query="Phân tích TCB", stock_code="TCB")
+        ctx.meta["response_mode"] = "chat"
+        ctx.add_opinion(AgentOpinion(
+            agent_name="risk", signal="hold", confidence=0.6, reasoning="Ổn",
+            raw_data={"risk_level": "low", "veto_buy": False, "signal_adjustment": "none"},
+        ))
+        self.assertNotIn("Mandatory risk constraints", agent.build_user_message(ctx))
+        self.assertNotIn("Reference: latest calibrated", agent.build_user_message(ctx))
+
+        ctx.opinions[-1].raw_data = {"veto_buy": True, "signal_adjustment": "veto"}
+        ctx.meta["agent_risk_override"] = False
+        self.assertNotIn("Mandatory risk constraints", agent.build_user_message(ctx))
+
+    def test_chat_prompt_requires_consistency_with_reference(self):
+        from src.agent.agents.decision_agent import DecisionAgent
+
+        agent = DecisionAgent(tool_registry=MagicMock(), llm_adapter=MagicMock())
+        ctx = AgentContext(query="Phân tích TCB", stock_code="TCB")
+        ctx.meta["response_mode"] = "chat"
+
+        prompt = agent.system_prompt(ctx)
+
+        self.assertIn("Keep your action\n  consistent", prompt)
+        self.assertIn("say so explicitly near the top", prompt)
+        self.assertIn('Always obey any "Mandatory risk constraints" section.', prompt)
+        self.assertIn("Do not flip directly between buy and sell", prompt)
 
 
 class TestTechnicalAgentSkillPolicy(unittest.TestCase):
