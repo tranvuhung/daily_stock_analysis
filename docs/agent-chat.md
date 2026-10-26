@@ -2,6 +2,8 @@
 
 Tài liệu mô tả luồng của trang **Hỏi đáp** (`/chat` trên Web UI): người dùng đặt câu hỏi về cổ phiếu, Agent gọi các công cụ dữ liệu rồi LLM tổng hợp thành báo cáo quyết định.
 
+Sơ đồ workflow tổng thể (pipeline phân tích mã, multi-agent, vòng ReAct, chat) xem [agent-workflow.md](agent-workflow.md).
+
 ## 1. Tổng quan luồng
 
 ```

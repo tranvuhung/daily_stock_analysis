@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [文档] Thêm `docs/agent-workflow.md`: sơ đồ Mermaid cho workflow phân tích mã (legacy / agent), kiến trúc single và multi-agent, vòng ReAct, luồng Chat hỏi đáp và bảng tool / cờ cấu hình liên quan.
 - [修复] "Lưu ý rủi ro" khi quản trị rủi ro hạ tín hiệu (multi-agent) không còn bị cắt cứng ở 500 ký tự (trước đây cụt giữa từ và mất lý do của RiskAgent cùng các cờ rủi ro phía sau); câu mở đầu hiển thị tín hiệu theo ngôn ngữ báo cáo ("hạ xuống Bán" thay vì "sell").
 - [新功能] Agent (Hỏi đáp và phân tích chế độ agent) có dòng tiền khối ngoại / tự doanh **theo từng mã** từ FiinTrade (`GetForeign` / `GetProprietaryV2` với `ComGroupCode=<organCode>`): ròng hôm nay / 1 tuần / 1 tháng / YTD kèm khoảng ngày, qua công cụ mới `get_stock_money_flow`; orchestrator multi-agent nạp sẵn một lần (fail-open) để DecisionAgent thấy được. Ròng tự doanh luôn tính bằng mua − bán vì API tách ròng thành hai trường không âm. Chỉ chạy khi có `FIINTRADE_ORIGIN`.
 - [修复] Công cụ `get_realtime_quote` của agent làm rơi các trường khối ngoại trong phiên (mua/bán/ròng, room, tỷ lệ sở hữu), ROE, EPS, giá trị thoả thuận và KL bình quân 1 tháng dù báo giá có; nay trả kèm khi có giá trị.
