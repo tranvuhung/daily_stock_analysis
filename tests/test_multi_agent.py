@@ -3066,6 +3066,36 @@ class TestRiskOverride(unittest.TestCase):
         self.assertIn("Quản trị rủi ro can thiệp", dashboard["risk_warning"])
         self.assertEqual(ctx.opinions[0].signal, "hold")
 
+    def test_merge_risk_warning_keeps_full_text_and_flags(self):
+        from src.agent.orchestrator import AgentOrchestrator
+
+        last_sentence = "Câu cuối cùng về khối ngoại nước ngoài phải còn nguyên."
+        existing = ("Rủi ro kỹ thuật ngắn hạn. " * 25) + last_sentence
+        self.assertGreater(len(existing), 600)
+
+        merged = AgentOrchestrator._merge_risk_warning(
+            existing,
+            {"reasoning": "Lý do của RiskAgent"},
+            [{"description": "Bán ròng kéo dài", "severity": "high"}],
+            "sell",
+            "vi",
+        )
+
+        self.assertIn(last_sentence, merged)
+        self.assertIn("Lý do của RiskAgent", merged)
+        self.assertIn("[high] Bán ròng kéo dài", merged)
+        self.assertTrue(merged.endswith("[high] Bán ròng kéo dài"))
+
+    def test_merge_risk_warning_localizes_signal(self):
+        from src.agent.orchestrator import AgentOrchestrator
+
+        vi = AgentOrchestrator._merge_risk_warning("", {}, [], "sell", "vi")
+        self.assertIn("hạ xuống Bán", vi)
+        self.assertNotIn("sell", vi)
+
+        en = AgentOrchestrator._merge_risk_warning("", {}, [], "sell", "en")
+        self.assertIn("downgraded to Sell", en)
+
     def test_risk_override_normalizes_strong_buy_before_veto(self):
         from src.agent.orchestrator import AgentOrchestrator
 

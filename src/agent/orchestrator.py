@@ -66,7 +66,7 @@ from src.agent.stock_scope import resolve_stock_scope
 from src.agent.stream_events import stream_event
 from src.agent.tools.registry import ToolRegistry
 from src.config import AGENT_MAX_STEPS_DEFAULT, get_config
-from src.report_language import normalize_report_language
+from src.report_language import localize_operation_advice, normalize_report_language
 
 if TYPE_CHECKING:
     from src.agent.executor import AgentResult
@@ -1951,7 +1951,7 @@ class AgentOrchestrator:
         signal: str,
         language: str = "vi",
     ) -> str:
-        """Build a concise risk warning after a forced downgrade."""
+        """Build the risk warning after a forced downgrade (no truncation)."""
         warnings: List[str] = []
         if isinstance(existing_warning, str) and existing_warning.strip():
             warnings.append(existing_warning.strip())
@@ -1962,9 +1962,13 @@ class AgentOrchestrator:
             severity = str(flag.get("severity", "")).lower()
             if description:
                 warnings.append(f"[{severity or 'risk'}] {description}")
-        prefix = _fallback_text("risk_takeover", language).format(signal=signal)
-        merged = " ".join(dict.fromkeys([prefix] + warnings))
-        return merged[:500]
+        # Hiển thị tín hiệu theo ngôn ngữ báo cáo (sell -> "Bán") thay vì mã thô.
+        # Show the signal in the report language instead of the raw code.
+        signal_label = localize_operation_advice(signal, language) or signal
+        prefix = _fallback_text("risk_takeover", language).format(signal=signal_label)
+        # Không cắt theo số ký tự: cắt cứng làm cụt câu giữa từ và mất lý do/cờ rủi ro phía sau.
+        # No character cap: a hard cut broke words and dropped the risk reasoning and flags.
+        return " ".join(dict.fromkeys([prefix] + warnings))
 
 
 # Common English words (2-5 uppercase letters) that should NOT be treated as
