@@ -498,6 +498,31 @@ class AgentOrchestrator:
     # Pipeline execution
     # -----------------------------------------------------------------
 
+    @staticmethod
+    def _prefetch_stock_money_flow(ctx: AgentContext) -> None:
+        """Nạp sẵn dòng tiền khối ngoại / tự doanh theo mã vào ``ctx.data`` (fail-open).
+
+        Kết quả công cụ của agent phụ không vào ``ctx.data``, nên DecisionAgent chỉ thấy
+        dòng tiền nếu được nạp sẵn ở đây; ``_inject_cached_data`` đưa nó cho mọi agent.
+        Tool results of sub-agents never reach ``ctx.data``, so the flow is pre-fetched
+        once here and injected into every agent, including DecisionAgent.
+        """
+        from src.agent.stock_scope import normalize_vn_stock_code
+        from data_provider.base import is_vn_index_code
+
+        code = normalize_vn_stock_code(ctx.stock_code)
+        if not code or is_vn_index_code(code) or ctx.get_data("stock_money_flow"):
+            return
+        try:
+            from src.agent.tools.data_tools import _get_fetcher_manager
+
+            flow = _get_fetcher_manager().get_stock_money_flow(code)
+        except Exception as exc:
+            logger.debug("[Orchestrator] prefetch stock money flow failed for %s: %s", code, exc)
+            return
+        if flow:
+            ctx.set_data("stock_money_flow", flow)
+
     def _execute_pipeline(
         self,
         ctx: AgentContext,
@@ -511,6 +536,7 @@ class AgentOrchestrator:
         t0 = time.time()
         timeout_s = self._get_timeout_seconds()
 
+        self._prefetch_stock_money_flow(ctx)
         agents = self._build_agent_chain(ctx)
         specialist_agents_inserted = False
         index = 0

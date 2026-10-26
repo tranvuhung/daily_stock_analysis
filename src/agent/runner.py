@@ -67,6 +67,7 @@ __all__ = [
 # Tool name → friendly label for progress messages (user-facing, Vietnamese).
 _THINKING_TOOL_LABELS: Dict[str, str] = {
     "get_realtime_quote": "Lấy giá thời gian thực",
+    "get_stock_money_flow": "Lấy dòng tiền khối ngoại / tự doanh",
     "get_daily_history": "Lấy dữ liệu nến ngày",
     "analyze_trend": "Phân tích chỉ báo kỹ thuật",
     "search_stock_news": "Tìm kiếm tin tức",

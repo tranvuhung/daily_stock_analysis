@@ -85,6 +85,16 @@ Thị trường (kiểm chứng 2026-10-21):
     công bố lại gộp hai phiên (``20/10 → 21/10``). Vì vậy luôn giữ nguyên
     ``fromDate``/``toDate`` của API và để tầng prompt nêu rõ khoảng ngày, không
     gán là "hôm nay". Danh sách top lẫn chứng quyền nên phải lọc.
+
+Dòng tiền theo mã (kiểm chứng 2026-10-23):
+
+17. ``GetForeign`` / ``GetProprietaryV2`` nhận ``ComGroupCode=<organCode>`` để trả dòng
+    tiền **của một mã** (HOSE, HNX, UPCOM; VHM → ``NHN``, ACV → ``ACVN``), cùng 4 kỳ
+    và cấu trúc với cấp sàn. Khối ngoại hôm nay khớp ``GetPriceDepth`` (TCB +152,06 tỷ).
+18. Tự doanh tách ròng thành hai trường không âm ``totalNetBuyTradeValue`` /
+    ``totalNetSellTradeValue`` (TCB 1 tháng: 0 / 765,31) nên ròng luôn tính bằng
+    mua − bán. Khối ngoại 1 tuần/1 tháng/YTD kết thúc ở phiên trước, tự doanh có thể
+    kết thúc hôm nay hoặc dừng sớm (ACV YTD đến 31/07): luôn giữ ``from``/``to``.
 """
 
 import logging
@@ -924,11 +934,16 @@ class FiinTradeFetcher(BaseFetcher):
         }
 
     def _load_flow(
-        self, path: str, buy_key: str, sell_key: str, net_key: str
+        self,
+        path: str,
+        buy_key: str,
+        sell_key: str,
+        net_key: str,
+        group_code: str = _FLOW_SCOPE_CODE,
     ) -> Optional[Dict[str, Any]]:
         data = self._get_json(
             path,
-            {"language": "vi", "ComGroupCode": _FLOW_SCOPE_CODE},
+            {"language": "vi", "ComGroupCode": group_code},
             base_url=FIINTRADE_MARKET_BASE_URL,
         )
         if str(data.get("status") or "").lower() == "failed":
@@ -977,6 +992,57 @@ class FiinTradeFetcher(BaseFetcher):
             return result if ("foreign" in result or "proprietary" in result) else None
 
         return self._cached_market("money_flow", _MONEY_FLOW_CACHE_TTL, _load)
+
+    def get_stock_money_flow(self, stock_code: str) -> Optional[Dict[str, Any]]:
+        """Dòng tiền khối ngoại và tự doanh của một mã theo kỳ (tỷ đồng).
+
+        Cùng endpoint với cấp sàn nhưng ``ComGroupCode`` là organCode của mã (mục 17).
+        Mỗi nhánh fail-open; ròng = mua − bán (mục 18); giữ nguyên ``from``/``to``.
+        Per-stock foreign and proprietary flows by period; each branch is fail-open.
+        """
+
+        code, chart_type, ticker = self._resolve_code(stock_code)
+        if code is None or chart_type != "Stock":
+            return None
+
+        def _strip_tops(periods: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+            # Cấp mã thì danh sách top chỉ có chính mã đó. / Per-stock tops only list the stock.
+            if not periods:
+                return None
+            return {
+                key: {k: v for k, v in value.items() if not k.startswith("top_")}
+                for key, value in periods.items()
+            }
+
+        def _load() -> Optional[Dict[str, Any]]:
+            result: Dict[str, Any] = {"stock_code": ticker, "unit": "VND bn"}
+            try:
+                foreign = _strip_tops(self._load_flow(
+                    _FOREIGN_FLOW_PATH,
+                    "foreignBuyValue",
+                    "foreignSellValue",
+                    "foreignNetBuyValue",
+                    group_code=code,
+                ))
+                if foreign:
+                    result["foreign"] = foreign
+            except Exception as exc:
+                logger.warning("[%s] %s lấy dòng tiền khối ngoại thất bại: %s", self.name, ticker, exc)
+            try:
+                proprietary = _strip_tops(self._load_flow(
+                    _PROPRIETARY_FLOW_PATH,
+                    "totalBuyTradeValue",
+                    "totalSellTradeValue",
+                    "totalNetBuyTradeValue",
+                    group_code=code,
+                ))
+                if proprietary:
+                    result["proprietary"] = proprietary
+            except Exception as exc:
+                logger.warning("[%s] %s lấy dòng tiền tự doanh thất bại: %s", self.name, ticker, exc)
+            return result if ("foreign" in result or "proprietary" in result) else None
+
+        return self._cached_market(f"stock_flow:{code}", _MONEY_FLOW_CACHE_TTL, _load)
 
     # ------------------------------------------------------------------
     # Động lực thị trường: mã dẫn dắt chỉ số, đột biến KL, diễn biến trong ngày

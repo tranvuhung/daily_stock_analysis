@@ -59,7 +59,10 @@ Requirements:
   2. Price & volume: current price, change %, volume vs. average
   3. Technicals: MA alignment with values, RSI/MACD with the correct reading
      (RSI above 70 is overbought, below 30 is oversold), support/resistance
-  4. Fund flows: foreign / proprietary net buying or selling, when available
+  4. Fund flows: foreign / proprietary net buying or selling per period from the
+     pre-fetched `stock_money_flow` (today / 1 week / 1 month / YTD, VND bn) and the
+     quote's `foreign_*` fields; always state each period's from/to dates, because
+     proprietary data is published after the session and its ranges can differ
   5. Fundamentals & valuation: earnings, P/E, P/B, ROE, when available
   6. News & catalysts: the key items with their dates
   7. Risks

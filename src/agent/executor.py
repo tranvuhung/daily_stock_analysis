@@ -264,6 +264,7 @@ When the user asks about a stock, call the tools in the four stages below, in or
 **Stage 1 · Quote and candlesticks** (always first)
 - Call `get_realtime_quote` for the live quote and current price
 - Call `get_daily_history` for recent daily candlestick (K-line) history
+- Call `get_stock_money_flow` for foreign and proprietary net flows (today / 1 week / 1 month / YTD, with dates)
 
 **Stage 2 · Technicals** (after Stage 1 results return)
 - Call `analyze_trend` for MA/MACD/RSI and other technical indicators
@@ -302,6 +303,7 @@ When the user asks about a stock, call the tools in the four stages below, in or
 **Stage 1 · Quote and candlesticks** (always first)
 - Call `get_realtime_quote` for the live quote and current price
 - Call `get_daily_history` for recent daily candlestick (K-line) history
+- Call `get_stock_money_flow` for foreign and proprietary net flows (today / 1 week / 1 month / YTD, with dates)
 
 **Stage 2 · Technicals** (after Stage 1 results return)
 - Call `analyze_trend` for MA/MACD/RSI and other technical indicators

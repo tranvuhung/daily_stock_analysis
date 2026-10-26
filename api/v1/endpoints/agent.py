@@ -23,6 +23,7 @@ from src.services.agent_model_service import list_agent_model_deployments
 # Tên công cụ -> tên hiển thị (tiếng Anh). / Tool name -> English display name mapping.
 TOOL_DISPLAY_NAMES: Dict[str, str] = {
     "get_realtime_quote":         "Get realtime quote",
+    "get_stock_money_flow":       "Get foreign / proprietary money flow",
     "get_daily_history":          "Get historical K-lines",
     "get_analysis_context":       "Get analysis context",
     "get_stock_info":             "Get stock fundamentals",

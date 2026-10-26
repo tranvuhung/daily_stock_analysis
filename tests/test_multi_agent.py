@@ -1049,6 +1049,28 @@ class TestOrchestratorModes(unittest.TestCase):
             {"previous_analysis_summary": {"operation_advice": "Quan sát"}, "previous_price": 34200},
         )
 
+    def test_prefetch_stock_money_flow_loads_once_and_is_fail_open(self):
+        # Kết quả công cụ của agent phụ không vào ctx.data nên dòng tiền phải nạp sẵn.
+        from src.agent.orchestrator import AgentOrchestrator
+
+        manager = MagicMock(get_stock_money_flow=MagicMock(return_value={"stock_code": "TCB"}))
+        with patch("src.agent.tools.data_tools._get_fetcher_manager", return_value=manager):
+            ctx = AgentContext(query="Phân tích TCB", stock_code="TCB")
+            AgentOrchestrator._prefetch_stock_money_flow(ctx)
+            AgentOrchestrator._prefetch_stock_money_flow(ctx)
+            self.assertEqual(ctx.get_data("stock_money_flow"), {"stock_code": "TCB"})
+            manager.get_stock_money_flow.assert_called_once_with("TCB")
+
+            for code in ("", "VNINDEX"):
+                AgentOrchestrator._prefetch_stock_money_flow(AgentContext(query="x", stock_code=code))
+            manager.get_stock_money_flow.assert_called_once()
+
+        broken = MagicMock(get_stock_money_flow=MagicMock(side_effect=RuntimeError("down")))
+        with patch("src.agent.tools.data_tools._get_fetcher_manager", return_value=broken):
+            ctx = AgentContext(query="Phân tích FPT", stock_code="FPT")
+            AgentOrchestrator._prefetch_stock_money_flow(ctx)
+            self.assertIsNone(ctx.get_data("stock_money_flow"))
+
     def test_specialist_builder_allows_four_requested_skills(self):
         orch = self._make_orchestrator("specialist")
         ctx = AgentContext(query="test", stock_code="600519")

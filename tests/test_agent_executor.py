@@ -336,6 +336,7 @@ class TestAgentExecutor(unittest.TestCase):
 
         for template in (CHAT_SYSTEM_PROMPT, LEGACY_DEFAULT_CHAT_SYSTEM_PROMPT):
             self.assertIn("**Stay consistent with the saved analysis**", template)
+            self.assertIn("Call `get_stock_money_flow`", template)
             self.assertIn("stating the reference time, the reference action, your action and the evidence", template)
 
     def test_chat_does_not_trust_exchange_token_from_public_context(self):

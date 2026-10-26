@@ -361,6 +361,13 @@ class BaseFetcher(ABC):
         """
         return None
 
+    def get_stock_money_flow(self, stock_code: str) -> Optional[Dict[str, Any]]:
+        """Dòng tiền khối ngoại / tự doanh của một mã theo kỳ; mặc định không hỗ trợ.
+
+        Per-stock foreign / proprietary flows by period; unsupported by default.
+        """
+        return None
+
     def get_market_drivers(self, region: str = "vn") -> Optional[Dict[str, Any]]:
         """Mã dẫn dắt chỉ số, mã đột biến KL, diễn biến trong phiên; mặc định không hỗ trợ.
 
@@ -1635,6 +1642,35 @@ class DataFetcherManager:
                 logger.info(
                     "[MoneyFlow] action=provider_success region=%s provider=%s elapsed=%.2fs",
                     region,
+                    fetcher.name,
+                    time.monotonic() - started_at,
+                )
+                return data
+        return {}
+
+    def get_stock_money_flow(self, stock_code: str) -> Dict[str, Any]:
+        """Dòng tiền khối ngoại / tự doanh của một mã (nguồn đầu tiên có dữ liệu).
+
+        Lỗi của một nguồn chỉ được log, không làm hỏng luồng phân tích / Hỏi đáp.
+        Per-stock money flow from the first provider with data; fail-open.
+        """
+        for fetcher in self._get_fetchers_snapshot():
+            started_at = time.monotonic()
+            try:
+                data = fetcher.get_stock_money_flow(stock_code)
+            except Exception as e:
+                logger.warning(
+                    "[StockMoneyFlow] action=provider_failed code=%s provider=%s elapsed=%.2fs error=%s",
+                    stock_code,
+                    fetcher.name,
+                    time.monotonic() - started_at,
+                    e,
+                )
+                continue
+            if data:
+                logger.info(
+                    "[StockMoneyFlow] action=provider_success code=%s provider=%s elapsed=%.2fs",
+                    stock_code,
                     fetcher.name,
                     time.monotonic() - started_at,
                 )

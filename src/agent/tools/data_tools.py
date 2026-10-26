@@ -265,7 +265,7 @@ def _handle_get_realtime_quote(stock_code: str) -> dict:
             "note": "All data sources unavailable (network or circuit-breaker). Skip this tool and proceed with historical data only.",
         }
 
-    return {
+    result = {
         "code": quote.code,
         "name": quote.name,
         "price": quote.price,
@@ -287,6 +287,24 @@ def _handle_get_realtime_quote(stock_code: str) -> dict:
         "change_60d": quote.change_60d,
         "source": quote.source.value if hasattr(quote.source, 'value') else str(quote.source),
     }
+    # Trường bổ sung của nguồn VN (khối ngoại trong phiên, ROE/EPS, thoả thuận); trước đây
+    # bị bỏ nên agent không thấy khối ngoại dù báo giá có. Chỉ thêm khi có giá trị.
+    # Extra VN fields (session foreign flow, ROE/EPS, put-through), added only when present.
+    for field_name in (
+        "foreign_buy_value",
+        "foreign_sell_value",
+        "foreign_net_value",
+        "foreign_room_remaining",
+        "foreign_ownership_pct",
+        "roe",
+        "eps_ttm",
+        "put_through_value",
+        "avg_volume_1m",
+    ):
+        value = getattr(quote, field_name, None)
+        if value is not None:
+            result[field_name] = value
+    return result
 
 
 get_realtime_quote_tool = ToolDefinition(
@@ -301,6 +319,46 @@ get_realtime_quote_tool = ToolDefinition(
         ),
     ],
     handler=_handle_get_realtime_quote,
+    category="data",
+    policy=_MARKET_DATA_STOCK_POLICY,
+)
+
+
+# ============================================================
+# get_stock_money_flow
+# ============================================================
+
+def _handle_get_stock_money_flow(stock_code: str) -> dict:
+    """Dòng tiền khối ngoại / tự doanh của một mã theo kỳ (tỷ đồng).
+
+    Per-stock foreign / proprietary flows by period (VND bn).
+    """
+    manager = _get_fetcher_manager()
+    data = manager.get_stock_money_flow(stock_code)
+    if not data:
+        return {
+            "error": f"No money flow data available for {stock_code}",
+            "retriable": False,
+            "note": "Per-stock flow source unavailable (indices are not supported). Do not invent flow figures.",
+        }
+    return data
+
+
+get_stock_money_flow_tool = ToolDefinition(
+    name="get_stock_money_flow",
+    description="Get per-stock foreign investor and proprietary (securities-firm) trading "
+                "flows for today, 1 week, 1 month and year-to-date, in VND billion "
+                "(buy, sell, net = buy - sell). Each period carries its own from/to dates; "
+                "keep them when citing figures (proprietary data is published after the "
+                "session and its ranges can differ from foreign data).",
+    parameters=[
+        ToolParameter(
+            name="stock_code",
+            type="string",
+            description="Stock code, e.g., 'TCB', 'FPT' (indices are not supported)",
+        ),
+    ],
+    handler=_handle_get_stock_money_flow,
     category="data",
     policy=_MARKET_DATA_STOCK_POLICY,
 )
@@ -610,6 +668,7 @@ get_portfolio_snapshot_tool = ToolDefinition(
 
 ALL_DATA_TOOLS = [
     get_realtime_quote_tool,
+    get_stock_money_flow_tool,
     get_daily_history_tool,
     get_analysis_context_tool,
     get_stock_info_tool,

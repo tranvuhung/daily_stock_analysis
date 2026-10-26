@@ -28,6 +28,7 @@ class IntelAgent(BaseAgent):
         "search_stock_news",
         "search_comprehensive_intel",
         "get_stock_info",
+        "get_stock_money_flow",
     ]
 
     def system_prompt(self, ctx: AgentContext) -> str:
@@ -52,6 +53,8 @@ announcements, market analysis, risk checks, and earnings outlook
 - Industry-wide policy headwinds
 - Large lock-up expirations
 - PE valuation anomalies
+- Sustained foreign or proprietary net selling (use the pre-fetched `stock_money_flow` \
+data, or call get_stock_money_flow; cite each period with its from/to dates)
 
 ## Output Format
 Return **only** a JSON object:

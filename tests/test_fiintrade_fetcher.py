@@ -732,6 +732,107 @@ class FiinTradeMarketDriversTestCase(unittest.TestCase):
         self.assertIsNone(self.fetcher.get_market_drivers("us"))
 
 
+# Rút gọn từ response thật theo mã (2026-10-23): TCB khối ngoại + tự doanh.
+# Trimmed from the real per-stock responses (2026-10-23).
+_STOCK_FOREIGN_PAYLOAD = {
+    "items": [{
+        "comGroupCode": "TCB",
+        "today": {
+            "fromDate": "2026-10-23T00:00:00", "toDate": "2026-10-23T00:00:00",
+            "foreignBuyValue": 280690221500.0, "foreignSellValue": 128629721500.0,
+            "foreignNetBuyValue": 152060500000.0,
+            "netBuy": [{"ticker": "TCB", "foreignNetBuyValue": 152060500000.0}], "netSell": [],
+        },
+        "oneMonth": {
+            "fromDate": "2026-09-23T00:00:00", "toDate": "2026-10-22T00:00:00",
+            "foreignBuyValue": 2463380000000.0, "foreignSellValue": 3039140000000.0,
+            "netBuy": [], "netSell": [],
+        },
+    }],
+    "status": "Success",
+}
+
+_STOCK_PROPRIETARY_PAYLOAD = {
+    "items": [{
+        "comGroupCode": "TCB",
+        "oneMonth": {
+            "fromDate": "2026-09-24T00:00:00", "toDate": "2026-10-23T00:00:00",
+            "totalBuyTradeValue": 2399370000000.0, "totalSellTradeValue": 3164690000000.0,
+            # Ròng tách hai trường không âm: NetBuy = 0 dù ròng thật âm (mục 18).
+            "totalNetBuyTradeValue": 0.0, "totalNetSellTradeValue": 765320000000.0,
+            "netBuy": [], "netSell": [{"ticker": "TCB", "totalNetBuyTradeValue": 0.0}],
+        },
+    }],
+    "status": "Success",
+}
+
+
+class FiinTradeStockMoneyFlowTestCase(unittest.TestCase):
+    """Dòng tiền khối ngoại / tự doanh theo từng mã (mục 17-18 ở đầu module)."""
+
+    def setUp(self):
+        module.reset_market_cache()
+        self.fetcher = FiinTradeFetcher(min_interval=0.0, origin="https://partner.example")
+
+    def tearDown(self):
+        module.reset_market_cache()
+
+    def _get(self, foreign=_STOCK_FOREIGN_PAYLOAD, proprietary=_STOCK_PROPRIETARY_PAYLOAD, calls=None):
+        def _inner(url, params=None, timeout=None):
+            if calls is not None:
+                calls.append((url, dict(params or {})))
+            payload = foreign if url.endswith("/MoneyFlow/GetForeign") else proprietary
+            if isinstance(payload, Exception):
+                raise payload
+            return _response(payload)
+        return _inner
+
+    def test_stock_flow_parses_periods_and_uses_buy_minus_sell(self):
+        with patch.object(self.fetcher._session, "get", side_effect=self._get()):
+            flow = self.fetcher.get_stock_money_flow("TCB")
+
+        self.assertEqual((flow["stock_code"], flow["unit"]), ("TCB", "VND bn"))
+        today = flow["foreign"]["today"]
+        self.assertEqual((today["from"], today["to"], today["net"]), ("2026-10-23", "2026-10-23", 152.06))
+        self.assertEqual(flow["foreign"]["one_month"]["net"], -575.76)
+        self.assertNotIn("top_net_buy", today)
+        # Tự doanh: ròng thật = mua − bán (âm), không phải totalNetBuyTradeValue = 0.
+        self.assertEqual(flow["proprietary"]["one_month"]["net"], -765.32)
+
+    def test_stock_flow_sends_organ_code_and_skips_indices(self):
+        calls = []
+        with patch.object(FiinTradeFetcher, "_organization_map", return_value={"VHM": "NHN"}), \
+                patch.object(self.fetcher._session, "get", side_effect=self._get(calls=calls)):
+            flow = self.fetcher.get_stock_money_flow("VHM")
+            self.assertIsNone(self.fetcher.get_stock_money_flow("VNINDEX"))
+
+        self.assertEqual(flow["stock_code"], "VHM")
+        self.assertEqual({params["ComGroupCode"] for _url, params in calls}, {"NHN"})
+
+    def test_stock_flow_branch_failure_is_fail_open(self):
+        with patch.object(
+            self.fetcher._session, "get", side_effect=self._get(foreign=DataFetchError("boom")),
+        ):
+            flow = self.fetcher.get_stock_money_flow("TCB")
+
+        self.assertNotIn("foreign", flow)
+        self.assertIn("proprietary", flow)
+
+    def test_manager_stock_flow_falls_back_and_never_raises(self):
+        failing = SimpleNamespace(
+            name="FiinTradeFetcher", priority=0,
+            get_stock_money_flow=MagicMock(side_effect=DataFetchError("403")),
+        )
+        working = SimpleNamespace(
+            name="Other", priority=1,
+            get_stock_money_flow=MagicMock(return_value={"stock_code": "TCB"}),
+        )
+        manager = DataFetcherManager(fetchers=[failing, working])
+
+        self.assertEqual(manager.get_stock_money_flow("TCB"), {"stock_code": "TCB"})
+        self.assertEqual(DataFetcherManager(fetchers=[failing]).get_stock_money_flow("TCB"), {})
+
+
 class _MarketStub:
     def __init__(self, name, indices=None, stats=None, error=None):
         self.name = name
