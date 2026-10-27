@@ -11,13 +11,18 @@ import { PortfolioAiReviewCard } from '../components/portfolio/PortfolioAiReview
 import { useUiLanguage } from '../contexts/UiLanguageContext';
 import { formatUiText } from '../i18n/uiText';
 import { PORTFOLIO_TEXT } from '../locales/featureText';
+import { useAlertStore } from '../stores/alertStore';
 import {
+  applyLivePrices,
+  countMqttPricedPositions,
   formatCashDirectionLabel,
   formatCorporateActionLabel,
   formatMoney,
   formatPct,
   formatPositionMoney,
   formatPositionPrice,
+  formatQuantity,
+  formatSharePrice,
   formatSideLabel,
   formatSignedPct,
   getPositionPriceLabel,
@@ -186,7 +191,12 @@ const PortfolioPage: React.FC = () => {
     broker: 'Demo',
   });
   const [costMethod, setCostMethod] = useState<PortfolioCostMethod>('fifo');
-  const [snapshot, setSnapshot] = useState<PortfolioSnapshotResponse | null>(null);
+  const [baseSnapshot, setSnapshot] = useState<PortfolioSnapshotResponse | null>(null);
+  // Giá live từ feed MQTT (SSE price_update) ghép lên snapshot của server. Live MQTT ticks overlay.
+  const livePrices = useAlertStore((state) => state.livePrices);
+  const snapshot = useMemo(() => applyLivePrices(baseSnapshot, livePrices), [baseSnapshot, livePrices]);
+  const mqttPricedCount = useMemo(() => countMqttPricedPositions(snapshot), [snapshot]);
+  const realtimeSnapshotRequestRef = useRef(0);
   const [risk, setRisk] = useState<PortfolioRiskResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ParsedApiError | null>(null);
@@ -274,9 +284,29 @@ const PortfolioPage: React.FC = () => {
     }
   }, []);
 
+  // Lần tải nhanh không chờ giá realtime; sau đó xin snapshot có giá realtime ở nền
+  // (trong phiên: tick MQTT, ngoài phiên: FiinTrade). Lỗi thì giữ snapshot đang hiển thị.
+  // Fast load first, then a background snapshot with realtime prices.
+  const loadRealtimeSnapshot = useCallback(async () => {
+    const requestId = realtimeSnapshotRequestRef.current + 1;
+    realtimeSnapshotRequestRef.current = requestId;
+    try {
+      const realtimeData = await portfolioApi.getSnapshot({
+        accountId: queryAccountId,
+        costMethod,
+        includeRealtime: true,
+      });
+      if (realtimeSnapshotRequestRef.current === requestId) setSnapshot(realtimeData);
+    } catch {
+      // Giữ snapshot không kèm realtime. Keep the non-realtime snapshot.
+    }
+  }, [queryAccountId, costMethod]);
+
   const loadSnapshotAndRisk = useCallback(async () => {
     setIsLoading(true);
     setRiskWarning(null);
+    // Huỷ kết quả realtime của lần tải trước. Invalidate any in-flight realtime load.
+    realtimeSnapshotRequestRef.current += 1;
     try {
       const snapshotData = await portfolioApi.getSnapshot({
         accountId: queryAccountId,
@@ -285,6 +315,7 @@ const PortfolioPage: React.FC = () => {
       });
       setSnapshot(snapshotData);
       setError(null);
+      void loadRealtimeSnapshot();
 
       try {
         const riskData = await portfolioApi.getRisk({
@@ -305,7 +336,7 @@ const PortfolioPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [queryAccountId, costMethod]);
+  }, [queryAccountId, costMethod, loadRealtimeSnapshot]);
 
   const loadEventsPage = useCallback(async (page: number) => {
     setEventLoading(true);
@@ -930,7 +961,14 @@ const PortfolioPage: React.FC = () => {
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-3">
         <Card className="xl:col-span-2" padding="md">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-foreground">{text.positionsTitle}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-foreground">{text.positionsTitle}</h2>
+              {mqttPricedCount > 0 ? (
+                <span className="rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
+                  {text.livePriceBadge}
+                </span>
+              ) : null}
+            </div>
             <span className="text-xs text-secondary">{formatUiText(text.countItems, { count: positionRows.length })}</span>
           </div>
           {portfolioSignalsWarning ? (
@@ -973,8 +1011,8 @@ const PortfolioPage: React.FC = () => {
                     <tr key={rowKey} className="border-b border-white/5">
                       <td className="py-2 pr-2 text-secondary">{row.accountName}</td>
                       <td className="py-2 pr-2 font-mono text-foreground">{row.symbol}</td>
-                      <td className="py-2 pr-2 text-right">{row.quantity.toFixed(2)}</td>
-                      <td className="py-2 pr-2 text-right">{row.avgCost.toFixed(4)}</td>
+                      <td className="py-2 pr-2 text-right">{formatQuantity(row.quantity)}</td>
+                      <td className="py-2 pr-2 text-right">{formatSharePrice(row.avgCost)}</td>
                       <td className="py-2 pr-2 text-right">
                         <div>{formatPositionPrice(row)}</div>
                         <div className={`text-[11px] ${hasPositionPrice(row) ? 'text-secondary' : 'text-warning'}`}>

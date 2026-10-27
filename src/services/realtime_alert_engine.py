@@ -13,6 +13,8 @@ Luồng / Flow:
 - Mỗi ``RULE_REFRESH_SECONDS`` (hoặc khi CRUD rule gọi ``request_reload``) nạp lại rule và
   cập nhật tập mã subscribe của feed.
 - Ngoài phiên khớp lệnh VN thì không đánh giá.
+- ``extra_symbols_provider`` (vd. mã đang nắm giữ trong danh mục) được subscribe thêm chỉ để
+  phát ``price_update`` cho Web; không có rule nào được đánh giá cho các mã này.
 - Khi feed mất kết nối, ``claims`` trả ``False`` nên engine định kỳ tự đánh giá lại qua SSI.
 """
 
@@ -23,7 +25,7 @@ import threading
 import time
 from collections import defaultdict
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set
 
 from data_provider.realtime_feed import RealtimeTick, tick_to_quote, vn_bare_symbol
 from src.services.event_bus import publish_event
@@ -50,18 +52,22 @@ class RealtimeAlertEngine:
         config_provider: Callable[[], Any],
         session_checker: Callable[[], bool] = is_vn_price_alert_window,
         now: Callable[[], float] = time.time,
+        extra_symbols_provider: Optional[Callable[[], Iterable[str]]] = None,
     ) -> None:
         self.feed = feed
         self.worker = worker
         self.config_provider = config_provider
         self.session_checker = session_checker
         self.now = now
+        self.extra_symbols_provider = extra_symbols_provider
         self._lock = threading.Lock()
         self._wake = threading.Event()
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._pending: Dict[str, RealtimeTick] = {}
         self._rules_by_symbol: Dict[str, List[Any]] = {}
+        # Mã nhận tick = mã có rule ∪ mã từ extra_symbols_provider. Symbols whose ticks are kept.
+        self._watched: Set[str] = set()
         self._claimed_keys: Set[str] = set()
         self._last_reload = 0.0
         self._reload_requested = True
@@ -112,7 +118,7 @@ class RealtimeAlertEngine:
     # ------------------------------------------------------------------ feed callback (thread MQTT)
     def _on_tick(self, tick: RealtimeTick) -> None:
         with self._lock:
-            watched = tick.symbol in self._rules_by_symbol
+            watched = tick.symbol in self._watched
             if watched:
                 self._pending[tick.symbol] = tick
         if watched:
@@ -149,16 +155,34 @@ class RealtimeAlertEngine:
             symbol = vn_bare_symbol(str(getattr(rule, "stock_code", "") or ""))
             rules_by_symbol[symbol].append(runtime_rule)
             claimed.add(runtime_rule.key)
+        watched = set(rules_by_symbol) | self._load_extra_symbols()
         with self._lock:
             self._rules_by_symbol = dict(rules_by_symbol)
+            self._watched = watched
             self._claimed_keys = claimed
             self._last_reload = self.now()
             self._reload_requested = False
-            self._pending = {key: value for key, value in self._pending.items() if key in self._rules_by_symbol}
+            self._pending = {key: value for key, value in self._pending.items() if key in watched}
             # Rule có thể vừa được sửa / reset cooldown: đọc lại cooldown từ DB ở lần kích hoạt sau.
             self._suppressed_until = {}
-        self.feed.set_symbols(rules_by_symbol.keys())
-        logger.debug("[RealtimeAlertEngine] %d rules on %d symbols", len(claimed), len(rules_by_symbol))
+        self.feed.set_symbols(watched)
+        logger.debug(
+            "[RealtimeAlertEngine] %d rules on %d symbols, %d symbols watched",
+            len(claimed),
+            len(rules_by_symbol),
+            len(watched),
+        )
+
+    def _load_extra_symbols(self) -> Set[str]:
+        if self.extra_symbols_provider is None:
+            return set()
+        try:
+            symbols = self.extra_symbols_provider() or []
+        except Exception as exc:
+            # Nguồn mã phụ lỗi không được làm mất subscribe của mã có rule.
+            logger.warning("[RealtimeAlertEngine] extra symbols provider failed: %s", exc)
+            return set()
+        return {vn_bare_symbol(item) for item in symbols if vn_bare_symbol(item)}
 
     def _drain(self) -> None:
         with self._lock:
@@ -169,11 +193,15 @@ class RealtimeAlertEngine:
         in_session = self.session_checker()
         for symbol, tick in pending.items():
             self._maybe_publish_price(tick)
+            runtime_rules = rules_by_symbol.get(symbol)
+            if not runtime_rules:
+                # Mã chỉ được theo dõi giá (vd. đang nắm giữ), không có rule. Price-only symbol.
+                continue
             if not in_session:
                 self.stats["out_of_session"] += 1
                 continue
             quote = tick_to_quote(tick)
-            for runtime_rule in rules_by_symbol.get(symbol, []):
+            for runtime_rule in runtime_rules:
                 self.evaluate_tick(runtime_rule, quote)
 
     def evaluate_tick(self, runtime_rule: Any, quote: Any) -> Dict[str, Any]:

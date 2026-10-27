@@ -242,9 +242,11 @@ class PortfolioService:
                         currency=currency_norm,
                         session=session,
                     )
-                return {"id": int(row.id)}
+                result = {"id": int(row.id)}
         except (DuplicateTradeUidError, DuplicateTradeDedupHashError) as exc:
             raise PortfolioConflictError(str(exc)) from exc
+        self._notify_realtime_symbols_changed()
+        return result
 
     def record_cash_ledger(
         self,
@@ -350,7 +352,24 @@ class PortfolioService:
                     currency=currency,
                     session=session,
                 )
-            return deleted
+        if deleted:
+            self._notify_realtime_symbols_changed()
+        return deleted
+
+    @staticmethod
+    def _notify_realtime_symbols_changed() -> None:
+        """Báo engine realtime nạp lại tập mã subscribe (mã nắm giữ vừa đổi). Best-effort.
+
+        Ask the realtime engine to refresh its subscriptions after the held symbols changed.
+        """
+        try:
+            from src.services.realtime_alert_engine import get_active_realtime_engine
+
+            engine = get_active_realtime_engine()
+            if engine is not None:
+                engine.request_reload()
+        except Exception as exc:  # không được làm hỏng thao tác ghi sổ lệnh
+            logger.debug("Failed to request realtime symbol reload: %s", exc)
 
     def delete_cash_ledger_event(self, entry_id: int) -> bool:
         with self.repo.portfolio_write_session() as session:
@@ -1277,8 +1296,11 @@ class PortfolioService:
         if numeric_price <= 0:
             return None, None
 
-        source = getattr(quote, "source", None)
-        provider = getattr(source, "value", None) or (str(source) if source is not None else None)
+        # Ưu tiên nguồn thật do manager ghi (tvsi_mqtt / fiintrade / ssi / vci). Actual provider first.
+        provider = getattr(quote, "realtime_provider", None)
+        if not provider:
+            source = getattr(quote, "source", None)
+            provider = getattr(source, "value", None) or (str(source) if source is not None else None)
         return numeric_price, provider
 
     @staticmethod

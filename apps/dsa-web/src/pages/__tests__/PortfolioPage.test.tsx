@@ -10,6 +10,7 @@ import PortfolioPage from '../PortfolioPage';
 const {
   getAccounts,
   getSnapshot,
+  getRealtimeSnapshot,
   getRisk,
   listTrades,
   listCashLedger,
@@ -28,6 +29,7 @@ const {
 } = vi.hoisted(() => ({
   getAccounts: vi.fn(),
   getSnapshot: vi.fn(),
+  getRealtimeSnapshot: vi.fn(),
   getRisk: vi.fn(),
   listTrades: vi.fn(),
   listCashLedger: vi.fn(),
@@ -55,7 +57,11 @@ vi.mock('../../api/decisionSignals', () => ({
 vi.mock('../../api/portfolio', () => ({
   portfolioApi: {
     getAccounts,
-    getSnapshot,
+    // Lần tải nền kèm giá realtime đi vào mock riêng để các test tải nhanh giữ nguyên.
+    // Background realtime loads go to a separate mock.
+    getSnapshot: (query: { includeRealtime?: boolean }) => (
+      query?.includeRealtime ? getRealtimeSnapshot(query) : getSnapshot(query)
+    ),
     getRisk,
         listTrades,
     listCashLedger,
@@ -278,6 +284,7 @@ describe('PortfolioPage', () => {
 
     getAccounts.mockResolvedValue(makeAccounts());
     getSnapshot.mockImplementation(async ({ accountId }: { accountId?: number } = {}) => makeSnapshot({ accountId, fxStale: true }));
+    getRealtimeSnapshot.mockRejectedValue(new Error('realtime unavailable'));
     getRisk.mockResolvedValue(makeRisk());
     listTrades.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
     listCashLedger.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
@@ -316,6 +323,22 @@ describe('PortfolioPage', () => {
 
     expect(getSnapshot).toHaveBeenCalledWith({ accountId: undefined, costMethod: 'fifo', includeRealtime: false });
     expect(getRisk).toHaveBeenCalledWith({ accountId: undefined, costMethod: 'fifo', includeRealtime: false });
+  });
+
+  it('replaces the fast snapshot with a background realtime snapshot', async () => {
+    getSnapshot.mockResolvedValueOnce(makeSnapshot({ positions: [
+      { symbol: 'HPG', market: 'vn', currency: 'VND', quantity: 100, avgCost: 25000, totalCost: 2500000, lastPrice: 26000, marketValueBase: 2600000, unrealizedPnlBase: 100000, unrealizedPnlPct: 4, valuationCurrency: 'VND', priceSource: 'history_close', priceDate: '2026-06-17', priceStale: false, priceAvailable: true },
+    ] }));
+    getRealtimeSnapshot.mockResolvedValueOnce(makeSnapshot({ positions: [
+      { symbol: 'HPG', market: 'vn', currency: 'VND', quantity: 100, avgCost: 25000, totalCost: 2500000, lastPrice: 27500, marketValueBase: 2750000, unrealizedPnlBase: 250000, unrealizedPnlPct: 10, valuationCurrency: 'VND', priceSource: 'realtime_quote', priceProvider: 'tvsi_mqtt', priceDate: '2026-06-18', priceStale: false, priceAvailable: true },
+    ] }));
+
+    render(<PortfolioPage />);
+
+    await waitForInitialLoad();
+    await waitFor(() => expect(getRealtimeSnapshot).toHaveBeenCalledWith({ accountId: undefined, costMethod: 'fifo', includeRealtime: true }));
+    expect(await screen.findByText('27.500')).toBeInTheDocument();
+    expect(screen.getByText(/realtime \(MQTT\)|Live prices \(MQTT\)/)).toBeInTheDocument();
   });
 
   it('shows aggregate partial valuation limitations near summary totals', async () => {
@@ -440,8 +463,8 @@ describe('PortfolioPage', () => {
     await waitForInitialLoad();
 
     expect(await screen.findByText('FPT')).toBeInTheDocument();
-    expect(screen.getByText('420.0000')).toBeInTheDocument();
-    expect(screen.getByText('VND 4,200.00')).toBeInTheDocument();
+    expect(screen.getByText('420')).toBeInTheDocument();
+    expect(screen.getByText('VND 4,200')).toBeInTheDocument();
     expect(screen.getByText('+5.00%')).toBeInTheDocument();
     expect(screen.getByText('Close · 2026-03-18')).toBeInTheDocument();
     expect(screen.getByText('No price')).toBeInTheDocument();

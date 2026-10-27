@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [改进] Bảng vị thế trang Danh mục: số lượng nhóm nghìn bằng dấu phẩy (`1,300`), giá vốn / giá hiện tại theo kiểu Việt Nam (`70.050`, `24,63`), tiền không còn đệm `.00`; giữ nguyên phần thập phân thật, không làm tròn.
+- [修复] Trang Quản lý danh mục cập nhật giá realtime: sau lần tải nhanh, Web tự xin snapshot kèm giá realtime (trong phiên là tick MQTT TVSI, ngoài phiên là giá khớp mới nhất từ FiinTrade); feed MQTT tự subscribe các mã đang nắm giữ và tick được ghép trực tiếp vào giá, giá trị thị trường, lãi/lỗ trên trang. `price_provider` hiển thị nguồn thật (`tvsi_mqtt` / `fiintrade` / `ssi` / `vci`) thay vì `fallback`. Trước đây trang luôn dùng giá đóng cửa trong DB.
 - [文档] Thêm `docs/portfolio-workflow.md` (workflow Quản lý danh mục: ghi sổ lệnh, replay snapshot, rủi ro, nhập CSV, cảnh báo, điểm agent tham gia, hạn chế đã biết); `docs/agent-workflow.md` thêm mục PortfolioAgent, sửa ghi chú tool `get_portfolio_snapshot` (không phải tool của PortfolioAgent) và các tham chiếu dòng đã lệch.
 - [新功能] Trang Quản lý danh mục có thẻ "Đánh giá danh mục bằng AI" (`POST /api/v1/portfolio/ai-review`): PortfolioAgent đánh giá trên vị thế thật, báo cáo rủi ro và tín hiệu AI mới nhất của từng mã, trả điểm rủi ro, tỷ trọng hiện tại / đề xuất, tỷ lệ tiền mặt, cảnh báo tập trung / tương quan, gợi ý tái cân bằng và dữ liệu còn thiếu. Tỷ trọng do server tính; kết quả không lưu DB. Cần bật Agent.
 - [改进] PortfolioAgent chuyển sang thị trường Việt Nam (HOSE/HNX/UPCoM, T+2, lô 100, biên độ giá, ngành ICB ước lượng, ngưỡng tập trung theo cấu hình); không còn nạp trùng ý kiến từng mã vào prompt; tối đa 4 bước.

@@ -65,7 +65,7 @@ sequenceDiagram
 1. Sắp xếp sự kiện theo ngày; cùng ngày: tiền → sự kiện quyền → lệnh.
 2. Giá vốn theo **FIFO** (lô, đơn giá = (giá trị + phí + thuế) / số lượng) hoặc **bình quân** (`avg`).
 3. Lãi/lỗ đã thực hiện = tiền bán ròng − giá vốn tiêu thụ. Cổ tức tiền cộng vào tiền mặt; tách/gộp nhân số lượng lô và chia đơn giá.
-4. Giá mỗi mã (`_resolve_position_price`): hôm nay thử báo giá realtime trước (trừ khi `include_realtime=false`), rồi giá đóng cửa gần nhất `≤ as_of` trong `stock_daily`.
+4. Giá mỗi mã (`_resolve_position_price`): hôm nay thử báo giá realtime trước (trừ khi `include_realtime=false`), rồi giá đóng cửa gần nhất `≤ as_of` trong `stock_daily`. Báo giá realtime đi qua `DataFetcherManager.get_realtime_quote`: tick MQTT TVSI còn mới (≤ `REALTIME_FEED_STALE_SECONDS`) trước, rồi theo `REALTIME_SOURCE_PRIORITY` (FiinTrade đứng đầu khi đã bật, sau đó SSI, VCI). Trong phiên vì vậy là giá MQTT; ngoài phiên feed im lặng nên là giá khớp mới nhất từ FiinTrade PriceDepth. `price_provider` của vị thế ghi nguồn thật (`tvsi_mqtt` / `fiintrade` / `ssi` / `vci`, lấy từ thuộc tính `realtime_provider` mà manager gắn vào quote) thay vì `fallback` như trước.
 5. Vốn chủ sở hữu = tiền mặt + giá trị thị trường. Kết quả được ghi lại vào các bảng cache.
 
 Ngữ nghĩa giá:
@@ -78,7 +78,12 @@ Ngữ nghĩa giá:
 | Ngày lễ | Chưa mô hình hoá: giá trước kỳ nghỉ vẫn bị coi là stale |
 | Không có giá | `price_available=false`, loại khỏi giá trị thị trường và lãi/lỗ (không dùng giá vốn thay thế), gắn hạn chế `price_unavailable` → `data_quality=partial` ở vị thế, tài khoản và tổng; Web hiện banner "Giới hạn định giá danh mục" |
 
-Trang Web tải lần đầu với `include_realtime=false` để không bị nguồn realtime chậm chặn màn hình.
+Giá trên trang Web:
+
+- Tải nhanh với `include_realtime=false` để không bị nguồn realtime chậm chặn màn hình, rồi tự gọi lại `GET /snapshot?include_realtime=true` ở nền và thay snapshot khi có kết quả (lỗi thì giữ bản đang hiển thị).
+- Các mã đang nắm giữ được feed MQTT subscribe tự động (xem [alerts.md](alerts.md#cảnh-báo-realtime-theo-tick-feed-mqtt-tvsi)). Tick đến qua SSE `price_update` được ghép vào snapshot ngay trên trình duyệt (`applyLivePrices`): giá, giá trị thị trường, lãi/lỗ chưa thực hiện, tổng tài khoản và tổng danh mục đổi theo, tiền mặt giữ nguyên. Chỉ tick cùng ngày với `as_of` của snapshot được dùng. Bảng vị thế hiện nhãn "Giá realtime (MQTT)" khi có mã đang lấy giá từ feed.
+- Ghép giá chỉ để hiển thị: rủi ro, biểu đồ tập trung và snapshot ngày trong DB không đổi cho tới lần tải lại.
+- Cần `REALTIME_FEED_ENABLED=true`, `AGENT_EVENT_MONITOR_ENABLED=true` và `TVSI_MQTT_HOST`; thiếu thì trang chỉ có giá từ lần tải realtime (FiinTrade/SSI).
 
 ## 5. Rủi ro (`GET /risk`)
 

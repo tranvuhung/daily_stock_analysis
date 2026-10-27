@@ -1312,8 +1312,10 @@ class DataFetcherManager:
             float(getattr(config, "realtime_feed_stale_seconds", 30) or 30),
         )
         if tick is not None:
+            quote = tick_to_quote(tick)
+            setattr(quote, "realtime_provider", "tvsi_mqtt")
             return self._enrich_realtime_quote(
-                tick_to_quote(tick),
+                quote,
                 realtime_cache_ttl=getattr(config, "realtime_cache_ttl", None),
             )
         for source_name in self._vn_realtime_source_order():
@@ -1322,6 +1324,9 @@ class DataFetcherManager:
                 logger.info(
                     "[Giá realtime] %s lấy thành công (nguồn: %s)", stock_code, source_name
                 )
+                # Các fetcher HTTP đều gán source=FALLBACK; ghi lại nguồn thật (fiintrade/ssi/vci)
+                # để tầng trên (vd. danh mục) hiển thị đúng. Actual provider token.
+                setattr(quote, "realtime_provider", self._realtime_fetcher_token(source_name))
                 return self._enrich_realtime_quote(
                     quote,
                     realtime_cache_ttl=getattr(config, "realtime_cache_ttl", None),

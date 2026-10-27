@@ -427,7 +427,7 @@ Mục này mô tả engine cảnh báo realtime dùng feed giá push của TVSI.
 - Payload `topic/<MÃ>` là JSON. Giá (`MatchPrice`, `CeilingPrice`, `FloorPrice`, `BasicPrice`…) tính bằng **nghìn đồng** và được nhân 1000 để khớp với SSI.
 - Timestamp tick lấy từ `TradeDate` + `Time` (`HHMMSS`, giờ VN). `SequenceNumber` dùng để bỏ tick đến trễ.
 - `FloorCode`: `10` = HOSE, `02` = HNX, `04` = UPCOM (chưa có mẫu thật cho UPCOM).
-- **Bảo mật:** broker còn phát `order/<id>` và `new-order/<account>` chứa lệnh của khách hàng khác. Feed chỉ subscribe `topic/<MÃ>` của các mã đang có rule, và chặn wildcard trong template. `scripts/probe_tvsi_mqtt.py` cũng mặc định chỉ subscribe topic giá.
+- **Bảo mật:** broker còn phát `order/<id>` và `new-order/<account>` chứa lệnh của khách hàng khác. Feed chỉ subscribe `topic/<MÃ>` của các mã đang có rule hoặc đang nắm giữ trong danh mục, và chặn wildcard trong template. `scripts/probe_tvsi_mqtt.py` cũng mặc định chỉ subscribe topic giá.
 
 ### Luồng xử lý
 
@@ -436,7 +436,8 @@ Mục này mô tả engine cảnh báo realtime dùng feed giá push của TVSI.
    - Lưu tick mới nhất vào `LatestTickStore`, rồi báo cho listener.
 2. `RealtimeAlertEngine` (`src/services/realtime_alert_engine.py`):
    - Nạp các rule DB đang bật thuộc loại giá: `price_cross`, `price_change_percent`, `price_limit_touch`. Chỉ lấy mã VN, trên phạm vi một mã, watchlist hoặc holdings.
-   - Nạp lại mỗi 30 giây, và ngay khi có CRUD rule.
+   - Nạp lại mỗi 30 giây, và ngay khi có CRUD rule hoặc ghi / xoá lệnh danh mục.
+   - Ngoài mã có rule, feed subscribe thêm các mã đang nắm giữ ở tài khoản danh mục còn hoạt động (`PortfolioRepository.list_open_position_symbols`: tổng mua − bán > 0, cộng mã từng có tách/gộp). Tick của các mã này chỉ phát SSE `price_update` để trang danh mục cập nhật giá live, không đánh giá rule nào.
    - Tick được gộp theo mã rồi đánh giá trong bộ nhớ bằng `AlertService.evaluate_price_quote`.
 3. Chỉ đánh giá trong phiên khớp lệnh VN: 9:00–11:30 và 13:00–14:45, thứ 2–6, cộng 2 phút ân hạn cuối mỗi khung để nhận giá khớp ATC công bố ngay sau 14:45 (`is_vn_price_alert_window`). Ngày lễ chưa được loại trừ. Worker định kỳ (kể cả khi không bật feed realtime) cũng bỏ qua rule giá mã VN ngoài khung này (thống kê `out_of_session`), vì snapshot sau giờ không đổi và trước đây sinh trigger lặp mỗi chu kỳ.
 4. Kết quả kích hoạt đi qua `AlertWorker.process_result`, là đường xử lý chung với worker định kỳ:

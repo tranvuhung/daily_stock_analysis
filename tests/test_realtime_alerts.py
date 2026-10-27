@@ -237,6 +237,7 @@ class RealtimeQuoteIntegrationTestCase(unittest.TestCase):
                 quote = manager.get_realtime_quote("HPG.VN", log_final_failure=False)
             self.assertEqual(quote.price, 20300)
             self.assertEqual(quote.source.value, "tvsi_mqtt")
+            self.assertEqual(quote.realtime_provider, "tvsi_mqtt")
             self.assertIsNotNone(quote.provider_timestamp)
 
             feed.connected = False  # feed mất kết nối → quay về chuỗi SSI
@@ -245,6 +246,26 @@ class RealtimeQuoteIntegrationTestCase(unittest.TestCase):
             order.assert_called_once()
         finally:
             set_active_feed(None)
+
+
+    def test_out_of_session_quote_records_fiintrade_as_actual_provider(self) -> None:
+        """Không có tick (ngoài phiên): FiinTrade đứng đầu, quote ghi nguồn thật ``fiintrade``."""
+        from data_provider.base import DataFetcherManager
+        from data_provider.realtime_types import RealtimeSource, UnifiedRealtimeQuote
+
+        manager = DataFetcherManager()
+        fiin_quote = UnifiedRealtimeQuote(code="HPG", source=RealtimeSource.FALLBACK, price=26500.0)
+        with patch.object(DataFetcherManager, "_vn_realtime_source_order", return_value=["FiinTradeFetcher", "SsiFetcher"]), \
+                patch.object(DataFetcherManager, "_try_fetcher_quote", side_effect=lambda code, name: fiin_quote if name == "FiinTradeFetcher" else None) as fetch:
+            quote = manager.get_realtime_quote("HPG.VN", log_final_failure=False)
+        self.assertEqual(quote.price, 26500.0)
+        self.assertEqual(quote.realtime_provider, "fiintrade")
+        self.assertEqual(fetch.call_args_list[0].args[1], "FiinTradeFetcher")
+
+        from src.services.portfolio_service import PortfolioService
+
+        with patch.object(DataFetcherManager, "get_realtime_quote", return_value=quote):
+            self.assertEqual(PortfolioService._fetch_realtime_position_price("HPG"), (26500.0, "fiintrade"))
 
 
 class VnSessionTestCase(unittest.TestCase):
@@ -487,12 +508,112 @@ class RealtimeEngineTestCase(_DbTestCase):
         evaluate.assert_called_once()
         self.assertNotIn("realtime_claimed", stats)
 
+    def test_extra_symbols_are_subscribed_and_published_without_rule_evaluation(self) -> None:
+        self._rule()
+        feed = FakeFeed()
+        engine, _, notifier = self._engine(feed)
+        engine.extra_symbols_provider = lambda: ["FPT", "hpg.vn"]
+        engine.reload_rules()
+        self.assertEqual(feed.symbols, {"FPT", "HPG"})
+        # Mã có rule vẫn giữ nghĩa cũ của watched_symbols (API /alerts).
+        self.assertEqual(engine.watched_symbols(), ["HPG"])
+
+        with patch("src.services.realtime_alert_engine.publish_event") as publish, \
+                patch.object(engine, "evaluate_tick") as evaluate:
+            engine._on_tick(_tick(symbol="FPT", price=95000))
+            engine._drain()
+        evaluate.assert_not_called()
+        notifier.send_with_results.assert_not_called()
+        publish.assert_called_once()
+        self.assertEqual(publish.call_args.args[0], "price_update")
+        self.assertEqual(publish.call_args.args[1]["symbol"], "FPT")
+
+    def test_price_only_ticks_publish_outside_session_without_stats(self) -> None:
+        feed = FakeFeed()
+        engine, _, _ = self._engine(feed, in_session=False)
+        engine.extra_symbols_provider = lambda: ["FPT"]
+        engine.reload_rules()
+        with patch("src.services.realtime_alert_engine.publish_event") as publish:
+            engine._on_tick(_tick(symbol="FPT", price=95000))
+            engine._drain()
+        publish.assert_called_once()
+        self.assertNotIn("out_of_session", engine.stats)
+
+    def test_failing_extra_symbols_provider_keeps_rule_subscriptions(self) -> None:
+        self._rule()
+        feed = FakeFeed()
+        engine, _, _ = self._engine(feed)
+
+        def broken():
+            raise RuntimeError("db locked")
+
+        engine.extra_symbols_provider = broken
+        engine.reload_rules()
+        self.assertEqual(feed.symbols, {"HPG"})
+
+    def test_unwatched_ticks_are_dropped(self) -> None:
+        engine, _, _ = self._engine(FakeFeed())
+        engine.reload_rules()
+        engine._on_tick(_tick(symbol="VNM"))
+        self.assertEqual(engine._pending, {})
+
     def test_crud_requests_engine_reload(self) -> None:
         engine, _, _ = self._engine(FakeFeed())
         set_active_realtime_engine(engine)
         engine._reload_requested = False
         self._rule()
         self.assertTrue(engine._reload_requested)
+
+
+class PortfolioHeldSymbolsTestCase(_DbTestCase):
+    """Mã đang nắm giữ trong danh mục được subscribe feed để trang danh mục có giá live."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        from src.services.portfolio_service import PortfolioService
+
+        self.portfolio = PortfolioService()
+        self.account_id = self.portfolio.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")["id"]
+
+    def _trade(self, symbol, side, quantity, *, account_id=None, trade_date="2026-01-05"):
+        return self.portfolio.record_trade(
+            account_id=account_id or self.account_id,
+            symbol=symbol,
+            trade_date=datetime.strptime(trade_date, "%Y-%m-%d").date(),
+            side=side,
+            quantity=quantity,
+            price=10000,
+        )
+
+    def test_lists_open_symbols_and_split_symbols_of_active_accounts(self) -> None:
+        from src.services.realtime_alert_runtime import portfolio_held_symbols
+
+        self._trade("HPG", "buy", 100)
+        self._trade("FPT", "buy", 100)
+        self._trade("FPT", "sell", 100, trade_date="2026-01-06")
+        self._trade("VNM", "buy", 100)
+        self._trade("VNM", "sell", 100, trade_date="2026-01-06")
+        self.portfolio.record_corporate_action(
+            account_id=self.account_id,
+            symbol="VNM",
+            effective_date=datetime(2026, 1, 7).date(),
+            action_type="split_adjustment",
+            split_ratio=2.0,
+        )
+        archived = self.portfolio.create_account(name="Old", broker="Demo", market="vn", base_currency="VND")["id"]
+        self._trade("MBB", "buy", 100, account_id=archived)
+        self.portfolio.repo.deactivate_account(archived)
+
+        self.assertEqual(portfolio_held_symbols(), ["HPG", "VNM"])
+
+    def test_trade_writes_request_engine_reload(self) -> None:
+        engine = MagicMock()
+        set_active_realtime_engine(engine)
+        trade_id = self._trade("HPG", "buy", 100)["id"]
+        engine.request_reload.assert_called_once()
+
+        self.portfolio.delete_trade_event(trade_id)
+        self.assertEqual(engine.request_reload.call_count, 2)
 
 
 class EventBusTestCase(unittest.TestCase):

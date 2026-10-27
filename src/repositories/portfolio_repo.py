@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from datetime import date, datetime
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from sqlalchemy import and_, delete, desc, func, select
+from sqlalchemy import and_, case, delete, desc, func, select
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from src.storage import (
@@ -774,6 +774,45 @@ class PortfolioRepository:
             # Keep only the latest N calendar days window for risk calculations.
             cutoff_ordinal = as_of.toordinal() - lookback_days
             return [row for row in rows if row.snapshot_date.toordinal() >= cutoff_ordinal]
+
+    def list_open_position_symbols(self, *, market: str = "vn") -> List[str]:
+        """Mã có thể đang nắm giữ, đọc thẳng từ sổ lệnh (không replay, không cần cache).
+
+        Gồm mã có tổng mua − bán > 0, cộng mã từng có tách/gộp (khi đó tổng mua − bán
+        không phản ánh đúng số lượng). Thừa vài mã là chấp nhận được: dùng để subscribe
+        feed giá realtime, không dùng để tính toán.
+        Symbols possibly held, from the trade ledger; a superset is fine (feed subscription).
+        """
+        market_norm = (market or "").strip().lower()
+        signed_qty = func.sum(
+            case(
+                (func.lower(PortfolioTrade.side) == "buy", PortfolioTrade.quantity),
+                (func.lower(PortfolioTrade.side) == "sell", -PortfolioTrade.quantity),
+                else_=0.0,
+            )
+        )
+        with self.db.get_session() as session:
+            open_rows = session.execute(
+                select(PortfolioTrade.symbol)
+                .join(PortfolioAccount, PortfolioTrade.account_id == PortfolioAccount.id)
+                .where(
+                    PortfolioAccount.is_active.is_(True),
+                    func.lower(PortfolioTrade.market) == market_norm,
+                )
+                .group_by(PortfolioTrade.account_id, PortfolioTrade.symbol)
+                .having(signed_qty > 0)
+            ).scalars().all()
+            split_rows = session.execute(
+                select(PortfolioCorporateAction.symbol)
+                .join(PortfolioAccount, PortfolioCorporateAction.account_id == PortfolioAccount.id)
+                .where(
+                    PortfolioAccount.is_active.is_(True),
+                    func.lower(PortfolioCorporateAction.market) == market_norm,
+                    PortfolioCorporateAction.action_type == "split_adjustment",
+                )
+            ).scalars().all()
+        symbols = {str(item or "").strip().upper() for item in [*open_rows, *split_rows]}
+        return sorted(symbol for symbol in symbols if symbol)
 
     def list_cached_position_identities(
         self,

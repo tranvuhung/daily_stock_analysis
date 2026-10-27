@@ -5,6 +5,8 @@ Khởi động / dừng feed giá realtime và engine cảnh báo realtime trong
 Start/stop the realtime price feed (TVSI MQTT) and the realtime alert engine.
 Idempotent: FastAPI lifespan và ``main.py --schedule`` cùng gọi được, chỉ khởi tạo một lần.
 
+Feed subscribe các mã có rule giá và các mã đang nắm giữ trong danh mục (để Web có giá live).
+
 Điều kiện chạy: ``REALTIME_FEED_ENABLED=true``, ``AGENT_EVENT_MONITOR_ENABLED=true`` và có
 ``TVSI_MQTT_HOST``. Thiếu điều kiện thì không làm gì (hành vi cũ giữ nguyên).
 Đổi các cấu hình này cần khởi động lại dịch vụ.
@@ -14,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any, Callable, Optional
+from typing import Any, Callable, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,17 @@ def realtime_alerts_requested(config: Any) -> bool:
         getattr(config, "realtime_feed_enabled", False)
         and getattr(config, "agent_event_monitor_enabled", False)
     )
+
+
+def portfolio_held_symbols() -> List[str]:
+    """Mã đang nắm giữ trong danh mục: subscribe feed để trang danh mục có giá live.
+
+    Held portfolio symbols, subscribed so the portfolio page receives live prices.
+    """
+
+    from src.repositories.portfolio_repo import PortfolioRepository
+
+    return PortfolioRepository().list_open_position_symbols(market="vn")
 
 
 def start_realtime_alerts(
@@ -63,6 +76,7 @@ def start_realtime_alerts(
                 feed,
                 worker=AlertWorker(config_provider=provider),
                 config_provider=provider,
+                extra_symbols_provider=portfolio_held_symbols,
             )
             set_active_feed(feed)
             set_active_realtime_engine(engine)
