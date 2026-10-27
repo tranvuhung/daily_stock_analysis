@@ -284,3 +284,48 @@ export interface PortfolioCorporateActionListResponse {
   page: number;
   pageSize: number;
 }
+
+// Đánh giá danh mục bằng AI (POST /api/v1/portfolio/ai-review). / AI portfolio review.
+export interface PortfolioAiReviewRequest {
+  accountId?: number;
+  costMethod?: PortfolioCostMethod;
+  question?: string;
+}
+
+export interface PortfolioAiReviewPosition {
+  code: string;
+  currentWeight?: number | null;
+  suggestedWeight?: number | null;
+  signal?: string | null;
+  priority?: 'high' | 'medium' | 'low' | null;
+  note: string;
+}
+
+export interface PortfolioAiReviewAssessment {
+  portfolioRiskScore?: number | null;
+  totalStocks: number;
+  summary: string;
+  positions: PortfolioAiReviewPosition[];
+  cashRatio?: number | null;
+  suggestedCashRatio?: number | null;
+  sectorWarnings: string[];
+  correlationWarnings: string[];
+  crossMarketNotes: string[];
+  rebalanceSuggestions: string[];
+  dataGaps: string[];
+  generatedAt?: string | null;
+}
+
+export interface PortfolioAiReviewResponse {
+  success: boolean;
+  asOf?: string | null;
+  accountId?: number | null;
+  assessment?: PortfolioAiReviewAssessment | null;
+  error?: string | null;
+  timedOut: boolean;
+  durationS: number;
+  tokensUsed: number;
+  holdingCount: number;
+  signalCoverage: { withSignal: number; withoutSignal: string[] };
+  riskAvailable: boolean;
+}

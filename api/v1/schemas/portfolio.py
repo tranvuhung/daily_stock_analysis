@@ -283,3 +283,52 @@ class PortfolioRiskResponse(BaseModel):
     drawdown: Dict[str, Any] = Field(default_factory=dict)
     stop_loss: Dict[str, Any] = Field(default_factory=dict)
     decision_signal_risk: PortfolioDecisionSignalRiskBlock = Field(default_factory=PortfolioDecisionSignalRiskBlock)
+
+
+class PortfolioAiReviewRequest(BaseModel):
+    account_id: Optional[int] = None
+    cost_method: Literal["fifo", "avg"] = "fifo"
+    question: Optional[str] = Field(None, max_length=500)
+
+
+class PortfolioAiReviewPosition(BaseModel):
+    code: str
+    current_weight: Optional[float] = None
+    suggested_weight: Optional[float] = None
+    signal: Optional[str] = None
+    priority: Optional[str] = None
+    note: str = ""
+
+
+class PortfolioAiReviewAssessment(BaseModel):
+    portfolio_risk_score: Optional[float] = None
+    total_stocks: int = 0
+    summary: str = ""
+    positions: List[PortfolioAiReviewPosition] = Field(default_factory=list)
+    cash_ratio: Optional[float] = None
+    suggested_cash_ratio: Optional[float] = None
+    sector_warnings: List[str] = Field(default_factory=list)
+    correlation_warnings: List[str] = Field(default_factory=list)
+    cross_market_notes: List[str] = Field(default_factory=list)
+    rebalance_suggestions: List[str] = Field(default_factory=list)
+    data_gaps: List[str] = Field(default_factory=list)
+    generated_at: Optional[str] = None
+
+
+class PortfolioAiReviewSignalCoverage(BaseModel):
+    with_signal: int = 0
+    without_signal: List[str] = Field(default_factory=list)
+
+
+class PortfolioAiReviewResponse(BaseModel):
+    success: bool
+    as_of: Optional[str] = None
+    account_id: Optional[int] = None
+    assessment: Optional[PortfolioAiReviewAssessment] = None
+    error: Optional[str] = None
+    timed_out: bool = False
+    duration_s: float = 0.0
+    tokens_used: int = 0
+    holding_count: int = 0
+    signal_coverage: PortfolioAiReviewSignalCoverage = Field(default_factory=PortfolioAiReviewSignalCoverage)
+    risk_available: bool = False

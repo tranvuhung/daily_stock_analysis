@@ -812,6 +812,55 @@ class PortfolioApiTestCase(unittest.TestCase):
         snapshot = self.client.get(f"/api/v1/portfolio/snapshot?account_id={account_id}&as_of=2026-01-06")
         self.assertEqual(snapshot.status_code, 200)
 
+    def test_ai_review_returns_assessment(self) -> None:
+        from src.services.portfolio_review_service import PortfolioReviewResult
+
+        result = PortfolioReviewResult(
+            success=True,
+            assessment={"portfolio_risk_score": 6, "summary": "ok", "positions": [{"code": "HPG", "current_weight": 0.5}]},
+            duration_s=1.2,
+            tokens_used=10,
+            context_meta={"as_of": "2026-01-05", "holding_count": 2, "with_signal": 1,
+                          "without_signal": ["FPT"], "risk_available": True},
+        )
+        with patch("api.v1.endpoints.portfolio.get_config") as get_config, \
+                patch("api.v1.endpoints.portfolio.PortfolioReviewService") as service_cls:
+            get_config.return_value.is_agent_available.return_value = True
+            service_cls.return_value.review.return_value = result
+            resp = self.client.post("/api/v1/portfolio/ai-review", json={"account_id": 3, "cost_method": "avg"})
+
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body["success"])
+        self.assertEqual(body["assessment"]["positions"][0]["code"], "HPG")
+        self.assertEqual(body["signal_coverage"], {"with_signal": 1, "without_signal": ["FPT"]})
+        self.assertEqual(body["holding_count"], 2)
+        service_cls.return_value.review.assert_called_once_with(account_id=3, cost_method="avg", query=None)
+
+    def test_ai_review_timeout_returns_200_with_flag(self) -> None:
+        from src.services.portfolio_review_service import PortfolioReviewResult
+
+        result = PortfolioReviewResult(success=False, error="timeout", timed_out=True,
+                                       context_meta={"holding_count": 2})
+        with patch("api.v1.endpoints.portfolio.get_config") as get_config, \
+                patch("api.v1.endpoints.portfolio.PortfolioReviewService") as service_cls:
+            get_config.return_value.is_agent_available.return_value = True
+            service_cls.return_value.review.return_value = result
+            resp = self.client.post("/api/v1/portfolio/ai-review", json={})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json()["success"])
+        self.assertTrue(resp.json()["timed_out"])
+        self.assertIsNone(resp.json()["assessment"])
+
+    def test_ai_review_rejects_when_agent_unavailable(self) -> None:
+        with patch("api.v1.endpoints.portfolio.get_config") as get_config:
+            get_config.return_value.is_agent_available.return_value = False
+            resp = self.client.post("/api/v1/portfolio/ai-review", json={})
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json().get("error"), "agent_unavailable")
+
     def test_delete_trade_busy_returns_409(self) -> None:
         with patch(
             "api.v1.endpoints.portfolio.PortfolioService.delete_trade_event",

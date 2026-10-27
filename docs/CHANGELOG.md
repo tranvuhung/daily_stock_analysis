@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [新功能] Trang Quản lý danh mục có thẻ "Đánh giá danh mục bằng AI" (`POST /api/v1/portfolio/ai-review`): PortfolioAgent đánh giá trên vị thế thật, báo cáo rủi ro và tín hiệu AI mới nhất của từng mã, trả điểm rủi ro, tỷ trọng hiện tại / đề xuất, tỷ lệ tiền mặt, cảnh báo tập trung / tương quan, gợi ý tái cân bằng và dữ liệu còn thiếu. Tỷ trọng do server tính; kết quả không lưu DB. Cần bật Agent.
+- [改进] PortfolioAgent chuyển sang thị trường Việt Nam (HOSE/HNX/UPCoM, T+2, lô 100, biên độ giá, ngành ICB ước lượng, ngưỡng tập trung theo cấu hình); không còn nạp trùng ý kiến từng mã vào prompt; tối đa 4 bước.
+- [修复] PortfolioAgent in risk flag dạng dict thô; `AGENT_PORTFOLIO_AGENT_TIMEOUT_S` trước đây không có hiệu lực, nay áp dụng cho đánh giá danh mục trên Web và phần góc nhìn danh mục của `/ask` nhiều mã (0 = min(`AGENT_ORCHESTRATOR_TIMEOUT_S`, 240)), và hiển thị trong trang Cài đặt.
 - [修复] Danh mục: vị thế thiếu giá nay gắn hạn chế `price_unavailable` và `data_quality=partial` (trước luôn "ok"); cắt lỗ / cảnh báo `portfolio_stop_loss` không còn báo lỗ 100% giả cho mã thiếu giá.
 - [修复] Danh mục: cờ `price_stale` và cảnh báo `portfolio_price_stale` không còn bật vào cuối tuần, hay trong phiên khi giá đóng cửa là của phiên hoàn tất gần nhất (ngày lễ chưa được mô hình hoá).
 - [修复] Danh mục: nhập lệnh bán lùi ngày, xoá lệnh mua, ghi/xoá tách-gộp cổ phiếu làm các lệnh bán sau đó vượt số lượng nắm giữ nay bị từ chối với 409 `portfolio_oversell` thay vì làm hỏng snapshot (trước đó GET snapshot trả 400, xoá trả 500).

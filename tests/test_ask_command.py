@@ -174,7 +174,7 @@ class TestAskCommandMultiStock(unittest.TestCase):
             },
         }
 
-        def fake_run(self, ctx, progress_callback=None):
+        def fake_run(self, ctx, progress_callback=None, **kwargs):
             ctx.data["portfolio_assessment"] = {
                 "summary": "Danh mục tập trung ngành thép, nên kiểm soát tỷ trọng.",
                 "portfolio_risk_score": 7,
@@ -197,6 +197,28 @@ class TestAskCommandMultiStock(unittest.TestCase):
         self.assertIn("Danh mục tập trung ngành thép", text)
         self.assertIn("Tỷ trọng đề xuất", text)
 
+    def test_build_portfolio_section_applies_portfolio_agent_timeout(self):
+        command = AskCommand()
+        results = {
+            code: {"signal": "hold", "confidence": 0.5, "summary": code, "stock_name": code, "risk_flags": []}
+            for code in ("HPG", "FPT")
+        }
+        seen = {}
+
+        def capture_run(self, ctx, progress_callback=None, timeout_seconds=None):
+            seen["timeout_seconds"] = timeout_seconds
+            return SimpleNamespace(success=False)
+
+        config = SimpleNamespace(agent_portfolio_agent_timeout_s=30.0, agent_orchestrator_timeout_s=600)
+        with patch("src.agent.factory.get_tool_registry", return_value=MagicMock()):
+            with patch("src.agent.llm_adapter.LLMToolAdapter", return_value=MagicMock()):
+                with patch("src.agent.agents.portfolio_agent.PortfolioAgent.run", new=capture_run):
+                    command._build_portfolio_section(config, ["HPG", "FPT"], results)
+                    self.assertEqual(seen["timeout_seconds"], 30.0)
+                    # Thời gian còn lại của /ask nhỏ hơn -> dùng thời gian còn lại.
+                    command._build_portfolio_section(config, ["HPG", "FPT"], results, timeout_s=5.0)
+                    self.assertEqual(seen["timeout_seconds"], 5.0)
+
     def test_build_portfolio_section_returns_quickly_on_timeout(self):
         command = AskCommand()
         results = {
@@ -216,7 +238,7 @@ class TestAskCommandMultiStock(unittest.TestCase):
             },
         }
 
-        def slow_run(self, ctx, progress_callback=None):
+        def slow_run(self, ctx, progress_callback=None, **kwargs):
             time.sleep(0.1)
             ctx.data["portfolio_assessment"] = {"summary": "late summary"}
             return SimpleNamespace(success=True)

@@ -735,6 +735,14 @@ const settingsHelpViVN: SettingsHelpMap = {
     impact: ['Ảnh hưởng tới thời gian chờ tối đa của phân tích bằng Agent.'],
     notes: ['Việc quá hạn không ảnh hưởng tới các mã khác trong luồng phân tích.'],
   },
+  'settings.agent.AGENT_PORTFOLIO_AGENT_TIMEOUT_S': {
+    title: 'Thời gian chờ đánh giá danh mục',
+    summary: 'Thời gian tối đa (giây) cho một lượt PortfolioAgent.',
+    usage: 'Áp dụng cho nút "Đánh giá danh mục bằng AI" trên trang Danh mục và phần góc nhìn danh mục của lệnh /ask nhiều mã. Đặt 0 để dùng min(AGENT_ORCHESTRATOR_TIMEOUT_S, 240).',
+    valueNotes: ['Quá hạn thì trang Danh mục báo hết thời gian, không có kết quả một phần.'],
+    impact: ['Ảnh hưởng tới thời gian chờ tối đa của đánh giá danh mục bằng AI.'],
+    notes: ['Web chờ tối đa 300 giây; giá trị lớn hơn sẽ bị trình duyệt cắt trước.'],
+  },
   'settings.agent.AGENT_SKILL_CONCURRENCY': {
     title: 'Số chiến lược chạy đồng thời',
     summary: 'Quy định số agent chiến lược chuyên biệt được chạy cùng lúc ở chế độ specialist.',
@@ -1770,6 +1778,14 @@ const settingsHelpEnUS: SettingsHelpMap = {
     ],
     impact: ['Affects the maximum wait time for Agent analysis.'],
     notes: ['Timeout does not affect other stocks in the analysis pipeline.'],
+  },
+  'settings.agent.AGENT_PORTFOLIO_AGENT_TIMEOUT_S': {
+    title: 'Portfolio Agent Timeout',
+    summary: 'Maximum time in seconds for one PortfolioAgent run.',
+    usage: 'Applies to the "AI portfolio review" button on the Portfolio page and to the portfolio overlay of multi-stock /ask. Set 0 to use min(AGENT_ORCHESTRATOR_TIMEOUT_S, 240).',
+    valueNotes: ['On timeout the Portfolio page reports a timeout; there is no partial result.'],
+    impact: ['Affects the maximum wait time of the AI portfolio review.'],
+    notes: ['The Web client waits at most 300 seconds; larger values are cut off by the browser first.'],
   },
   'settings.agent.AGENT_SKILL_CONCURRENCY': {
     title: 'Strategy Skill Concurrency',

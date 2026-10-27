@@ -5,6 +5,8 @@ import type {
   PortfolioAccountItem,
   PortfolioAccountCreateRequest,
   PortfolioAccountListResponse,
+  PortfolioAiReviewRequest,
+  PortfolioAiReviewResponse,
   PortfolioCashLedgerCreateRequest,
   PortfolioCashLedgerListResponse,
   PortfolioCorporateActionCreateRequest,
@@ -214,6 +216,21 @@ export const portfolioApi = {
     }
     const response = await apiClient.get<Record<string, unknown>>('/api/v1/portfolio/cash-ledger', { params });
     return toCamelCase<PortfolioCashLedgerListResponse>(response.data);
+  },
+
+  async aiReview(payload: PortfolioAiReviewRequest = {}): Promise<PortfolioAiReviewResponse> {
+    const body: Record<string, unknown> = { cost_method: payload.costMethod ?? 'fifo' };
+    if (payload.accountId != null) {
+      body.account_id = payload.accountId;
+    }
+    if (payload.question) {
+      body.question = payload.question;
+    }
+    // LLM có thể chạy tới vài phút (server tự cắt ở AGENT_PORTFOLIO_AGENT_TIMEOUT_S, mặc định 240s).
+    const response = await apiClient.post<Record<string, unknown>>('/api/v1/portfolio/ai-review', body, {
+      timeout: 300000,
+    });
+    return toCamelCase<PortfolioAiReviewResponse>(response.data);
   },
 
   async listCorporateActions(query: CorporateListQuery = {}): Promise<PortfolioCorporateActionListResponse> {

@@ -613,11 +613,18 @@ class AskCommand(BotCommand):
             ctx.data["stock_list"] = stock_list
             ctx.risk_flags.extend(risk_flags[:10])
 
+            from src.services.portfolio_review_service import resolve_portfolio_agent_timeout
+
             agent = PortfolioAgent(
                 tool_registry=get_tool_registry(),
                 llm_adapter=LLMToolAdapter(config),
             )
-            stage_result = agent.run(ctx)
+            # Áp dụng AGENT_PORTFOLIO_AGENT_TIMEOUT_S, giới hạn bởi thời gian còn lại của /ask.
+            # Apply the configured portfolio-agent timeout, capped by the remaining /ask budget.
+            stage_result = agent.run(
+                ctx,
+                timeout_seconds=resolve_portfolio_agent_timeout(config, budget_s=timeout_s),
+            )
             if not stage_result.success:
                 return ""
 

@@ -878,6 +878,60 @@ class TestPortfolioAgentPostProcess(unittest.TestCase):
         self.assertAlmostEqual(op.confidence, 0.3)
 
 
+class TestPortfolioAgentPrompt(unittest.TestCase):
+    """PortfolioAgent prompt targets Vietnam and renders inputs without duplication."""
+
+    def _make_agent(self):
+        from src.agent.agents.portfolio_agent import PortfolioAgent
+        return PortfolioAgent(tool_registry=MagicMock(), llm_adapter=MagicMock())
+
+    def test_system_prompt_targets_vietnam_market(self):
+        prompt = self._make_agent().system_prompt(AgentContext())
+        for token in ("HOSE", "T+2", "100", "VND", "current_weight", "data_gaps"):
+            self.assertIn(token, prompt)
+        self.assertNotIn("A-share", prompt)
+        self.assertEqual(self._make_agent().max_steps, 4)
+
+    def test_risk_flags_render_description_not_raw_dict(self):
+        ctx = AgentContext()
+        ctx.data["stock_opinions"] = {"HPG": {"signal": "buy", "confidence": 0.7, "summary": "ok"}}
+        ctx.add_risk_flag("stop_loss", "HPG lỗ 22%", severity="high")
+        text = self._make_agent().build_user_message(ctx)
+        self.assertIn("- [high] stop_loss: HPG lỗ 22%", text)
+        self.assertNotIn("{'category'", text)
+
+    def test_holdings_rendered_in_message_and_not_injected_twice(self):
+        agent = self._make_agent()
+        ctx = AgentContext()
+        ctx.data["portfolio_summary"] = {"total_equity": 1000, "cash_ratio": 0.2}
+        ctx.data["portfolio_risk"] = {"thresholds": {"concentration_alert_pct": 35}}
+        ctx.data["portfolio_holdings"] = [
+            {"code": "HPG", "quantity": 100, "avg_cost": 25, "last_price": 28, "current_weight": 0.5},
+            {"code": "FPT", "quantity": 100, "avg_cost": 90, "last_price": 95, "current_weight": 0.3},
+        ]
+        ctx.data["stock_opinions"] = {"HPG": {"signal": "hold", "confidence": 0.6, "summary": "giữ"}}
+        ctx.data["stock_list"] = ["HPG", "FPT"]
+
+        injected = agent._inject_cached_data(ctx)
+        self.assertIn("portfolio_summary", injected)
+        self.assertIn("portfolio_risk", injected)
+        self.assertNotIn("stock_opinions", injected)
+        self.assertNotIn("portfolio_holdings", injected)
+
+        message = agent.build_user_message(ctx)
+        self.assertLess(message.index("**HPG**"), message.index("**FPT**"))
+        self.assertIn("current_weight=50.0%", message)
+        self.assertIn("signal: none", message)  # FPT chưa có tín hiệu
+
+    def test_legacy_assessment_without_new_keys_still_parses(self):
+        agent = self._make_agent()
+        ctx = AgentContext()
+        data = {"portfolio_risk_score": 5, "positions": [{"code": "HPG", "suggested_weight": 0.3}], "summary": "ok"}
+        op = agent.post_process(ctx, json.dumps(data))
+        self.assertEqual(op.signal, "hold")
+        self.assertEqual(ctx.data["portfolio_assessment"], data)
+
+
 class TestDecisionAgentPostProcess(unittest.TestCase):
     """Test DecisionAgent dashboard normalization behaviour."""
 

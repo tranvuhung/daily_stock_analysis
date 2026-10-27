@@ -3683,6 +3683,32 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         ],
         "warning_codes": [],
     },
+    "AGENT_PORTFOLIO_AGENT_TIMEOUT_S": {
+        "title": "Portfolio Agent Timeout",
+        "description": "Timeout in seconds for one PortfolioAgent run (Web AI portfolio review and the multi-stock /ask overlay). 0 means min(AGENT_ORCHESTRATOR_TIMEOUT_S, 240).",
+        "category": "agent",
+        "data_type": "integer",
+        "ui_control": "number",
+        "is_sensitive": False,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": "0",
+        "options": [],
+        "validation": {"min": 0, "max": 3600},
+        "display_order": 62,
+        "help_key": "settings.agent.AGENT_PORTFOLIO_AGENT_TIMEOUT_S",
+        "examples": [
+            "AGENT_PORTFOLIO_AGENT_TIMEOUT_S=0",
+            "AGENT_PORTFOLIO_AGENT_TIMEOUT_S=180",
+        ],
+        "docs": [
+            {
+                "label": "Agent workflow: PortfolioAgent",
+                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/agent-workflow.md",
+            },
+        ],
+        "warning_codes": [],
+    },
     "AGENT_RISK_OVERRIDE": {
         "title": "Risk Agent Override",
         "description": "Allow the risk agent to veto buy signals when critical risk flags are detected.",

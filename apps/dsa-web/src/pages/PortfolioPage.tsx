@@ -7,6 +7,7 @@ import type { ParsedApiError } from '../api/error';
 import { getParsedApiError } from '../api/error';
 import { ApiErrorAlert, Card, ConfirmDialog, EmptyState, InlineAlert } from '../components/common';
 import { PortfolioSignalSummary } from '../components/decision-signals/DecisionSignalDisplay';
+import { PortfolioAiReviewCard } from '../components/portfolio/PortfolioAiReviewCard';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
 import { formatUiText } from '../i18n/uiText';
 import { PORTFOLIO_TEXT } from '../locales/featureText';
@@ -1056,6 +1057,14 @@ const PortfolioPage: React.FC = () => {
             <div>{text.topWeight}: {formatPct(risk?.sectorConcentration?.topWeightPct ?? risk?.concentration?.topWeightPct)}</div>
           </div>
         </Card>
+      </section>
+
+      <section>
+        <PortfolioAiReviewCard
+          accountId={queryAccountId}
+          costMethod={costMethod}
+          positionCount={positionRows.length}
+        />
       </section>
 
       {writeBlocked && hasAccounts ? (

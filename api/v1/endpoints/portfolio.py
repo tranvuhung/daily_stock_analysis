@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import date
 from typing import Optional
@@ -18,6 +19,8 @@ from api.v1.schemas.portfolio import (
     PortfolioAccountItem,
     PortfolioAccountListResponse,
     PortfolioAccountUpdateRequest,
+    PortfolioAiReviewRequest,
+    PortfolioAiReviewResponse,
     PortfolioCashLedgerListResponse,
     PortfolioCashLedgerCreateRequest,
     PortfolioCorporateActionListResponse,
@@ -34,8 +37,10 @@ from api.v1.schemas.portfolio import (
     PortfolioTradeListResponse,
     PortfolioTradeCreateRequest,
 )
+from src.config import get_config
 from src.services.task_queue import get_task_queue
 from src.services.portfolio_import_service import PortfolioImportService
+from src.services.portfolio_review_service import PortfolioReviewService
 from src.services.portfolio_risk_service import PortfolioRiskService
 from src.services.portfolio_service import (
     PortfolioBusyError,
@@ -659,3 +664,52 @@ def get_risk_report(
         raise _bad_request(exc)
     except Exception as exc:
         raise _internal_error("Get risk report failed", exc)
+
+
+@router.post(
+    "/ai-review",
+    response_model=PortfolioAiReviewResponse,
+    responses={
+        400: {"description": "Agent unavailable or invalid request", "model": ErrorResponse},
+        500: {"description": "Internal error", "model": ErrorResponse},
+    },
+    summary="AI portfolio review",
+    description=(
+        "Run PortfolioAgent on current holdings, risk report and latest AI signals. "
+        "Synchronous with an internal timeout; the result is not persisted."
+    ),
+)
+async def ai_review(request: PortfolioAiReviewRequest) -> PortfolioAiReviewResponse:
+    config = get_config()
+    if not config.is_agent_available():
+        raise api_error(400, "agent_unavailable", "Agent mode is not enabled")
+    try:
+        # Chạy trong thread để không chặn event loop (snapshot + LLM đều đồng bộ).
+        result = await asyncio.to_thread(
+            PortfolioReviewService(config=config).review,
+            account_id=request.account_id,
+            cost_method=request.cost_method,
+            query=request.question,
+        )
+    except ValueError as exc:
+        raise _bad_request(exc)
+    except Exception as exc:
+        raise _internal_error("Portfolio AI review failed", exc)
+
+    meta = result.context_meta
+    return PortfolioAiReviewResponse(
+        success=result.success,
+        as_of=meta.get("as_of"),
+        account_id=request.account_id,
+        assessment=result.assessment or None,
+        error=result.error,
+        timed_out=result.timed_out,
+        duration_s=result.duration_s,
+        tokens_used=result.tokens_used,
+        holding_count=int(meta.get("holding_count") or 0),
+        signal_coverage={
+            "with_signal": int(meta.get("with_signal") or 0),
+            "without_signal": list(meta.get("without_signal") or []),
+        },
+        risk_available=bool(meta.get("risk_available")),
+    )
