@@ -116,20 +116,45 @@ def _sync_softened_dashboard_fields(
         battle_plan["position_strategy"] = _softened_position_strategy(language)
 
 
-def _softened_position_advice(language: str) -> dict[str, str]:
-    # vi và en dùng chung câu chữ tiếng Anh như trước. / vi and en share the English wording as before.
-    return {
+# Câu do guardrail ghi đè vào báo cáo, theo ngôn ngữ báo cáo.
+# Wording the guardrail writes into the report, per report language.
+_SOFTENING_TEXTS = {
+    "en": {
         "no_position": "Do not open a new position until market risk eases or confirmation appears.",
         "has_position": "Hold only a small position; do not increase exposure, and reduce if risk controls break.",
+        "suggested_position": "Small/defensive position",
+        "risk_control": "Do not increase exposure before market risk eases; control drawdown strictly.",
+        "limitation": "Daily market context is conservative/high risk; aggressive buy advice was softened.",
+        "reason_note": "Market context requires conservative sizing.",
+    },
+    "vi": {
+        "no_position": "Chưa mở vị thế mới cho đến khi rủi ro thị trường hạ nhiệt hoặc có tín hiệu xác nhận.",
+        "has_position": "Chỉ giữ tỷ trọng nhỏ; không gia tăng tỷ trọng và giảm bớt nếu thủng ngưỡng quản trị rủi ro.",
+        "suggested_position": "Tỷ trọng nhỏ/phòng thủ",
+        "risk_control": "Không gia tăng tỷ trọng trước khi rủi ro thị trường hạ nhiệt; kiểm soát sụt giảm chặt chẽ.",
+        "limitation": "Bối cảnh thị trường trong ngày thận trọng/rủi ro cao; khuyến nghị mua mạnh đã được làm mềm.",
+        "reason_note": "Bối cảnh thị trường đòi hỏi tỷ trọng thận trọng.",
+    },
+}
+
+
+def _softening_text(key: str, language: str) -> str:
+    return _SOFTENING_TEXTS["en" if language == "en" else "vi"][key]
+
+
+def _softened_position_advice(language: str) -> dict[str, str]:
+    return {
+        "no_position": _softening_text("no_position", language),
+        "has_position": _softening_text("has_position", language),
     }
 
 
 def _softened_position_strategy(language: str) -> dict[str, str]:
     position_advice = _softened_position_advice(language)
     return {
-        "suggested_position": "Small/defensive position",
+        "suggested_position": _softening_text("suggested_position", language),
         "entry_plan": position_advice["no_position"],
-        "risk_control": "Do not increase exposure before market risk eases; control drawdown strictly.",
+        "risk_control": _softening_text("risk_control", language),
     }
 
 
@@ -137,12 +162,12 @@ def _append_softening_limitation(phase_decision: dict[str, Any], *, language: st
     limitations = phase_decision.get("data_limitations")
     if not isinstance(limitations, list):
         limitations = []
-    limitation = "Daily market context is conservative/high risk; aggressive buy advice was softened."
+    limitation = _softening_text("limitation", language)
     if limitation not in limitations:
         limitations.append(limitation)
     phase_decision["data_limitations"] = limitations
     reason = str(phase_decision.get("confidence_reason") or "").strip()
-    reason_note = "Market context requires conservative sizing."
+    reason_note = _softening_text("reason_note", language)
     phase_decision["confidence_reason"] = (
         f"{reason}; {reason_note}" if reason else reason_note
     )

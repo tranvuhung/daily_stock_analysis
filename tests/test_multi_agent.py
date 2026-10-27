@@ -3083,8 +3083,8 @@ class TestRiskOverride(unittest.TestCase):
 
         self.assertIn(last_sentence, merged)
         self.assertIn("Lý do của RiskAgent", merged)
-        self.assertIn("[high] Bán ròng kéo dài", merged)
-        self.assertTrue(merged.endswith("[high] Bán ròng kéo dài"))
+        self.assertIn("[Rủi ro cao] Bán ròng kéo dài", merged)
+        self.assertTrue(merged.endswith("[Rủi ro cao] Bán ròng kéo dài"))
 
     def test_merge_risk_warning_localizes_signal(self):
         from src.agent.orchestrator import AgentOrchestrator

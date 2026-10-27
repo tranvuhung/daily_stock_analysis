@@ -1286,6 +1286,41 @@ def localize_bias_status(value: Any, language: Optional[str]) -> str:
     )
 
 
+# Nhãn tiếng Việt cho mã hạn chế dữ liệu dạng "quote: stale" do analysis_context_builder
+# sinh ra; mã chuẩn vẫn dùng trong prompt/overview và giữ nguyên với báo cáo tiếng Anh.
+# Vietnamese labels for "quote: stale"-style data-limitation codes; English keeps the code.
+_DATA_LIMITATION_BLOCK_LABELS_VI = {
+    "quote": "Báo giá",
+    "daily_bars": "Nến ngày",
+    "technical": "Kỹ thuật",
+    "news": "Tin tức",
+    "fundamentals": "Cơ bản",
+}
+_DATA_LIMITATION_STATUS_LABELS_VI = {
+    "available": "đầy đủ",
+    "missing": "thiếu",
+    "not_supported": "không hỗ trợ",
+    "fallback": "dùng nguồn dự phòng",
+    "stale": "dữ liệu trễ",
+    "estimated": "ước lượng",
+    "partial": "một phần",
+    "fetch_failed": "lấy dữ liệu lỗi",
+}
+
+
+def localize_data_limitation(value: Any, language: Optional[str]) -> str:
+    """Translate a ``"<block>: <status>"`` data-limitation code; other text is returned unchanged."""
+    text = str(value or "").strip()
+    if normalize_report_language(language) == "en" or ":" not in text:
+        return text
+    block, _, status = text.partition(":")
+    block_label = _DATA_LIMITATION_BLOCK_LABELS_VI.get(block.strip())
+    status_label = _DATA_LIMITATION_STATUS_LABELS_VI.get(status.strip())
+    if not block_label or not status_label:
+        return text
+    return f"{block_label}: {status_label}"
+
+
 def get_bias_status_emoji(value: Any) -> str:
     """Return the stable alert emoji for a localized or canonical bias status."""
     canonical = _canonicalize_lookup_value(value, _BIAS_STATUS_CANONICAL_MAP)

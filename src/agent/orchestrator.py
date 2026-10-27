@@ -66,7 +66,11 @@ from src.agent.stock_scope import resolve_stock_scope
 from src.agent.stream_events import stream_event
 from src.agent.tools.registry import ToolRegistry
 from src.config import AGENT_MAX_STEPS_DEFAULT, get_config
-from src.report_language import localize_operation_advice, normalize_report_language
+from src.report_language import (
+    localize_conflict_severity,
+    localize_operation_advice,
+    normalize_report_language,
+)
 
 if TYPE_CHECKING:
     from src.agent.executor import AgentResult
@@ -1434,9 +1438,11 @@ class AgentOrchestrator:
                 operation=_signal_to_operation(decision_type, lang)
             )
         if risk_applied:
+            # Hiển thị tín hiệu theo ngôn ngữ báo cáo ("Mua -> Quan sát") thay vì mã thô.
+            # Show signals in the report language instead of raw codes.
             transition_prefix = _fallback_text("risk_transition_prefix", lang).format(
-                from_signal=application.from_signal.value,
-                to_signal=application.post_risk_signal.value,
+                from_signal=_localized_signal_label(application.from_signal.value, lang),
+                to_signal=_localized_signal_label(application.post_risk_signal.value, lang),
             )
             if not analysis_summary.startswith(transition_prefix):
                 analysis_summary = f"{transition_prefix} {analysis_summary}"
@@ -1961,10 +1967,10 @@ class AgentOrchestrator:
             description = str(flag.get("description", "")).strip()
             severity = str(flag.get("severity", "")).lower()
             if description:
-                warnings.append(f"[{severity or 'risk'}] {description}")
+                warnings.append(f"[{_localized_severity_tag(severity, language)}] {description}")
         # Hiển thị tín hiệu theo ngôn ngữ báo cáo (sell -> "Bán") thay vì mã thô.
         # Show the signal in the report language instead of the raw code.
-        signal_label = localize_operation_advice(signal, language) or signal
+        signal_label = _localized_signal_label(signal, language)
         prefix = _fallback_text("risk_takeover", language).format(signal=signal_label)
         # Không cắt theo số ký tự: cắt cứng làm cụt câu giữa từ và mất lý do/cờ rủi ro phía sau.
         # No character cap: a hard cut broke words and dropped the risk reasoning and flags.
@@ -2184,6 +2190,20 @@ def _adjust_operation_advice(advice: str, signal: str, language: Optional[str] =
     if advice == mapping[signal]:
         return advice
     return _fallback_text("advice_downgraded", language).format(advice=mapping[signal])
+
+
+def _localized_signal_label(signal: str, language: Optional[str] = "vi") -> str:
+    """buy/hold/sell -> nhãn theo ngôn ngữ báo cáo / label in the report language."""
+    return localize_operation_advice(signal, language) or signal
+
+
+def _localized_severity_tag(severity: str, language: Optional[str] = "vi") -> str:
+    """Nhãn mức rủi ro của cờ RiskAgent / severity tag for a RiskAgent flag."""
+    if _lang_key(language) == "en":
+        return severity or "risk"
+    if not severity:
+        return "Rủi ro"
+    return f"Rủi ro {localize_conflict_severity(severity, language).lower()}"
 
 
 def _signal_to_operation(signal: str, language: Optional[str] = "vi") -> str:

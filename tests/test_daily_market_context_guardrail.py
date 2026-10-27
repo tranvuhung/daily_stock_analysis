@@ -15,6 +15,11 @@ _CONSERVATIVE_VN_CONTEXT = {
 }
 
 _SOFTENED_POSITION_ADVICE = {
+    "no_position": "Chưa mở vị thế mới cho đến khi rủi ro thị trường hạ nhiệt hoặc có tín hiệu xác nhận.",
+    "has_position": "Chỉ giữ tỷ trọng nhỏ; không gia tăng tỷ trọng và giảm bớt nếu thủng ngưỡng quản trị rủi ro.",
+}
+
+_SOFTENED_POSITION_ADVICE_EN = {
     "no_position": "Do not open a new position until market risk eases or confirmation appears.",
     "has_position": "Hold only a small position; do not increase exposure, and reduce if risk controls break.",
 }
@@ -78,10 +83,52 @@ def test_conservative_market_context_softens_aggressive_buy() -> None:
     assert core["position_advice"] == _SOFTENED_POSITION_ADVICE
     position_strategy = result.dashboard["battle_plan"]["position_strategy"]
     assert position_strategy == {
-        "suggested_position": "Small/defensive position",
+        "suggested_position": "Tỷ trọng nhỏ/phòng thủ",
         "entry_plan": _SOFTENED_POSITION_ADVICE["no_position"],
-        "risk_control": "Do not increase exposure before market risk eases; control drawdown strictly.",
+        "risk_control": "Không gia tăng tỷ trọng trước khi rủi ro thị trường hạ nhiệt; kiểm soát sụt giảm chặt chẽ.",
     }
+    phase_decision = result.dashboard["phase_decision"]
+    assert any("Bối cảnh thị trường trong ngày" in item for item in phase_decision["data_limitations"])
+    assert "Bối cảnh thị trường đòi hỏi tỷ trọng thận trọng." in phase_decision["confidence_reason"]
+
+
+def test_vietnamese_softening_inserts_no_english_text() -> None:
+    # Báo cáo chạy sau phiên từng lẫn nguyên câu tiếng Anh do guardrail chèn.
+    # Post-market reports used to carry English sentences inserted by this guardrail.
+    result = _result()
+
+    apply_daily_market_context_guardrail(
+        result,
+        daily_market_context=dict(_CONSERVATIVE_VN_CONTEXT),
+        report_language="vi",
+    )
+
+    dashboard = result.dashboard
+    inserted = [
+        *dashboard["core_conclusion"]["position_advice"].values(),
+        *dashboard["battle_plan"]["position_strategy"].values(),
+        *dashboard["phase_decision"]["data_limitations"],
+        dashboard["phase_decision"]["confidence_reason"],
+    ]
+    for english in ("Do not", "Hold only", "Small/defensive", "Daily market context", "Market context"):
+        assert not any(english in text for text in inserted), english
+
+
+def test_english_report_keeps_english_softening_text() -> None:
+    result = _result()
+    result.operation_advice = "Buy now and add aggressively."
+    result.confidence_level = "High"
+
+    apply_daily_market_context_guardrail(
+        result,
+        daily_market_context=dict(_CONSERVATIVE_VN_CONTEXT),
+        report_language="en",
+    )
+
+    core = result.dashboard["core_conclusion"]
+    assert core["position_advice"] == _SOFTENED_POSITION_ADVICE_EN
+    position_strategy = result.dashboard["battle_plan"]["position_strategy"]
+    assert position_strategy["suggested_position"] == "Small/defensive position"
     phase_decision = result.dashboard["phase_decision"]
     assert any("Daily market context" in item for item in phase_decision["data_limitations"])
     assert "Market context requires conservative sizing." in phase_decision["confidence_reason"]

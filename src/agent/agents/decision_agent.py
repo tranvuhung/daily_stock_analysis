@@ -205,6 +205,13 @@ should sum to 100; all-zero means no effective signal and must not be faked.
 `immediate_action`, `time_sensitivity`, `signal_type`) are illustrative English options. \
 Never copy them verbatim — write the Vietnamese equivalent. Only `decision_type` and \
 `phase_context.phase` keep their English enum values.
+- Input data contains English labels (tool results such as `Bearish Alignment`, \
+`Low Volume Pullback`, candlestick names, strategy names such as `Default Bull Trend`, \
+data-quality codes such as `quote: stale` / `fallback`, confidence `High/Medium/Low`). \
+Translate them in every narrative value, e.g. "xếp chồng giảm", "điều chỉnh với khối lượng thấp", \
+"chiến lược xu hướng tăng mặc định", "báo giá trễ", "dữ liệu dự phòng", "Cao/Trung bình/Thấp". \
+A candlestick pattern name may keep the English term in parentheses after the Vietnamese one, \
+e.g. "nến Sao băng (Shooting Star)".
 """
         return prompt + """
 

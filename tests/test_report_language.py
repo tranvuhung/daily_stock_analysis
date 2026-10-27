@@ -4,6 +4,7 @@
 import unittest
 
 from src.report_language import (
+    localize_data_limitation,
     SUPPORTED_REPORT_LANGUAGES,
     get_bias_status_emoji,
     get_localized_stock_name,
@@ -146,6 +147,17 @@ class SupportedReportLanguageTestCase(unittest.TestCase):
             "Chưa vội bán",
         ):
             self.assertEqual(infer_decision_type_from_advice(advice), "hold", advice)
+
+    def test_data_limitation_codes_are_localized_for_vietnamese(self) -> None:
+        self.assertEqual(localize_data_limitation("quote: stale", "vi"), "Báo giá: dữ liệu trễ")
+        self.assertEqual(
+            localize_data_limitation("technical: fallback", "vi"),
+            "Kỹ thuật: dùng nguồn dự phòng",
+        )
+        self.assertEqual(localize_data_limitation("quote: stale", "en"), "quote: stale")
+        # Câu tự do hoặc mã lạ giữ nguyên. / Free text and unknown codes stay unchanged.
+        self.assertEqual(localize_data_limitation("Báo giá trễ 15 phút", "vi"), "Báo giá trễ 15 phút")
+        self.assertEqual(localize_data_limitation("portfolio: hidden", "vi"), "portfolio: hidden")
 
 
 if __name__ == "__main__":

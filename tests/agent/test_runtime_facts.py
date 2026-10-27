@@ -278,7 +278,7 @@ def test_orchestrator_returns_internal_facts_without_public_dashboard_fields():
     assert call_order == ["prepare", "risk", "finalize"]
     assert "Quan sát" in result.dashboard["operation_advice"]
     core = result.dashboard["dashboard"]["core_conclusion"]
-    assert core["one_sentence"].startswith("[Hạ bậc do quản trị rủi ro: buy -> hold]")
+    assert core["one_sentence"].startswith("[Hạ bậc do quản trị rủi ro: Mua -> Nắm giữ]")
     assert "趋势向上，建议立即买入" in core["one_sentence"]
     assert core["signal_type"] == "🟡 Nắm giữ/Quan sát"
     assert "cho tới khi rủi ro được giải toả" in core["position_advice"]["no_position"]

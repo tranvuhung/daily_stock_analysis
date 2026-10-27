@@ -56,6 +56,9 @@ def _output_language_section(report_language: str) -> str:
 `key_news[].title`, `flags[].description`, `pattern`, and any other narrative text) \
 in Vietnamese (Tiếng Việt) with correct diacritics, using standard Vietnamese \
 securities terminology. Never write Chinese characters.
+- Inside free text, translate English labels taken from tool results or strategy names \
+(e.g. `Bearish Alignment` -> "xếp chồng giảm", `stale` -> "trễ"); a candlestick pattern \
+name may keep the English term in parentheses, e.g. "nến Sao băng (Shooting Star)".
 """
     return """
 

@@ -96,8 +96,8 @@ def test_degraded_core_data_caps_high_confidence_buy() -> None:
     assert result.confidence_level == "Trung bình"
     pd = result.dashboard["phase_decision"]
     assert pd["phase_context"]["phase"] == "intraday"
-    assert "quote: stale" in pd["data_limitations"]
-    assert "Core quote" in pd["confidence_reason"]
+    assert "Báo giá: dữ liệu trễ" in pd["data_limitations"]
+    assert "Dữ liệu lõi" in pd["confidence_reason"]
 
 
 def test_degraded_core_data_caps_high_confidence_hold_advice() -> None:
@@ -127,8 +127,8 @@ def test_degraded_core_data_caps_high_confidence_hold_advice() -> None:
 
     assert "confidence_capped_core_data_degraded" in adjustments
     assert result.confidence_level == "Trung bình"
-    assert "Core quote" in result.dashboard["phase_decision"]["confidence_reason"]
-    assert "quote: stale" in result.dashboard["phase_decision"]["data_limitations"]
+    assert "Dữ liệu lõi" in result.dashboard["phase_decision"]["confidence_reason"]
+    assert "Báo giá: dữ liệu trễ" in result.dashboard["phase_decision"]["data_limitations"]
 
 
 def test_premarket_high_confidence_immediate_action_is_conservative() -> None:
@@ -143,7 +143,7 @@ def test_premarket_high_confidence_immediate_action_is_conservative() -> None:
 
     assert "confidence_capped_non_intraday_action" in adjustments
     assert result.confidence_level == "Thấp"
-    assert result.dashboard["phase_decision"]["immediate_action"] == "Wait for intraday confirmation; do not chase."
+    assert result.dashboard["phase_decision"]["immediate_action"] == "Chờ xác nhận trong phiên; không mua đuổi."
 
 
 def test_premarket_medium_confidence_immediate_action_rewrites_action_only() -> None:
@@ -209,7 +209,7 @@ def test_unknown_low_confidence_immediate_action_rewrites_action_only() -> None:
     assert "non_intraday_action_adjusted" in adjustments
     assert "confidence_capped_non_intraday_action" not in adjustments
     assert result.confidence_level == "Thấp"
-    assert result.dashboard["phase_decision"]["immediate_action"] == "Wait for intraday confirmation; do not chase."
+    assert result.dashboard["phase_decision"]["immediate_action"] == "Chờ xác nhận trong phiên; không mua đuổi."
 
 
 def test_premarket_degraded_immediate_action_uses_strongest_cap() -> None:
@@ -225,7 +225,7 @@ def test_premarket_degraded_immediate_action_uses_strongest_cap() -> None:
     assert "confidence_capped_core_data_degraded" in adjustments
     assert "confidence_capped_non_intraday_action" in adjustments
     assert result.confidence_level == "Thấp"
-    assert result.dashboard["phase_decision"]["immediate_action"] == "Wait for intraday confirmation; do not chase."
+    assert result.dashboard["phase_decision"]["immediate_action"] == "Chờ xác nhận trong phiên; không mua đuổi."
 
 
 def test_intraday_postmarket_recap_wording_is_adjusted_in_vi_and_en() -> None:
@@ -323,3 +323,39 @@ def test_guardrail_creates_dashboard_for_agent_compatible_result_object() -> Non
     assert adjustments == []
     assert result.dashboard["phase_decision"]["phase_context"]["phase"] == "intraday"
     assert result.dashboard["phase_decision"]["watch_conditions"] == []
+
+
+def test_vietnamese_guardrail_text_has_no_english() -> None:
+    # Báo cáo chạy sau phiên từng lẫn câu tiếng Anh và mã thô "quote: stale".
+    # Post-market reports used to carry English reasons and raw "quote: stale" codes.
+    result = _result()
+    phase = _phase("premarket")
+    phase["warnings"] = ["quote_stale"]
+
+    apply_phase_decision_guardrails(
+        result,
+        market_phase_summary=phase,
+        analysis_context_pack_overview=_overview("stale"),
+        report_language="vi",
+    )
+
+    pd = result.dashboard["phase_decision"]
+    inserted = [pd["confidence_reason"], pd["immediate_action"], *pd["data_limitations"]]
+    for english in ("Core quote", "Wait for", "confidence capped", "market phase warning", "quote: stale", "；"):
+        assert not any(english in text for text in inserted), english
+    assert "Cảnh báo phiên: quote_stale" in pd["data_limitations"]
+
+
+def test_english_report_keeps_english_guardrail_text() -> None:
+    result = _result(confidence_level="High", report_language="en")
+
+    apply_phase_decision_guardrails(
+        result,
+        market_phase_summary=_phase("intraday"),
+        analysis_context_pack_overview=_overview("stale"),
+        report_language="en",
+    )
+
+    pd = result.dashboard["phase_decision"]
+    assert "quote: stale" in pd["data_limitations"]
+    assert "Core quote" in pd["confidence_reason"]

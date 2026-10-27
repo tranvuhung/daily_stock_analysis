@@ -8,7 +8,11 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from src.analysis_context_pack_prompt import CORE_DEGRADED_STATUSES
 from src.market_phase_summary import render_market_phase_summary
-from src.report_language import localize_confidence_level, normalize_report_language
+from src.report_language import (
+    localize_confidence_level,
+    localize_data_limitation,
+    normalize_report_language,
+)
 
 if TYPE_CHECKING:
     from src.analyzer import AnalysisResult
@@ -64,9 +68,10 @@ def _negations_for(language: str) -> tuple[str, ...]:
     return _NEGATION_PREFIXES_EN
 
 
-def _reason_text(language: str, *, en: str) -> str:
-    # vi và en dùng chung câu chữ tiếng Anh như trước. / vi and en share the English wording as before.
-    return en
+def _reason_text(language: str, *, en: str, vi: str) -> str:
+    # Câu do guardrail tự chèn phải theo ngôn ngữ báo cáo.
+    # Guardrail-inserted wording follows the report language.
+    return en if language == "en" else vi
 
 
 def apply_phase_decision_guardrails(
@@ -105,7 +110,7 @@ def apply_phase_decision_guardrails(
     merged_limitations = _merge_limitations(
         _list_strings(phase_decision.get("data_limitations")),
         _phase_warning_limitations(phase_summary, language=language),
-        _overview_limitations(overview),
+        _overview_limitations(overview, language=language),
     )
     phase_decision["data_limitations"] = merged_limitations
 
@@ -118,6 +123,7 @@ def apply_phase_decision_guardrails(
         reason = _reason_text(
             language,
             en="Core quote, daily-bar, or technical data is degraded; high confidence was capped.",
+            vi="Dữ liệu lõi (báo giá, nến ngày hoặc kỹ thuật) bị suy giảm nên độ tin cậy cao đã được hạ xuống.",
         )
         _append_reason(phase_decision, reason)
         adjustments.append("confidence_capped_core_data_degraded")
@@ -131,6 +137,7 @@ def apply_phase_decision_guardrails(
         reason = _reason_text(
             language,
             en="Current market phase does not support immediate intraday buy/sell action.",
+            vi="Phiên thị trường hiện tại không phù hợp để mua/bán ngay trong phiên.",
         )
         _append_reason(phase_decision, reason)
         adjustments.append("non_intraday_action_adjusted")
@@ -142,6 +149,7 @@ def apply_phase_decision_guardrails(
         reason = _reason_text(
             language,
             en="Intraday output contained post-market recap wording; replaced with phase-safe action wording.",
+            vi="Kết quả trong phiên có câu chữ kiểu điểm lại sau phiên; đã thay bằng hành động phù hợp với phiên.",
         )
         _replace_postmarket_recap_fields(result, phase_decision, language=language)
         _append_reason(phase_decision, reason)
@@ -193,13 +201,17 @@ def _has_core_degraded_block(overview: Optional[Mapping[str, Any]]) -> bool:
     return False
 
 
-def _overview_limitations(overview: Optional[Mapping[str, Any]]) -> List[str]:
+def _overview_limitations(overview: Optional[Mapping[str, Any]], *, language: str) -> List[str]:
     if not isinstance(overview, Mapping):
         return []
     data_quality = overview.get("data_quality")
     if not isinstance(data_quality, Mapping):
         return []
-    return _list_strings(data_quality.get("limitations"))
+    # Mã chuẩn ("quote: stale") được dịch khi hiển thị. / Canonical codes are localized for display.
+    return [
+        localize_data_limitation(item, language)
+        for item in _list_strings(data_quality.get("limitations"))
+    ]
 
 
 def _phase_warning_limitations(summary: Optional[Mapping[str, Any]], *, language: str) -> List[str]:
@@ -208,7 +220,8 @@ def _phase_warning_limitations(summary: Optional[Mapping[str, Any]], *, language
     warnings = _list_strings(summary.get("warnings"))
     if not warnings:
         return []
-    return [f"market phase warning: {item}" for item in warnings]
+    prefix = "market phase warning" if language == "en" else "Cảnh báo phiên"
+    return [f"{prefix}: {item}" for item in warnings]
 
 
 def _merge_limitations(*groups: Any, limit: int = 5) -> List[str]:
@@ -304,6 +317,10 @@ def _replace_postmarket_recap_fields(
             "This is an intraday phase; use live state, watch conditions, and the next "
             "check point rather than post-market recap wording."
         ),
+        vi=(
+            "Đang trong phiên giao dịch; dựa vào diễn biến hiện tại, điều kiện theo dõi và "
+            "mốc kiểm tra tiếp theo thay vì câu chữ điểm lại sau phiên."
+        ),
     )
     if _contains_any(core.get("one_sentence"), _patterns(language)):
         core["one_sentence"] = safe_action
@@ -321,7 +338,7 @@ def _append_reason(phase_decision: Dict[str, Any], reason: str) -> None:
         phase_decision["confidence_reason"] = reason
         return
     if reason not in existing:
-        phase_decision["confidence_reason"] = f"{existing}；{reason}"
+        phase_decision["confidence_reason"] = f"{existing}; {reason}"
 
 
 def _adjustment_limitation_text(adjustment: str, *, language: str) -> str:
@@ -329,21 +346,25 @@ def _adjustment_limitation_text(adjustment: str, *, language: str) -> str:
         return _reason_text(
             language,
             en="post-market recap wording adjusted",
+            vi="đã chỉnh câu chữ điểm lại sau phiên",
         )
     if adjustment == "non_intraday_action_adjusted":
         return _reason_text(
             language,
             en="non-intraday immediate action adjusted",
+            vi="đã chỉnh hành động tức thời ngoài phiên",
         )
     if adjustment == "confidence_capped_non_intraday_action":
         return _reason_text(
             language,
             en="confidence capped for non-intraday action",
+            vi="đã hạ độ tin cậy vì hành động ngoài phiên",
         )
     if adjustment == "confidence_capped_core_data_degraded":
         return _reason_text(
             language,
             en="confidence capped due to degraded core data",
+            vi="đã hạ độ tin cậy vì dữ liệu lõi bị suy giảm",
         )
     return adjustment
 
@@ -352,6 +373,7 @@ def _safe_wait_action(language: str) -> str:
     return _reason_text(
         language,
         en="Wait for intraday confirmation; do not chase.",
+        vi="Chờ xác nhận trong phiên; không mua đuổi.",
     )
 
 
