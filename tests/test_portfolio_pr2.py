@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import unicodedata
 import unittest
 from datetime import date
 from pathlib import Path
@@ -35,6 +36,28 @@ def _reset_auth_globals() -> None:
     auth._password_hash_salt = None
     auth._password_hash_stored = None
     auth._rate_limit = {}
+
+
+_VN_TONE_MARKS = {"\u0300", "\u0301", "\u0303", "\u0309", "\u0323"}
+
+
+def _encode_cp1258(text: str) -> bytes:
+    """Mã hoá như Windows tiếng Việt: chữ cơ sở (â, ê, ơ...) dựng sẵn, dấu thanh tách rời.
+
+    Encode like Vietnamese Windows exports: precomposed base letters, separate tone marks.
+    """
+    out = []
+    for char in text:
+        try:
+            out.append(char.encode("cp1258"))
+            continue
+        except UnicodeEncodeError:
+            pass
+        decomposed = unicodedata.normalize("NFD", char)
+        base = "".join(c for c in decomposed if c not in _VN_TONE_MARKS)
+        tones = "".join(c for c in decomposed if c in _VN_TONE_MARKS)
+        out.append((unicodedata.normalize("NFC", base) + tones).encode("cp1258"))
+    return b"".join(out)
 
 
 class PortfolioPr2TestCase(unittest.TestCase):
@@ -406,6 +429,126 @@ class PortfolioPr2TestCase(unittest.TestCase):
         self.assertGreaterEqual(report["drawdown"]["series_points"], 2)
         self.assertGreater(report["drawdown"]["max_drawdown_pct"], 10.0)
         self.assertTrue(report["drawdown"]["alert"])
+
+    def test_risk_stop_loss_ignores_missing_price_positions(self) -> None:
+        aid = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")["id"]
+        self._create_position(aid, "HPG", price=100.0)
+        self.service.record_trade(
+            account_id=aid,
+            symbol="VCB",
+            trade_date=date(2026, 1, 1),
+            side="buy",
+            quantity=10,
+            price=50,
+            market="vn",
+            currency="VND",
+        )
+        # Ngưỡng cắt lỗ test = 25%: HPG lỗ 30% -> kích hoạt; VCB thiếu giá -> bỏ qua.
+        self._save_close("HPG", date(2026, 1, 2), 70.0)
+
+        report = self.risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 2), cost_method="fifo")
+
+        symbols = [item["symbol"] for item in report["stop_loss"]["items"]]
+        self.assertIn("HPG", symbols)
+        self.assertNotIn("VCB", symbols)
+        self.assertEqual(report["stop_loss"]["triggered_count"], 1)
+
+    def test_risk_drawdown_backfill_skips_weekends(self) -> None:
+        aid = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")["id"]
+        self._create_position(aid, "HPG", price=100.0)
+        self._save_close("HPG", date(2026, 1, 5), 100.0)
+
+        original = PortfolioService.get_portfolio_snapshot
+        calls = []
+
+        def _spy(service_self, *args, **kwargs):
+            calls.append(kwargs.get("as_of"))
+            return original(service_self, *args, **kwargs)
+
+        with patch.object(PortfolioService, "get_portfolio_snapshot", autospec=True, side_effect=_spy):
+            report = self.risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 5), cost_method="fifo")
+
+        # 01-01 (thứ 5) .. 01-05 (thứ 2): thứ 7 01-03 và CN 01-04 không được replay.
+        self.assertNotIn(date(2026, 1, 3), calls)
+        self.assertNotIn(date(2026, 1, 4), calls)
+        self.assertIn(date(2026, 1, 2), calls)
+        self.assertEqual(report["drawdown"]["series_points"], 3)
+
+    def test_risk_drawdown_excludes_missing_price_days(self) -> None:
+        aid = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")["id"]
+        self.service.record_cash_ledger(
+            account_id=aid, event_date=date(2026, 1, 1), direction="in", amount=20000, currency="VND"
+        )
+        self.service.record_trade(
+            account_id=aid,
+            symbol="HPG",
+            trade_date=date(2026, 1, 1),
+            side="buy",
+            quantity=100,
+            price=100,
+            market="vn",
+            currency="VND",
+        )
+        self._save_close("HPG", date(2026, 1, 1), 100.0)
+        self._save_close("HPG", date(2026, 1, 5), 100.0)
+        # Mã VCB mua 01-02 không có giá đến 01-05 -> 01-02 thiếu giá; equity bị đánh giá thấp.
+        self.service.record_trade(
+            account_id=aid,
+            symbol="VCB",
+            trade_date=date(2026, 1, 2),
+            side="buy",
+            quantity=100,
+            price=50,
+            market="vn",
+            currency="VND",
+        )
+        self._save_close("VCB", date(2026, 1, 5), 50.0)
+
+        report = self.risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 5), cost_method="fifo")
+
+        self.assertEqual(report["drawdown"]["excluded_points"], 1)
+        self.assertAlmostEqual(report["drawdown"]["max_drawdown_pct"], 0.0, places=6)
+        self.assertFalse(report["drawdown"]["alert"])
+
+    def test_import_parses_vietnamese_dates_and_numbers(self) -> None:
+        csv_text = (
+            "Ngày giao dịch,Mã CK,Loại lệnh,Khối lượng khớp,Giá khớp,Phí\n"
+            "05/03/2026,HPG,Mua,1.000,\"25.300\",\"37,95\"\n"
+        )
+        parsed = self.import_service.parse_trade_csv(broker="generic", content=csv_text.encode("utf-8"))
+        record = parsed["records"][0]
+        self.assertEqual(record["trade_date"], date(2026, 3, 5))
+        self.assertAlmostEqual(record["quantity"], 1000.0)
+        self.assertAlmostEqual(record["price"], 25300.0)
+        self.assertAlmostEqual(record["fee"], 37.95)
+
+    def test_import_reads_cp1258_and_utf16_exports(self) -> None:
+        csv_text = "Ngày giao dịch,Mã CK,Loại lệnh,Khối lượng khớp,Giá khớp\n2026-01-02,HPG,Bán,10,100\n"
+        cp1258_bytes = _encode_cp1258(csv_text)
+        with self.assertRaises(UnicodeDecodeError):
+            cp1258_bytes.decode("utf-8")
+        utf16_bytes = csv_text.replace(",", "\t").encode("utf-16")
+
+        for content in (cp1258_bytes, utf16_bytes):
+            with self.subTest(size=len(content)):
+                parsed = self.import_service.parse_trade_csv(broker="generic", content=content)
+                self.assertEqual(parsed["record_count"], 1)
+                self.assertEqual(parsed["records"][0]["side"], "sell")
+                self.assertEqual(parsed["records"][0]["symbol"], "HPG")
+
+    def test_import_commits_newest_first_file_in_date_order(self) -> None:
+        aid = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")["id"]
+        csv_text = (
+            "Ngày giao dịch,Mã CK,Loại lệnh,Khối lượng khớp,Giá khớp\n"
+            "05/01/2026,HPG,Bán,10,110\n"
+            "02/01/2026,HPG,Mua,10,100\n"
+        )
+        parsed = self.import_service.parse_trade_csv(broker="generic", content=csv_text.encode("utf-8"))
+        result = self.import_service.commit_trade_records(
+            account_id=aid, broker="generic", records=parsed["records"]
+        )
+        self.assertEqual(result["inserted_count"], 2, result["errors"])
+        self.assertEqual(result["failed_count"], 0)
 
     def test_sector_concentration_marks_vn_positions_unclassified(self) -> None:
         account = self.service.create_account(name="VN", broker="Demo", market="vn", base_currency="VND")

@@ -241,6 +241,36 @@ def resolve_historical_daily_bar_date(
     return None
 
 
+def latest_completed_session_date(
+    market: str,
+    as_of: date,
+    current_time: Optional[datetime] = None,
+) -> date:
+    """Ngày của phiên giao dịch đã hoàn tất gần nhất tính đến ``as_of``.
+
+    - ``as_of`` là hôm nay (giờ thị trường) và phiên chưa đóng (premarket / intraday /
+      lunch_break / closing_auction) -> lùi về phiên trước đó;
+    - sau đó bỏ qua các ngày không giao dịch (thứ 7/CN). Ngày lễ chưa được mô hình hoá,
+      nên vẫn được coi là ngày giao dịch (fail-open).
+
+    Latest completed trading session on or before ``as_of`` (weekends skipped,
+    holidays not modelled).
+    """
+    candidate = as_of
+    if as_of == get_market_now(market, current_time).date():
+        phase = infer_market_phase(market, current_time)
+        if phase in {
+            MarketPhase.PREMARKET,
+            MarketPhase.INTRADAY,
+            MarketPhase.LUNCH_BREAK,
+            MarketPhase.CLOSING_AUCTION,
+        }:
+            candidate -= timedelta(days=1)
+    while not is_market_open(market, candidate):
+        candidate -= timedelta(days=1)
+    return candidate
+
+
 def _classify_open_session(
     market: str,
     market_now: datetime,

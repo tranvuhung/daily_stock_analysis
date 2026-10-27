@@ -6,6 +6,8 @@ from __future__ import annotations
 import hashlib
 import io
 import logging
+import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
@@ -22,6 +24,12 @@ from src.services.portfolio_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Số kiểu VN "25.300" / "1.000.000" (dấu chấm phân cách nghìn) và kiểu quốc tế "25,300".
+# Nhóm đầu không bắt đầu bằng 0 để "0.025" vẫn là số thập phân.
+_DOT_THOUSANDS_RE = re.compile(r"^-?[1-9]\d{0,2}(\.\d{3})+$")
+_COMMA_THOUSANDS_RE = re.compile(r"^-?[1-9]\d{0,2}(,\d{3})+$")
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{1,2}-\d{1,2}")
 
 @dataclass(frozen=True)
 class CsvParserSpec:
@@ -173,7 +181,13 @@ class PortfolioImportService:
         seen_trade_uids: set[str] = set()
         seen_dedup_hashes: set[str] = set()
 
-        for i, record in enumerate(records):
+        # Ghi theo thứ tự ngày tăng dần, cùng ngày thì mua trước bán, để file xếp mới-nhất-trước
+        # không bị từ chối vì bán vượt. Sắp xếp ổn định, preview vẫn giữ thứ tự file.
+        # Commit in date order (buys before sells on the same day) so newest-first exports work.
+        ordered = sorted(enumerate(records), key=lambda item: self._commit_sort_key(item[1]))
+
+        for i, record in ordered:
+            line = record.get("_source_line_number") or record.get("source_line_number") or f"idx{i}"
             try:
                 trade_uid = (record.get("trade_uid") or "").strip() or None
                 dedup_hash = (record.get("dedup_hash") or "").strip()
@@ -228,13 +242,13 @@ class PortfolioImportService:
                 duplicate_count += 1
             except PortfolioOversellError as exc:
                 failed_count += 1
-                errors.append(f"idx={i}: {exc}")
+                errors.append(f"line={line}: {exc}")
             except PortfolioBusyError as exc:
                 failed_count += 1
-                errors.append(f"idx={i}: portfolio_busy: {exc}")
+                errors.append(f"line={line}: portfolio_busy: {exc}")
             except Exception as exc:
                 failed_count += 1
-                errors.append(f"idx={i}: {exc}")
+                errors.append(f"line={line}: {exc}")
 
         return {
             "account_id": account_id,
@@ -246,6 +260,18 @@ class PortfolioImportService:
             "errors": errors[:20],
         }
 
+    @staticmethod
+    def _commit_sort_key(record: Dict[str, Any]) -> Tuple[date, int]:
+        value = record.get("trade_date")
+        try:
+            trade_day = value if isinstance(value, date) else date.fromisoformat(str(value))
+        except (TypeError, ValueError):
+            # Ngày lỗi: đưa xuống cuối, record_trade sẽ báo lỗi cụ thể.
+            # Unparseable dates go last; record_trade reports the error.
+            trade_day = date.max
+        side = str(record.get("side") or "").strip().lower()
+        return trade_day, 0 if side == "buy" else 1
+
     def _normalize_broker(self, value: str) -> str:
         broker = (value or "").strip().lower()
         broker = self._broker_alias_map.get(broker, broker)
@@ -256,17 +282,39 @@ class PortfolioImportService:
 
     @staticmethod
     def _read_csv(content: bytes) -> pd.DataFrame:
-        for encoding in ("utf-8-sig", "gbk", "gb18030"):
-            try:
-                return pd.read_csv(
-                    io.BytesIO(content),
-                    encoding=encoding,
-                    dtype=str,
-                    keep_default_na=False,
-                )
-            except UnicodeDecodeError:
-                continue
-        return pd.read_csv(io.BytesIO(content), dtype=str, keep_default_na=False)
+        """Đọc CSV xuất từ CTCK VN: UTF-16 (có BOM, thường phân cách tab), UTF-8 hoặc cp1258.
+
+        Reads broker exports in UTF-16 (BOM, usually tab-separated), UTF-8 or cp1258.
+        Fails loudly instead of guessing when no encoding fits.
+        """
+        if content.startswith((b"\xff\xfe", b"\xfe\xff")):
+            df = pd.read_csv(
+                io.BytesIO(content),
+                encoding="utf-16",
+                sep=None,
+                engine="python",
+                dtype=str,
+                keep_default_na=False,
+            )
+        else:
+            df = None
+            for encoding in ("utf-8-sig", "cp1258"):
+                try:
+                    df = pd.read_csv(
+                        io.BytesIO(content),
+                        encoding=encoding,
+                        dtype=str,
+                        keep_default_na=False,
+                    )
+                    break
+                except UnicodeDecodeError:
+                    continue
+            if df is None:
+                raise ValueError("Không đọc được file CSV: cần mã hoá UTF-8, UTF-16 hoặc cp1258")
+        # cp1258 có thể sinh dấu tổ hợp (NFD); chuẩn hoá NFC để khớp tên cột tiếng Việt.
+        # cp1258 may yield decomposed diacritics; normalise headers to NFC.
+        df.columns = [unicodedata.normalize("NFC", str(col)).strip() for col in df.columns]
+        return df
 
     def _normalize_trade_row(
         self,
@@ -350,11 +398,36 @@ class PortfolioImportService:
 
     @staticmethod
     def _parse_float(value: Any) -> Optional[float]:
+        """Parse số theo quy ước VN và quốc tế.
+
+        - có cả "." và ",": ký tự xuất hiện sau cùng là dấu thập phân ("1.234,5" -> 1234.5);
+        - chỉ có "." dạng nhóm 3 chữ số ("25.300", "1.000.000"): "." là dấu nghìn;
+        - chỉ có "," dạng nhóm 3 chữ số ("25,300"): "," là dấu nghìn;
+        - một dấu "," còn lại là dấu thập phân ("25,3" -> 25.3).
+
+        Locale-aware number parsing for Vietnamese (dot thousands, comma decimal) and
+        international formats.
+        """
         if value is None:
             return None
-        text = str(value).strip().replace(",", "")
+        text = str(value).strip().replace(" ", "").replace("\u00a0", "")
         if not text or text.lower() == "nan":
             return None
+        has_dot = "." in text
+        has_comma = "," in text
+        if has_dot and has_comma:
+            if text.rfind(",") > text.rfind("."):
+                text = text.replace(".", "").replace(",", ".")
+            else:
+                text = text.replace(",", "")
+        elif has_dot:
+            if _DOT_THOUSANDS_RE.match(text):
+                text = text.replace(".", "")
+        elif has_comma:
+            if _COMMA_THOUSANDS_RE.match(text):
+                text = text.replace(",", "")
+            elif text.count(",") == 1:
+                text = text.replace(",", ".")
         try:
             return float(text)
         except ValueError:
@@ -367,14 +440,19 @@ class PortfolioImportService:
         text = str(value).strip()
         if not text or text.lower() == "nan":
             return None
-        parsed = pd.to_datetime(text, errors="coerce")
+        # ISO (yyyy-mm-dd) giữ nguyên; định dạng khác theo quy ước VN ngày trước tháng (dd/mm/yyyy).
+        # ISO stays as is; other formats are day-first as in Vietnamese exports.
+        if _ISO_DATE_RE.match(text):
+            parsed = pd.to_datetime(text, errors="coerce")
+        else:
+            parsed = pd.to_datetime(text, dayfirst=True, errors="coerce")
         if pd.isna(parsed):
             return None
         return parsed.date()
 
     @staticmethod
     def _normalize_side(value: Any) -> Optional[str]:
-        text = str(value or "").strip().lower()
+        text = unicodedata.normalize("NFC", str(value or "")).strip().lower()
         if not text:
             return None
         compact = text.replace(" ", "")

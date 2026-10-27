@@ -1415,13 +1415,21 @@ A: Check if Actions is enabled, and if cron expression is correct (note it's UTC
 - Account deletion uses soft-delete/archive semantics. Archived accounts are hidden from default account lists, portfolio snapshots, risk summaries, entry forms, and event lists.
 - Historical trade, cash-ledger, corporate-action, and daily snapshot rows are not physically removed. To correct a specific ledger row from the Web UI, delete that row before archiving its account.
 
-### Manual FX refresh on `/portfolio`
+### Snapshot price metadata
 
-- The FX status card on the Web `/portfolio` page includes a manual refresh action.
-- The button calls the existing `POST /api/v1/portfolio/fx/refresh` endpoint and reloads snapshot/risk data only.
-- If upstream FX fetch fails, the page may still remain stale after refresh and will explain the fallback result inline.
-- When `PORTFOLIO_FX_UPDATE_ENABLED=false`, the refresh API returns an explicit disabled status and the page shows that online FX refresh is disabled instead of implying that no refreshable pairs exist.
-- Portfolio snapshot `positions[]` includes price metadata such as `price_source`, `price_date`, `price_stale`, and `price_available`. Today's snapshot tries realtime quotes by default, then falls back to the latest historical close on or before `as_of` when the realtime quote is unavailable or non-positive. Passing `include_realtime=false` skips realtime quotes and uses the local historical-close fallback path directly; the Web portfolio page uses this mode to render holdings before slow external realtime quote sources can block the first screen. Historical `as_of` snapshots stay on historical-close semantics and no longer silently treat cost basis as the current price. Missing-price positions are marked with `price_available=false` and excluded from market value / unrealized PnL totals.
+- Portfolio snapshot `positions[]` includes price metadata such as `price_source`, `price_date`, `price_stale`, and `price_available`. Today's snapshot tries realtime quotes by default, then falls back to the latest historical close on or before `as_of` when the realtime quote is unavailable or non-positive. Passing `include_realtime=false` skips realtime quotes and uses the local historical-close fallback path directly; the Web portfolio page uses this mode to render holdings before slow external realtime quote sources can block the first screen. Historical `as_of` snapshots stay on historical-close semantics and no longer silently treat cost basis as the current price.
+- Missing-price positions are marked with `price_available=false`, excluded from market value / unrealized PnL totals, and carry the `price_unavailable` limitation, so the position, account and aggregate `data_quality` become `partial`. Stop-loss risk skips them instead of reporting a 100% loss.
+- `price_stale=true` means the close is older than the latest completed Vietnam trading session: on weekends the Friday close is not stale, and during an open session (premarket to closing auction) the previous session's close is not stale. Public holidays are not modelled yet, so a close from before a holiday is still reported as stale.
+- Portfolio values are in VND only; there is no FX conversion or FX refresh endpoint.
+
+### Ledger consistency
+
+- Recording a back-dated sell, deleting a buy, or recording/deleting a `split_adjustment` re-validates the whole timeline of that symbol. If any later sell would exceed the shares held, the write is rejected with HTTP 409 `portfolio_oversell` and nothing changes.
+
+### Drawdown and CSV import notes
+
+- Drawdown skips weekends (no snapshot backfill for Saturday/Sunday) and excludes dates where any snapshot had a missing price; the number of excluded dates is reported as `drawdown.excluded_points`. Deposits and withdrawals are not yet adjusted for.
+- CSV import reads UTF-8, UTF-16 (BOM, usually tab-separated) and cp1258 files, parses non-ISO dates as day-first (`05/03/2026` is 5 March), and accepts Vietnamese number formats (`25.300` = 25300, `25,3` = 25.3, `1.234,5` = 1234.5). Rows are committed in date order (buys before sells on the same day), so newest-first exports no longer fail with oversell errors. Rows imported earlier with wrong dates or numbers are not corrected automatically; delete them and re-import.
 
 ## Agent Tool Data Cache And Persistence
 

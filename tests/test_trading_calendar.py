@@ -103,6 +103,42 @@ class InferMarketPhaseTestCase(unittest.TestCase):
         )
 
 
+class LatestCompletedSessionDateTestCase(unittest.TestCase):
+    def test_weekend_resolves_to_friday(self):
+        # 2026-01-03 / 01-04 là thứ 7 / CN; phiên hoàn tất gần nhất là thứ 6 01-02.
+        now = datetime(2026, 1, 10, 10, 0, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+        for as_of in (date(2026, 1, 3), date(2026, 1, 4)):
+            with self.subTest(as_of=as_of):
+                self.assertEqual(
+                    trading_calendar.latest_completed_session_date("vn", as_of, now),
+                    date(2026, 1, 2),
+                )
+
+    def test_past_weekday_is_itself(self):
+        now = datetime(2026, 1, 10, 10, 0, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+        self.assertEqual(
+            trading_calendar.latest_completed_session_date("vn", date(2026, 1, 6), now),
+            date(2026, 1, 6),
+        )
+
+    def test_today_open_session_resolves_to_previous_session(self):
+        # Thứ 2 2026-01-05: trong phiên -> phiên hoàn tất gần nhất là thứ 6 01-02.
+        for hm in ((8, 30), (10, 0), (12, 0), (14, 40)):
+            with self.subTest(at=hm):
+                now = datetime(2026, 1, 5, *hm, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+                self.assertEqual(
+                    trading_calendar.latest_completed_session_date("vn", date(2026, 1, 5), now),
+                    date(2026, 1, 2),
+                )
+
+    def test_today_postmarket_is_today(self):
+        now = datetime(2026, 1, 6, 15, 0, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+        self.assertEqual(
+            trading_calendar.latest_completed_session_date("vn", date(2026, 1, 6), now),
+            date(2026, 1, 6),
+        )
+
+
 class MarketPhaseContextTestCase(unittest.TestCase):
     def test_context_to_dict_is_json_safe_for_intraday(self):
         ctx = trading_calendar.build_market_phase_context(

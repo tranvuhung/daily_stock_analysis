@@ -12,6 +12,7 @@ from datetime import date
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from data_provider.base import canonical_stock_code, normalize_stock_code
+from src.core.trading_calendar import latest_completed_session_date
 from src.repositories.portfolio_repo import (
     DuplicateTradeDedupHashError,
     DuplicateTradeUidError,
@@ -231,6 +232,16 @@ class PortfolioService:
                     note=(note or "").strip() or None,
                     dedup_hash=dedup_hash_norm,
                 )
+                if side_norm == "sell":
+                    # Lệnh bán lùi ngày có thể làm các lệnh bán sau đó vượt số lượng nắm giữ.
+                    # A back-dated sell may leave later sells uncovered.
+                    self._validate_symbol_timeline(
+                        account_id=account_id,
+                        symbol=symbol_norm,
+                        market=market_norm,
+                        currency=currency_norm,
+                        session=session,
+                    )
                 return {"id": int(row.id)}
         except (DuplicateTradeUidError, DuplicateTradeDedupHashError) as exc:
             raise PortfolioConflictError(str(exc)) from exc
@@ -306,11 +317,40 @@ class PortfolioService:
                 split_ratio=split_ratio,
                 note=(note or "").strip() or None,
             )
+            if action_type_norm == "split_adjustment":
+                # Gộp cổ phiếu (ratio < 1) có thể làm lệnh bán sau đó vượt số lượng nắm giữ.
+                # A reverse split may leave later sells uncovered.
+                self._validate_symbol_timeline(
+                    account_id=account_id,
+                    symbol=symbol_norm,
+                    market=market_norm,
+                    currency=currency_norm,
+                    session=session,
+                )
             return {"id": int(row.id)}
 
     def delete_trade_event(self, trade_id: int) -> bool:
         with self.repo.portfolio_write_session() as session:
-            return self.repo.delete_trade_in_session(session=session, trade_id=trade_id)
+            row = self.repo.get_trade_in_session(session=session, trade_id=trade_id)
+            if row is None:
+                return False
+            # Đọc thông tin trước khi xoá (row sẽ bị detach sau delete).
+            # Capture identity before the row is deleted.
+            account_id = int(row.account_id)
+            symbol, market, currency = row.symbol, row.market, row.currency
+            is_buy = (row.side or "").strip().lower() == "buy"
+            deleted = self.repo.delete_trade_in_session(session=session, trade_id=trade_id)
+            if deleted and is_buy:
+                # Xoá lệnh mua mà lệnh bán sau đó phụ thuộc -> PortfolioOversellError, rollback.
+                # Deleting a buy that later sells depend on raises and rolls back.
+                self._validate_symbol_timeline(
+                    account_id=account_id,
+                    symbol=symbol,
+                    market=market,
+                    currency=currency,
+                    session=session,
+                )
+            return deleted
 
     def delete_cash_ledger_event(self, entry_id: int) -> bool:
         with self.repo.portfolio_write_session() as session:
@@ -318,7 +358,24 @@ class PortfolioService:
 
     def delete_corporate_action_event(self, action_id: int) -> bool:
         with self.repo.portfolio_write_session() as session:
-            return self.repo.delete_corporate_action_in_session(session=session, action_id=action_id)
+            row = self.repo.get_corporate_action_in_session(session=session, action_id=action_id)
+            if row is None:
+                return False
+            account_id = int(row.account_id)
+            symbol, market, currency = row.symbol, row.market, row.currency
+            is_split = (row.action_type or "").strip().lower() == "split_adjustment"
+            deleted = self.repo.delete_corporate_action_in_session(session=session, action_id=action_id)
+            if deleted and is_split:
+                # Xoá tách cổ phiếu có thể làm lệnh bán sau đó vượt số lượng nắm giữ.
+                # Removing a split may leave later sells uncovered.
+                self._validate_symbol_timeline(
+                    account_id=account_id,
+                    symbol=symbol,
+                    market=market,
+                    currency=currency,
+                    session=session,
+                )
+            return deleted
 
     def list_trade_events(
         self,
@@ -514,56 +571,56 @@ class PortfolioService:
                 account_snapshot["public"].get("limitations", []),
             )
 
-            cash_cny, stale_cash, _ = self._convert_amount(
+            cash_agg, stale_cash, _ = self._convert_amount(
                 amount=account_snapshot["total_cash"],
                 from_currency=account.base_currency,
                 to_currency=aggregate_currency,
                 as_of_date=as_of_date,
             )
-            mv_cny, stale_mv, _ = self._convert_amount(
+            mv_agg, stale_mv, _ = self._convert_amount(
                 amount=account_snapshot["total_market_value"],
                 from_currency=account.base_currency,
                 to_currency=aggregate_currency,
                 as_of_date=as_of_date,
             )
-            eq_cny, stale_eq, _ = self._convert_amount(
+            eq_agg, stale_eq, _ = self._convert_amount(
                 amount=account_snapshot["total_equity"],
                 from_currency=account.base_currency,
                 to_currency=aggregate_currency,
                 as_of_date=as_of_date,
             )
-            realized_cny, stale_realized, _ = self._convert_amount(
+            realized_agg, stale_realized, _ = self._convert_amount(
                 amount=account_snapshot["realized_pnl"],
                 from_currency=account.base_currency,
                 to_currency=aggregate_currency,
                 as_of_date=as_of_date,
             )
-            unrealized_cny, stale_unrealized, _ = self._convert_amount(
+            unrealized_agg, stale_unrealized, _ = self._convert_amount(
                 amount=account_snapshot["unrealized_pnl"],
                 from_currency=account.base_currency,
                 to_currency=aggregate_currency,
                 as_of_date=as_of_date,
             )
-            fee_cny, stale_fee, _ = self._convert_amount(
+            fee_agg, stale_fee, _ = self._convert_amount(
                 amount=account_snapshot["fee_total"],
                 from_currency=account.base_currency,
                 to_currency=aggregate_currency,
                 as_of_date=as_of_date,
             )
-            tax_cny, stale_tax, _ = self._convert_amount(
+            tax_agg, stale_tax, _ = self._convert_amount(
                 amount=account_snapshot["tax_total"],
                 from_currency=account.base_currency,
                 to_currency=aggregate_currency,
                 as_of_date=as_of_date,
             )
 
-            aggregate["total_cash"] += cash_cny
-            aggregate["total_market_value"] += mv_cny
-            aggregate["total_equity"] += eq_cny
-            aggregate["realized_pnl"] += realized_cny
-            aggregate["unrealized_pnl"] += unrealized_cny
-            aggregate["fee_total"] += fee_cny
-            aggregate["tax_total"] += tax_cny
+            aggregate["total_cash"] += cash_agg
+            aggregate["total_market_value"] += mv_agg
+            aggregate["total_equity"] += eq_agg
+            aggregate["realized_pnl"] += realized_agg
+            aggregate["unrealized_pnl"] += unrealized_agg
+            aggregate["fee_total"] += fee_agg
+            aggregate["tax_total"] += tax_agg
             aggregate["fx_stale"] = aggregate["fx_stale"] or any(
                 [
                     stale_cash,
@@ -639,6 +696,31 @@ class PortfolioService:
                 requested_quantity=quantity,
                 available_quantity=available_quantity,
             )
+
+    def _validate_symbol_timeline(
+        self,
+        *,
+        account_id: int,
+        symbol: str,
+        market: str,
+        currency: str,
+        session: Any,
+    ) -> None:
+        """Replay toàn bộ lịch sử một mã; ném PortfolioOversellError nếu có lệnh bán vượt.
+
+        Replays the whole symbol timeline (not just up to one date) so later sells are checked.
+        """
+        key = (
+            self._normalize_symbol_for_position(symbol),
+            self._normalize_market(market),
+            self._normalize_currency(currency),
+        )
+        self._calculate_available_quantity(
+            account_id=account_id,
+            key=key,
+            as_of_date=date.max,
+            session=session,
+        )
 
     def _calculate_available_quantity(
         self,
@@ -1044,9 +1126,13 @@ class PortfolioService:
                 unrealized_base = market_base - cost_base
                 fx_stale = fx_stale or stale_market or stale_cost
             else:
+                # Không có giá: vị thế bị loại khỏi giá trị thị trường / lãi lỗ chưa thực hiện
+                # (không fallback về giá vốn), nên gắn hạn chế để data_quality thành "partial".
+                # Missing price: excluded from market value / unrealized P&L totals.
                 market_base = 0.0
                 cost_base = 0.0
                 unrealized_base = 0.0
+                limitations.append("price_unavailable")
 
             unrealized_pct = None
             if abs(cost_base) > EPS:
@@ -1113,7 +1199,9 @@ class PortfolioService:
                     price=float(close_price),
                     source="history_close",
                     price_date=close_date,
-                    is_stale=close_date < as_of_date,
+                    # Giá cũ khi đóng cửa trước phiên đã hoàn tất gần nhất (cuối tuần không tính).
+                    # Stale only when older than the latest completed session.
+                    is_stale=close_date < latest_completed_session_date("vn", as_of_date),
                     is_available=True,
                 )
 

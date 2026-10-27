@@ -243,6 +243,8 @@ def delete_trade(trade_id: int) -> PortfolioDeleteResponse:
         return PortfolioDeleteResponse(deleted=1)
     except PortfolioBusyError as exc:
         raise _conflict_error(error="portfolio_busy", message=str(exc))
+    except PortfolioOversellError as exc:
+        raise _conflict_error(error="portfolio_oversell", message=str(exc))
     except HTTPException:
         raise
     except Exception as exc:
@@ -350,6 +352,8 @@ def create_corporate_action(request: PortfolioCorporateActionCreateRequest) -> P
         return PortfolioEventCreatedResponse(**data)
     except PortfolioBusyError as exc:
         raise _conflict_error(error="portfolio_busy", message=str(exc))
+    except PortfolioOversellError as exc:
+        raise _conflict_error(error="portfolio_oversell", message=str(exc))
     except ValueError as exc:
         raise _bad_request(exc)
     except Exception as exc:
@@ -404,6 +408,8 @@ def delete_corporate_action(action_id: int) -> PortfolioDeleteResponse:
         return PortfolioDeleteResponse(deleted=1)
     except PortfolioBusyError as exc:
         raise _conflict_error(error="portfolio_busy", message=str(exc))
+    except PortfolioOversellError as exc:
+        raise _conflict_error(error="portfolio_oversell", message=str(exc))
     except HTTPException:
         raise
     except Exception as exc:

@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.config import Config, get_config
+from src.core.trading_calendar import is_market_open
 from src.repositories.portfolio_repo import PortfolioRepository
 from src.services.decision_signal_service import DecisionSignalService
 from src.services.decision_signal_summary import summarize_decision_signal
@@ -228,7 +230,9 @@ class PortfolioRiskService:
             existing_dates = {row.snapshot_date for row in existing_rows if int(row.account_id) == int(account_id)}
             current_date = start_date
             while current_date <= as_of_date:
-                if current_date not in existing_dates:
+                # Bỏ qua ngày không giao dịch (thứ 7/CN): giá trị trùng phiên trước, chỉ tốn replay.
+                # Skip non-trading days: they duplicate the previous session and cost a replay each.
+                if current_date not in existing_dates and is_market_open("vn", current_date):
                     self.portfolio_service.get_portfolio_snapshot(
                         account_id=account_id,
                         as_of=current_date,
@@ -245,7 +249,9 @@ class PortfolioRiskService:
         existing_pairs = {(int(row.account_id), row.snapshot_date) for row in existing_rows}
         current_date = start_date
         while current_date <= as_of_date:
-            if not all((aid, current_date) in existing_pairs for aid in account_ids):
+            if is_market_open("vn", current_date) and not all(
+                (aid, current_date) in existing_pairs for aid in account_ids
+            ):
                 self.portfolio_service.get_portfolio_snapshot(
                     account_id=None,
                     as_of=current_date,
@@ -422,16 +428,27 @@ class PortfolioRiskService:
         if not rows:
             return {
                 "series_points": 0,
+                "excluded_points": 0,
                 "max_drawdown_pct": 0.0,
                 "current_drawdown_pct": 0.0,
                 "alert": False,
                 "fx_stale": False,
             }
 
+        # Loại cả ngày nếu là ngày không giao dịch hoặc có tài khoản thiếu giá (equity bị đánh giá
+        # thấp -> drawdown giả). Loại theo ngày để tổng nhiều tài khoản không bị lệch.
+        # Exclude whole dates that are non-trading or have any missing-price snapshot.
+        excluded_dates = {
+            row.snapshot_date.isoformat()
+            for row in rows
+            if not is_market_open("vn", row.snapshot_date) or self._snapshot_has_missing_price(row)
+        }
         grouped: Dict[str, float] = {}
         stale_flag = False
         for row in rows:
             key = row.snapshot_date.isoformat()
+            if key in excluded_dates:
+                continue
             converted, stale, _ = self.portfolio_service.convert_amount(
                 amount=float(row.total_equity or 0.0),
                 from_currency=str(row.base_currency or "VND"),
@@ -441,6 +458,7 @@ class PortfolioRiskService:
             grouped[key] = grouped.get(key, 0.0) + converted
             stale_flag = stale_flag or stale or bool(row.fx_stale)
 
+        excluded_points = len(excluded_dates)
         series: List[Tuple[str, float]] = sorted(grouped.items(), key=lambda item: item[0])
         peak = 0.0
         max_drawdown = 0.0
@@ -456,11 +474,21 @@ class PortfolioRiskService:
 
         return {
             "series_points": len(series),
+            "excluded_points": excluded_points,
             "max_drawdown_pct": round(max_drawdown, 4),
             "current_drawdown_pct": round(current_drawdown, 4),
             "alert": bool(max_drawdown >= threshold_pct),
             "fx_stale": stale_flag,
         }
+
+    @staticmethod
+    def _snapshot_has_missing_price(row: Any) -> bool:
+        try:
+            payload = json.loads(row.payload or "{}")
+        except (TypeError, ValueError):
+            return False
+        limitations = payload.get("limitations") if isinstance(payload, dict) else None
+        return isinstance(limitations, list) and "price_unavailable" in limitations
 
     @staticmethod
     def _build_stop_loss(snapshot: Dict[str, Any], thresholds: Dict[str, Any]) -> Dict[str, Any]:
@@ -474,6 +502,10 @@ class PortfolioRiskService:
                 avg_cost = float(pos.get("avg_cost", 0.0) or 0.0)
                 last_price = float(pos.get("last_price", 0.0) or 0.0)
                 if avg_cost <= 0:
+                    continue
+                # Mã thiếu giá không có last_price thật; bỏ qua để không báo lỗ 100% giả.
+                # Skip positions without a real price to avoid a false 100% loss.
+                if not pos.get("price_available", True) or last_price <= 0:
                     continue
                 loss_pct = max(0.0, (avg_cost - last_price) / avg_cost * 100.0)
                 if loss_pct < near_threshold:

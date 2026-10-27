@@ -794,6 +794,24 @@ class PortfolioApiTestCase(unittest.TestCase):
         detail = resp.json()
         self.assertEqual(detail.get("error"), "portfolio_busy")
 
+    def test_delete_buy_with_dependent_sell_returns_409_oversell(self) -> None:
+        account_id = self.client.post(
+            "/api/v1/portfolio/accounts",
+            json={"name": "Main", "broker": "Demo", "market": "vn", "base_currency": "VND"},
+        ).json()["id"]
+        base = {"account_id": account_id, "symbol": "HPG", "price": 100, "fee": 0, "tax": 0, "market": "vn", "currency": "VND"}
+        buy = self.client.post("/api/v1/portfolio/trades", json={**base, "trade_date": "2026-01-02", "side": "buy", "quantity": 10})
+        self.assertEqual(buy.status_code, 200)
+        sell = self.client.post("/api/v1/portfolio/trades", json={**base, "trade_date": "2026-01-05", "side": "sell", "quantity": 10})
+        self.assertEqual(sell.status_code, 200)
+
+        resp = self.client.delete(f"/api/v1/portfolio/trades/{buy.json()['id']}")
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.json().get("error"), "portfolio_oversell")
+
+        snapshot = self.client.get(f"/api/v1/portfolio/snapshot?account_id={account_id}&as_of=2026-01-06")
+        self.assertEqual(snapshot.status_code, 200)
+
     def test_delete_trade_busy_returns_409(self) -> None:
         with patch(
             "api.v1.endpoints.portfolio.PortfolioService.delete_trade_event",

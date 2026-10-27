@@ -69,6 +69,10 @@ type PortfolioSignalLookupResult = {
 type PortfolioPageLanguage = 'vi' | 'en';
 
 const PORTFOLIO_LIMITATION_LABELS: Record<string, Record<PortfolioPageLanguage, string>> = {
+  price_unavailable: {
+    vi: 'Thiếu giá cho một số mã; tổng giá trị chưa tính các mã này',
+    en: 'Some symbols have no price; totals exclude them',
+  },
   realtime_quote_best_effort: {
     vi: 'Realtime quotes are best-effort',
     en: 'Realtime quotes are best-effort',

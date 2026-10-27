@@ -238,7 +238,8 @@ class PortfolioServiceTestCase(unittest.TestCase):
             market="vn",
             currency="VND",
         )
-        self._save_close("HPG", today - timedelta(days=1), 118.0)
+        # Giá đóng cửa cũ 1 tuần -> luôn stale, không phụ thuộc phiên hiện tại.
+        self._save_close("HPG", today - timedelta(days=7), 118.0)
 
         with patch.object(
             PortfolioService,
@@ -255,7 +256,7 @@ class PortfolioServiceTestCase(unittest.TestCase):
         pos = snapshot["accounts"][0]["positions"][0]
         self.assertAlmostEqual(pos["last_price"], 118.0, places=6)
         self.assertEqual(pos["price_source"], "history_close")
-        self.assertEqual(pos["price_date"], (today - timedelta(days=1)).isoformat())
+        self.assertEqual(pos["price_date"], (today - timedelta(days=7)).isoformat())
         self.assertTrue(pos["price_stale"])
         self.assertTrue(pos["price_available"])
 
@@ -531,7 +532,8 @@ class PortfolioServiceTestCase(unittest.TestCase):
         )
         self._save_close("HPG", date(2026, 1, 2), 110)
 
-        snapshot = self.service.get_portfolio_snapshot(account_id=aid, as_of=date(2026, 1, 3), cost_method="fifo")
+        # Thứ Hai 2026-01-05: giá thứ Sáu 01-02 cũ hơn phiên hoàn tất gần nhất -> stale.
+        snapshot = self.service.get_portfolio_snapshot(account_id=aid, as_of=date(2026, 1, 5), cost_method="fifo")
         positions = {item["symbol"]: item for item in snapshot["accounts"][0]["positions"]}
 
         stale_close = positions["HPG"]
@@ -551,6 +553,28 @@ class PortfolioServiceTestCase(unittest.TestCase):
         self.assertAlmostEqual(missing["market_value_base"], 0.0, places=6)
         self.assertAlmostEqual(missing["unrealized_pnl_base"], 0.0, places=6)
         self.assertIsNone(missing["unrealized_pnl_pct"])
+        self.assertEqual(missing["limitations"], ["price_unavailable"])
+        self.assertEqual(missing["data_quality"], "partial")
+        self.assertEqual(stale_close["limitations"], [])
+        self.assertEqual(snapshot["accounts"][0]["data_quality"], "partial")
+        self.assertIn("price_unavailable", snapshot["accounts"][0]["limitations"])
+        self.assertEqual(snapshot["data_quality"], "partial")
+
+    def test_weekend_snapshot_friday_close_not_stale(self) -> None:
+        aid = self._create_account_with_position(
+            market="vn",
+            currency="VND",
+            symbol="HPG",
+            close=110,
+            close_date=date(2026, 1, 2),
+        )
+        # Thứ 7 / CN: giá thứ Sáu là phiên hoàn tất gần nhất, không coi là cũ.
+        for as_of in (date(2026, 1, 3), date(2026, 1, 4)):
+            snapshot = self.service.get_portfolio_snapshot(account_id=aid, as_of=as_of, cost_method="fifo")
+            pos = snapshot["accounts"][0]["positions"][0]
+            self.assertEqual(pos["price_date"], "2026-01-02")
+            self.assertFalse(pos["price_stale"])
+            self.assertEqual(pos["data_quality"], "ok")
 
     def test_build_positions_handles_zero_cost_without_division(self) -> None:
         account = SimpleNamespace(base_currency="VND")
@@ -764,6 +788,84 @@ class PortfolioServiceTestCase(unittest.TestCase):
         trades = self.service.list_trade_events(account_id=aid, page=1, page_size=20)
         self.assertEqual(len(trades["items"]), 1)
         self.assertEqual(trades["items"][0]["side"], "buy")
+
+    def _trade(self, aid: int, day: date, side: str, quantity: float) -> int:
+        return self.service.record_trade(
+            account_id=aid,
+            symbol="HPG",
+            trade_date=day,
+            side=side,
+            quantity=quantity,
+            price=10,
+            market="vn",
+            currency="VND",
+        )["id"]
+
+    def test_backdated_sell_rejected_when_later_sell_would_oversell(self) -> None:
+        aid = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")["id"]
+        self._trade(aid, date(2026, 1, 1), "buy", 10)
+        self._trade(aid, date(2026, 1, 5), "sell", 10)
+
+        # Bán lùi ngày 01-03: đủ hàng tại ngày đó nhưng làm lệnh bán 01-05 vượt số lượng.
+        with self.assertRaises(PortfolioOversellError):
+            self._trade(aid, date(2026, 1, 3), "sell", 5)
+
+        trades = self.service.list_trade_events(account_id=aid, page=1, page_size=20)
+        self.assertEqual(len(trades["items"]), 2)
+
+    def test_delete_buy_rejected_when_later_sell_depends_on_it(self) -> None:
+        aid = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")["id"]
+        buy_id = self._trade(aid, date(2026, 1, 1), "buy", 10)
+        self._trade(aid, date(2026, 1, 5), "sell", 10)
+
+        with self.assertRaises(PortfolioOversellError):
+            self.service.delete_trade_event(buy_id)
+
+        trades = self.service.list_trade_events(account_id=aid, page=1, page_size=20)
+        self.assertEqual(len(trades["items"]), 2)
+        snapshot = self.service.get_portfolio_snapshot(account_id=aid, as_of=date(2026, 1, 6), cost_method="fifo")
+        self.assertEqual(snapshot["accounts"][0]["positions"], [])
+
+    def test_delete_split_rejected_when_later_sell_depends_on_it(self) -> None:
+        aid = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")["id"]
+        self._trade(aid, date(2026, 1, 1), "buy", 10)
+        split = self.service.record_corporate_action(
+            account_id=aid,
+            symbol="HPG",
+            effective_date=date(2026, 1, 2),
+            action_type="split_adjustment",
+            split_ratio=2.0,
+        )
+        self._trade(aid, date(2026, 1, 5), "sell", 20)
+
+        with self.assertRaises(PortfolioOversellError):
+            self.service.delete_corporate_action_event(split["id"])
+
+        actions = self.service.list_corporate_action_events(account_id=aid, page=1, page_size=20)
+        self.assertEqual(len(actions["items"]), 1)
+
+    def test_reverse_split_rejected_when_later_sell_would_oversell(self) -> None:
+        aid = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")["id"]
+        self._trade(aid, date(2026, 1, 1), "buy", 10)
+        self._trade(aid, date(2026, 1, 5), "sell", 10)
+
+        with self.assertRaises(PortfolioOversellError):
+            self.service.record_corporate_action(
+                account_id=aid,
+                symbol="HPG",
+                effective_date=date(2026, 1, 2),
+                action_type="split_adjustment",
+                split_ratio=0.5,
+            )
+
+    def test_delete_buy_allowed_without_dependent_sell(self) -> None:
+        aid = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")["id"]
+        buy_id = self._trade(aid, date(2026, 1, 1), "buy", 10)
+        self._trade(aid, date(2026, 1, 2), "buy", 10)
+        self._trade(aid, date(2026, 1, 5), "sell", 10)
+
+        self.assertTrue(self.service.delete_trade_event(buy_id))
+        self.assertFalse(self.service.delete_trade_event(buy_id))
 
     def test_duplicate_full_close_sell_keeps_conflict_semantics(self) -> None:
         account = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")

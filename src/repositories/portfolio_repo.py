@@ -415,6 +415,16 @@ class PortfolioRepository:
         session.refresh(row)
         return row
 
+    def get_trade_in_session(self, *, session: Any, trade_id: int) -> Optional[PortfolioTrade]:
+        return session.execute(
+            select(PortfolioTrade).where(PortfolioTrade.id == trade_id).limit(1)
+        ).scalar_one_or_none()
+
+    def get_corporate_action_in_session(self, *, session: Any, action_id: int) -> Optional[PortfolioCorporateAction]:
+        return session.execute(
+            select(PortfolioCorporateAction).where(PortfolioCorporateAction.id == action_id).limit(1)
+        ).scalar_one_or_none()
+
     def delete_trade_in_session(self, *, session: Any, trade_id: int) -> bool:
         row = session.execute(
             select(PortfolioTrade).where(PortfolioTrade.id == trade_id).limit(1)
