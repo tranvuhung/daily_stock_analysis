@@ -75,7 +75,8 @@
 | Tài liệu | Nội dung |
 | --- | --- |
 | [Đặc tả API](architecture/api_spec.json) | Bản OpenAPI của FastAPI |
-| [Workflow Agent](agent-workflow.md) | Sơ đồ pipeline phân tích mã, single/multi-agent, vòng ReAct và Chat hỏi đáp |
+| [Workflow Agent](agent-workflow.md) | Sơ đồ pipeline phân tích mã, single/multi-agent, vòng ReAct, Chat hỏi đáp và PortfolioAgent |
+| [Workflow Quản lý danh mục](portfolio-workflow.md) | Ghi sổ lệnh, replay snapshot, rủi ro, nhập CSV, cảnh báo và các điểm agent tham gia |
 | [Hướng dẫn đóng góp](CONTRIBUTING.md) / [EN](CONTRIBUTING_EN.md) | Issue, PR, kiểm thử, đồng bộ tài liệu |
 
 ## Ngôn ngữ khác

@@ -115,8 +115,8 @@ flowchart TD
     S1 --> S2["1 vòng ReAct, thấy cả 16 tool<br/>AGENT_SYSTEM_PROMPT + skills"]
     S2 --> S3["parse_dashboard_json<br/>(không có risk override)"]
 
-    Q -- "multi" --> O["AgentOrchestrator<br/>orchestrator.py:106"]
-    O --> P{"AGENT_ORCHESTRATOR_MODE<br/>_build_agent_chain :820"}
+    Q -- "multi" --> O["AgentOrchestrator<br/>orchestrator.py:110"]
+    O --> P{"AGENT_ORCHESTRATOR_MODE<br/>_build_agent_chain :824"}
     P -- quick --> C1["Technical → Decision"]
     P -- "standard (mặc định)" --> C2["Technical → Intel → Decision"]
     P -- full --> C3["Technical → Intel → Risk → Decision"]
@@ -248,7 +248,7 @@ sequenceDiagram
 | data | `get_daily_history` | OHLCV N ngày | DB cache → fetchers | Technical |
 | data | `get_analysis_context` | Ngữ cảnh phân tích đã lưu | DB | Technical |
 | data | `get_stock_info` | Định giá + cơ bản rút gọn | `get_fundamental_context` | Intel, Risk |
-| data | `get_portfolio_snapshot` | Tóm tắt danh mục + rủi ro | PortfolioService | — (single/portfolio) |
+| data | `get_portfolio_snapshot` | Tóm tắt danh mục + rủi ro | PortfolioService | — (chỉ single-agent và chat; backend Codex ẩn tool này) |
 | analysis | `analyze_trend` | MA, MACD, RSI, KL, hỗ trợ/kháng cự, điểm mua | `StockTrendAnalyzer` | Technical |
 | analysis | `calculate_ma` | MA theo chu kỳ tuỳ chọn | lịch sử giá | Technical |
 | analysis | `get_volume_analysis` | Phân tích khối lượng | lịch sử giá | Technical |
@@ -262,13 +262,44 @@ sequenceDiagram
 
 Single-agent (cả pipeline và chat) thấy toàn bộ 16 tool.
 
-## 8. Thành phần dùng chung giữa Pipeline và Chat
+## 8. PortfolioAgent — đánh giá danh mục
+
+PortfolioAgent (`src/agent/agents/portfolio_agent.py`) **không** nằm trong chuỗi agent của `AgentOrchestrator`. Nó chạy riêng, sau khi đã có dữ liệu từng mã, theo hai đường:
+
+```mermaid
+flowchart TD
+    W["Web /portfolio<br/>nút 'Đánh giá danh mục bằng AI'"] --> API["POST /api/v1/portfolio/ai-review<br/>portfolio.py:682"]
+    API --> S["PortfolioReviewService.review<br/>portfolio_review_service.py:319"]
+    S --> C["build_context :127"]
+    C --> SN["PortfolioService.get_portfolio_snapshot<br/>(realtime, gộp vị thế theo mã)"]
+    C --> RK["PortfolioRiskService.get_risk_report<br/>(lỗi thì bỏ qua)"]
+    C --> SG["DecisionSignalService.list_signals<br/>tín hiệu active mới nhất mỗi mã"]
+    SN & RK & SG --> CTX["AgentContext.data:<br/>portfolio_summary, portfolio_holdings,<br/>portfolio_risk, stock_opinions + risk_flags"]
+    CTX --> RUN["run_portfolio_agent :72<br/>hard timeout"]
+    BOT["/ask 2-5 mã<br/>ask.py:574 (bot chưa nhận lệnh)"] --> RUN2["PortfolioAgent.run<br/>stock_opinions từ phân tích vừa chạy"]
+    RUN --> PA["PortfolioAgent<br/>tool: get_realtime_quote, get_stock_info<br/>max_steps=4"]
+    RUN2 --> PA
+    PA --> N["normalize_assessment :363<br/>tỷ trọng / tiền mặt do server tính thắng"]
+    N --> W
+```
+
+- **Đầu vào là dữ liệu nạp sẵn, không phải tool.** Agent không có `get_portfolio_snapshot`: server đã tính snapshot, nên tránh replay lại và tránh để LLM tự chọn `account_id`. Hai tool còn lại chỉ để lấp chỗ trống (giá cũ, ngành chưa rõ).
+- **Không chạy lại phân tích từng mã.** Ý kiến từng mã lấy từ tín hiệu AI active mới nhất (mọi action, không chỉ sell/reduce như `PortfolioRiskService`). Mã chưa có tín hiệu được liệt kê vào `data_gaps`.
+- **Prompt cho thị trường Việt Nam:** HOSE/HNX/UPCoM, VND, T+2, lô 100, biên độ ±7/10/15%; ngành ICB do model ước lượng phải ghi rõ là ước lượng (dữ liệu ngành hiện luôn `UNCLASSIFIED`); ngưỡng tập trung lấy từ `portfolio_risk.thresholds`.
+- **Prompt gọn:** `_inject_cached_data` chỉ nạp `portfolio_summary` và `portfolio_risk` dạng JSON; danh mục nắm giữ (tối đa 40 dòng theo tỷ trọng) và ý kiến từng mã được hiển thị trong user message, không bị nạp trùng hay cắt ở 8000 ký tự.
+- **Output:** `portfolio_risk_score` (1-10), `positions[{code, current_weight, suggested_weight, signal, priority, note}]`, `cash_ratio`, `suggested_cash_ratio`, `sector_warnings`, `correlation_warnings`, `cross_market_notes`, `rebalance_suggestions`, `data_gaps`, `summary`. `post_process` vẫn suy tín hiệu tổng từ điểm rủi ro (≤3 buy, ≥7 sell).
+- **Timeout:** `resolve_portfolio_agent_timeout` (:54) — `AGENT_PORTFOLIO_AGENT_TIMEOUT_S` nếu > 0, nếu không thì min(`AGENT_ORCHESTRATOR_TIMEOUT_S`, 240); `/ask` lấy thêm min với thời gian còn lại. Hết giờ thì API trả 200 với `success=false, timed_out=true`.
+- **Không lưu kết quả** vào DB; Web giữ trong state và xoá khi đổi tài khoản / phương pháp giá vốn.
+
+Luồng dữ liệu danh mục (snapshot, rủi ro, import CSV, cảnh báo) xem [portfolio-workflow.md](portfolio-workflow.md).
+
+## 9. Thành phần dùng chung giữa Pipeline và Chat
 
 | Dùng chung | Chỉ Pipeline | Chỉ Chat |
 | --- | --- | --- |
 | `factory.py`, `ToolRegistry`, `run_agent_loop`, `LLMToolAdapter`, `SkillManager` (`strategies/*.yaml`), các agent chuyên trách, `build_risk_override_plan`, `DataFetcherManager`, `SearchService`, `StockTrendAnalyzer` | `GeminiAnalyzer` (legacy), context pack, guardrails hậu xử lý, report, notification, `AgentExecutor.run` + `parse_dashboard_json` | `prepare_agent_chat`, `AgentChatExecutor`, stock scope, prompt chat, `finalize_chat_answer`, lưu hội thoại + provider trace, SSE |
 
-## 9. Cờ cấu hình quyết định luồng
+## 10. Cờ cấu hình quyết định luồng
 
 | Biến | Mặc định | Tác dụng |
 | --- | --- | --- |
@@ -278,6 +309,7 @@ Single-agent (cả pipeline và chat) thấy toàn bộ 16 tool.
 | `AGENT_BACKEND` | `auto` | Backend của chat: `auto`/`litellm` hoặc `codex_app_server` |
 | `AGENT_MAX_STEPS` | `10` | Số bước tối đa của vòng ReAct (single-agent / chat) |
 | `AGENT_ORCHESTRATOR_TIMEOUT_S` | `600` | Tổng thời gian cho một lượt multi-agent |
+| `AGENT_PORTFOLIO_AGENT_TIMEOUT_S` | `0` | Thời gian tối đa một lượt PortfolioAgent (Web đánh giá danh mục, `/ask` nhiều mã); `0` = min(`AGENT_ORCHESTRATOR_TIMEOUT_S`, 240) |
 | `AGENT_RISK_OVERRIDE` | `true` | Áp veto/hạ bậc tín hiệu theo RiskAgent (chỉ multi-agent) |
 | `AGENT_MEMORY_ENABLED` | `false` | Chèn 3 phân tích gần nhất và kết quả của chúng vào prompt từng agent (multi) |
 | `AGENT_CONTEXT_COMPRESSION_ENABLED` | `false` | Nén lịch sử chat cũ bằng LLM |
@@ -285,9 +317,10 @@ Single-agent (cả pipeline và chat) thấy toàn bộ 16 tool.
 
 Giải thích đầy đủ xem `.env.example`.
 
-## 10. Lưu ý dễ hiểu nhầm
+## 11. Lưu ý dễ hiểu nhầm
 
 - **Agent lỗi không fallback về legacy.** Mã đó sẽ có `success=False` và không xuất hiện trong báo cáo gộp.
 - **Single-agent không có risk override.** Veto/hạ bậc chỉ chạy trong `AgentOrchestrator`.
 - **Bot chưa hoạt động như một kênh nhận lệnh:** `bot/platforms/__init__.py` có `ALL_PLATFORMS = {}` và không route API nào gọi webhook. Telegram, Discord và Slack hiện chỉ dùng làm kênh **gửi** thông báo.
 - **Không có thư mục `src/reports/`.** Report được dựng trong `src/notification.py` và `src/services/report_renderer.py` (template `templates/report_*.j2`).
+- **PortfolioAgent không thuộc orchestrator.** Không chế độ `AGENT_ORCHESTRATOR_MODE` nào chạy nó; chỉ Web `/portfolio` (nút đánh giá AI) và `/ask` nhiều mã gọi trực tiếp.

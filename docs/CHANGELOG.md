@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [文档] Thêm `docs/portfolio-workflow.md` (workflow Quản lý danh mục: ghi sổ lệnh, replay snapshot, rủi ro, nhập CSV, cảnh báo, điểm agent tham gia, hạn chế đã biết); `docs/agent-workflow.md` thêm mục PortfolioAgent, sửa ghi chú tool `get_portfolio_snapshot` (không phải tool của PortfolioAgent) và các tham chiếu dòng đã lệch.
 - [新功能] Trang Quản lý danh mục có thẻ "Đánh giá danh mục bằng AI" (`POST /api/v1/portfolio/ai-review`): PortfolioAgent đánh giá trên vị thế thật, báo cáo rủi ro và tín hiệu AI mới nhất của từng mã, trả điểm rủi ro, tỷ trọng hiện tại / đề xuất, tỷ lệ tiền mặt, cảnh báo tập trung / tương quan, gợi ý tái cân bằng và dữ liệu còn thiếu. Tỷ trọng do server tính; kết quả không lưu DB. Cần bật Agent.
 - [改进] PortfolioAgent chuyển sang thị trường Việt Nam (HOSE/HNX/UPCoM, T+2, lô 100, biên độ giá, ngành ICB ước lượng, ngưỡng tập trung theo cấu hình); không còn nạp trùng ý kiến từng mã vào prompt; tối đa 4 bước.
 - [修复] PortfolioAgent in risk flag dạng dict thô; `AGENT_PORTFOLIO_AGENT_TIMEOUT_S` trước đây không có hiệu lực, nay áp dụng cho đánh giá danh mục trên Web và phần góc nhìn danh mục của `/ask` nhiều mã (0 = min(`AGENT_ORCHESTRATOR_TIMEOUT_S`, 240)), và hiển thị trong trang Cài đặt.
