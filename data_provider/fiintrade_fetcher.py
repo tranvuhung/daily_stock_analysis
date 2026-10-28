@@ -215,7 +215,8 @@ _events_lock = RLock()
 # Ticker -> organCode map: cached 24h; after a failed load, retry only after 5 min.
 _ORGANIZATIONS_CACHE_TTL = 24 * 3600.0
 _ORGANIZATIONS_RETRY_SECONDS = 300.0
-_organizations_cache: Dict[str, Any] = {"data": None, "ts": 0.0, "failed_at": 0.0}
+# "icb": ticker -> mã ICB cấp 4, lấy cùng payload với organCode. / ICB level-4 code from the same payload.
+_organizations_cache: Dict[str, Any] = {"data": None, "icb": None, "ts": 0.0, "failed_at": 0.0}
 _organizations_lock = RLock()
 _market_cache: Dict[str, Dict[str, Any]] = {}
 _market_lock = RLock()
@@ -225,7 +226,7 @@ def reset_organizations_cache() -> None:
     """Xoá cache bảng organCode (dùng cho test). / Clear the organCode cache (for tests)."""
 
     with _organizations_lock:
-        _organizations_cache.update({"data": None, "ts": 0.0, "failed_at": 0.0})
+        _organizations_cache.update({"data": None, "icb": None, "ts": 0.0, "failed_at": 0.0})
 
 
 def reset_events_cache() -> None:
@@ -382,22 +383,48 @@ class FiinTradeFetcher(BaseFetcher):
     def _organization_map(self) -> Dict[str, str]:
         """Bảng ticker -> organCode từ danh mục FiinTrade; lỗi thì trả rỗng (fail-open)."""
 
+        return self._load_organizations().get("data") or {}
+
+    def get_icb_code(self, stock_code: str) -> Optional[str]:
+        """Mã ICB cấp 4 của cổ phiếu (vd. VCB -> ``8355``); không có thì ``None``.
+
+        Dùng chung cache danh mục tổ chức với organCode nên không phát sinh request mới.
+        ICB level-4 code from the cached organization list; ``None`` when unknown.
+        """
+
+        ticker, chart_type = self.to_provider_symbol(stock_code)
+        if not ticker or chart_type != "Stock":
+            return None
+        return (self._load_organizations().get("icb") or {}).get(ticker)
+
+    def _load_organizations(self) -> Dict[str, Any]:
+        """Tải/cache danh mục tổ chức: ``{"data": ticker->organCode, "icb": ticker->icbCode}``.
+
+        Loads the organization list once per TTL; on failure keeps the previous data.
+        """
+
         with _organizations_lock:
             now = time.time()
             data = _organizations_cache.get("data")
             if data is not None and now - float(_organizations_cache.get("ts") or 0) < _ORGANIZATIONS_CACHE_TTL:
-                return data
+                return dict(_organizations_cache)
             if now - float(_organizations_cache.get("failed_at") or 0) < _ORGANIZATIONS_RETRY_SECONDS:
-                return data or {}
+                return dict(_organizations_cache)
         try:
             payload = self._get_json(
                 _ORGANIZATIONS_PATH, {"language": "vi"}, base_url=FIINTRADE_CORE_BASE_URL
             )
-            mapping = {
-                str(item.get("ticker")).strip().upper(): str(item.get("organCode")).strip()
-                for item in payload.get("items") or []
-                if isinstance(item, dict) and item.get("ticker") and item.get("organCode")
-            }
+            mapping: Dict[str, str] = {}
+            icb_mapping: Dict[str, str] = {}
+            for item in payload.get("items") or []:
+                if not isinstance(item, dict) or not item.get("ticker"):
+                    continue
+                ticker = str(item.get("ticker")).strip().upper()
+                if item.get("organCode"):
+                    mapping[ticker] = str(item.get("organCode")).strip()
+                icb_code = str(item.get("icbCode") or "").strip()
+                if icb_code:
+                    icb_mapping[ticker] = icb_code
             if not mapping:
                 raise DataFetchError(f"[{self.name}] danh mục organCode rỗng")
         except Exception as exc:
@@ -406,10 +433,12 @@ class FiinTradeFetcher(BaseFetcher):
             )
             with _organizations_lock:
                 _organizations_cache["failed_at"] = time.time()
-                return _organizations_cache.get("data") or {}
+                return dict(_organizations_cache)
         with _organizations_lock:
-            _organizations_cache.update({"data": mapping, "ts": time.time(), "failed_at": 0.0})
-        return mapping
+            _organizations_cache.update(
+                {"data": mapping, "icb": icb_mapping, "ts": time.time(), "failed_at": 0.0}
+            )
+            return dict(_organizations_cache)
 
     def _resolve_code(self, stock_code: str) -> Tuple[Optional[str], str, str]:
         """``(mã gửi API, Type, ticker)``: cổ phiếu/ETF được quy về ``organCode``.

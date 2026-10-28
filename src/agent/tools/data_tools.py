@@ -225,6 +225,7 @@ def _compact_portfolio_risk(risk: dict, top_n: int = 10) -> dict:
         reverse=True,
     )[:top_n]
     drawdown = risk.get("drawdown", {}) or {}
+    sector_concentration = risk.get("sector_concentration", {}) or {}
     return {
         "as_of": risk.get("as_of"),
         "currency": risk.get("currency"),
@@ -234,6 +235,13 @@ def _compact_portfolio_risk(risk: dict, top_n: int = 10) -> dict:
             "alert": concentration.get("alert", False),
             "top_weight_pct": concentration.get("top_weight_pct"),
             "top_positions": top_positions,
+        },
+        # Ngành ICB cấp 2 từ nguồn dữ liệu; vị thế chưa tra được là UNCLASSIFIED.
+        "sector_concentration": {
+            "alert": sector_concentration.get("alert", False),
+            "top_weight_pct": sector_concentration.get("top_weight_pct"),
+            "top_sectors": list(sector_concentration.get("top_sectors") or [])[:top_n],
+            "coverage": sector_concentration.get("coverage", {}),
         },
         "drawdown": {
             "alert": drawdown.get("alert", False),

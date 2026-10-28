@@ -561,12 +561,58 @@ class PortfolioPr2TestCase(unittest.TestCase):
             currency="VND",
         )
         self._create_position(aid, "HPG")
-        report = self.risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 1), cost_method="fifo")
+        # FiinTrade chưa cấu hình -> không có nguồn ICB.
+        with patch("data_provider.fiintrade_fetcher.is_fiintrade_enabled", return_value=False):
+            report = self.risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 1), cost_method="fifo")
         self.assertIn("sector_concentration", report)
         sectors = report["sector_concentration"]["top_sectors"]
         self.assertTrue(len(sectors) >= 1)
         self.assertEqual(sectors[0]["sector"], "UNCLASSIFIED")
         self.assertEqual(report["sector_concentration"]["coverage"]["unclassified_count"], 1)
+
+    def test_sector_concentration_groups_positions_by_icb_supersector(self) -> None:
+        account = self.service.create_account(name="VN", broker="Demo", market="vn", base_currency="VND")
+        aid = account["id"]
+        self.service.record_cash_ledger(
+            account_id=aid, event_date=date(2026, 1, 1), direction="in", amount=100000.0, currency="VND",
+        )
+        for symbol in ("HPG", "VCB", "CTG", "ZZZ"):
+            self._create_position(aid, symbol)
+
+        class FakeSectorFetcher:
+            icb = {"HPG": "1757", "VCB": "8355", "CTG": "8355"}
+
+            def get_icb_code(self, symbol: str):
+                return self.icb.get(symbol)
+
+        risk_service = PortfolioRiskService(portfolio_service=self.service, sector_fetcher=FakeSectorFetcher())
+        report = risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 1), cost_method="fifo")
+        block = report["sector_concentration"]
+        by_sector = {row["sector"]: row for row in block["top_sectors"]}
+        self.assertEqual(by_sector["Ngân hàng"]["symbol_count"], 2)
+        self.assertEqual(by_sector["Tài nguyên cơ bản"]["symbol_count"], 1)
+        self.assertEqual(by_sector["UNCLASSIFIED"]["symbol_count"], 1)
+        self.assertEqual(block["top_sectors"][0]["sector"], "Ngân hàng")
+        self.assertEqual(block["coverage"], {"classified_count": 3, "unclassified_count": 1, "failed_count": 0})
+
+    def test_sector_lookup_failure_does_not_break_risk_report(self) -> None:
+        account = self.service.create_account(name="VN", broker="Demo", market="vn", base_currency="VND")
+        aid = account["id"]
+        self.service.record_cash_ledger(
+            account_id=aid, event_date=date(2026, 1, 1), direction="in", amount=100000.0, currency="VND",
+        )
+        self._create_position(aid, "HPG")
+
+        class BrokenSectorFetcher:
+            def get_icb_code(self, symbol: str):
+                raise RuntimeError("down")
+
+        risk_service = PortfolioRiskService(portfolio_service=self.service, sector_fetcher=BrokenSectorFetcher())
+        report = risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 1), cost_method="fifo")
+        block = report["sector_concentration"]
+        self.assertEqual(block["top_sectors"][0]["sector"], "UNCLASSIFIED")
+        self.assertEqual(block["coverage"]["failed_count"], 1)
+        self.assertEqual(len(block["errors"]), 1)
 
     def test_risk_report_aggregates_active_defensive_decision_signals_for_holdings(self) -> None:
         account = self.service.create_account(name="Main", broker="Demo", market="vn", base_currency="VND")

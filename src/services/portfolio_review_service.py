@@ -297,6 +297,14 @@ class PortfolioReviewService:
                 f"Mã lớn nhất chiếm {concentration.get('top_weight_pct')}% giá trị cổ phiếu",
                 severity="high",
             )
+        sector_concentration = risk.get("sector_concentration") or {}
+        top_sector = (sector_concentration.get("top_sectors") or [{}])[0]
+        if sector_concentration.get("alert") and top_sector.get("sector") not in (None, "UNCLASSIFIED"):
+            ctx.add_risk_flag(
+                "sector_concentration",
+                f"Ngành {top_sector.get('sector')} chiếm {sector_concentration.get('top_weight_pct')}% giá trị cổ phiếu",
+                severity="high",
+            )
         drawdown = risk.get("drawdown") or {}
         if drawdown.get("alert"):
             ctx.add_risk_flag(

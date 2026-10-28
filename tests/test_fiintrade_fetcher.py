@@ -877,7 +877,7 @@ _ORGANIZATIONS_PAYLOAD = {
     "items": [
         {"organCode": "FPT", "ticker": "FPT", "comGroupCode": "VNINDEX"},
         {"organCode": "NHN", "ticker": "VHM", "comGroupCode": "VNINDEX"},
-        {"organCode": "ACVN", "ticker": "ACV", "comGroupCode": "UpcomIndex"},
+        {"organCode": "ACVN", "ticker": "ACV", "comGroupCode": "UpcomIndex", "icbCode": "2777"},
         {"organCode": "TLSC", "ticker": "MBS", "comGroupCode": "HNXIndex"},
     ],
     "status": "Success",
@@ -931,6 +931,20 @@ class FiinTradeOrganCodeTestCase(unittest.TestCase):
             self.fetcher.get_realtime_quote("VHM")
         org_calls = [c for c in mocked.call_args_list if c.args[0].endswith("/Master/GetListOrganization")]
         self.assertEqual(len(org_calls), 1)
+
+    def test_icb_code_comes_from_cached_organization_list(self):
+        with patch.object(self.fetcher._session, "get", side_effect=self._router()) as mocked:
+            self.assertEqual(self.fetcher.get_icb_code("ACV"), "2777")
+            self.assertEqual(self.fetcher._resolve_code("ACV"), ("ACVN", "Stock", "ACV"))
+            # Mã không có icbCode / chỉ số -> None.
+            self.assertIsNone(self.fetcher.get_icb_code("MBS"))
+            self.assertIsNone(self.fetcher.get_icb_code("VNINDEX"))
+        org_calls = [c for c in mocked.call_args_list if c.args[0].endswith("/Master/GetListOrganization")]
+        self.assertEqual(len(org_calls), 1)
+
+    def test_icb_code_is_none_when_organization_list_fails(self):
+        with patch.object(self.fetcher._session, "get", side_effect=DataFetchError("down")):
+            self.assertIsNone(self.fetcher.get_icb_code("ACV"))
 
     def test_unknown_ticker_and_failed_map_fall_back_to_ticker(self):
         with patch.object(self.fetcher._session, "get", side_effect=self._router()):

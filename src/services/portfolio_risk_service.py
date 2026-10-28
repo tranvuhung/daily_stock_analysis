@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.config import Config, get_config
+from src.core.icb_sectors import icb_supersector_name
 from src.core.trading_calendar import is_market_open
 from src.repositories.portfolio_repo import PortfolioRepository
 from src.services.decision_signal_service import DecisionSignalService
@@ -30,8 +31,12 @@ class PortfolioRiskService:
         portfolio_service: Optional[PortfolioService] = None,
         decision_signal_service: Optional[DecisionSignalService] = None,
         config: Optional[Config] = None,
+        sector_fetcher: Optional[Any] = None,
     ):
         self.repo = repo or PortfolioRepository()
+        # Nguồn mã ICB (cần ``get_icb_code``); None thì khởi tạo FiinTrade khi cần.
+        # ICB code source (needs ``get_icb_code``); lazily uses FiinTrade when None.
+        self._sector_fetcher = sector_fetcher
         self.portfolio_service = portfolio_service or PortfolioService(repo=self.repo)
         self.decision_signal_service = decision_signal_service or DecisionSignalService(portfolio_repo=self.repo)
         self.config = config or get_config()
@@ -403,12 +408,41 @@ class PortfolioRiskService:
         if cache_key in board_cache:
             return board_cache[cache_key]
 
-        # Chưa có nguồn phân ngành cho cổ phiếu Việt Nam nên mọi vị thế đều chưa phân loại.
-        # No Vietnam sector-classification source yet; every position is unclassified.
-        coverage["unclassified_count"] += 1
-        board_cache[cache_key] = "UNCLASSIFIED"
+        sector: Optional[str] = None
+        if market == "vn":
+            try:
+                fetcher = self._get_sector_fetcher()
+                if fetcher is not None:
+                    sector = icb_supersector_name(fetcher.get_icb_code(symbol))
+            except Exception as exc:
+                # Lỗi tra ngành không được làm hỏng báo cáo rủi ro. / Never fail the risk report.
+                logger.warning("[PortfolioRiskService] Tra ngành ICB cho %s thất bại: %s", symbol, exc)
+                coverage["failed_count"] += 1
+                errors.append(f"{symbol}: {exc}")
+                board_cache[cache_key] = "UNCLASSIFIED"
+                return board_cache[cache_key]
+
+        if sector:
+            coverage["classified_count"] += 1
+            board_cache[cache_key] = sector
+        else:
+            coverage["unclassified_count"] += 1
+            board_cache[cache_key] = "UNCLASSIFIED"
         return board_cache[cache_key]
 
+    def _get_sector_fetcher(self) -> Optional[Any]:
+        """FiinTrade là nguồn mã ICB duy nhất; chưa cấu hình ``FIINTRADE_ORIGIN`` thì trả None.
+
+        FiinTrade is the only ICB source; returns None when it is not configured.
+        """
+
+        if self._sector_fetcher is None:
+            from data_provider.fiintrade_fetcher import FiinTradeFetcher, is_fiintrade_enabled
+
+            if not is_fiintrade_enabled():
+                return None
+            self._sector_fetcher = FiinTradeFetcher()
+        return self._sector_fetcher
 
     def _build_drawdown(
         self,

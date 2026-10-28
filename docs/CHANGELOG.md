@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] "Mức độ tập trung theo ngành" trang Danh mục không còn luôn là `UNCLASSIFIED`: ngành ICB cấp 2 (Ngân hàng, Bất động sản, Dịch vụ tài chính, Chứng chỉ quỹ...) lấy từ mã `icbCode` trong danh mục tổ chức FiinTrade (cùng request tra `organCode`, không thêm request). Đánh giá Danh mục bằng AI nay nhận cùng dữ liệu ngành (`portfolio_risk.sector_concentration`) và chỉ ước lượng ngành cho mã chưa phân loại. Cần `FIINTRADE_ORIGIN`; thiếu thì giữ `UNCLASSIFIED` như cũ.
 - [改进] Bảng vị thế trang Danh mục: số lượng nhóm nghìn bằng dấu phẩy (`1,300`), giá vốn / giá hiện tại theo kiểu Việt Nam (`70.050`, `24,63`), tiền không còn đệm `.00`; giữ nguyên phần thập phân thật, không làm tròn.
 - [修复] Trang Quản lý danh mục cập nhật giá realtime: sau lần tải nhanh, Web tự xin snapshot kèm giá realtime (trong phiên là tick MQTT TVSI, ngoài phiên là giá khớp mới nhất từ FiinTrade); feed MQTT tự subscribe các mã đang nắm giữ và tick được ghép trực tiếp vào giá, giá trị thị trường, lãi/lỗ trên trang. `price_provider` hiển thị nguồn thật (`tvsi_mqtt` / `fiintrade` / `ssi` / `vci`) thay vì `fallback`. Trước đây trang luôn dùng giá đóng cửa trong DB.
 - [文档] Thêm `docs/portfolio-workflow.md` (workflow Quản lý danh mục: ghi sổ lệnh, replay snapshot, rủi ro, nhập CSV, cảnh báo, điểm agent tham gia, hạn chế đã biết); `docs/agent-workflow.md` thêm mục PortfolioAgent, sửa ghi chú tool `get_portfolio_snapshot` (không phải tool của PortfolioAgent) và các tham chiếu dòng đã lệch.

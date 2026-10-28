@@ -130,6 +130,31 @@ class PortfolioReviewServiceTestCase(unittest.TestCase):
         self.assertIn("FPT", stop["description"])
         self.assertEqual(stop["severity"], "high")
 
+    def test_sector_concentration_reaches_agent_context(self):
+        sector = {
+            "alert": True,
+            "top_weight_pct": 60.0,
+            "top_sectors": [{"sector": "Ngân hàng", "weight_pct": 60.0, "symbol_count": 2, "is_alert": True}],
+            "coverage": {"classified_count": 2, "unclassified_count": 0, "failed_count": 0},
+        }
+        ctx, _ = self._service(risk=_risk(sector_concentration=sector)).build_context()
+
+        compact = ctx.data["portfolio_risk"]["sector_concentration"]
+        self.assertEqual(compact["top_sectors"][0]["sector"], "Ngân hàng")
+        self.assertEqual(compact["coverage"]["classified_count"], 2)
+        flag = next(flag for flag in ctx.risk_flags if flag["category"] == "sector_concentration")
+        self.assertIn("Ngân hàng", flag["description"])
+
+    def test_unclassified_sector_alert_is_not_flagged(self):
+        sector = {
+            "alert": True,
+            "top_weight_pct": 100.0,
+            "top_sectors": [{"sector": "UNCLASSIFIED", "weight_pct": 100.0, "symbol_count": 2, "is_alert": True}],
+        }
+        ctx, _ = self._service(risk=_risk(sector_concentration=sector)).build_context()
+
+        self.assertNotIn("sector_concentration", [flag["category"] for flag in ctx.risk_flags])
+
     def test_no_positions_does_not_call_llm(self):
         empty = {**_snapshot(), "accounts": [], "total_equity": 0.0}
         service = self._service(snapshot=empty)
