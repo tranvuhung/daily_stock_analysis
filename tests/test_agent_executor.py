@@ -266,7 +266,7 @@ class TestAgentExecutor(unittest.TestCase):
         assert messages[1:3] == compressed_history
         assert messages[3]["role"] == "user"
         assert messages[3]["content"].startswith("[System-provided historical analysis context for reference and comparison]")
-        assert "Previous analysis price: 1800" in messages[3]["content"]
+        assert "Previous analysis price: 1800 (historical, NOT the current price)" in messages[3]["content"]
         assert messages[4]["role"] == "assistant"
         assert messages[-1] == {"role": "user", "content": "Current question"}
         assert captured["stock_scope"].expected_stock_code == "HPG"

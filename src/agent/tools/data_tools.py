@@ -308,6 +308,11 @@ def _handle_get_realtime_quote(stock_code: str) -> dict:
         "eps_ttm",
         "put_through_value",
         "avg_volume_1m",
+        # Thời điểm khớp lệnh của nguồn: để agent biết giá thuộc phiên nào. Không đưa
+        # is_stale vì sau giờ đóng cửa nó luôn True dù giá đóng cửa vẫn là giá mới nhất.
+        # Provider trade time; is_stale is omitted as it is always True after the close.
+        "provider_timestamp",
+        "realtime_provider",
     ):
         value = getattr(quote, field_name, None)
         if value is not None:

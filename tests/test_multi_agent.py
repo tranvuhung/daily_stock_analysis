@@ -1125,6 +1125,40 @@ class TestOrchestratorModes(unittest.TestCase):
             AgentOrchestrator._prefetch_stock_money_flow(ctx)
             self.assertIsNone(ctx.get_data("stock_money_flow"))
 
+    def test_prefetch_realtime_quote_loads_once_and_is_fail_open(self):
+        # DecisionAgent không thấy kết quả tool của agent phụ: thiếu giá realtime thì nó
+        # lấy previous_price của báo cáo cũ (55.400) làm giá hiện tại thay vì 54.000.
+        from src.agent.orchestrator import AgentOrchestrator
+
+        quote = MagicMock(
+            code="FPT", price=54000.0, change_pct=-2.53, change_amount=-1400.0, pre_close=55400.0,
+            provider_timestamp="2026-10-28T07:46:00+00:00", is_stale=False,
+            realtime_provider="fiintrade",
+        )
+        manager = MagicMock(get_realtime_quote=MagicMock(return_value=quote))
+        with patch("src.agent.tools.data_tools._get_fetcher_manager", return_value=manager):
+            ctx = AgentContext(query="Phân tích FPT", stock_code="FPT")
+            AgentOrchestrator._prefetch_realtime_quote(ctx)
+            AgentOrchestrator._prefetch_realtime_quote(ctx)
+            data = ctx.get_data("realtime_quote")
+            self.assertEqual(data["price"], 54000.0)
+            self.assertEqual(data["pre_close"], 55400.0)
+            self.assertEqual(data["provider_timestamp"], "2026-10-28T07:46:00+00:00")
+            self.assertNotIn("is_stale", data)
+            manager.get_realtime_quote.assert_called_once_with("FPT")
+
+            AgentOrchestrator._prefetch_realtime_quote(AgentContext(query="x", stock_code=""))
+            manager.get_realtime_quote.assert_called_once()
+
+        for broken in (
+            MagicMock(get_realtime_quote=MagicMock(side_effect=RuntimeError("down"))),
+            MagicMock(get_realtime_quote=MagicMock(return_value=None)),
+        ):
+            with patch("src.agent.tools.data_tools._get_fetcher_manager", return_value=broken):
+                ctx = AgentContext(query="Phân tích FPT", stock_code="FPT")
+                AgentOrchestrator._prefetch_realtime_quote(ctx)
+                self.assertIsNone(ctx.get_data("realtime_quote"))
+
     def test_specialist_builder_allows_four_requested_skills(self):
         orch = self._make_orchestrator("specialist")
         ctx = AgentContext(query="test", stock_code="600519")
@@ -2320,6 +2354,8 @@ class TestDecisionAgentChatMode(unittest.TestCase):
         message = agent.build_user_message(ctx)
 
         self.assertIn("## Reference: latest calibrated system analysis", message)
+        self.assertIn("snapshot at 2026-10-23 17:04; historical", message)
+        self.assertIn("NOT the current price", message)
         self.assertIn('"decision_type": "hold"', message)
         self.assertIn("## Mandatory risk constraints", message)
         self.assertIn("must not recommend buying", message)

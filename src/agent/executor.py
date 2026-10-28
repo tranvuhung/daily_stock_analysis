@@ -570,10 +570,17 @@ def prepare_agent_chat(
             context_parts.append(f"Stock code: {effective_context['stock_code']}")
         if effective_context.get("stock_name"):
             context_parts.append(f"Stock name: {effective_context['stock_name']}")
+        # Giá của báo cáo trước, không phải giá hiện tại: giá hiện tại lấy qua get_realtime_quote.
+        # Saved-report price, not the current one; the current price comes from get_realtime_quote.
         if effective_context.get("previous_price"):
-            context_parts.append(f"Previous analysis price: {effective_context['previous_price']}")
+            context_parts.append(
+                f"Previous analysis price: {effective_context['previous_price']} "
+                "(historical, NOT the current price)"
+            )
         if effective_context.get("previous_change_pct"):
-            context_parts.append(f"Previous change: {effective_context['previous_change_pct']}%")
+            context_parts.append(
+                f"Previous change: {effective_context['previous_change_pct']}% (historical)"
+            )
         if effective_context.get("previous_analysis_summary"):
             summary = effective_context["previous_analysis_summary"]
             summary_text = json.dumps(summary, ensure_ascii=False) if isinstance(summary, dict) else str(summary)

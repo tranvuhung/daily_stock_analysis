@@ -325,8 +325,21 @@ e.g. "nến Sao băng (Shooting Star)".
         sections: List[str] = []
         previous = ctx.meta.get("previous_analysis")
         if isinstance(previous, dict) and previous:
-            sections.append("## Reference: latest calibrated system analysis")
+            # previous_price / previous_change_pct là giá lúc lưu báo cáo (thường phiên trước),
+            # không phải giá hiện tại. / Prices of the saved report, not the current price.
+            summary = previous.get("previous_analysis_summary")
+            as_of = summary.get("created_at") if isinstance(summary, dict) else None
+            sections.append(
+                "## Reference: latest calibrated system analysis "
+                f"(snapshot at {as_of or 'an earlier time'}; historical)"
+            )
             sections.append(json.dumps(previous, ensure_ascii=False, default=str))
+            sections.append(
+                "- `previous_price` / `previous_change_pct` are the price and change when that "
+                "report was saved, NOT the current price. State the current price only from the "
+                "pre-fetched `realtime_quote`; if it is missing, say the latest price is "
+                "unavailable and label any older price with its date."
+            )
             sections.append("")
 
         if ctx.meta.get("agent_risk_override", True):

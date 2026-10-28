@@ -527,6 +527,31 @@ class AgentOrchestrator:
         if flow:
             ctx.set_data("stock_money_flow", flow)
 
+    @staticmethod
+    def _prefetch_realtime_quote(ctx: AgentContext) -> None:
+        """Nạp sẵn giá realtime theo mã vào ``ctx.data`` (fail-open).
+
+        Cùng lý do với dòng tiền: DecisionAgent không thấy kết quả tool của agent phụ,
+        nên thiếu bước này thì giá duy nhất nó thấy là ``previous_price`` của báo cáo
+        đã lưu (giá phiên trước) và trả lời nhầm đó là giá hiện tại.
+        Same reason as the money flow: without it the DecisionAgent only sees the saved
+        report's ``previous_price`` and presents it as the current price.
+        """
+        from src.agent.stock_scope import normalize_vn_stock_code
+
+        code = normalize_vn_stock_code(ctx.stock_code)
+        if not code or ctx.get_data("realtime_quote"):
+            return
+        try:
+            from src.agent.tools.data_tools import _handle_get_realtime_quote
+
+            quote = _handle_get_realtime_quote(code)
+        except Exception as exc:
+            logger.debug("[Orchestrator] prefetch realtime quote failed for %s: %s", code, exc)
+            return
+        if isinstance(quote, dict) and quote.get("price") and not quote.get("error"):
+            ctx.set_data("realtime_quote", quote)
+
     def _execute_pipeline(
         self,
         ctx: AgentContext,
@@ -541,6 +566,7 @@ class AgentOrchestrator:
         timeout_s = self._get_timeout_seconds()
 
         self._prefetch_stock_money_flow(ctx)
+        self._prefetch_realtime_quote(ctx)
         agents = self._build_agent_chain(ctx)
         specialist_agents_inserted = False
         index = 0
