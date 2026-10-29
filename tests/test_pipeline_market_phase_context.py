@@ -485,8 +485,9 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
         pipeline._ensure_agent_history = MagicMock()
         # Bằng chứng tin tức cục bộ được chèn sẵn vào news_context.
         # Local intelligence evidence is prefetched into news_context.
-        pipeline._load_persisted_intelligence_context = MagicMock(
-            return_value="Local news raw payload should stay in legacy news_context only."
+        local_news = "Local news raw payload should stay in legacy news_context only."
+        pipeline._load_persisted_intelligence_for_prompt = MagicMock(
+            return_value=(local_news, local_news)
         )
 
         from src.agent.executor import AgentResult

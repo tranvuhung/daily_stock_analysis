@@ -43,9 +43,19 @@ def _handle_analyze_trend(stock_code: str) -> dict:
     if len(df) < 20:
         return {"error": f"Insufficient data for trend analysis on {stock_code} (need >= 20 days)"}
 
+    from src.core.trading_calendar import get_market_for_stock, partial_bar_session_fraction
+
+    # Nến hôm nay còn trong phiên thì volume phải quy đổi ra cả phiên trước khi so sánh.
+    # Today's still-forming bar needs its volume projected to a full session.
+    session_fraction = None
+    if "date" in df.columns:
+        session_fraction = partial_bar_session_fraction(
+            df["date"].max(), get_market_for_stock(stock_code)
+        )
+
     analyzer = StockTrendAnalyzer()
     try:
-        result = analyzer.analyze(df, stock_code)
+        result = analyzer.analyze(df, stock_code, session_fraction=session_fraction)
     except Exception:
         logger.warning("analyze_trend(%s): Trend analysis failed", stock_code, exc_info=True)
         return {"error": f"Trend analysis failed for {stock_code}"}
@@ -66,6 +76,7 @@ def _handle_analyze_trend(stock_code: str) -> dict:
         "volume_status": result.volume_status.value,
         "volume_ratio_5d": round(result.volume_ratio_5d, 2),
         "volume_trend": result.volume_trend,
+        "volume_ratio_basis": result.volume_ratio_basis,
         "support_ma5": result.support_ma5,
         "support_ma10": result.support_ma10,
         "resistance_levels": result.resistance_levels,

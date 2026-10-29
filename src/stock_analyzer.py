@@ -18,7 +18,7 @@ Technical criteria:
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from enum import Enum
 
 import pandas as pd
@@ -109,6 +109,9 @@ class TrendAnalysisResult:
     volume_status: VolumeStatus = VolumeStatus.NORMAL
     volume_ratio_5d: float = 0.0     # Today's volume / 5-day average volume
     volume_trend: str = ""           # Volume trend description
+    # Cơ sở của volume_ratio_5d: "full_day" | "projected_intraday" | "intraday_too_early".
+    # Basis of volume_ratio_5d for a still-forming bar.
+    volume_ratio_basis: str = "full_day"
     
     # Support and resistance
     support_ma5: bool = False        # Whether MA5 acts as support
@@ -153,6 +156,7 @@ class TrendAnalysisResult:
             'volume_status': self.volume_status.value,
             'volume_ratio_5d': self.volume_ratio_5d,
             'volume_trend': self.volume_trend,
+            'volume_ratio_basis': self.volume_ratio_basis,
             'support_ma5': self.support_ma5,
             'support_ma10': self.support_ma10,
             'buy_signal': self.buy_signal.value,
@@ -187,6 +191,9 @@ class StockTrendAnalyzer:
     # Trading parameters (BIAS_THRESHOLD is read from Config, see _generate_signal)
     VOLUME_SHRINK_RATIO = 0.7   # Low-volume threshold (today's volume / 5-day average)
     VOLUME_HEAVY_RATIO = 1.5    # Heavy-volume threshold
+    # Dưới mức này của phiên, quy đổi volume trong phiên ra cả ngày quá nhiễu để phân loại.
+    # Below this session fraction, projecting intraday volume is too noisy to classify.
+    MIN_SESSION_FRACTION_FOR_VOLUME = 0.2
     MA_SUPPORT_TOLERANCE = 0.02  # MA support tolerance (2%)
 
     # MACD parameters (standard 12/26/9)
@@ -205,12 +212,20 @@ class StockTrendAnalyzer:
         """Initialize the analyzer."""
         pass
     
-    def analyze(self, df: pd.DataFrame, code: str) -> TrendAnalysisResult:
+    def analyze(
+        self,
+        df: pd.DataFrame,
+        code: str,
+        session_fraction: Optional[float] = None,
+    ) -> TrendAnalysisResult:
         """Analyze a stock's trend.
 
         Args:
             df: DataFrame with OHLCV data
             code: Stock code
+            session_fraction: phần phiên đã trôi qua (0..1) nếu nến cuối chưa đóng;
+                ``None`` khi nến cuối là ngày đủ phiên. / Elapsed session fraction
+                when the last bar is still forming.
 
         Returns:
             TrendAnalysisResult with the analysis
@@ -247,7 +262,7 @@ class StockTrendAnalyzer:
         self._calculate_bias(result)
 
         # 3. Volume analysis
-        self._analyze_volume(df, result)
+        self._analyze_volume(df, result, session_fraction)
 
         # 4. Support/resistance analysis
         self._analyze_support_resistance(df, result)
@@ -405,7 +420,12 @@ class StockTrendAnalyzer:
         if result.ma20 > 0:
             result.bias_ma20 = (price - result.ma20) / result.ma20 * 100
     
-    def _analyze_volume(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
+    def _analyze_volume(
+        self,
+        df: pd.DataFrame,
+        result: TrendAnalysisResult,
+        session_fraction: Optional[float] = None,
+    ) -> None:
         """Analyze volume.
 
         Preference: low-volume pullback > rising on heavy volume > rising on low volume > falling on heavy volume
@@ -415,9 +435,24 @@ class StockTrendAnalyzer:
         
         latest = df.iloc[-1]
         vol_5d_avg = df['volume'].iloc[-6:-1].mean()
-        
+        latest_volume = float(latest['volume'])
+
+        # Nến trong phiên chỉ có volume tới hiện tại; so thẳng với ngày đủ phiên sẽ luôn ra
+        # "thanh khoản thấp" giả (vd. 0.33 lúc 10:10). Quy đổi ra cả phiên trước khi so.
+        # An intraday bar holds partial volume; project it to a full session first.
+        if session_fraction is not None and 0 < session_fraction < 1:
+            if session_fraction < self.MIN_SESSION_FRACTION_FOR_VOLUME:
+                if vol_5d_avg > 0:
+                    result.volume_ratio_5d = latest_volume / vol_5d_avg
+                result.volume_ratio_basis = "intraday_too_early"
+                result.volume_status = VolumeStatus.NORMAL
+                result.volume_trend = "Too early in the session to compare volume with full days"
+                return
+            latest_volume = latest_volume / session_fraction
+            result.volume_ratio_basis = "projected_intraday"
+
         if vol_5d_avg > 0:
-            result.volume_ratio_5d = float(latest['volume']) / vol_5d_avg
+            result.volume_ratio_5d = latest_volume / vol_5d_avg
         
         # Determine the price change
         prev_close = df.iloc[-2]['close']

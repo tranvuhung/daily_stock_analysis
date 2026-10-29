@@ -77,6 +77,44 @@ class PersistedIntelligenceAnalysisIntegrationTestCase(unittest.TestCase):
         self.assertIn("Company wins major AI order", context)
         self.assertIn("https://news.example.com/symbol", context)
 
+    def test_market_news_is_not_presented_as_symbol_evidence(self) -> None:
+        # Hồi quy FPT #159: không có tin riêng của mã, tin thị trường từng nằm dưới
+        # tiêu đề "Kho bằng chứng tin tức cục bộ (FPT)" và bị tính là bằng chứng.
+        # Regression for FPT #159: market news was labelled as stock evidence.
+        pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)
+        pipeline.config = self.config
+
+        prompt_text, symbol_text = pipeline._load_persisted_intelligence_for_prompt(
+            code="FPT",
+            stock_name="FPT Corp",
+            market="vn",
+        )
+
+        self.assertIsNone(symbol_text)
+        assert prompt_text is not None
+        self.assertIn("Policy support lifts market sentiment", prompt_text)
+        self.assertNotIn("Kho bằng chứng tin tức cục bộ", prompt_text)
+        self.assertIn("không riêng FPT", prompt_text)
+
+    def test_symbol_and_market_news_use_separate_sections(self) -> None:
+        pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)
+        pipeline.config = self.config
+
+        prompt_text, symbol_text = pipeline._load_persisted_intelligence_for_prompt(
+            code="HPG",
+            stock_name="Hòa Phát",
+            market="vn",
+        )
+
+        assert prompt_text is not None and symbol_text is not None
+        self.assertIn("Company wins major AI order", symbol_text)
+        self.assertNotIn("Policy support lifts market sentiment", symbol_text)
+        self.assertIn("không riêng HPG", prompt_text)
+        self.assertLess(
+            prompt_text.index("Company wins major AI order"),
+            prompt_text.index("Policy support lifts market sentiment"),
+        )
+
     def test_pipeline_refreshes_auto_sources_before_loading_local_intelligence(self) -> None:
         self.config.news_intel_auto_fetch_enabled = True
         pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)

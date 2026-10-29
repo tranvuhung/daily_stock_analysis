@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 import threading
 from contextvars import ContextVar, Token
-from typing import Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +30,24 @@ logger = logging.getLogger(__name__)
 class NewsEvidenceAccumulator:
     """Thread-safe accumulator of news items actually consumed by the Agent in this analysis."""
 
+    # Giới hạn số tin lưu vào snapshot để không phình bản ghi lịch sử.
+    # Cap on items kept for the snapshot so history rows stay small.
+    MAX_ITEMS = 30
+
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._total = 0
+        self._calls = 0
+        self._items: List[Dict[str, Any]] = []
+        self._seen_urls: set = set()
 
-    def record(self, count: int) -> None:
-        """Record the number of items a search tool actually returned; zero hits must be recorded too (as 0)."""
+    def record(self, count: int, items: Optional[Iterable[Dict[str, Any]]] = None) -> None:
+        """Record the number of items a search tool actually returned; zero hits must be recorded too (as 0).
+
+        ``items`` (title/url/source/...) là chính các tin đã trao cho Agent, lưu vào snapshot để
+        số liệu trong báo cáo truy được nguồn. / The items handed to the Agent, kept so report
+        figures can be traced back to their source.
+        """
         try:
             value = int(count)
         except (TypeError, ValueError):
@@ -44,6 +56,29 @@ class NewsEvidenceAccumulator:
             value = 0
         with self._lock:
             self._total += value
+            self._calls += 1
+            for item in items or ():
+                if len(self._items) >= self.MAX_ITEMS:
+                    break
+                if not isinstance(item, dict):
+                    continue
+                url = str(item.get("url") or "")
+                if url and url in self._seen_urls:
+                    continue
+                if url:
+                    self._seen_urls.add(url)
+                self._items.append(dict(item))
+
+    @property
+    def calls(self) -> int:
+        """Số lần tool tìm kiếm thực sự chạy (kể cả không trúng). / Search tool invocations."""
+        with self._lock:
+            return self._calls
+
+    @property
+    def items(self) -> List[Dict[str, Any]]:
+        with self._lock:
+            return [dict(item) for item in self._items]
 
     @property
     def total(self) -> int:
@@ -90,7 +125,7 @@ def reset_news_evidence_scope(token: Optional[Token]) -> None:
         logger.warning("news evidence scope reset failed: %s", exc)
 
 
-def record_news_evidence(count: int) -> None:
+def record_news_evidence(count: int, items: Optional[Iterable[Dict[str, Any]]] = None) -> None:
     """Called by Agent search tools.
 
     Silently ignored when no scope is active: non-Agent paths maintain the count themselves, and
@@ -100,4 +135,4 @@ def record_news_evidence(count: int) -> None:
     accumulator = _CURRENT_ACCUMULATOR.get()
     if accumulator is None:
         return
-    accumulator.record(count)
+    accumulator.record(count, items)

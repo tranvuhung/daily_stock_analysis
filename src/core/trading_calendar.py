@@ -311,6 +311,60 @@ def _static_session_times(
     return _at(open_h, open_m), _at(bs_h, bs_m), _at(be_h, be_m), _at(close_h, close_m)
 
 
+def session_elapsed_fraction(
+    market: Optional[str], current_time: Optional[datetime] = None
+) -> Optional[float]:
+    """Tỷ lệ thời gian giao dịch đã trôi qua trong ngày (0..1), không tính nghỉ trưa.
+
+    Fraction of today's trading time elapsed, excluding the lunch break. ``None``
+    outside the session (premarket, postmarket, non-trading day, unknown market).
+    """
+    if market not in _STATIC_SESSION_HOURS:
+        return None
+    market_now = get_market_now(market, current_time=current_time)
+    times = _static_session_times(market, market_now)
+    if times is None:
+        return None
+    session_open, break_start, break_end, session_close = times
+    if market_now < session_open or market_now >= session_close:
+        return None
+    morning = break_start - session_open
+    total = morning + (session_close - break_end)
+    if market_now < break_start:
+        elapsed = market_now - session_open
+    elif market_now < break_end:
+        elapsed = morning
+    else:
+        elapsed = morning + (market_now - break_end)
+    return max(0.0, min(1.0, elapsed / total))
+
+
+def partial_bar_session_fraction(
+    bar_date: Any,
+    market: Optional[str],
+    current_time: Optional[datetime] = None,
+) -> Optional[float]:
+    """Phần phiên đã qua nếu ``bar_date`` là nến hôm nay chưa đóng; ngược lại ``None``.
+
+    Session fraction for a still-forming bar dated today; ``None`` for closed bars.
+    """
+    if bar_date is None:
+        return None
+    if isinstance(bar_date, datetime):
+        bar_day = bar_date.date()
+    elif isinstance(bar_date, date):
+        bar_day = bar_date
+    else:
+        try:
+            bar_day = date.fromisoformat(str(bar_date)[:10])
+        except ValueError:
+            return None
+    market_now = get_market_now(market, current_time=current_time)
+    if bar_day != market_now.date():
+        return None
+    return session_elapsed_fraction(market, market_now)
+
+
 def infer_market_phase(
     market: Optional[str], current_time: Optional[datetime] = None
 ) -> MarketPhase:

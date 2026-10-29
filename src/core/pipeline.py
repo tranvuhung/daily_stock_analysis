@@ -106,6 +106,7 @@ from src.core.trading_calendar import (
     get_market_for_stock,
     get_market_now,
     is_market_open,
+    partial_bar_session_fraction,
 )
 from bot.models import BotMessage
 
@@ -602,7 +603,13 @@ class StockAnalysisPipeline:
                         df = self._augment_historical_with_realtime(
                             df, realtime_quote, code, market=market
                         )
-                    trend_result = self.trend_analyzer.analyze(df, code)
+                    trend_result = self.trend_analyzer.analyze(
+                        df,
+                        code,
+                        session_fraction=self._partial_bar_fraction(
+                            df, market, market_phase_context_dict
+                        ),
+                    )
                     logger.info(f"{stock_name}({code}) phân tích xu hướng: {trend_result.trend_status.value}, "
                               f"tín hiệu mua={trend_result.buy_signal.value}, điểm={trend_result.signal_score}")
             except Exception as e:
@@ -628,7 +635,10 @@ class StockAnalysisPipeline:
 
             # Bước 4: tìm kiếm thông tin đa chiều (tin mới nhất + rà soát rủi ro + kỳ vọng kết quả)
             news_context = None
-            persisted_intelligence_context = self._load_persisted_intelligence_context(
+            (
+                persisted_intelligence_context,
+                persisted_symbol_intelligence,
+            ) = self._load_persisted_intelligence_for_prompt(
                 code=code,
                 stock_name=stock_name,
                 market=market or "vn",
@@ -791,7 +801,7 @@ class StockAnalysisPipeline:
                     # ghi nào" thành "có bằng chứng".
                     result.news_evidence_present = news_evidence_present(
                         news_result_count,
-                        persisted_intelligence_context,
+                        persisted_symbol_intelligence,
                     )
                 record_llm_run(
                     success=bool(result and getattr(result, "success", True)),
@@ -922,6 +932,39 @@ class StockAnalysisPipeline:
             logger.exception(f"{stock_name}({code}) chi tiết lỗi:")
             return None
     
+    @staticmethod
+    def _session_fraction_from_phase(
+        bar_date: Any,
+        market_phase_context: Optional[Dict[str, Any]],
+    ) -> Optional[float]:
+        """Phần phiên đã qua cho nến ``bar_date`` theo thời điểm đã đóng băng của lượt chạy.
+
+        Elapsed session fraction for ``bar_date`` at the run's frozen market time.
+        """
+        if not isinstance(market_phase_context, dict) or not market_phase_context.get("is_partial_bar"):
+            return None
+        local_time = market_phase_context.get("market_local_time")
+        try:
+            current_time = datetime.fromisoformat(str(local_time)) if local_time else None
+        except ValueError:
+            return None
+        return partial_bar_session_fraction(
+            bar_date, market_phase_context.get("market"), current_time=current_time
+        )
+
+    @staticmethod
+    def _partial_bar_fraction(
+        df: pd.DataFrame,
+        market: Optional[str],
+        market_phase_context: Optional[Dict[str, Any]],
+    ) -> Optional[float]:
+        """Phần phiên đã qua nếu nến cuối của ``df`` là nến hôm nay chưa đóng."""
+        if df is None or df.empty or "date" not in df.columns:
+            return None
+        context = dict(market_phase_context or {})
+        context.setdefault("market", market)
+        return StockAnalysisPipeline._session_fraction_from_phase(df["date"].max(), context)
+
     def _enhance_context(
         self,
         context: Dict[str, Any],
@@ -1120,9 +1163,16 @@ class StockAnalysisPipeline:
                         try:
                             yv = float(yest_vol)
                             if yv > 0:
-                                enhanced['volume_change_ratio'] = round(
-                                    float(vol) / yv, 2
+                                today_vol = float(vol)
+                                fraction = self._session_fraction_from_phase(
+                                    market_today, market_phase_context
                                 )
+                                # Volume trong phiên quy đổi ra cả phiên trước khi so với hôm qua.
+                                # Project intraday volume to a full session before comparing.
+                                if fraction is not None and fraction >= StockTrendAnalyzer.MIN_SESSION_FRACTION_FOR_VOLUME:
+                                    today_vol = today_vol / fraction
+                                    enhanced['volume_change_ratio_basis'] = "projected_intraday"
+                                enhanced['volume_change_ratio'] = round(today_vol / yv, 2)
                         except (TypeError, ValueError):
                             pass
 
@@ -1236,7 +1286,10 @@ class StockAnalysisPipeline:
             if trend_result:
                 initial_context["trend_result"] = self._safe_to_dict(trend_result)
 
-            persisted_intelligence_context = self._load_persisted_intelligence_context(
+            (
+                persisted_intelligence_context,
+                persisted_symbol_intelligence,
+            ) = self._load_persisted_intelligence_for_prompt(
                 code=code,
                 stock_name=stock_name,
                 market=get_market_for_stock(normalize_stock_code(code)) or "vn",
@@ -1336,8 +1389,12 @@ class StockAnalysisPipeline:
                 # trường hợp sau này có người thêm một nguồn sinh văn bản placeholder.
                 result.news_evidence_present = news_evidence_present(
                     result.news_result_count,
-                    persisted_intelligence_context,
+                    persisted_symbol_intelligence,
                 )
+                # Agent tự gọi tool tìm kiếm nên cờ này phải lấy từ số lần gọi thật, không mặc
+                # định False (FPT #159: search_performed=false nhưng có 18 tin).
+                # The Agent searches via tools, so derive the flag from real tool calls.
+                result.search_performed = news_evidence.calls > 0
             record_llm_run(
                 success=bool(result and getattr(result, "success", True)),
                 model=getattr(result, "model_used", None) if result else getattr(agent_result, "model", None),
@@ -1554,6 +1611,10 @@ class StockAnalysisPipeline:
                     )
                     result.diagnostic_context_snapshot = agent_context_snapshot
                     agent_context_snapshot["stock_name"] = resolved_stock_name
+                    # Tin mà tool tìm kiếm thực sự trao cho Agent, để số liệu trong báo cáo truy được nguồn.
+                    # Items the Agent's search tools actually returned, for source tracing.
+                    if news_evidence is not None and news_evidence.items:
+                        agent_context_snapshot["agent_news_evidence"] = news_evidence.items
                     saved_history_id = self.db.save_analysis_history(
                         result=result,
                         query_id=query_id,
@@ -2695,6 +2756,23 @@ class StockAnalysisPipeline:
             except Exception as exc:
                 logger.warning("Ghi lại snapshot chẩn đoán thông báo thất bại (fail-open): %s", exc)
 
+    def _load_persisted_intelligence_for_prompt(
+        self,
+        *,
+        code: str,
+        stock_name: str,
+        market: str,
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """(văn bản đưa vào prompt, khối tin riêng của mã dùng để tính bằng chứng).
+
+        (prompt text, symbol-only section used for the news-evidence disclosure).
+        """
+        symbol_text, market_text = self._load_persisted_intelligence_sections(
+            code=code, stock_name=stock_name, market=market
+        )
+        parts = [part for part in (symbol_text, market_text) if part]
+        return ("\n\n".join(parts) if parts else None), symbol_text
+
     def _load_persisted_intelligence_context(
         self,
         *,
@@ -2704,17 +2782,43 @@ class StockAnalysisPipeline:
         limit: int = 6,
     ) -> Optional[str]:
         """Load locally persisted intelligence as fail-open evidence context."""
+        symbol_text, market_text = self._load_persisted_intelligence_sections(
+            code=code, stock_name=stock_name, market=market, limit=limit
+        )
+        parts = [part for part in (symbol_text, market_text) if part]
+        return "\n\n".join(parts) if parts else None
+
+    def _load_persisted_intelligence_sections(
+        self,
+        *,
+        code: str,
+        stock_name: str,
+        market: str,
+        limit: int = 6,
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """Tin cục bộ tách 2 khối: (tin riêng của mã, tin thị trường chung).
+
+        Trước đây tin thị trường bù vào cùng tiêu đề "Kho bằng chứng ... (FPT)" nên LLM coi
+        tin không liên quan là bằng chứng về mã. Chỉ khối đầu được tính là bằng chứng tin của mã.
+        Returns (symbol section, market-wide section); only the first counts as stock evidence.
+        """
         try:
             service = IntelligenceService(config=self.config)
             service.refresh_auto_sources()
             days = max(1, int(self.config.get_effective_news_window_days() or 1))
-            collected: list[Dict[str, Any]] = []
+            symbol_items: list[Dict[str, Any]] = []
+            market_items: list[Dict[str, Any]] = []
             seen_urls: set[str] = set()
             symbol_filters = [
                 {"scope_type": "symbol", "scope_value": scope_value, "market": market}
                 for scope_value in _symbol_scope_lookup_values(code, market)
             ]
-            for filters in symbol_filters + [{"scope_type": "market", "market": market}]:
+            scoped_filters = [(f, symbol_items) for f in symbol_filters] + [
+                ({"scope_type": "market", "market": market}, market_items)
+            ]
+            for filters, bucket in scoped_filters:
+                if len(symbol_items) + len(market_items) >= limit:
+                    break
                 payload = service.list_items(published_days=days, page=1, page_size=limit, **filters)
                 for item in payload.get("items", []):
                     if not isinstance(item, dict):
@@ -2723,44 +2827,61 @@ class StockAnalysisPipeline:
                     if url in seen_urls:
                         continue
                     seen_urls.add(url)
-                    collected.append(item)
-                    if len(collected) >= limit:
+                    bucket.append(item)
+                    if len(symbol_items) + len(market_items) >= limit:
                         break
-                if len(collected) >= limit:
-                    break
-            if not collected:
-                return None
+            if not symbol_items and not market_items:
+                return None, None
             # Khối này đi thẳng vào prompt của LLM, nên nhãn phải theo ngôn ngữ báo cáo
             # ('en' dùng tiếng Anh, còn lại tiếng Việt).
             # This block goes straight into the LLM prompt, so labels follow the report language.
             is_en = normalize_report_language(getattr(self.config, "report_language", None)) == "en"
-            heading = (
+            symbol_heading = (
                 f"## Local news evidence pool ({stock_name}/{code})" if is_en
                 else f"## Kho bằng chứng tin tức cục bộ ({stock_name}/{code})"
             )
-            untitled = "Untitled news" if is_en else "Tin không có tiêu đề"
-            summary_label = "Summary" if is_en else "Tóm tắt"
-            source_label = "Source" if is_en else "Nguồn"
-            lines = [heading]
-            for idx, item in enumerate(collected[:limit], 1):
-                title = str(item.get("title") or untitled).strip()
-                summary = str(item.get("summary") or "").strip()
-                source = str(item.get("source") or item.get("source_name") or "local-intel").strip()
-                published = str(item.get("published_at") or "").strip()
-                url = str(item.get("url") or "").strip()
-                meta = " / ".join(part for part in (source, published) if part)
-                if meta:
-                    lines.append(f"{idx}. {title} ({meta})")
-                else:
-                    lines.append(f"{idx}. {title}")
-                if summary:
-                    lines.append(f"   {summary_label}: {summary[:220]}")
-                if url and not url.startswith("no-url:intel:"):
-                    lines.append(f"   {source_label}: {url}")
-            return "\n".join(lines)
+            market_heading = (
+                f"## Market-wide news (not specific to {code}; macro background only, not evidence about {code})"
+                if is_en
+                else f"## Tin thị trường chung (không riêng {code}; chỉ dùng làm bối cảnh vĩ mô, không phải bằng chứng về {code})"
+            )
+            return (
+                self._render_intelligence_items(symbol_heading, symbol_items, is_en=is_en),
+                self._render_intelligence_items(market_heading, market_items, is_en=is_en),
+            )
         except Exception as exc:
             logger.debug("Đọc bằng chứng tin tức cục bộ thất bại (fail-open): %s", exc)
+            return None, None
+
+    @staticmethod
+    def _render_intelligence_items(
+        heading: str,
+        items: List[Dict[str, Any]],
+        *,
+        is_en: bool,
+    ) -> Optional[str]:
+        if not items:
             return None
+        untitled = "Untitled news" if is_en else "Tin không có tiêu đề"
+        summary_label = "Summary" if is_en else "Tóm tắt"
+        source_label = "Source" if is_en else "Nguồn"
+        lines = [heading]
+        for idx, item in enumerate(items, 1):
+            title = str(item.get("title") or untitled).strip()
+            summary = str(item.get("summary") or "").strip()
+            source = str(item.get("source") or item.get("source_name") or "local-intel").strip()
+            published = str(item.get("published_at") or "").strip()
+            url = str(item.get("url") or "").strip()
+            meta = " / ".join(part for part in (source, published) if part)
+            if meta:
+                lines.append(f"{idx}. {title} ({meta})")
+            else:
+                lines.append(f"{idx}. {title}")
+            if summary:
+                lines.append(f"   {summary_label}: {summary[:220]}")
+            if url and not url.startswith("no-url:intel:"):
+                lines.append(f"   {source_label}: {url}")
+        return "\n".join(lines)
 
     def _build_legacy_analysis_artifacts(
         self,

@@ -135,6 +135,43 @@ class SearchToolsPersistenceTest(unittest.TestCase):
         self.assertFalse(result["success"])
         db.save_news_intel.assert_not_called()
 
+    def test_search_tools_hand_items_to_evidence_scope(self) -> None:
+        # Tin Agent nhận phải được giữ lại cho snapshot (truy nguồn số liệu báo cáo).
+        # Items given to the Agent are kept for the report snapshot.
+        from src.agent.news_evidence import (
+            activate_news_evidence_scope,
+            get_current_news_evidence,
+            reset_news_evidence_scope,
+        )
+
+        service = SimpleNamespace(
+            is_available=True,
+            search_stock_news=MagicMock(return_value=_response("FPT")),
+            search_comprehensive_intel=MagicMock(
+                return_value={"risk_check": _response("risk"), "earnings": _response("earn", success=False)}
+            ),
+            format_intel_report=MagicMock(return_value="report"),
+        )
+        db = SimpleNamespace(save_news_intel=MagicMock(return_value=1))
+        token = activate_news_evidence_scope()
+        try:
+            with patch("src.agent.tools.search_tools._get_search_service", return_value=service), \
+                 patch("src.agent.tools.search_tools._get_db", return_value=db):
+                _handle_search_stock_news("FPT", "FPT Corp")
+                _handle_search_comprehensive_intel("FPT", "FPT Corp")
+            evidence = get_current_news_evidence()
+            assert evidence is not None
+            self.assertEqual(evidence.calls, 2)
+            self.assertEqual(evidence.total, 2)
+            items = evidence.items
+            # Cùng URL ở hai lần gọi chỉ giữ một / same URL across calls kept once.
+            self.assertEqual(len(items), 1)
+            self.assertEqual(items[0]["dimension"], "latest_news")
+            self.assertEqual(items[0]["url"], "https://example.com/news")
+            self.assertEqual(items[0]["published_date"], "2026-04-24")
+        finally:
+            reset_news_evidence_scope(token)
+
 
 if __name__ == "__main__":
     unittest.main()

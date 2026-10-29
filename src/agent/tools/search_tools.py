@@ -87,6 +87,22 @@ def _persist_news_response(
         )
 
 
+def _evidence_item(result, *, dimension: str) -> dict:
+    """Bản ghi gọn của một tin đã trao cho Agent (lưu vào snapshot để truy nguồn).
+
+    Compact record of one item handed to the Agent, kept for source tracing.
+    """
+    published = getattr(result, "published_date", None)
+    return {
+        "dimension": dimension,
+        "title": getattr(result, "title", None),
+        "url": getattr(result, "url", None),
+        "source": getattr(result, "source", None),
+        "published_date": str(published) if published is not None else None,
+        "snippet": str(getattr(result, "snippet", "") or "")[:300],
+    }
+
+
 def _handle_search_stock_news(stock_code: str, stock_name: str) -> dict:
     """Search latest news for a stock."""
     service = _get_search_service()
@@ -107,7 +123,10 @@ def _handle_search_stock_news(stock_code: str, stock_name: str) -> dict:
             "error": response.error_message,
         }
 
-    record_news_evidence(len(response.results))
+    record_news_evidence(
+        len(response.results),
+        [_evidence_item(r, dimension="latest_news") for r in response.results],
+    )
 
     _persist_news_response(
         stock_code=stock_code,
@@ -185,12 +204,14 @@ def _handle_search_comprehensive_intel(stock_code: str, stock_name: str) -> dict
 
     # Number of evidence items actually handed to the Agent, summed across dimensions and recorded once.
     evidence_count = 0
+    evidence_items = []
 
     # Also return structured data
     dimensions = {}
     for dim_name, response in intel_results.items():
         if response and response.success:
             evidence_count += len(response.results)
+            evidence_items.extend(_evidence_item(r, dimension=dim_name) for r in response.results)
             _persist_news_response(
                 stock_code=stock_code,
                 stock_name=query_name,
@@ -210,7 +231,7 @@ def _handle_search_comprehensive_intel(stock_code: str, stock_name: str) -> dict
                 ],
             }
 
-    record_news_evidence(evidence_count)
+    record_news_evidence(evidence_count, evidence_items)
 
     return {
         "report": report,
