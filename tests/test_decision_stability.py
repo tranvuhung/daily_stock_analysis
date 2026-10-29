@@ -151,3 +151,64 @@ def test_english_wording_for_mid_range_hold() -> None:
     assert "without a clear signal" in result.risk_warning
     position_advice = result.dashboard["core_conclusion"]["position_advice"]
     assert position_advice["no_position"].startswith("Do not chase or panic")
+
+
+def _with_llm_sell_plan(result: AnalysisResult) -> AnalysisResult:
+    result.analysis_summary = "Khối ngoại bán ròng mạnh; nên cơ cấu hạ tỷ trọng."
+    result.risk_warning = "Áp lực bán ròng chưa dừng."
+    result.dashboard["analysis_summary"] = result.analysis_summary
+    result.dashboard["phase_decision"] = {"immediate_action": "Căn nhịp hồi để giảm tỷ trọng"}
+    result.dashboard["battle_plan"] = {
+        "position_strategy": {
+            "suggested_position": "0% - 20% danh mục",
+            "entry_plan": "Ưu tiên hạ vị thế hiện có.",
+        }
+    }
+    return result
+
+
+def test_sell_kept_in_bearish_ma_alignment_near_support() -> None:
+    # Hồi quy FPT #161: MA5 < MA10 < MA20 là giảm nhiều phiên, không phải "một phiên giảm".
+    # Regression for FPT #161: a bearish MA stack is not a one-day drop.
+    result = _result(decision_type="sell", operation_advice="Bán", score=35, current_price=30.4, change_pct=-1.1)
+    result.dashboard["data_perspective"]["price_position"].update({"ma5": 31.5, "ma10": 32.0, "ma20": 32.8})
+
+    stabilize_decision_with_structure(result, _LEVELS, None)
+
+    assert result.decision_type == "sell"
+    assert result.operation_advice == "Bán"
+    assert "decision_stability" not in result.dashboard
+
+
+def test_hold_in_bearish_alignment_is_not_relabelled_shakeout() -> None:
+    result = _result(decision_type="hold", operation_advice="Nắm giữ", score=50, current_price=30.5, change_pct=-1.6)
+    trend = SimpleNamespace(support_levels=[30.0], resistance_levels=[34.0], ma5=31.0, ma10=31.6, ma20=32.4)
+
+    stabilize_decision_with_structure(result, trend, None)
+
+    assert result.operation_advice == "Nắm giữ"
+
+
+def test_sell_to_hold_rewrites_llm_action_fields_in_report_language() -> None:
+    result = _with_llm_sell_plan(
+        _result(decision_type="sell", operation_advice="Bán", score=30, current_price=30.4, change_pct=-2.1)
+    )
+
+    stabilize_decision_with_structure(result, _LEVELS, None)
+
+    assert result.decision_type == "hold"
+    dashboard = result.dashboard
+    core = dashboard["core_conclusion"]
+    assert core["signal_type"] == "🟡 Nắm giữ/Quan sát"
+    no_position = core["position_advice"]["no_position"]
+    assert dashboard["phase_decision"]["immediate_action"] == no_position
+    strategy = dashboard["battle_plan"]["position_strategy"]
+    assert strategy["entry_plan"] == no_position
+    assert strategy["suggested_position"] == "Kiểm soát tỷ trọng"
+    assert result.analysis_summary.endswith(
+        "Kết luận cuối sau hiệu chỉnh cấu trúc: Quan sát rũ bỏ. "
+        "Giá đang sát vùng hỗ trợ và chưa thủng hỗ trợ, một phiên giảm chưa đủ cơ sở để bán."
+    )
+    assert dashboard["analysis_summary"] == result.analysis_summary
+    # Nối cảnh báo không tạo ".;" / joining warnings must not produce ".;".
+    assert ".;" not in result.risk_warning

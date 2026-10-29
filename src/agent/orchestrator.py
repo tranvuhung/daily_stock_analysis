@@ -64,9 +64,11 @@ from src.agent.runtime_facts import (
 from src.agent.runner import parse_dashboard_json
 from src.agent.stock_scope import resolve_stock_scope
 from src.agent.stream_events import stream_event
+from src.utils.sniper_points import strip_vn_thousands_separators
 from src.agent.tools.registry import ToolRegistry
 from src.config import AGENT_MAX_STEPS_DEFAULT, get_config
 from src.report_language import (
+    localize_confidence_level,
     localize_conflict_severity,
     localize_operation_advice,
     normalize_report_language,
@@ -1463,6 +1465,7 @@ class AgentOrchestrator:
             analysis_summary = _fallback_text("incomplete_summary", lang).format(
                 operation=_signal_to_operation(decision_type, lang)
             )
+        post_risk_action: Optional[str] = None
         if risk_applied:
             # Hiển thị tín hiệu theo ngôn ngữ báo cáo ("Mua -> Quan sát") thay vì mã thô.
             # Show signals in the report language instead of raw codes.
@@ -1470,8 +1473,27 @@ class AgentOrchestrator:
                 from_signal=_localized_signal_label(application.from_signal.value, lang),
                 to_signal=_localized_signal_label(application.post_risk_signal.value, lang),
             )
-            if not analysis_summary.startswith(transition_prefix):
-                analysis_summary = f"{transition_prefix} {analysis_summary}"
+            post_risk_action = _post_risk_immediate_action(decision_type, lang)
+            # Thân bài LLM viết theo tín hiệu cũ; kết luận cuối đặt ở cuối đoạn để
+            # người đọc không hiểu nhầm câu khuyến nghị cũ là kết luận.
+            # The LLM body was written for the old signal; the authoritative final
+            # conclusion goes last so the old recommendation is not read as the verdict.
+            final_conclusion = ""
+            if post_risk_action:
+                final_conclusion = _fallback_text("risk_final_conclusion", lang).format(
+                    operation=_signal_to_operation(decision_type, lang),
+                    action=post_risk_action,
+                )
+            body = analysis_summary
+            if body.startswith(transition_prefix):
+                body = body[len(transition_prefix):].strip()
+            if final_conclusion and body.endswith(final_conclusion):
+                body = body[: -len(final_conclusion)].strip()
+            body_limit = _ANALYSIS_SUMMARY_MAX_CHARS - len(transition_prefix) - len(final_conclusion) - 2
+            body = _truncate_text(body, max(0, body_limit))
+            analysis_summary = " ".join(
+                part for part in (transition_prefix, body, final_conclusion) if part
+            )
         # Chỉ chặn trường hợp quá dài bất thường; schema yêu cầu ~100-150 từ.
         # Only guards runaway output; the schema asks for ~100-150 words.
         analysis_summary = _truncate_text(analysis_summary, _ANALYSIS_SUMMARY_MAX_CHARS)
@@ -1595,7 +1617,11 @@ class AgentOrchestrator:
             core.get("one_sentence"),
             analysis_summary,
         )
-        if risk_applied and not one_sentence.startswith(transition_prefix):
+        if risk_applied and post_risk_action:
+            # Câu LLM (vd. "kiên nhẫn quan sát") mâu thuẫn tín hiệu mới; thay bằng hành động có thẩm quyền.
+            # The LLM headline contradicts the new signal; use the authoritative action instead.
+            one_sentence = f"{transition_prefix} {post_risk_action}"
+        elif risk_applied and not one_sentence.startswith(transition_prefix):
             one_sentence = f"{transition_prefix} {one_sentence}"
         core["one_sentence"] = _truncate_text(one_sentence, _ONE_SENTENCE_MAX_CHARS)
         if not core.get("time_sensitivity"):
@@ -1646,6 +1672,12 @@ class AgentOrchestrator:
         if strategy_synthesis:
             dashboard_block["strategy_synthesis"] = strategy_synthesis
 
+        if risk_applied and post_risk_action:
+            phase_decision = dashboard_block.get("phase_decision")
+            phase_decision = dict(phase_decision) if isinstance(phase_decision, dict) else {}
+            phase_decision["immediate_action"] = post_risk_action
+            dashboard_block["phase_decision"] = phase_decision
+
         dashboard_block["core_conclusion"] = core
         dashboard_block["intelligence"] = intelligence
         dashboard_block["battle_plan"] = battle
@@ -1689,10 +1721,16 @@ class AgentOrchestrator:
         payload["trend_prediction"] = trend_prediction
         payload["operation_advice"] = operation_advice
         payload["decision_type"] = decision_type
-        payload["confidence_level"] = _confidence_label(confidence, lang)
+        payload["confidence_level"] = _resolve_confidence_label(
+            payload.get("confidence_level"), confidence, lang
+        )
         payload["analysis_summary"] = analysis_summary
         payload["key_points"] = key_points
         payload["risk_warning"] = risk_warning
+        if risk_applied:
+            post_risk_buy_reason = _post_risk_buy_reason(decision_type, lang)
+            if post_risk_buy_reason:
+                payload["buy_reason"] = post_risk_buy_reason
         payload["dashboard"] = dashboard_block
         if risk_applied:
             for opinion in reversed(ctx.opinions):
@@ -2095,6 +2133,7 @@ _FALLBACK_TEXTS: Dict[str, Dict[str, str]] = {
         "degraded_prefix": "[Kết quả hạ cấp] ",
         "risk_takeover": "Quản trị rủi ro can thiệp: tín hiệu cuối cùng đã được hạ xuống {signal}.",
         "advice_downgraded": "{advice} (khuyến nghị ban đầu đã bị quản trị rủi ro hạ bậc)",
+        "risk_final_conclusion": "Kết luận cuối sau quản trị rủi ro: {operation}. {action}",
     },
     "en": {
         "timeout_note": "Multi-agent run timed out; the conclusion below was auto-degraded from the completed stages.",
@@ -2115,6 +2154,7 @@ _FALLBACK_TEXTS: Dict[str, Dict[str, str]] = {
         "degraded_prefix": "[Degraded result] ",
         "risk_takeover": "Risk control took over: the final signal was downgraded to {signal}.",
         "advice_downgraded": "{advice} (original advice downgraded by risk control)",
+        "risk_final_conclusion": "Final conclusion after risk control: {operation}. {action}",
     },
 }
 
@@ -2179,6 +2219,32 @@ _POST_RISK_POSITION_ADVICE: Dict[str, Dict[str, Dict[str, str]]] = {
             "no_position": "Risk is clearly elevated; do not open new positions.",
             "has_position": "Prioritise limiting drawdown; reduce or exit high-risk positions.",
         },
+    },
+}
+
+# Hành động/lý do có thẩm quyền sau khi quản trị rủi ro hạ bậc: thay cho văn bản
+# LLM viết theo tín hiệu cũ để báo cáo không tự mâu thuẫn (vd. "Bán" nhưng "giữ quan sát").
+# Authoritative action/reason after a risk downgrade, replacing LLM text written for the
+# pre-risk signal so the report does not contradict itself.
+_POST_RISK_IMMEDIATE_ACTION: Dict[str, Dict[str, str]] = {
+    "vi": {
+        "hold": "Chờ xác nhận, chưa mở vị thế mới cho tới khi rủi ro giảm bớt.",
+        "sell": "Không mở vị thế mới; ưu tiên giảm tỷ trọng các vị thế đang nắm giữ.",
+    },
+    "en": {
+        "hold": "Wait for confirmation; do not open new positions until the risk eases.",
+        "sell": "Do not open new positions; prioritise reducing existing holdings.",
+    },
+}
+
+_POST_RISK_BUY_REASON: Dict[str, Dict[str, str]] = {
+    "vi": {
+        "hold": "Khuyến nghị mua ban đầu đã bị quản trị rủi ro hạ bậc; chờ rủi ro giảm và điều kiện vào lệnh rõ ràng hơn trước khi mua.",
+        "sell": "Không có điểm mua mới sau khi quản trị rủi ro hạ bậc; các vùng giá mua trong kế hoạch chỉ để tham khảo khi xu hướng đảo chiều rõ ràng.",
+    },
+    "en": {
+        "hold": "The original buy call was downgraded by risk control; wait for the risk to ease and clearer entry conditions before buying.",
+        "sell": "No new entry after the risk downgrade; the planned buy zones are reference only until the trend clearly reverses.",
     },
 }
 
@@ -2255,6 +2321,16 @@ def _post_risk_position_advice(signal: str, language: Optional[str] = "vi") -> D
     return _default_position_advice(signal, language)
 
 
+def _post_risk_immediate_action(signal: str, language: Optional[str] = "vi") -> Optional[str]:
+    """Hành động hiện tại sau hạ bậc rủi ro / current action after a risk downgrade."""
+    return _POST_RISK_IMMEDIATE_ACTION[_lang_key(language)].get(signal)
+
+
+def _post_risk_buy_reason(signal: str, language: Optional[str] = "vi") -> Optional[str]:
+    """Lý do mua/không mua sau hạ bậc rủi ro / buy reason after a risk downgrade."""
+    return _POST_RISK_BUY_REASON[_lang_key(language)].get(signal)
+
+
 def _default_position_size(signal: str, language: Optional[str] = "vi") -> str:
     mapping = _DEFAULT_POSITION_SIZE[_lang_key(language)]
     return mapping.get(signal, mapping["hold"])
@@ -2275,6 +2351,25 @@ def _confidence_label(confidence: float, language: Optional[str] = "vi") -> str:
     return labels["low"]
 
 
+def _resolve_confidence_label(
+    declared: Any,
+    confidence: float,
+    language: Optional[str] = "vi",
+) -> str:
+    """Ưu tiên mức tin cậy LLM khai báo; chỉ suy từ số khi thiếu/không hợp lệ.
+
+    DecisionAgent đặt ``confidence = sentiment_score / 100`` nên tín hiệu bán (điểm thấp)
+    luôn ra "Thấp", mâu thuẫn với ``confidence_reason`` LLM viết. Prefer the declared
+    High/Medium/Low label; the numeric fallback conflates bearishness with confidence.
+    """
+    labels = _CONFIDENCE_LABELS[_lang_key(language)]
+    if isinstance(declared, str) and declared.strip():
+        localized = localize_confidence_level(declared, _lang_key(language))
+        if localized in labels.values():
+            return localized
+    return _confidence_label(confidence, language)
+
+
 def _estimate_sentiment_score(signal: str, confidence: float) -> int:
     confidence = max(0.0, min(1.0, float(confidence)))
     bands = {
@@ -2291,11 +2386,13 @@ def _coerce_level_value(value: Any) -> Any:
         return None
     if isinstance(value, (int, float)):
         return round(float(value), 2)
+    # "54.500" là 54.500 VND (dấu chấm hàng nghìn kiểu VN), không phải 54,5.
+    # "54.500" is 54,500 VND (VN thousands dot), not 54.5.
     text = str(value).replace(",", "").replace("，", "").strip()
     if not text or text.upper() == "N/A" or text in {"-", "—"}:
         return None
     try:
-        return round(float(text), 2)
+        return round(float(strip_vn_thousands_separators(text)), 2)
     except ValueError:
         return text
 

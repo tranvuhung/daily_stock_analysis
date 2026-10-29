@@ -279,7 +279,16 @@ def test_orchestrator_returns_internal_facts_without_public_dashboard_fields():
     assert "Quan sát" in result.dashboard["operation_advice"]
     core = result.dashboard["dashboard"]["core_conclusion"]
     assert core["one_sentence"].startswith("[Hạ bậc do quản trị rủi ro: Mua -> Nắm giữ]")
-    assert "趋势向上，建议立即买入" in core["one_sentence"]
+    # Câu LLM viết theo tín hiệu cũ (mua ngay) không được giữ trong tiêu đề sau hạ bậc.
+    # The pre-risk LLM headline (buy now) must not survive the downgrade.
+    assert "趋势向上，建议立即买入" not in core["one_sentence"]
+    assert "chưa mở vị thế mới" in core["one_sentence"]
+    assert result.dashboard["analysis_summary"].endswith(
+        "Kết luận cuối sau quản trị rủi ro: Quan sát. "
+        "Chờ xác nhận, chưa mở vị thế mới cho tới khi rủi ro giảm bớt."
+    )
+    assert result.dashboard["dashboard"]["phase_decision"]["immediate_action"].startswith("Chờ xác nhận")
+    assert "hạ bậc" in result.dashboard["buy_reason"]
     assert core["signal_type"] == "🟡 Nắm giữ/Quan sát"
     assert "cho tới khi rủi ro được giải toả" in core["position_advice"]["no_position"]
     strategy = result.dashboard["dashboard"]["battle_plan"]["position_strategy"]

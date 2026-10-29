@@ -930,6 +930,10 @@ def stabilize_decision_with_structure(
         )
 
         has_significant_risk = _has_structural_risk_alert(result)
+        # MA5 < MA10 < MA20: giảm đã kéo dài nhiều phiên, không phải "một phiên giảm" hay
+        # nhịp rũ bỏ, nên không nới tín hiệu bán / không gắn nhãn rũ bỏ.
+        # A multi-session downtrend is neither a one-day drop nor a shakeout.
+        bearish_alignment = _is_bearish_ma_alignment(trend_dict, price_position)
 
         # Chỉ hiệu chỉnh theo cấu trúc giá (hỗ trợ/kháng cự); thị trường Việt Nam không
         # có dữ liệu dòng tiền chủ lực nên không dùng tín hiệu dòng tiền.
@@ -946,7 +950,7 @@ def stabilize_decision_with_structure(
                     resistance=resistance,
                 )
         elif decision_type == "sell":
-            if near_support and not has_significant_risk:
+            if near_support and not has_significant_risk and not bearish_alignment:
                 _downgrade_to_structural_hold(
                     result,
                     language,
@@ -958,7 +962,7 @@ def stabilize_decision_with_structure(
                 )
         elif decision_type == "hold":
             change_pct = _first_numeric_value(getattr(result, "change_pct", None))
-            if change_pct is not None and change_pct < 0 and near_support:
+            if change_pct is not None and change_pct < 0 and near_support and not bearish_alignment:
                 _set_structural_hold_wording(
                     result,
                     language,
@@ -981,6 +985,16 @@ def stabilize_decision_with_structure(
         _sync_stability_dashboard_fields(result)
     except Exception as exc:
         logger.warning("[decision_stability] skipped: %s", exc)
+
+
+def _is_bearish_ma_alignment(trend_dict: Dict[str, Any], price_position: Dict[str, Any]) -> bool:
+    """MA5 < MA10 < MA20 (xếp chồng giảm) / bearish moving-average alignment."""
+    ma5 = _first_numeric_value(trend_dict.get("ma5"), price_position.get("ma5"))
+    ma10 = _first_numeric_value(trend_dict.get("ma10"), price_position.get("ma10"))
+    ma20 = _first_numeric_value(trend_dict.get("ma20"), price_position.get("ma20"))
+    if ma5 is None or ma10 is None or ma20 is None:
+        return False
+    return ma5 < ma10 < ma20
 
 
 def _has_structural_risk_alert(result: "AnalysisResult") -> bool:
@@ -1144,7 +1158,7 @@ def _apply_hold_watch_dashboard(
     if not isinstance(core, dict):
         core = {}
         dashboard["core_conclusion"] = core
-    core["signal_type"] = "🟡 Hold / Watch"
+    core["signal_type"] = "🟡 Hold / Watch" if language == "en" else "🟡 Nắm giữ/Quan sát"
     core["one_sentence"] = f"{advice}: {reason}"
 
     position_advice = core.get("position_advice")
@@ -1169,8 +1183,9 @@ def _apply_hold_watch_dashboard(
     dashboard["decision_stability"] = stability
 
     if reason and reason not in str(result.risk_warning or ""):
-        sep = "; "
-        result.risk_warning = f"{result.risk_warning}{sep}{reason}" if result.risk_warning else reason
+        existing = str(result.risk_warning or "").rstrip()
+        sep = " " if existing.endswith((".", "!", "?", "…")) else "; "
+        result.risk_warning = f"{existing}{sep}{reason}" if existing else reason
     result.buy_reason = reason or result.buy_reason
 
 
@@ -1195,6 +1210,48 @@ def _downgrade_to_structural_hold(
         resistance=resistance,
         calibrate_score=True,
     )
+    _align_action_fields_after_structural_hold(result, language)
+
+
+def _align_action_fields_after_structural_hold(result: "AnalysisResult", language: str) -> None:
+    """Đồng bộ hành động/kế hoạch/tóm tắt với khuyến nghị giữ sau hiệu chỉnh cấu trúc.
+
+    The LLM wrote immediate_action / entry_plan / summary for the original buy or
+    sell call; after the structural downgrade they would contradict the hold
+    advice (e.g. "Quan sát rũ bỏ" next to "ưu tiên hạ vị thế"), so rewrite them.
+    """
+    dashboard = result.dashboard if isinstance(result.dashboard, dict) else {}
+    core = dashboard.get("core_conclusion") if isinstance(dashboard.get("core_conclusion"), dict) else {}
+    position_advice = core.get("position_advice") if isinstance(core.get("position_advice"), dict) else {}
+    stability = dashboard.get("decision_stability") if isinstance(dashboard.get("decision_stability"), dict) else {}
+    action = position_advice.get("no_position")
+    reason = stability.get("reason")
+
+    phase_decision = dashboard.get("phase_decision")
+    if isinstance(phase_decision, dict) and action:
+        phase_decision["immediate_action"] = action
+
+    battle = dashboard.get("battle_plan")
+    strategy = battle.get("position_strategy") if isinstance(battle, dict) else None
+    if isinstance(strategy, dict):
+        if action:
+            strategy["entry_plan"] = action
+        strategy["suggested_position"] = (
+            "Keep position size controlled" if language == "en" else "Kiểm soát tỷ trọng"
+        )
+
+    if reason:
+        template = (
+            "Final conclusion after structural calibration: {advice}. {reason}"
+            if language == "en"
+            else "Kết luận cuối sau hiệu chỉnh cấu trúc: {advice}. {reason}"
+        )
+        conclusion = template.format(advice=result.operation_advice, reason=reason)
+        summary = str(getattr(result, "analysis_summary", "") or "").strip()
+        if conclusion not in summary:
+            result.analysis_summary = f"{summary} {conclusion}".strip()
+        if "analysis_summary" in dashboard:
+            dashboard["analysis_summary"] = result.analysis_summary
 
 
 def _set_structural_hold_wording(

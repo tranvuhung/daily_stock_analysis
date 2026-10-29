@@ -111,6 +111,15 @@ class TestAgentOrchestratorSniperFallback(unittest.TestCase):
 
         self.assertEqual(normalized["key_points"], ["Lợi nhuận kỷ lục, khối ngoại bán ròng"])
 
+    def test_coerce_level_value_reads_vn_thousands_dot(self):
+        # "54.500" là 54.500 VND, không phải 54,5 / VN thousands dot, not a decimal.
+        from src.agent.orchestrator import _coerce_level_value
+
+        self.assertEqual(_coerce_level_value("54.500"), 54500.0)
+        self.assertEqual(_coerce_level_value("55.14"), 55.14)
+        # Văn bản hiển thị giữ nguyên / display text is left untouched.
+        self.assertEqual(_coerce_level_value("51.500 VND"), "51.500 VND")
+
 
 if __name__ == "__main__":
     unittest.main()

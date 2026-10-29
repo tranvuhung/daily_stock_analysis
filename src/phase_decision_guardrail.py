@@ -13,6 +13,7 @@ from src.report_language import (
     localize_data_limitation,
     normalize_report_language,
 )
+from src.utils.sniper_points import extract_sniper_points
 
 if TYPE_CHECKING:
     from src.analyzer import AnalysisResult
@@ -107,10 +108,11 @@ def apply_phase_decision_guardrails(
     if phase_summary:
         phase_decision["phase_context"] = _phase_context_from_summary(phase_summary)
 
+    llm_limitations = _list_strings(phase_decision.get("data_limitations"))
     merged_limitations = _merge_limitations(
-        _list_strings(phase_decision.get("data_limitations")),
+        llm_limitations,
         _phase_warning_limitations(phase_summary, language=language),
-        _overview_limitations(overview, language=language),
+        _overview_limitations(overview, language=language, already_stated=llm_limitations),
     )
     phase_decision["data_limitations"] = merged_limitations
 
@@ -154,6 +156,16 @@ def apply_phase_decision_guardrails(
         _replace_postmarket_recap_fields(result, phase_decision, language=language)
         _append_reason(phase_decision, reason)
         adjustments.append("postmarket_recap_wording_adjusted")
+
+    level_issues = _sniper_level_order_issues(result, language=language)
+    if level_issues:
+        reason = _reason_text(
+            language,
+            en="Plan price levels are inconsistent ({issues}); re-check them before trading.",
+            vi="Các mức giá trong kế hoạch không nhất quán ({issues}); cần kiểm tra lại trước khi giao dịch.",
+        ).format(issues="; ".join(level_issues))
+        _append_reason(phase_decision, reason)
+        adjustments.append("sniper_level_order_invalid")
 
     if adjustments:
         phase_decision["data_limitations"] = _merge_limitations(
@@ -201,16 +213,61 @@ def _has_core_degraded_block(overview: Optional[Mapping[str, Any]]) -> bool:
     return False
 
 
-def _overview_limitations(overview: Optional[Mapping[str, Any]], *, language: str) -> List[str]:
+# Từ khoá nhận diện một giới hạn "<block>: <status>" mà LLM đã tự viết bằng lời.
+# Keywords recognising a "<block>: <status>" limitation the LLM already wrote in prose.
+_LIMITATION_BLOCK_KEYWORDS = {
+    "quote": ("quote", "báo giá"),
+    "daily_bars": ("daily_bars", "daily bar", "nến ngày"),
+    "technical": ("technical", "kỹ thuật"),
+    "news": ("news", "tin tức"),
+    "fundamentals": ("fundamental", "cơ bản"),
+}
+_LIMITATION_STATUS_KEYWORDS = {
+    "fallback": ("fallback", "dự phòng"),
+    "stale": ("stale", "trễ", "cũ"),
+    "missing": ("missing", "thiếu"),
+    "partial": ("partial", "một phần"),
+    "estimated": ("estimated", "ước lượng"),
+    "fetch_failed": ("fetch_failed", "fetch failed", "lỗi"),
+    "not_supported": ("not_supported", "not supported", "không hỗ trợ"),
+}
+
+
+def _limitation_already_stated(code: str, stated: List[str]) -> bool:
+    """LLM đã nêu cùng block + trạng thái chưa (vd. "Báo giá ... dự phòng (fallback)")?
+
+    Whether the LLM already stated the same block and status in its own words.
+    """
+    block, _, status = code.partition(":")
+    block_words = _LIMITATION_BLOCK_KEYWORDS.get(block.strip())
+    status_words = _LIMITATION_STATUS_KEYWORDS.get(status.strip())
+    if not block_words or not status_words:
+        return False
+    for item in stated:
+        text = item.lower()
+        if any(word in text for word in block_words) and any(word in text for word in status_words):
+            return True
+    return False
+
+
+def _overview_limitations(
+    overview: Optional[Mapping[str, Any]],
+    *,
+    language: str,
+    already_stated: Optional[List[str]] = None,
+) -> List[str]:
     if not isinstance(overview, Mapping):
         return []
     data_quality = overview.get("data_quality")
     if not isinstance(data_quality, Mapping):
         return []
-    # Mã chuẩn ("quote: stale") được dịch khi hiển thị. / Canonical codes are localized for display.
+    stated = already_stated or []
+    # Mã chuẩn ("quote: stale") được dịch khi hiển thị; bỏ mã LLM đã nêu để tránh trùng ý.
+    # Canonical codes are localized; skip ones the LLM already stated to avoid duplicates.
     return [
         localize_data_limitation(item, language)
         for item in _list_strings(data_quality.get("limitations"))
+        if not _limitation_already_stated(item, stated)
     ]
 
 
@@ -338,7 +395,10 @@ def _append_reason(phase_decision: Dict[str, Any], reason: str) -> None:
         phase_decision["confidence_reason"] = reason
         return
     if reason not in existing:
-        phase_decision["confidence_reason"] = f"{existing}; {reason}"
+        # Câu trước đã kết thúc bằng dấu câu thì chỉ cần khoảng trắng, tránh ".;".
+        # Avoid ".;" when the previous sentence already ends with punctuation.
+        sep = " " if existing.endswith((".", "!", "?", "…")) else "; "
+        phase_decision["confidence_reason"] = f"{existing}{sep}{reason}"
 
 
 def _adjustment_limitation_text(adjustment: str, *, language: str) -> str:
@@ -360,6 +420,12 @@ def _adjustment_limitation_text(adjustment: str, *, language: str) -> str:
             en="confidence capped for non-intraday action",
             vi="đã hạ độ tin cậy vì hành động ngoài phiên",
         )
+    if adjustment == "sniper_level_order_invalid":
+        return _reason_text(
+            language,
+            en="plan price levels out of order",
+            vi="các mức giá kế hoạch sai thứ tự",
+        )
     if adjustment == "confidence_capped_core_data_degraded":
         return _reason_text(
             language,
@@ -367,6 +433,43 @@ def _adjustment_limitation_text(adjustment: str, *, language: str) -> str:
             vi="đã hạ độ tin cậy vì dữ liệu lõi bị suy giảm",
         )
     return adjustment
+
+
+def _format_level(value: float, language: str) -> str:
+    text = f"{value:,.0f}"
+    # VND kiểu Việt Nam dùng "." hàng nghìn / VN style uses "." for thousands.
+    return text if language == "en" else text.replace(",", ".")
+
+
+def _sniper_level_order_issues(result: "AnalysisResult", *, language: str) -> List[str]:
+    """Phát hiện cắt lỗ không nằm dưới điểm mua/chốt lời (không tự sửa mức giá).
+
+    Detect a stop-loss that is not below the buy or take-profit levels. Levels
+    are only reported, never rewritten, so no price is invented.
+    """
+    try:
+        points = extract_sniper_points(result)
+    except Exception:  # noqa: BLE001 - kiểm tra phụ, không được làm hỏng luồng chính
+        return []
+    stop_loss = points.get("stop_loss")
+    if stop_loss is None:
+        return []
+    labels = {
+        "ideal_buy": ("ideal buy", "điểm mua lý tưởng"),
+        "secondary_buy": ("secondary buy", "điểm mua thứ cấp"),
+        "take_profit": ("take-profit", "chốt lời"),
+    }
+    stop_label = "stop-loss" if language == "en" else "cắt lỗ"
+    issues: List[str] = []
+    for key, (en_label, vi_label) in labels.items():
+        level = points.get(key)
+        if level is None or stop_loss < level:
+            continue
+        label = en_label if language == "en" else vi_label
+        issues.append(
+            f"{stop_label} {_format_level(stop_loss, language)} ≥ {label} {_format_level(level, language)}"
+        )
+    return issues
 
 
 def _safe_wait_action(language: str) -> str:

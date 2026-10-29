@@ -359,3 +359,96 @@ def test_english_report_keeps_english_guardrail_text() -> None:
     pd = result.dashboard["phase_decision"]
     assert "quote: stale" in pd["data_limitations"]
     assert "Core quote" in pd["confidence_reason"]
+
+
+def _with_sniper(result: AnalysisResult, **points) -> AnalysisResult:
+    result.dashboard["battle_plan"] = {"sniper_points": points}
+    return result
+
+
+def test_stop_loss_above_buy_level_is_flagged_without_rewriting_levels() -> None:
+    # Hồi quy #159: cắt lỗ 51.000 cao hơn điểm mua thứ cấp 50.000.
+    # Regression for #159: stop-loss 51,000 above the 50,000 secondary buy.
+    result = _with_sniper(
+        _result(current_price=53300.0),
+        ideal_buy="51.500 VND",
+        secondary_buy="50.000 VND",
+        stop_loss="51.000 VND",
+        take_profit="55.150 VND",
+    )
+
+    adjustments = apply_phase_decision_guardrails(
+        result,
+        market_phase_summary=_phase("intraday"),
+        analysis_context_pack_overview=None,
+        report_language="vi",
+    )
+
+    assert "sniper_level_order_invalid" in adjustments
+    pd = result.dashboard["phase_decision"]
+    assert "cắt lỗ 51.000 ≥ điểm mua thứ cấp 50.000" in pd["confidence_reason"]
+    assert "điểm mua lý tưởng" not in pd["confidence_reason"]
+    assert "các mức giá kế hoạch sai thứ tự" in pd["data_limitations"]
+    assert result.dashboard["battle_plan"]["sniper_points"]["secondary_buy"] == "50.000 VND"
+
+
+def test_ordered_levels_are_not_flagged() -> None:
+    result = _with_sniper(
+        _result(current_price=53300.0),
+        ideal_buy="51.500 VND",
+        secondary_buy="50.500 VND",
+        stop_loss="49.800 VND",
+        take_profit="55.150 VND",
+    )
+
+    adjustments = apply_phase_decision_guardrails(
+        result,
+        market_phase_summary=_phase("intraday"),
+        analysis_context_pack_overview=None,
+        report_language="vi",
+    )
+
+    assert "sniper_level_order_invalid" not in adjustments
+
+
+def test_overview_limitation_already_stated_by_llm_is_not_duplicated() -> None:
+    # Hồi quy FPT #166: "Báo giá ... dự phòng (fallback)" và "Báo giá: dùng nguồn dự phòng" trùng ý.
+    # Regression for FPT #166: the LLM line and the canonical code said the same thing.
+    result = _result(confidence_level="Trung bình")
+    pd = result.dashboard["phase_decision"]
+    pd["data_limitations"] = ["Báo giá thời gian thực sử dụng chế độ dự phòng (fallback)"]
+    overview = _overview("fallback")
+    overview["data_quality"]["limitations"] = ["quote: fallback", "news: partial"]
+
+    apply_phase_decision_guardrails(
+        result,
+        market_phase_summary=_phase("intraday"),
+        analysis_context_pack_overview=overview,
+        report_language="vi",
+    )
+
+    limitations = result.dashboard["phase_decision"]["data_limitations"]
+    assert "Báo giá: dùng nguồn dự phòng" not in limitations
+    assert "Báo giá thời gian thực sử dụng chế độ dự phòng (fallback)" in limitations
+    # Giới hạn LLM chưa nêu vẫn được thêm / limitations the LLM did not state are still added.
+    assert "Tin tức: một phần" in limitations
+
+
+def test_appended_reason_after_full_stop_has_no_semicolon() -> None:
+    result = _with_sniper(
+        _result(current_price=53300.0, confidence_level="Trung bình"),
+        ideal_buy="50.000 VND",
+        stop_loss="50.000 VND",
+    )
+    result.dashboard["phase_decision"]["confidence_reason"] = "Phiên intraday chưa đóng cửa."
+
+    apply_phase_decision_guardrails(
+        result,
+        market_phase_summary=_phase("intraday"),
+        analysis_context_pack_overview=None,
+        report_language="vi",
+    )
+
+    reason = result.dashboard["phase_decision"]["confidence_reason"]
+    assert ".;" not in reason
+    assert reason.startswith("Phiên intraday chưa đóng cửa. Các mức giá trong kế hoạch")

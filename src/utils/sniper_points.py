@@ -17,17 +17,68 @@ _CURRENCY_MARKER_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Số kiểu Việt Nam dùng "." phân tách hàng nghìn: "51.500", "1.077.540".
+# Vietnamese-style numbers using "." as the thousands separator.
+_VN_THOUSANDS_RE = re.compile(r"(?<![\d.])\d{1,3}(?:\.\d{3})+(?![\d.])")
 
-def parse_sniper_value(value: Any) -> Optional[float]:
-    """Parse a sniper point value from report text into a positive price."""
+# Giá cổ phiếu VN thấp nhất thực tế ~ vài trăm đồng; giá trị < reference/100
+# gần như chắc chắn được viết theo đơn vị nghìn đồng (vd. 51.5 = 51.500 VND).
+# Real VN prices never sit 100x below the reference; such values are in thousands.
+_THOUSAND_UNIT_RATIO = 100
+_THOUSAND_UNIT_TOLERANCE = (0.2, 5.0)
 
+
+def strip_vn_thousands_separators(text: str) -> str:
+    """'51.500 VND' -> '51500 VND'; giữ nguyên số thập phân như '100.5', '102.10'.
+
+    Remove VN-style thousands dots while keeping real decimals intact.
+    """
+    return _VN_THOUSANDS_RE.sub(lambda m: m.group().replace(".", ""), text)
+
+
+def normalize_price_unit(value: Optional[float], reference_price: Any = None) -> Optional[float]:
+    """Quy đổi giá viết theo nghìn đồng về VND dựa trên giá tham chiếu.
+
+    Convert a price written in thousands of VND (51.5) to VND (51500) when a
+    reference price shows the value is ~1000x too small. Values that do not
+    land near the reference after scaling are returned unchanged.
+    """
+    if value is None or value <= 0:
+        return value
+    try:
+        reference = float(reference_price) if reference_price is not None else 0.0
+    except (TypeError, ValueError):
+        return value
+    if reference <= 0 or value >= reference / _THOUSAND_UNIT_RATIO:
+        return value
+    scaled = value * 1000
+    low, high = _THOUSAND_UNIT_TOLERANCE
+    if low <= scaled / reference <= high:
+        return scaled
+    return value
+
+
+def parse_sniper_value(value: Any, reference_price: Any = None) -> Optional[float]:
+    """Parse a sniper point value from report text into a positive price.
+
+    ``reference_price`` (giá hiện tại) là tuỳ chọn; khi có, giá trị viết theo
+    nghìn đồng sẽ được quy đổi về VND. / Optional current price used to
+    rescale values written in thousands of VND.
+    """
+    return normalize_price_unit(_parse_sniper_number(value), reference_price)
+
+
+def _parse_sniper_number(value: Any) -> Optional[float]:
     if value is None:
+        return None
+    if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
         parsed = float(value)
         return parsed if parsed > 0 else None
 
-    text = str(value).replace(",", "").replace("，", "").strip()
+    text = strip_vn_thousands_separators(str(value))
+    text = text.replace(",", "").replace("，", "").strip()
     if not text or text in {"-", "—", "N/A"}:
         return None
 
@@ -80,8 +131,15 @@ def parse_sniper_value(value: Any) -> Optional[float]:
     return None
 
 
-def extract_sniper_points(result: Any) -> Dict[str, Optional[float]]:
-    """Extract normalized sniper-point prices from a completed analysis result."""
+def extract_sniper_points(result: Any, reference_price: Any = None) -> Dict[str, Optional[float]]:
+    """Extract normalized sniper-point prices from a completed analysis result.
+
+    Mặc định dùng ``result.current_price`` làm giá tham chiếu quy đổi đơn vị.
+    Defaults to ``result.current_price`` as the unit reference.
+    """
+
+    if reference_price is None:
+        reference_price = getattr(result, "current_price", None)
 
     raw_points: Mapping[str, Any] = {}
 
@@ -100,7 +158,10 @@ def extract_sniper_points(result: Any) -> Dict[str, Optional[float]]:
         if isinstance(raw_response, Mapping):
             raw_points = find_sniper_points(raw_response) or raw_points
 
-    return {key: parse_sniper_value(raw_points.get(key)) for key in SNIPER_KEYS}
+    return {
+        key: parse_sniper_value(raw_points.get(key), reference_price)
+        for key in SNIPER_KEYS
+    }
 
 
 def _has_any_sniper_value(points: Mapping[str, Any]) -> bool:

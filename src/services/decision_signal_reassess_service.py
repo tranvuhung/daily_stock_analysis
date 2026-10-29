@@ -410,17 +410,18 @@ def _confidence_from_level(value: Any) -> Optional[float]:
 
 def _extract_persisted_sniper_points(record: AnalysisHistory, raw_result: Mapping[str, Any]) -> dict[str, Optional[float]]:
     raw_points = find_sniper_points(raw_result) or {}
+    # Giá hiện tại lúc phân tích dùng để quy đổi bản ghi cũ lưu theo nghìn đồng.
+    # Report-time price rescales legacy rows stored in thousands of VND.
+    reference_price = raw_result.get("current_price")
     return {
-        "ideal_buy": _first_price(getattr(record, "ideal_buy", None), raw_points.get("ideal_buy")),
-        "secondary_buy": _first_price(getattr(record, "secondary_buy", None), raw_points.get("secondary_buy")),
-        "stop_loss": _first_price(getattr(record, "stop_loss", None), raw_points.get("stop_loss")),
-        "take_profit": _first_price(getattr(record, "take_profit", None), raw_points.get("take_profit")),
+        key: _first_price(getattr(record, key, None), raw_points.get(key), reference_price=reference_price)
+        for key in ("ideal_buy", "secondary_buy", "stop_loss", "take_profit")
     }
 
 
-def _first_price(*values: Any) -> Optional[float]:
+def _first_price(*values: Any, reference_price: Any = None) -> Optional[float]:
     for value in values:
-        parsed = parse_sniper_value(value)
+        parsed = parse_sniper_value(value, reference_price)
         if parsed is not None:
             return parsed
     return None
