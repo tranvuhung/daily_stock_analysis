@@ -93,7 +93,7 @@ Giá trên trang Web:
 | --- | --- | --- |
 | `concentration` | Giá trị mỗi mã / tổng giá trị cổ phiếu (không tính tiền mặt) | `PORTFOLIO_RISK_CONCENTRATION_ALERT_PCT` (35) |
 | `sector_concentration` | Giá trị theo ngành ICB cấp 2 (vd. Ngân hàng, Bất động sản, Dịch vụ tài chính, Chứng chỉ quỹ). Mã ICB cấp 4 lấy từ danh mục tổ chức FiinTrade (`/Master/GetListOrganization`, cache 24h, cùng request tra `organCode`), quy đổi qua `src/core/icb_sectors.py`. Chưa cấu hình `FIINTRADE_ORIGIN` hoặc mã không có ICB → `UNCLASSIFIED`; tra lỗi → `UNCLASSIFIED` + `coverage.failed_count`, báo cáo vẫn trả về | `PORTFOLIO_RISK_CONCENTRATION_ALERT_PCT` (35) |
-| `drawdown` | Đỉnh-đáy trên `total_equity` của snapshot ngày | `PORTFOLIO_RISK_DRAWDOWN_ALERT_PCT` (15), `PORTFOLIO_RISK_LOOKBACK_DAYS` (180) |
+| `drawdown` | Đỉnh-đáy trên chỉ số hiệu suất time-weighted dựng từ `total_equity` của snapshot ngày, đã loại nạp/rút tiền (`method=time_weighted`) | `PORTFOLIO_RISK_DRAWDOWN_ALERT_PCT` (15), `PORTFOLIO_RISK_LOOKBACK_DAYS` (180) |
 | `stop_loss` | Lỗ % = (giá vốn − giá hiện tại) / giá vốn; "gần" khi ≥ ngưỡng × hệ số; bỏ qua mã thiếu giá | `PORTFOLIO_RISK_STOP_LOSS_ALERT_PCT` (10), `PORTFOLIO_RISK_STOP_LOSS_NEAR_RATIO` (0.8) |
 | `decision_signal_risk` | Đếm tín hiệu AI active sell/reduce/alert của mã đang nắm; lỗi thì `available=false` | — |
 
@@ -101,7 +101,8 @@ Drawdown:
 
 - Trước khi tính, `_ensure_drawdown_snapshot_window` bù các snapshot ngày còn thiếu trong cửa sổ, **bỏ qua thứ 7/CN**. Mỗi ngày thiếu là một lần replay đầy đủ, nên lần gọi `/risk` đầu tiên sau khi sửa sổ lệnh lùi ngày có thể chậm.
 - Loại cả ngày nếu là ngày không giao dịch hoặc có snapshot thiếu giá; số ngày bị loại trả về ở `drawdown.excluded_points`.
-- **Chưa loại trừ nạp/rút tiền:** rút tiền vẫn bị tính như sụt giảm, nạp tiền nâng đỉnh. Cảnh báo dựa trên drawdown **tối đa** nên khi đã vượt ngưỡng sẽ còn bật trong suốt cửa sổ.
+- **Loại trừ nạp/rút tiền:** lợi suất mỗi điểm `r_t = (E_t − F_t) / E_{t-1} − 1`, với `F_t` = nạp − rút (`portfolio_cash_ledger`) trong khoảng (điểm trước, t]; nhân dồn thành chỉ số rồi tính đỉnh-đáy trên chỉ số. Dòng tiền coi là cuối ngày; nạp/rút rơi vào ngày bị loại cộng sang điểm kế tiếp; điểm trước có equity ≤ 0 thì lợi suất = 0. Cổ tức tiền vẫn tính là lợi nhuận. Xem toàn bộ tài khoản thì chuyển tiền giữa hai tài khoản cùng ngày tự triệt tiêu. Tổng dòng tiền ngoài trong cửa sổ trả ở `drawdown.net_external_flow`.
+- Cảnh báo dựa trên drawdown **tối đa** nên khi đã vượt ngưỡng sẽ còn bật trong suốt cửa sổ.
 
 ## 6. Nhập CSV (`/imports/csv/*`, chỉ có API, Web chưa có màn hình)
 
@@ -134,7 +135,6 @@ Hạn chế còn lại:
 
 - `GET /snapshot` và `GET /risk` **ghi DB** (cache vị thế, snapshot ngày) dù là request đọc.
 - Ngày lễ chưa được mô hình hoá trong lịch giao dịch.
-- Drawdown chưa loại trừ nạp/rút tiền.
 - Phân ngành phụ thuộc FiinTrade: không cấu hình `FIINTRADE_ORIGIN` thì mọi mã là `UNCLASSIFIED` (chưa có nguồn dự phòng). PortfolioAgent chỉ ước lượng ngành cho mã `UNCLASSIFIED`.
 - Chưa mô hình hoá T+2 trong sổ lệnh (bán trước khi hàng về vẫn được ghi), lô 100 và thuế cổ tức.
 - `date.today()` của service theo giờ máy chủ, không phải giờ Việt Nam.

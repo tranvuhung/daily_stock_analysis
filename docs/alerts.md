@@ -312,7 +312,7 @@ P6 将可展示目标与可持久化目标分离：
 | --- | --- | --- | --- |
 | `portfolio_stop_loss` | `mode=near|breach`，默认 `near` | 受影响标的最大 `loss_pct` | `near` 使用 `stop_loss.near_alert`，`breach` 只统计 `is_triggered=true` 的 items；每账户每轮最多一条 trigger；`price_available=false` 的持仓不参与计算（不再按 100% 亏损误报） |
 | `portfolio_concentration` | - | `concentration.top_weight_pct` | `top_weight_pct >= portfolio_risk_concentration_alert_pct` |
-| `portfolio_drawdown` | - | `drawdown.max_drawdown_pct` | 复用 `PortfolioRiskService` 的 `drawdown.alert`；`current_drawdown_pct` 写 diagnostics；周末与存在缺价快照的日期不计入序列（`excluded_points`） |
+| `portfolio_drawdown` | - | `drawdown.max_drawdown_pct` | 复用 `PortfolioRiskService` 的 `drawdown.alert`；`current_drawdown_pct` 写 diagnostics；周末与存在缺价快照的日期不计入序列（`excluded_points`）；基于剔除入金/出金的时间加权净值指数计算（`method=time_weighted`） |
 | `portfolio_price_stale` | - | stale/missing 价格持仓数量 | 任一 position `price_stale=true` 或 `price_available=false`；`price_stale` 以最近一个已完成的越南交易日为基准（周末使用周五收盘不算过期，交易时段内使用上一交易日收盘不算过期；节假日尚未建模） |
 
 portfolio diagnostics 必含 `account_id`（或 `all`）、`currency`、`as_of`、`price_stale`、`fx_stale`、`data_available`、`top_affected_symbols`。`portfolio_stop_loss`、`portfolio_concentration`、`portfolio_drawdown` 复用 `PortfolioRiskService.get_risk_report()`；`portfolio_price_stale` 复用 `PortfolioService.get_portfolio_snapshot()` 的 position price metadata。

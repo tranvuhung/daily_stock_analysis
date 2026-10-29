@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] Drawdown danh mục (`/risk`, cảnh báo `portfolio_drawdown`, PortfolioAgent) loại trừ nạp/rút tiền: tính trên chỉ số hiệu suất time-weighted thay vì `total_equity` thô, nên rút tiền không còn bị báo là sụt giảm và nạp tiền không che lỗ. Tài khoản có nạp/rút sẽ thấy `max_drawdown_pct` thay đổi; trả thêm `drawdown.method` và `drawdown.net_external_flow`.
 - [修复] Chat AI (multi-agent) báo nhầm giá của báo cáo đã lưu phiên trước (`previous_price`) là giá hiện tại (vd. FPT 55.400 thay vì 54.000): orchestrator nay nạp sẵn `realtime_quote` cho mọi agent kể cả DecisionAgent (fail-open), báo cáo tham chiếu được gắn nhãn "historical" kèm thời điểm, và tool `get_realtime_quote` trả thêm `provider_timestamp` / `realtime_provider`.
 - [修复] "Mức độ tập trung theo ngành" trang Danh mục không còn luôn là `UNCLASSIFIED`: ngành ICB cấp 2 (Ngân hàng, Bất động sản, Dịch vụ tài chính, Chứng chỉ quỹ...) lấy từ mã `icbCode` trong danh mục tổ chức FiinTrade (cùng request tra `organCode`, không thêm request). Đánh giá Danh mục bằng AI nay nhận cùng dữ liệu ngành (`portfolio_risk.sector_concentration`) và chỉ ước lượng ngành cho mã chưa phân loại. Cần `FIINTRADE_ORIGIN`; thiếu thì giữ `UNCLASSIFIED` như cũ.
 - [改进] Bảng vị thế trang Danh mục: số lượng nhóm nghìn bằng dấu phẩy (`1,300`), giá vốn / giá hiện tại theo kiểu Việt Nam (`70.050`, `24,63`), tiền không còn đệm `.00`; giữ nguyên phần thập phân thật, không làm tròn.

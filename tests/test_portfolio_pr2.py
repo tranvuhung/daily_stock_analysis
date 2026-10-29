@@ -510,6 +510,89 @@ class PortfolioPr2TestCase(unittest.TestCase):
         self.assertAlmostEqual(report["drawdown"]["max_drawdown_pct"], 0.0, places=6)
         self.assertFalse(report["drawdown"]["alert"])
 
+    def _seed_hpg_account(self, name: str = "Main") -> int:
+        # Nạp 20.000, mua HPG 100 x 100 ngày 01-01 -> equity 20.000 (tiền 10.000 + cổ phiếu 10.000).
+        aid = self.service.create_account(name=name, broker="Demo", market="vn", base_currency="VND")["id"]
+        self.service.record_cash_ledger(
+            account_id=aid, event_date=date(2026, 1, 1), direction="in", amount=20000, currency="VND"
+        )
+        self.service.record_trade(
+            account_id=aid,
+            symbol="HPG",
+            trade_date=date(2026, 1, 1),
+            side="buy",
+            quantity=100,
+            price=100,
+            market="vn",
+            currency="VND",
+        )
+        return aid
+
+    def test_risk_drawdown_ignores_withdrawal(self) -> None:
+        aid = self._seed_hpg_account()
+        self._save_close("HPG", date(2026, 1, 1), 100.0)
+        self._save_close("HPG", date(2026, 1, 2), 100.0)
+        # Rút 10.000 khi giá không đổi: equity 20.000 -> 10.000 nhưng không lỗ đồng nào.
+        self.service.record_cash_ledger(
+            account_id=aid, event_date=date(2026, 1, 2), direction="out", amount=10000, currency="VND"
+        )
+
+        report = self.risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 2), cost_method="fifo")
+
+        self.assertEqual(report["drawdown"]["method"], "time_weighted")
+        self.assertAlmostEqual(report["drawdown"]["max_drawdown_pct"], 0.0, places=6)
+        self.assertAlmostEqual(report["drawdown"]["net_external_flow"], -10000.0, places=6)
+        self.assertFalse(report["drawdown"]["alert"])
+
+    def test_risk_drawdown_deposit_does_not_hide_loss(self) -> None:
+        aid = self._seed_hpg_account()
+        self._save_close("HPG", date(2026, 1, 1), 100.0)
+        self._save_close("HPG", date(2026, 1, 2), 80.0)
+        self._save_close("HPG", date(2026, 1, 5), 80.0)
+        # 01-02: lỗ 2.000 / 20.000 = 10%. 01-05: nạp 10.000, giá giữ 80 -> vẫn sụt 10%.
+        self.service.record_cash_ledger(
+            account_id=aid, event_date=date(2026, 1, 5), direction="in", amount=10000, currency="VND"
+        )
+
+        report = self.risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 5), cost_method="fifo")
+
+        self.assertAlmostEqual(report["drawdown"]["current_drawdown_pct"], 10.0, places=4)
+        self.assertAlmostEqual(report["drawdown"]["max_drawdown_pct"], 10.0, places=4)
+
+    def test_risk_drawdown_flow_on_non_trading_day_carries_forward(self) -> None:
+        aid = self._seed_hpg_account()
+        self._save_close("HPG", date(2026, 1, 1), 100.0)
+        self._save_close("HPG", date(2026, 1, 5), 100.0)
+        # Rút tiền thứ 7 (01-03, không có snapshot) -> tính vào phiên thứ 2 (01-05), không tạo sụt giảm.
+        self.service.record_cash_ledger(
+            account_id=aid, event_date=date(2026, 1, 3), direction="out", amount=5000, currency="VND"
+        )
+
+        report = self.risk_service.get_risk_report(account_id=aid, as_of=date(2026, 1, 5), cost_method="fifo")
+
+        self.assertAlmostEqual(report["drawdown"]["max_drawdown_pct"], 0.0, places=6)
+        self.assertAlmostEqual(report["drawdown"]["net_external_flow"], -5000.0, places=6)
+
+    def test_risk_drawdown_all_accounts_transfer_cancels_out(self) -> None:
+        aid_a = self._seed_hpg_account("A")
+        aid_b = self._seed_hpg_account("B")
+        self._save_close("HPG", date(2026, 1, 1), 100.0)
+        self._save_close("HPG", date(2026, 1, 2), 100.0)
+        # Chuyển 8.000 từ A sang B cùng ngày: tổng danh mục không đổi.
+        self.service.record_cash_ledger(
+            account_id=aid_a, event_date=date(2026, 1, 2), direction="out", amount=8000, currency="VND"
+        )
+        self.service.record_cash_ledger(
+            account_id=aid_b, event_date=date(2026, 1, 2), direction="in", amount=8000, currency="VND"
+        )
+
+        report = self.risk_service.get_risk_report(account_id=None, as_of=date(2026, 1, 2), cost_method="fifo")
+        report_a = self.risk_service.get_risk_report(account_id=aid_a, as_of=date(2026, 1, 2), cost_method="fifo")
+
+        self.assertAlmostEqual(report["drawdown"]["max_drawdown_pct"], 0.0, places=6)
+        self.assertAlmostEqual(report["drawdown"]["net_external_flow"], 0.0, places=6)
+        self.assertAlmostEqual(report_a["drawdown"]["max_drawdown_pct"], 0.0, places=6)
+
     def test_import_parses_vietnamese_dates_and_numbers(self) -> None:
         csv_text = (
             "Ngày giao dịch,Mã CK,Loại lệnh,Khối lượng khớp,Giá khớp,Phí\n"

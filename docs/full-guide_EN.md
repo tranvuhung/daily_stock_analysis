@@ -1428,7 +1428,7 @@ A: Check if Actions is enabled, and if cron expression is correct (note it's UTC
 
 ### Drawdown and CSV import notes
 
-- Drawdown skips weekends (no snapshot backfill for Saturday/Sunday) and excludes dates where any snapshot had a missing price; the number of excluded dates is reported as `drawdown.excluded_points`. Deposits and withdrawals are not yet adjusted for.
+- Drawdown skips weekends (no snapshot backfill for Saturday/Sunday) and excludes dates where any snapshot had a missing price; the number of excluded dates is reported as `drawdown.excluded_points`. Deposits and withdrawals are excluded: drawdown is measured on a time-weighted return index (`drawdown.method=time_weighted`), with the window's net external cash flow reported as `drawdown.net_external_flow`.
 - CSV import reads UTF-8, UTF-16 (BOM, usually tab-separated) and cp1258 files, parses non-ISO dates as day-first (`05/03/2026` is 5 March), and accepts Vietnamese number formats (`25.300` = 25300, `25,3` = 25.3, `1.234,5` = 1234.5). Rows are committed in date order (buys before sells on the same day), so newest-first exports no longer fail with oversell errors. Rows imported earlier with wrong dates or numbers are not corrected automatically; delete them and re-import.
 
 ## Agent Tool Data Cache And Persistence

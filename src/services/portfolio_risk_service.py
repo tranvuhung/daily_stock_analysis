@@ -467,6 +467,8 @@ class PortfolioRiskService:
                 "current_drawdown_pct": 0.0,
                 "alert": False,
                 "fx_stale": False,
+                "method": "time_weighted",
+                "net_external_flow": 0.0,
             }
 
         # Loại cả ngày nếu là ngày không giao dịch hoặc có tài khoản thiếu giá (equity bị đánh giá
@@ -494,17 +496,37 @@ class PortfolioRiskService:
 
         excluded_points = len(excluded_dates)
         series: List[Tuple[str, float]] = sorted(grouped.items(), key=lambda item: item[0])
-        peak = 0.0
+        flows = self._load_external_flows(account_id=account_id, as_of_date=as_of_date)
+
+        # Drawdown trên chỉ số hiệu suất time-weighted, loại nạp/rút tiền (dòng tiền ngoài):
+        # r_t = (E_t - F_t) / E_{t-1} - 1, F_t = nạp - rút trong (điểm trước, t]. Quy ước dòng tiền cuối
+        # ngày: snapshot ngày t đã gồm khoản nạp/rút ngày t (replay xử lý tiền trước lệnh). Dòng tiền rơi
+        # vào ngày bị loại tự cộng sang điểm hợp lệ kế tiếp. Cổ tức tiền không phải dòng tiền ngoài.
+        # Time-weighted index excluding deposits/withdrawals; flows are treated as end-of-day.
+        index = 1.0
+        peak = 1.0
         max_drawdown = 0.0
         current_drawdown = 0.0
-        for _, equity in series:
-            peak = max(peak, equity)
-            if peak <= 0:
-                drawdown = 0.0
-            else:
-                drawdown = (peak - equity) / peak * 100.0
+        net_external_flow = 0.0
+        prev_date: Optional[date] = None
+        prev_equity = 0.0
+        for key, equity in series:
+            point_date = date.fromisoformat(key)
+            if prev_date is not None:
+                period_flow = sum(
+                    amount for flow_date, amount in flows.items() if prev_date < flow_date <= point_date
+                )
+                net_external_flow += period_flow
+                # Tài khoản rỗng ở điểm trước (chưa nạp / đã rút hết) -> không có lợi suất.
+                # Empty equity at the previous point has no defined return.
+                if prev_equity > 0:
+                    index *= (equity - period_flow) / prev_equity
+            peak = max(peak, index)
+            drawdown = (peak - index) / peak * 100.0 if peak > 0 else 0.0
             max_drawdown = max(max_drawdown, drawdown)
             current_drawdown = drawdown
+            prev_date = point_date
+            prev_equity = equity
 
         return {
             "series_points": len(series),
@@ -513,7 +535,32 @@ class PortfolioRiskService:
             "current_drawdown_pct": round(current_drawdown, 4),
             "alert": bool(max_drawdown >= threshold_pct),
             "fx_stale": stale_flag,
+            "method": "time_weighted",
+            "net_external_flow": round(net_external_flow, 6),
         }
+
+    def _load_external_flows(self, *, account_id: Optional[int], as_of_date: date) -> Dict[date, float]:
+        """Nạp - rút tiền ròng theo ngày (VND) của cùng tập tài khoản với chuỗi snapshot drawdown.
+
+        Net deposits minus withdrawals per date for the accounts covered by the drawdown series.
+        """
+
+        if account_id is not None:
+            account_ids = [int(account_id)]
+        else:
+            account_ids = [int(account.id) for account in self.repo.list_accounts(include_inactive=False)]
+        flows: Dict[date, float] = {}
+        for aid in account_ids:
+            for entry in self.repo.list_cash_ledger(aid, as_of_date):
+                converted, _, _ = self.portfolio_service.convert_amount(
+                    amount=float(entry.amount or 0.0),
+                    from_currency=str(entry.currency or "VND"),
+                    to_currency="VND",
+                    as_of_date=entry.event_date,
+                )
+                sign = 1.0 if str(entry.direction or "").strip().lower() == "in" else -1.0
+                flows[entry.event_date] = flows.get(entry.event_date, 0.0) + sign * converted
+        return flows
 
     @staticmethod
     def _snapshot_has_missing_price(row: Any) -> bool:
