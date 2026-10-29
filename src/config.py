@@ -1188,6 +1188,8 @@ class Config:
     portfolio_risk_stop_loss_alert_pct: float = 10.0
     portfolio_risk_stop_loss_near_ratio: float = 0.8
     portfolio_risk_lookback_days: int = 180
+    # Số bản Đánh giá danh mục bằng AI giữ lại mỗi phạm vi (tài khoản + phương pháp giá vốn).
+    portfolio_ai_review_history_limit: int = 50
 
     # Discord bot status
     discord_bot_status: str = DEFAULT_DISCORD_BOT_STATUS
@@ -2129,6 +2131,12 @@ class Config:
                 os.getenv('PORTFOLIO_RISK_LOOKBACK_DAYS'),
                 180,
                 field_name='PORTFOLIO_RISK_LOOKBACK_DAYS',
+                minimum=1,
+            ),
+            portfolio_ai_review_history_limit=parse_env_int(
+                os.getenv('PORTFOLIO_AI_REVIEW_HISTORY_LIMIT'),
+                50,
+                field_name='PORTFOLIO_AI_REVIEW_HISTORY_LIMIT',
                 minimum=1,
             ),
         )

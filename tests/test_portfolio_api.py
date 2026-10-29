@@ -861,6 +861,60 @@ class PortfolioApiTestCase(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.json().get("error"), "agent_unavailable")
 
+    def test_ai_review_history_endpoints(self) -> None:
+        from src.services import portfolio_review_service as review_module
+
+        account_id = self.client.post(
+            "/api/v1/portfolio/accounts",
+            json={"name": "Main", "broker": "Demo", "market": "vn", "base_currency": "VND"},
+        ).json()["id"]
+        self.client.post(
+            "/api/v1/portfolio/trades",
+            json={"account_id": account_id, "symbol": "HPG", "trade_date": "2026-01-02", "side": "buy",
+                  "quantity": 100, "price": 100, "market": "vn", "currency": "VND"},
+        )
+
+        def fake_run(config, ctx, *, timeout_s):
+            ctx.data["portfolio_assessment"] = {"portfolio_risk_score": 4, "summary": "đã lưu",
+                                                "positions": [{"code": "HPG", "signal": "hold"}]}
+            return SimpleNamespace(success=True, tokens_used=5), False
+
+        with patch("api.v1.endpoints.portfolio.get_config") as get_config, \
+                patch.object(review_module, "run_portfolio_agent", side_effect=fake_run):
+            config = Config.get_instance()
+            get_config.return_value = config
+            with patch.object(Config, "is_agent_available", return_value=True):
+                posted = self.client.post(
+                    "/api/v1/portfolio/ai-review", json={"account_id": account_id, "question": "Rủi ro?"}
+                ).json()
+
+        self.assertTrue(posted["success"])
+        review_id = posted["review_id"]
+        self.assertIsNotNone(review_id)
+        self.assertTrue(posted["created_at"])
+        self.assertEqual(posted["cost_method"], "fifo")
+
+        listing = self.client.get(f"/api/v1/portfolio/ai-reviews?account_id={account_id}").json()
+        self.assertEqual(listing["total"], 1)
+        self.assertEqual(listing["items"][0]["id"], review_id)
+        self.assertEqual(listing["items"][0]["risk_score"], 4.0)
+        self.assertEqual(listing["items"][0]["question"], "Rủi ro?")
+        # Phạm vi tất cả tài khoản (không truyền account_id) là phạm vi riêng.
+        self.assertEqual(self.client.get("/api/v1/portfolio/ai-reviews").json()["total"], 0)
+
+        detail = self.client.get(f"/api/v1/portfolio/ai-reviews/{review_id}")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["assessment"]["summary"], "đã lưu")
+        self.assertEqual(detail.json()["assessment"], posted["assessment"])
+        self.assertEqual(detail.json()["account_id"], account_id)
+
+        self.assertEqual(self.client.delete(f"/api/v1/portfolio/ai-reviews/{review_id}").status_code, 200)
+        missing = self.client.get(f"/api/v1/portfolio/ai-reviews/{review_id}")
+        self.assertEqual(missing.status_code, 404)
+        self.assertEqual(missing.json().get("error"), "not_found")
+        self.assertEqual(self.client.delete(f"/api/v1/portfolio/ai-reviews/{review_id}").status_code, 404)
+        self.assertEqual(self.client.get("/api/v1/portfolio/ai-reviews?cost_method=bad").status_code, 422)
+
     def test_delete_trade_busy_returns_409(self) -> None:
         with patch(
             "api.v1.endpoints.portfolio.PortfolioService.delete_trade_event",

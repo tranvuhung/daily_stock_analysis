@@ -4,11 +4,54 @@ import { UiLanguageProvider } from '../../../contexts/UiLanguageContext';
 import { UI_LANGUAGE_STORAGE_KEY } from '../../../utils/uiLanguage';
 import { PortfolioAiReviewCard } from '../PortfolioAiReviewCard';
 
-const { aiReview } = vi.hoisted(() => ({ aiReview: vi.fn() }));
+const { aiReview, listAiReviews, getAiReview, deleteAiReview } = vi.hoisted(() => ({
+  aiReview: vi.fn(),
+  listAiReviews: vi.fn(),
+  getAiReview: vi.fn(),
+  deleteAiReview: vi.fn(),
+}));
 
 vi.mock('../../../api/portfolio', () => ({
-  portfolioApi: { aiReview },
+  portfolioApi: { aiReview, listAiReviews, getAiReview, deleteAiReview },
 }));
+
+const savedReview = (id: number, summary: string, riskScore: number) => ({
+  success: true,
+  reviewId: id,
+  createdAt: `2026-10-2${id}T09:00:00`,
+  asOf: '2026-10-28',
+  accountId: 7,
+  costMethod: 'fifo',
+  timedOut: false,
+  durationS: 30,
+  tokensUsed: 10,
+  holdingCount: 2,
+  signalCoverage: { withSignal: 2, withoutSignal: [] },
+  riskAvailable: true,
+  assessment: {
+    portfolioRiskScore: riskScore,
+    totalStocks: 2,
+    summary,
+    positions: [],
+    cashRatio: 0.1,
+    suggestedCashRatio: null,
+    sectorWarnings: [],
+    correlationWarnings: [],
+    crossMarketNotes: [],
+    rebalanceSuggestions: [],
+    dataGaps: [],
+  },
+});
+
+const listItem = (id: number, riskScore: number) => ({
+  id,
+  createdAt: `2026-10-2${id}T09:00:00`,
+  asOf: '2026-10-28',
+  accountId: 7,
+  costMethod: 'fifo',
+  riskScore,
+  holdingCount: 2,
+});
 
 const renderCard = (props: Partial<React.ComponentProps<typeof PortfolioAiReviewCard>> = {}) =>
   render(
@@ -20,6 +63,10 @@ const renderCard = (props: Partial<React.ComponentProps<typeof PortfolioAiReview
 describe('PortfolioAiReviewCard', () => {
   beforeEach(() => {
     aiReview.mockReset();
+    listAiReviews.mockReset();
+    getAiReview.mockReset();
+    deleteAiReview.mockReset();
+    listAiReviews.mockResolvedValue({ items: [], total: 0 });
     window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'vi');
   });
 
@@ -86,5 +133,54 @@ describe('PortfolioAiReviewCard', () => {
   it('disables the button when there are no positions', () => {
     renderCard({ positionCount: 0 });
     expect(screen.getByRole('button', { name: 'Đánh giá danh mục bằng AI' })).toBeDisabled();
+  });
+
+  it('loads the latest saved review on mount and switches via history', async () => {
+    listAiReviews.mockResolvedValue({ items: [listItem(2, 6), listItem(1, 3)], total: 2 });
+    getAiReview.mockImplementation((id: number) =>
+      Promise.resolve(id === 2 ? savedReview(2, 'Bản mới nhất', 6) : savedReview(1, 'Bản cũ', 3)),
+    );
+    renderCard();
+
+    expect(await screen.findByText('Bản mới nhất')).toBeInTheDocument();
+    expect(listAiReviews).toHaveBeenCalledWith({ accountId: 7, costMethod: 'fifo', limit: 20 });
+    expect(getAiReview).toHaveBeenCalledWith(2);
+    expect(screen.getByText(/Lưu lúc/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Lịch sử đánh giá'), { target: { value: '1' } });
+    expect(await screen.findByText('Bản cũ')).toBeInTheDocument();
+  });
+
+  it('adds a new successful run to the top of the history', async () => {
+    aiReview.mockResolvedValue(savedReview(3, 'Vừa chạy', 5));
+    renderCard();
+    await waitFor(() => expect(listAiReviews).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đánh giá danh mục bằng AI' }));
+
+    expect(await screen.findByText('Vừa chạy')).toBeInTheDocument();
+    const select = screen.getByLabelText('Lịch sử đánh giá') as HTMLSelectElement;
+    expect(select.value).toBe('3');
+    expect(select.options).toHaveLength(1);
+  });
+
+  it('deletes the shown review and falls back to the next one', async () => {
+    listAiReviews.mockResolvedValue({ items: [listItem(2, 6), listItem(1, 3)], total: 2 });
+    getAiReview.mockImplementation((id: number) =>
+      Promise.resolve(id === 2 ? savedReview(2, 'Bản mới nhất', 6) : savedReview(1, 'Bản cũ', 3)),
+    );
+    deleteAiReview.mockResolvedValue(undefined);
+    renderCard();
+    await screen.findByText('Bản mới nhất');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá bản này' }));
+    // Nút xác nhận trong ConfirmDialog là nút "Xoá bản này" thứ hai. / Second match is the dialog confirm.
+    const deleteButtons = await screen.findAllByRole('button', { name: 'Xoá bản này' });
+    expect(deleteButtons).toHaveLength(2);
+    fireEvent.click(deleteButtons[1]);
+
+    expect(await screen.findByText('Bản cũ')).toBeInTheDocument();
+    expect(deleteAiReview).toHaveBeenCalledWith(2);
+    expect((screen.getByLabelText('Lịch sử đánh giá') as HTMLSelectElement).options).toHaveLength(1);
   });
 });

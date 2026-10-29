@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from src.storage import (
     DatabaseManager,
     PortfolioAccount,
+    PortfolioAiReview,
     PortfolioCashLedger,
     PortfolioCorporateAction,
     PortfolioDailySnapshot,
@@ -1138,3 +1139,89 @@ class PortfolioRepository:
                 existing.updated_at = datetime.now()
 
             session.commit()
+
+    # ------------------------------------------------------------------
+    # Đánh giá danh mục bằng AI / AI portfolio reviews
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _ai_review_scope(account_id: Optional[int], cost_method: str) -> Any:
+        # account_id None = phạm vi tất cả tài khoản (cột NULL). / None means the all-accounts scope.
+        account_cond = (
+            PortfolioAiReview.account_id.is_(None)
+            if account_id is None
+            else PortfolioAiReview.account_id == int(account_id)
+        )
+        return and_(account_cond, PortfolioAiReview.cost_method == cost_method)
+
+    def add_ai_review(
+        self,
+        *,
+        account_id: Optional[int],
+        cost_method: str,
+        as_of: Optional[date],
+        question: Optional[str],
+        risk_score: Optional[float],
+        holding_count: int,
+        payload: str,
+        keep_limit: int,
+    ) -> PortfolioAiReview:
+        """Lưu một bản đánh giá rồi chỉ giữ ``keep_limit`` bản mới nhất của cùng phạm vi.
+
+        Insert one review and prune the scope to the newest ``keep_limit`` rows in the same session.
+        """
+        with self.db.get_session() as session:
+            row = PortfolioAiReview(
+                account_id=account_id,
+                cost_method=cost_method,
+                as_of=as_of,
+                question=question,
+                risk_score=risk_score,
+                holding_count=holding_count,
+                payload=payload,
+                created_at=datetime.now(),
+            )
+            session.add(row)
+            session.flush()
+            scope = self._ai_review_scope(account_id, cost_method)
+            keep_ids = select(PortfolioAiReview.id).where(scope).order_by(
+                desc(PortfolioAiReview.created_at), desc(PortfolioAiReview.id)
+            ).limit(max(int(keep_limit), 1))
+            session.execute(
+                delete(PortfolioAiReview).where(and_(scope, PortfolioAiReview.id.not_in(keep_ids)))
+            )
+            session.commit()
+            session.refresh(row)
+            return row
+
+    def list_ai_reviews(
+        self,
+        *,
+        account_id: Optional[int],
+        cost_method: str,
+        limit: int,
+        offset: int = 0,
+    ) -> Tuple[List[PortfolioAiReview], int]:
+        with self.db.get_session() as session:
+            scope = self._ai_review_scope(account_id, cost_method)
+            total = session.execute(
+                select(func.count()).select_from(PortfolioAiReview).where(scope)
+            ).scalar_one()
+            rows = session.execute(
+                select(PortfolioAiReview)
+                .where(scope)
+                .order_by(desc(PortfolioAiReview.created_at), desc(PortfolioAiReview.id))
+                .limit(limit)
+                .offset(offset)
+            ).scalars().all()
+            return list(rows), int(total or 0)
+
+    def get_ai_review(self, review_id: int) -> Optional[PortfolioAiReview]:
+        with self.db.get_session() as session:
+            return session.get(PortfolioAiReview, int(review_id))
+
+    def delete_ai_review(self, review_id: int) -> bool:
+        with self.db.get_session() as session:
+            result = session.execute(delete(PortfolioAiReview).where(PortfolioAiReview.id == int(review_id)))
+            session.commit()
+            return bool(result.rowcount)

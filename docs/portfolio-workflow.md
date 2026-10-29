@@ -33,6 +33,7 @@ Thị trường duy nhất là Việt Nam (`market=vn`, tiền tệ VND); không
 | `portfolio_corporate_actions` | `cash_dividend` (cổ tức tiền) và `split_adjustment` (tách / gộp) |
 | `portfolio_positions`, `portfolio_position_lots` | **Cache** vị thế và lô FIFO của lần replay gần nhất |
 | `portfolio_daily_snapshots` | **Cache** snapshot theo ngày, duy nhất theo `(account, ngày, cost_method)`, có `payload` JSON |
+| `portfolio_ai_reviews` | Kết quả Đánh giá danh mục bằng AI (chỉ lượt thành công), theo phạm vi `(account_id, cost_method)`; `account_id` NULL = tất cả tài khoản |
 
 Không có "vị thế hiện tại" lưu cố định: vị thế luôn được dựng lại bằng cách replay toàn bộ sự kiện. Mỗi lần ghi hoặc xoá sự kiện sẽ xoá cache vị thế / lô của tài khoản và các snapshot từ ngày sự kiện trở đi (`_invalidate_account_cache_in_session`).
 
@@ -125,11 +126,18 @@ Hạn chế còn lại:
 
 | Đường vào | Thành phần | Dùng dữ liệu danh mục thật? |
 | --- | --- | --- |
-| Nút **Đánh giá danh mục bằng AI** → `POST /ai-review` | `PortfolioReviewService` → `PortfolioAgent` | Có: snapshot + rủi ro + tín hiệu AI mới nhất, tỷ trọng do server tính |
+| Nút **Đánh giá danh mục bằng AI** → `POST /ai-review` | `PortfolioReviewService` → `PortfolioAgent` | Có: snapshot + rủi ro + tín hiệu AI mới nhất, tỷ trọng do server tính. Lượt thành công được lưu (xem dưới) |
 | Nút **Phân tích** một mã đang nắm → `POST /positions/{symbol}/analysis` | Pipeline phân tích thường (legacy hoặc agent) qua task queue | Gián tiếp: `portfolio_context` (số lượng, giá vốn, lãi/lỗ) vào khối `portfolio` của context pack (`analysis_context_builder.py`) |
 | Chat `/chat` hoặc single-agent | Tool `get_portfolio_snapshot` | Có, khi agent tự gọi tool; backend Codex không thấy tool này |
 | `/ask` 2-5 mã (bot) | `PortfolioAgent` overlay | Không: chỉ ý kiến của các mã vừa phân tích; bot hiện chưa nhận lệnh (`ALL_PLATFORMS = {}`) |
 | Tín hiệu AI theo vị thế | `DecisionSignalService` (`holding_only`) | Đọc bảng cache `portfolio_positions`, không replay |
+
+Lưu kết quả Đánh giá danh mục bằng AI:
+
+- Chỉ lượt thành công được lưu vào `portfolio_ai_reviews` (điểm rủi ro, số mã, câu hỏi, `payload` JSON gồm `assessment`, `signal_coverage`, `risk_available`, `duration_s`, `tokens_used`). Timeout, lỗi agent hay `no_positions` không lưu. Lỗi khi ghi DB chỉ ghi log; kết quả vẫn trả về với `review_id=null`.
+- Mỗi phạm vi `(account_id, cost_method)` giữ `PORTFOLIO_AI_REVIEW_HISTORY_LIMIT` (mặc định 50) bản mới nhất; lưu bản mới thì bản cũ hơn tự bị xoá.
+- API: `POST /ai-review` trả thêm `review_id`, `created_at`, `cost_method`, `question`; `GET /ai-reviews?account_id=&cost_method=&limit=&offset=` (không truyền `account_id` = phạm vi tất cả tài khoản); `GET /ai-reviews/{id}` trả cùng shape với POST; `DELETE /ai-reviews/{id}`; không có → 404 `not_found`.
+- Web: mở trang hoặc đổi tài khoản / phương pháp giá vốn thì thẻ tải bản mới nhất của phạm vi đó; ô **Lịch sử đánh giá** chọn xem lại bản cũ, nút **Xoá bản này** xoá bản đang xem.
 
 ## 9. Hạn chế đã biết
 
@@ -138,4 +146,3 @@ Hạn chế còn lại:
 - Phân ngành phụ thuộc FiinTrade: không cấu hình `FIINTRADE_ORIGIN` thì mọi mã là `UNCLASSIFIED` (chưa có nguồn dự phòng). PortfolioAgent chỉ ước lượng ngành cho mã `UNCLASSIFIED`.
 - Chưa mô hình hoá T+2 trong sổ lệnh (bán trước khi hàng về vẫn được ghi), lô 100 và thuế cổ tức.
 - `date.today()` của service theo giờ máy chủ, không phải giờ Việt Nam.
-- Kết quả đánh giá AI không được lưu.

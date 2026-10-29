@@ -328,4 +328,26 @@ export interface PortfolioAiReviewResponse {
   holdingCount: number;
   signalCoverage: { withSignal: number; withoutSignal: string[] };
   riskAvailable: boolean;
+  // Có khi bản đánh giá đã được lưu DB. / Set when the review was persisted.
+  reviewId?: number | null;
+  createdAt?: string | null;
+  costMethod?: PortfolioCostMethod | null;
+  question?: string | null;
+}
+
+// Lịch sử đánh giá đã lưu (GET /api/v1/portfolio/ai-reviews). / Saved review history.
+export interface PortfolioAiReviewListItem {
+  id: number;
+  createdAt?: string | null;
+  asOf?: string | null;
+  accountId?: number | null;
+  costMethod: PortfolioCostMethod;
+  riskScore?: number | null;
+  holdingCount: number;
+  question?: string | null;
+}
+
+export interface PortfolioAiReviewListResponse {
+  items: PortfolioAiReviewListItem[];
+  total: number;
 }

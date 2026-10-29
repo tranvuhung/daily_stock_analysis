@@ -332,3 +332,24 @@ class PortfolioAiReviewResponse(BaseModel):
     holding_count: int = 0
     signal_coverage: PortfolioAiReviewSignalCoverage = Field(default_factory=PortfolioAiReviewSignalCoverage)
     risk_available: bool = False
+    # Có khi bản đánh giá đã được lưu DB (chỉ lượt thành công). / Set when the review was persisted.
+    review_id: Optional[int] = None
+    created_at: Optional[str] = None
+    cost_method: Optional[str] = None
+    question: Optional[str] = None
+
+
+class PortfolioAiReviewListItem(BaseModel):
+    id: int
+    created_at: Optional[str] = None
+    as_of: Optional[str] = None
+    account_id: Optional[int] = None
+    cost_method: str
+    risk_score: Optional[float] = None
+    holding_count: int = 0
+    question: Optional[str] = None
+
+
+class PortfolioAiReviewListResponse(BaseModel):
+    items: List[PortfolioAiReviewListItem] = Field(default_factory=list)
+    total: int = 0

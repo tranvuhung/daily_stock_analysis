@@ -1,14 +1,18 @@
 import type React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { portfolioApi } from '../../api/portfolio';
 import type { ParsedApiError } from '../../api/error';
 import { getParsedApiError } from '../../api/error';
-import { ApiErrorAlert, Badge, Card, InlineAlert } from '../common';
+import { ApiErrorAlert, Badge, Card, ConfirmDialog, InlineAlert } from '../common';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
 import { formatUiText } from '../../i18n/uiText';
 import { PORTFOLIO_TEXT } from '../../locales/featureText';
 import type { DecisionAction } from '../../types/analysis';
-import type { PortfolioAiReviewResponse, PortfolioCostMethod } from '../../types/portfolio';
+import type {
+  PortfolioAiReviewListItem,
+  PortfolioAiReviewResponse,
+  PortfolioCostMethod,
+} from '../../types/portfolio';
 import { buildDecisionActionLabelMap } from '../../utils/decisionAction';
 
 interface PortfolioAiReviewCardProps {
@@ -20,6 +24,20 @@ interface PortfolioAiReviewCardProps {
 function formatWeight(value?: number | null): string {
   if (value == null || !Number.isFinite(value)) return '--';
   return `${(value * 100).toFixed(1)}%`;
+}
+
+// Thời điểm lưu theo giờ trình duyệt. / Saved time in the browser locale.
+function formatSavedAt(value: string | null | undefined, language: string): string {
+  if (!value) return '--';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(language === 'vi' ? 'vi-VN' : 'en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 // Điểm rủi ro 1-10: <=3 thấp, >=7 cao. / Risk score tone.
@@ -46,7 +64,8 @@ const TextList: React.FC<{ title: string; items: string[] }> = ({ title, items }
 
 /**
  * Thẻ "Đánh giá danh mục bằng AI": gọi POST /api/v1/portfolio/ai-review và hiển thị kết quả
- * PortfolioAgent. Kết quả chỉ giữ trong state, reset khi đổi tài khoản hoặc phương pháp giá vốn.
+ * PortfolioAgent. Lượt thành công được server lưu; khi mở trang / đổi tài khoản hoặc phương pháp
+ * giá vốn, thẻ tải bản mới nhất của phạm vi đó và cho chọn xem lại / xoá các bản cũ.
  */
 export const PortfolioAiReviewCard: React.FC<PortfolioAiReviewCardProps> = ({
   accountId,
@@ -65,25 +84,97 @@ export const PortfolioAiReviewCard: React.FC<PortfolioAiReviewCardProps> = ({
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PortfolioAiReviewResponse | null>(null);
   const [error, setError] = useState<ParsedApiError | null>(null);
+  const [history, setHistory] = useState<PortfolioAiReviewListItem[]>([]);
+  const [historyFailed, setHistoryFailed] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  // Tăng mỗi lần đổi phạm vi để bỏ response về muộn của phạm vi cũ. / Drops stale responses.
+  const scopeVersion = useRef(0);
 
   useEffect(() => {
+    scopeVersion.current += 1;
+    const version = scopeVersion.current;
     setResult(null);
     setError(null);
+    setHistory([]);
+    setHistoryFailed(false);
+    const loadLatest = async () => {
+      try {
+        const listing = await portfolioApi.listAiReviews({ accountId, costMethod, limit: 20 });
+        if (scopeVersion.current !== version) return;
+        setHistory(listing.items);
+        if (listing.items.length > 0) {
+          const latest = await portfolioApi.getAiReview(listing.items[0].id);
+          if (scopeVersion.current === version) setResult(latest);
+        }
+      } catch {
+        if (scopeVersion.current === version) setHistoryFailed(true);
+      }
+    };
+    void loadLatest();
   }, [accountId, costMethod]);
 
   const runReview = async () => {
+    const version = scopeVersion.current;
     setLoading(true);
     setError(null);
     try {
       const response = await portfolioApi.aiReview({ accountId, costMethod });
+      if (scopeVersion.current !== version) return;
       setResult(response);
+      if (response.success && response.reviewId != null) {
+        const item: PortfolioAiReviewListItem = {
+          id: response.reviewId,
+          createdAt: response.createdAt,
+          asOf: response.asOf,
+          accountId: response.accountId,
+          costMethod,
+          riskScore: response.assessment?.portfolioRiskScore,
+          holdingCount: response.holdingCount,
+          question: response.question,
+        };
+        setHistory((prev) => [item, ...prev.filter((entry) => entry.id !== item.id)]);
+      }
     } catch (err) {
+      if (scopeVersion.current !== version) return;
       setResult(null);
       setError(getParsedApiError(err));
     } finally {
       setLoading(false);
     }
   };
+
+  const showReview = async (reviewId: number) => {
+    const version = scopeVersion.current;
+    setError(null);
+    try {
+      const response = await portfolioApi.getAiReview(reviewId);
+      if (scopeVersion.current === version) setResult(response);
+    } catch (err) {
+      if (scopeVersion.current === version) setError(getParsedApiError(err));
+    }
+  };
+
+  const deleteCurrent = async () => {
+    const reviewId = result?.reviewId;
+    if (reviewId == null) return;
+    setDeleting(true);
+    try {
+      await portfolioApi.deleteAiReview(reviewId);
+      const remaining = history.filter((entry) => entry.id !== reviewId);
+      setHistory(remaining);
+      setResult(null);
+      if (remaining.length > 0) await showReview(remaining[0].id);
+    } catch (err) {
+      setError(getParsedApiError(err));
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
+
+  const historyLabel = (entry: PortfolioAiReviewListItem) =>
+    `${formatSavedAt(entry.createdAt, language)} · ${text.aiReviewRiskScore} ${entry.riskScore ?? '--'}/10`;
 
   const assessment = result?.success ? result.assessment : null;
   let failureMessage: string | null = null;
@@ -110,6 +201,43 @@ export const PortfolioAiReviewCard: React.FC<PortfolioAiReviewCardProps> = ({
         </button>
       </div>
 
+      {history.length > 0 ? (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <label className="text-xs text-secondary-text" htmlFor="portfolio-ai-review-history">
+            {text.aiReviewHistory}
+          </label>
+          <select
+            id="portfolio-ai-review-history"
+            className="input-surface h-9 rounded-lg border bg-transparent px-3 text-xs focus:outline-none"
+            value={result?.reviewId != null ? String(result.reviewId) : ''}
+            onChange={(event) => {
+              if (event.target.value) void showReview(Number(event.target.value));
+            }}
+            disabled={loading || deleting}
+          >
+            {result?.reviewId == null ? <option value="">--</option> : null}
+            {history.map((entry) => (
+              <option key={entry.id} value={String(entry.id)}>
+                {historyLabel(entry)}
+              </option>
+            ))}
+          </select>
+          {result?.reviewId != null ? (
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              onClick={() => setConfirmDelete(true)}
+              disabled={loading || deleting}
+            >
+              {text.aiReviewDelete}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {historyFailed ? (
+        <InlineAlert variant="warning" title={text.aiReviewHistoryLoadFailed} message="" className="mb-3" />
+      ) : null}
       {error ? <ApiErrorAlert error={error} className="mb-3" /> : null}
       {failureMessage ? (
         <InlineAlert variant="warning" title={text.aiReviewFailed} message={failureMessage} className="mb-3" />
@@ -134,6 +262,9 @@ export const PortfolioAiReviewCard: React.FC<PortfolioAiReviewCardProps> = ({
                 withSignal: result?.signalCoverage.withSignal ?? 0,
                 duration: result?.durationS ?? 0,
               })}
+              {result?.createdAt
+                ? ` · ${formatUiText(text.aiReviewSavedAt, { time: formatSavedAt(result.createdAt, language) })}`
+                : ''}
             </span>
           </div>
 
@@ -183,6 +314,22 @@ export const PortfolioAiReviewCard: React.FC<PortfolioAiReviewCardProps> = ({
       ) : null}
 
       <p className="mt-3 text-[11px] text-muted-text">{text.aiReviewDisclaimer}</p>
+
+      <ConfirmDialog
+        isOpen={confirmDelete}
+        title={text.aiReviewDeleteTitle}
+        message={formatUiText(text.aiReviewDeleteMessage, {
+          time: formatSavedAt(result?.createdAt, language),
+        })}
+        confirmText={deleting ? text.aiReviewDeleting : text.aiReviewDelete}
+        confirmDisabled={deleting}
+        cancelDisabled={deleting}
+        isDanger
+        onConfirm={() => void deleteCurrent()}
+        onCancel={() => {
+          if (!deleting) setConfirmDelete(false);
+        }}
+      />
     </Card>
   );
 };

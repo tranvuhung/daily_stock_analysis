@@ -671,6 +671,29 @@ class PortfolioDailySnapshot(Base):
     )
 
 
+class PortfolioAiReview(Base):
+    """Kết quả Đánh giá danh mục bằng AI (chỉ lượt thành công).
+
+    Saved PortfolioAgent review; ``account_id`` NULL means the all-accounts scope.
+    """
+
+    __tablename__ = 'portfolio_ai_reviews'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    account_id = Column(Integer, ForeignKey('portfolio_accounts.id'), nullable=True, index=True)
+    cost_method = Column(String(8), nullable=False, default='fifo')  # fifo/avg
+    as_of = Column(Date)
+    question = Column(String(500))
+    risk_score = Column(Float)
+    holding_count = Column(Integer, nullable=False, default=0)
+    payload = Column(Text)
+    created_at = Column(DateTime, default=datetime.now, index=True)
+
+    __table_args__ = (
+        Index('ix_portfolio_ai_review_scope', 'account_id', 'cost_method', 'created_at'),
+    )
+
+
 class ConversationMessage(Base):
     """
     Agent conversation history table

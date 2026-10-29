@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import tempfile
 import time
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -248,6 +250,117 @@ class NormalizeAssessmentTestCase(unittest.TestCase):
         self.assertIsNone(result["positions"][0]["priority"])
         self.assertIsNone(result["positions"][0]["suggested_weight"])
         self.assertEqual(result["data_gaps"], [])
+
+
+class PortfolioReviewPersistenceTestCase(unittest.TestCase):
+    """Lưu kết quả đánh giá AI vào bảng portfolio_ai_reviews (DB SQLite tạm)."""
+
+    def setUp(self):
+        from src.config import Config
+        from src.repositories.portfolio_repo import PortfolioRepository
+        from src.storage import DatabaseManager
+
+        self._db_cls = DatabaseManager
+        self._config_cls = Config
+        self.temp_dir = tempfile.TemporaryDirectory()
+        DatabaseManager.reset_instance()
+        Config.reset_instance()
+        self.db = DatabaseManager(db_url=f"sqlite:///{Path(self.temp_dir.name) / 'review.db'}")
+        self.repo = PortfolioRepository(db_manager=self.db)
+
+    def tearDown(self):
+        self._db_cls.reset_instance()
+        self._config_cls.reset_instance()
+        self.temp_dir.cleanup()
+
+    def _service(self, *, limit=50, repo=None):
+        portfolio_service = MagicMock()
+        portfolio_service.get_portfolio_snapshot.return_value = _snapshot()
+        risk_service = MagicMock()
+        risk_service.get_risk_report.return_value = _risk()
+        signal_service = MagicMock()
+        signal_service.list_signals.return_value = {"items": [], "total": 0}
+        return PortfolioReviewService(
+            portfolio_service=portfolio_service,
+            risk_service=risk_service,
+            decision_signal_service=signal_service,
+            config=SimpleNamespace(report_language="vi", agent_portfolio_agent_timeout_s=0,
+                                   agent_orchestrator_timeout_s=600, portfolio_ai_review_history_limit=limit),
+            repo=repo or self.repo,
+        )
+
+    @staticmethod
+    def _fake_success(config, ctx, *, timeout_s):
+        ctx.data["portfolio_assessment"] = {"portfolio_risk_score": 6, "summary": "ổn",
+                                            "positions": [{"code": "HPG", "signal": "hold"}]}
+        return SimpleNamespace(success=True, tokens_used=50), False
+
+    def test_success_is_persisted_and_readable(self):
+        service = self._service()
+        with patch.object(review_module, "run_portfolio_agent", side_effect=self._fake_success):
+            result = service.review(account_id=None, cost_method="avg", query="  Nên giảm HPG?  ")
+
+        self.assertIsNotNone(result.review_id)
+        self.assertTrue(result.created_at)
+        listing = service.list_reviews(account_id=None, cost_method="avg")
+        self.assertEqual(listing["total"], 1)
+        item = listing["items"][0]
+        self.assertEqual(item["id"], result.review_id)
+        self.assertEqual(item["risk_score"], 6.0)
+        self.assertEqual(item["question"], "Nên giảm HPG?")
+        self.assertEqual(item["as_of"], "2026-01-05")
+        saved = service.get_review(result.review_id)
+        self.assertEqual(saved["assessment"]["summary"], "ổn")
+        self.assertEqual(saved["assessment"]["positions"][0]["code"], "HPG")
+        self.assertEqual(saved["tokens_used"], 50)
+        self.assertEqual(saved["signal_coverage"]["without_signal"], ["HPG", "FPT"])
+        # Phạm vi khác (fifo) không thấy bản avg.
+        self.assertEqual(service.list_reviews(account_id=None, cost_method="fifo")["total"], 0)
+
+    def test_failures_are_not_persisted(self):
+        service = self._service()
+        with patch.object(review_module, "run_portfolio_agent", return_value=(None, True)):
+            self.assertIsNone(service.review().review_id)
+        failed = SimpleNamespace(success=False, error="llm_error", tokens_used=0, failure_reason=None)
+        with patch.object(review_module, "run_portfolio_agent", return_value=(failed, False)):
+            self.assertIsNone(service.review().review_id)
+        self.assertEqual(service.list_reviews(account_id=None)["total"], 0)
+
+    def test_storage_error_is_fail_open(self):
+        broken = MagicMock()
+        broken.add_ai_review.side_effect = RuntimeError("database is locked")
+        service = self._service(repo=broken)
+        with patch.object(review_module, "run_portfolio_agent", side_effect=self._fake_success):
+            result = service.review()
+
+        self.assertTrue(result.success)
+        self.assertIsNone(result.review_id)
+        self.assertEqual(result.assessment["portfolio_risk_score"], 6.0)
+
+    def test_history_is_pruned_per_scope(self):
+        account_id = self.repo.create_account(name="A", broker="Demo", market="vn", base_currency="VND").id
+        service = self._service(limit=2)
+        ids = []
+        with patch.object(review_module, "run_portfolio_agent", side_effect=self._fake_success):
+            other = service.review(account_id=account_id).review_id
+            for _ in range(3):
+                ids.append(service.review(account_id=None).review_id)
+
+        listing = service.list_reviews(account_id=None)
+        self.assertEqual(listing["total"], 2)
+        self.assertEqual([item["id"] for item in listing["items"]], [ids[2], ids[1]])
+        self.assertIsNone(service.get_review(ids[0]))
+        # Phạm vi tài khoản riêng không bị xoá khi tỉa phạm vi tất cả tài khoản.
+        self.assertEqual([item["id"] for item in service.list_reviews(account_id=account_id)["items"]], [other])
+
+    def test_delete_review(self):
+        service = self._service()
+        with patch.object(review_module, "run_portfolio_agent", side_effect=self._fake_success):
+            review_id = service.review().review_id
+
+        self.assertTrue(service.delete_review(review_id))
+        self.assertFalse(service.delete_review(review_id))
+        self.assertIsNone(service.get_review(review_id))
 
 
 if __name__ == "__main__":

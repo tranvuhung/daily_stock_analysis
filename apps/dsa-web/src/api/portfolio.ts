@@ -5,6 +5,7 @@ import type {
   PortfolioAccountItem,
   PortfolioAccountCreateRequest,
   PortfolioAccountListResponse,
+  PortfolioAiReviewListResponse,
   PortfolioAiReviewRequest,
   PortfolioAiReviewResponse,
   PortfolioCashLedgerCreateRequest,
@@ -231,6 +232,29 @@ export const portfolioApi = {
       timeout: 300000,
     });
     return toCamelCase<PortfolioAiReviewResponse>(response.data);
+  },
+
+  async listAiReviews(
+    query: { accountId?: number; costMethod?: PortfolioCostMethod; limit?: number } = {},
+  ): Promise<PortfolioAiReviewListResponse> {
+    const params: Record<string, string | number> = {
+      cost_method: query.costMethod ?? 'fifo',
+      limit: query.limit ?? 20,
+    };
+    if (query.accountId != null) {
+      params.account_id = query.accountId;
+    }
+    const response = await apiClient.get<Record<string, unknown>>('/api/v1/portfolio/ai-reviews', { params });
+    return toCamelCase<PortfolioAiReviewListResponse>(response.data);
+  },
+
+  async getAiReview(reviewId: number): Promise<PortfolioAiReviewResponse> {
+    const response = await apiClient.get<Record<string, unknown>>(`/api/v1/portfolio/ai-reviews/${reviewId}`);
+    return toCamelCase<PortfolioAiReviewResponse>(response.data);
+  },
+
+  async deleteAiReview(reviewId: number): Promise<void> {
+    await apiClient.delete(`/api/v1/portfolio/ai-reviews/${reviewId}`);
   },
 
   async listCorporateActions(query: CorporateListQuery = {}): Promise<PortfolioCorporateActionListResponse> {

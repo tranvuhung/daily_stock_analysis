@@ -289,7 +289,7 @@ flowchart TD
 - **Prompt gọn:** `_inject_cached_data` chỉ nạp `portfolio_summary` và `portfolio_risk` dạng JSON; danh mục nắm giữ (tối đa 40 dòng theo tỷ trọng) và ý kiến từng mã được hiển thị trong user message, không bị nạp trùng hay cắt ở 8000 ký tự.
 - **Output:** `portfolio_risk_score` (1-10), `positions[{code, current_weight, suggested_weight, signal, priority, note}]`, `cash_ratio`, `suggested_cash_ratio`, `sector_warnings`, `correlation_warnings`, `cross_market_notes`, `rebalance_suggestions`, `data_gaps`, `summary`. `post_process` vẫn suy tín hiệu tổng từ điểm rủi ro (≤3 buy, ≥7 sell).
 - **Timeout:** `resolve_portfolio_agent_timeout` (:54) — `AGENT_PORTFOLIO_AGENT_TIMEOUT_S` nếu > 0, nếu không thì min(`AGENT_ORCHESTRATOR_TIMEOUT_S`, 240); `/ask` lấy thêm min với thời gian còn lại. Hết giờ thì API trả 200 với `success=false, timed_out=true`.
-- **Không lưu kết quả** vào DB; Web giữ trong state và xoá khi đổi tài khoản / phương pháp giá vốn.
+- **Lưu kết quả:** lượt thành công từ `POST /ai-review` được lưu vào `portfolio_ai_reviews` (giữ `PORTFOLIO_AI_REVIEW_HISTORY_LIMIT` bản mỗi phạm vi tài khoản + phương pháp giá vốn); Web tự hiện bản mới nhất và cho xem lại / xoá lịch sử. Overlay `/ask` không lưu. Chi tiết xem [portfolio-workflow.md §8](portfolio-workflow.md#8-điểm-agent--llm-tham-gia).
 
 Luồng dữ liệu danh mục (snapshot, rủi ro, import CSV, cảnh báo) xem [portfolio-workflow.md](portfolio-workflow.md).
 

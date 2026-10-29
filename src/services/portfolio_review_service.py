@@ -13,15 +13,17 @@ AI portfolio review on real holdings; no per-stock re-analysis and no persistenc
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.agent.protocols import AgentContext, StageFailureReason
 from src.config import Config, get_config
+from src.repositories.portfolio_repo import PortfolioRepository
 from src.services.decision_signal_service import DecisionSignalService
 from src.services.decision_signal_summary import summarize_decision_signal
 from src.services.portfolio_risk_service import PortfolioRiskService
@@ -49,6 +51,9 @@ class PortfolioReviewResult:
     duration_s: float = 0.0
     tokens_used: int = 0
     context_meta: Dict[str, Any] = field(default_factory=dict)
+    # Có giá trị khi lượt thành công đã được lưu DB. / Set once a successful review is persisted.
+    review_id: Optional[int] = None
+    created_at: Optional[str] = None
 
 
 def resolve_portfolio_agent_timeout(config: Config, budget_s: Optional[float] = None) -> float:
@@ -114,9 +119,11 @@ class PortfolioReviewService:
         risk_service: Optional[PortfolioRiskService] = None,
         decision_signal_service: Optional[DecisionSignalService] = None,
         config: Optional[Config] = None,
+        repo: Optional[PortfolioRepository] = None,
     ):
         self.config = config or get_config()
         self.portfolio_service = portfolio_service or PortfolioService()
+        self.repo = repo or self.portfolio_service.repo
         self.risk_service = risk_service or PortfolioRiskService(portfolio_service=self.portfolio_service)
         self.decision_signal_service = decision_signal_service or DecisionSignalService()
 
@@ -359,13 +366,118 @@ class PortfolioReviewService:
                 tokens_used=int(getattr(stage_result, "tokens_used", 0) or 0),
                 context_meta=meta,
             )
-        return PortfolioReviewResult(
+        result = PortfolioReviewResult(
             success=True,
             assessment=normalize_assessment(assessment, ctx.data["portfolio_holdings"], meta),
             duration_s=duration,
             tokens_used=int(stage_result.tokens_used or 0),
             context_meta=meta,
         )
+        self._persist(result, account_id=account_id, cost_method=cost_method, query=query)
+        return result
+
+    # ------------------------------------------------------------------
+    # Lưu trữ / Persistence
+    # ------------------------------------------------------------------
+
+    def _persist(
+        self,
+        result: PortfolioReviewResult,
+        *,
+        account_id: Optional[int],
+        cost_method: str,
+        query: Optional[str],
+    ) -> None:
+        """Lưu lượt thành công (fail-open: lỗi DB chỉ ghi log, kết quả vẫn trả về).
+
+        Persist a successful review; storage errors are logged and never fail the review.
+        """
+        meta = result.context_meta
+        payload = {
+            "assessment": result.assessment,
+            "duration_s": result.duration_s,
+            "tokens_used": result.tokens_used,
+            "signal_coverage": {
+                "with_signal": int(meta.get("with_signal") or 0),
+                "without_signal": list(meta.get("without_signal") or []),
+            },
+            "risk_available": bool(meta.get("risk_available")),
+        }
+        as_of_raw = meta.get("as_of")
+        try:
+            as_of = date.fromisoformat(as_of_raw) if isinstance(as_of_raw, str) else as_of_raw
+            row = self.repo.add_ai_review(
+                account_id=account_id,
+                cost_method=cost_method,
+                as_of=as_of if isinstance(as_of, date) else None,
+                question=(query or "").strip()[:500] or None,
+                risk_score=_to_float(result.assessment.get("portfolio_risk_score")),
+                holding_count=int(meta.get("holding_count") or 0),
+                payload=json.dumps(payload, ensure_ascii=False),
+                keep_limit=int(getattr(self.config, "portfolio_ai_review_history_limit", 50) or 50),
+            )
+            result.review_id = int(row.id)
+            result.created_at = row.created_at.isoformat() if row.created_at else None
+        except Exception as exc:
+            logger.warning("[PortfolioReview] Không lưu được kết quả đánh giá AI: %s", exc)
+
+    @staticmethod
+    def _review_row_to_dict(row: Any) -> Dict[str, Any]:
+        """Dựng lại cùng shape với response POST /ai-review. / Same shape as the POST response."""
+        try:
+            payload = json.loads(row.payload or "{}")
+        except (TypeError, ValueError):
+            payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        return {
+            "success": True,
+            "review_id": int(row.id),
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "as_of": row.as_of.isoformat() if row.as_of else None,
+            "account_id": row.account_id,
+            "cost_method": row.cost_method,
+            "question": row.question,
+            "assessment": payload.get("assessment") or None,
+            "duration_s": float(payload.get("duration_s") or 0.0),
+            "tokens_used": int(payload.get("tokens_used") or 0),
+            "holding_count": int(row.holding_count or 0),
+            "signal_coverage": payload.get("signal_coverage") or {},
+            "risk_available": bool(payload.get("risk_available")),
+        }
+
+    def list_reviews(
+        self,
+        *,
+        account_id: Optional[int],
+        cost_method: str = "fifo",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        rows, total = self.repo.list_ai_reviews(
+            account_id=account_id, cost_method=cost_method, limit=limit, offset=offset
+        )
+        items = [
+            {
+                "id": int(row.id),
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "as_of": row.as_of.isoformat() if row.as_of else None,
+                "account_id": row.account_id,
+                "cost_method": row.cost_method,
+                "risk_score": row.risk_score,
+                "holding_count": int(row.holding_count or 0),
+                "question": row.question,
+            }
+            for row in rows
+        ]
+        return {"items": items, "total": total}
+
+    def get_review(self, review_id: int) -> Optional[Dict[str, Any]]:
+        row = self.repo.get_ai_review(review_id)
+        return self._review_row_to_dict(row) if row is not None else None
+
+    def delete_review(self, review_id: int) -> bool:
+        return self.repo.delete_ai_review(review_id)
 
 
 def normalize_assessment(

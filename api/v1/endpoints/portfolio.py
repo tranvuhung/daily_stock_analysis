@@ -20,6 +20,7 @@ from api.v1.schemas.portfolio import (
     PortfolioAccountListResponse,
     PortfolioAccountUpdateRequest,
     PortfolioAiReviewRequest,
+    PortfolioAiReviewListResponse,
     PortfolioAiReviewResponse,
     PortfolioCashLedgerListResponse,
     PortfolioCashLedgerCreateRequest,
@@ -676,7 +677,7 @@ def get_risk_report(
     summary="AI portfolio review",
     description=(
         "Run PortfolioAgent on current holdings, risk report and latest AI signals. "
-        "Synchronous with an internal timeout; the result is not persisted."
+        "Synchronous with an internal timeout; successful reviews are persisted (see GET /ai-reviews)."
     ),
 )
 async def ai_review(request: PortfolioAiReviewRequest) -> PortfolioAiReviewResponse:
@@ -712,4 +713,62 @@ async def ai_review(request: PortfolioAiReviewRequest) -> PortfolioAiReviewRespo
             "without_signal": list(meta.get("without_signal") or []),
         },
         risk_available=bool(meta.get("risk_available")),
+        review_id=result.review_id,
+        created_at=result.created_at,
+        cost_method=request.cost_method,
+        question=request.question,
     )
+
+
+@router.get(
+    "/ai-reviews",
+    response_model=PortfolioAiReviewListResponse,
+    responses={500: {"model": ErrorResponse}},
+    summary="List saved AI portfolio reviews",
+    description="Newest first, per scope (account_id + cost_method). Omit account_id for the all-accounts scope.",
+)
+def list_ai_reviews(
+    account_id: Optional[int] = Query(None, description="Account id; omit for the all-accounts scope"),
+    cost_method: str = Query("fifo", pattern="^(fifo|avg)$", description="Cost method: fifo or avg"),
+    limit: int = Query(20, ge=1, le=100, description="Page size"),
+    offset: int = Query(0, ge=0, description="Offset"),
+) -> PortfolioAiReviewListResponse:
+    try:
+        data = PortfolioReviewService(config=get_config()).list_reviews(
+            account_id=account_id, cost_method=cost_method, limit=limit, offset=offset
+        )
+        return PortfolioAiReviewListResponse(**data)
+    except Exception as exc:
+        raise _internal_error("List AI reviews failed", exc)
+
+
+@router.get(
+    "/ai-reviews/{review_id}",
+    response_model=PortfolioAiReviewResponse,
+    responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    summary="Get one saved AI portfolio review",
+)
+def get_ai_review(review_id: int) -> PortfolioAiReviewResponse:
+    try:
+        data = PortfolioReviewService(config=get_config()).get_review(review_id)
+    except Exception as exc:
+        raise _internal_error("Get AI review failed", exc)
+    if data is None:
+        raise api_error(404, "not_found", f"AI review not found: {review_id}")
+    return PortfolioAiReviewResponse(**data)
+
+
+@router.delete(
+    "/ai-reviews/{review_id}",
+    response_model=PortfolioDeleteResponse,
+    responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    summary="Delete one saved AI portfolio review",
+)
+def delete_ai_review(review_id: int) -> PortfolioDeleteResponse:
+    try:
+        ok = PortfolioReviewService(config=get_config()).delete_review(review_id)
+    except Exception as exc:
+        raise _internal_error("Delete AI review failed", exc)
+    if not ok:
+        raise api_error(404, "not_found", f"AI review not found: {review_id}")
+    return PortfolioDeleteResponse(deleted=1)
